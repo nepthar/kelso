@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from harbor.lib.apps import AppID
-from harbor.lib.crypto import FernetCryptoEngine, NoopCryptoEngine
-from harbor.lib.manifest import ConfigEntry, parse_manifest
-from harbor.lib.stack import HARBOR_CONFIG_ENV_PREFIX, AppConfig, AppStack
-from harbor.lib.store import AppStore
+from kelso.lib.apps import AppID
+from kelso.lib.crypto import FernetCryptoEngine, NoopCryptoEngine
+from kelso.lib.manifest import ConfigEntry, parse_manifest
+from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppConfig, AppSpec
+from kelso.lib.store import AppStore
 
 FIXTURES = Path(__file__).parent / "fixtures" / "apps"
 
@@ -52,7 +52,7 @@ def test_legacy_kind_key_rejected():
     ConfigEntry.model_validate({"kind": "str"})
 
 
-# ── Manifest parsing + stack resolution ───────────────────────────────────
+# ── Manifest parsing + spec resolution ───────────────────────────────────
 MANIFEST = b"""
 [app]
 version = "0.1.0"
@@ -68,18 +68,18 @@ env   = { ADMIN_USER = "${admin_user}" }
 """
 
 
-def _stack_from(manifest_bytes):
-  return AppStack.from_bytes(
+def _spec_from(manifest_bytes):
+  return AppSpec.from_bytes(
     manifest_bytes, AppID("io.test.example"), Path("manifest.toml")
   )
 
 
-def test_app_stack_resolves_config():
-  stack = _stack_from(MANIFEST)
+def test_app_spec_resolves_config():
+  spec = _spec_from(MANIFEST)
 
-  secret = stack.config["admin_pass"]
-  required = stack.config["admin_user"]
-  plain = stack.config["subdomain"]
+  secret = spec.config["admin_pass"]
+  required = spec.config["admin_user"]
+  plain = spec.config["subdomain"]
 
   assert isinstance(secret, AppConfig)
   assert secret.secret is True and secret.default == "auto"
@@ -93,23 +93,23 @@ def test_app_stack_resolves_config():
   assert plain.has_default() is True
 
   # env var substitution wiring uses the config prefix
-  assert plain.env_name() == f"{HARBOR_CONFIG_ENV_PREFIX}_subdomain"
+  assert plain.env_name() == f"{KELSO_CONFIG_ENV_PREFIX}_subdomain"
 
 
-def test_config_env_var_is_not_rewritten_on_the_stack():
-  """Compose, not the stack, rewrites `${admin_user}` to the harbor env name."""
-  stack = _stack_from(MANIFEST)
-  env = stack.run_units["main"].environment
+def test_config_env_var_is_not_rewritten_on_the_spec():
+  """Compose, not the spec, rewrites `${admin_user}` to the kelso env name."""
+  spec = _spec_from(MANIFEST)
+  env = spec.run_units["main"].environment
   assert env["ADMIN_USER"] == "${admin_user}"
-  assert stack.config["admin_user"].env_name() == (
-    f"{HARBOR_CONFIG_ENV_PREFIX}_admin_user"
+  assert spec.config["admin_user"].env_name() == (
+    f"{KELSO_CONFIG_ENV_PREFIX}_admin_user"
   )
 
 
 def test_fixtures_parse_with_config_section():
-  for happ in ("io.p2net.basic-features.happ", "routes-demo.happ"):
-    path = FIXTURES / happ / "manifest.toml"
-    manifest = parse_manifest(path.read_bytes(), AppID(happ.split(".happ")[0]), path)
+  for bundle in ("io.p2net.basic-features.klso", "routes-demo.klso"):
+    path = FIXTURES / bundle / "manifest.toml"
+    manifest = parse_manifest(path.read_bytes(), AppID(bundle.split(".klso")[0]), path)
     assert manifest.config  # non-empty [config] section
 
 
@@ -144,8 +144,8 @@ def test_store_plain_round_trip_is_plaintext(tmp_path):
 def test_store_keeps_binds_and_meta(tmp_path):
   store = AppStore.from_path(tmp_path / "config.logtab", NoopCryptoEngine())
   store.set_bind("media", "nas_media")
-  store.set_meta("origin", "/harbor/apps/io.test.example.happ")
+  store.set_meta("origin", "/kelso/apps/io.test.example.klso")
 
   assert store.list_binds() == {"media": "nas_media"}
-  assert store.get_meta("origin") == "/harbor/apps/io.test.example.happ"
+  assert store.get_meta("origin") == "/kelso/apps/io.test.example.klso"
   assert store.get_meta("installed_at") is None

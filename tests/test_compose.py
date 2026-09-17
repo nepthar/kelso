@@ -1,8 +1,8 @@
-"""`AppStack` plus per-installation data, out to a compose file.
+"""`AppSpec` plus per-installation data, out to a compose file.
 
-`make_compose_dict` is the whole of harbor's compose generation. `AppRunData`
+`make_compose_dict` is the whole of kelso's compose generation. `AppRunData`
 is a plain frozen dataclass, so these build one directly rather than going
-through `load_run_data`, which needs a `HarborCtx` and a staged app -- that
+through `load_run_data`, which needs a `KelsoCtx` and a staged app -- that
 path is covered end to end in test_cli.py. The readiness section at the bottom
 covers the rest of what `AppRunData` decides.
 """
@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from harbor.lib.apps import AppID
-from harbor.lib.config import PLACEHOLDER_DOMAIN
-from harbor.lib.manifest import ConfigError, parse_manifest
-from harbor.lib.run_layout import (
+from kelso.lib.apps import AppID
+from kelso.lib.config import PLACEHOLDER_DOMAIN
+from kelso.lib.manifest import ConfigError, parse_manifest
+from kelso.lib.run_layout import (
   LOCALTIME_PATH,
   AppRunData,
   AssignedRoute,
@@ -26,12 +26,12 @@ from harbor.lib.run_layout import (
   _route_urls,
   make_compose_dict,
 )
-from harbor.lib.stack import HARBOR_SUBDOMAIN_LABEL, AppConfig, AppStack
-from tests.conftest import stack_of
+from kelso.lib.spec import KELSO_SUBDOMAIN_LABEL, AppConfig, AppSpec
+from tests.conftest import spec_of
 
 
 def run_data(
-  stack: AppStack,
+  spec: AppSpec,
   *,
   app_domain: str | None = None,
   domain: str = "home.example",
@@ -41,7 +41,7 @@ def run_data(
   issues: tuple[ConfigIssue, ...] = (),
   assignments: dict[str, str] | None = None,
 ) -> AppRunData:
-  """An `AppRunData` for `stack`, with every route allocated.
+  """An `AppRunData` for `spec`, with every route allocated.
 
   `host_ports` overrides the allocated host port per route name; anything not
   named keeps whatever the manifest pinned.
@@ -50,18 +50,18 @@ def run_data(
   routes = {
     name: AssignedRoute(
       name=name,
-      subdomain=route.subdomain(stack.subdomain) if stack.subdomain else "",
+      subdomain=route.subdomain(spec.subdomain) if spec.subdomain else "",
       run_unit_name=route.run_unit_name,
       host_port=host_ports.get(name, route.host_port),
       container_port=route.container_port,
       proto=route.proto,
       scheme=route.scheme,
     )
-    for name, route in stack.routes.items()
+    for name, route in spec.routes.items()
   }
   if assignments is None:
     assignments = {
-      name: "web" for name, route in stack.routes.items() if not route.private
+      name: "web" for name, route in spec.routes.items() if not route.private
     }
   config = type(
     "Cfg",
@@ -73,8 +73,8 @@ def run_data(
     },
   )()
   return AppRunData(
-    app=stack.app,
-    run_path=Path("/harbor/run") / stack.app,
+    app=spec.app,
+    run_path=Path("/kelso/run") / spec.app,
     app_domain=app_domain,
     volume_links={},
     config_values=config_values or {},
@@ -88,8 +88,8 @@ def run_data(
 # --- compose generation ----------------------------------------------------
 
 
-def test_a_minimal_stack_becomes_a_minimal_compose_file(tmp_path):
-  stack = stack_of(
+def test_a_minimal_spec_becomes_a_minimal_compose_file(tmp_path):
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -100,7 +100,7 @@ image = "alpine:latest"
 """,
   )
 
-  compose = make_compose_dict(stack, run_data(stack))
+  compose = make_compose_dict(spec, run_data(spec))
 
   assert compose == {
     "name": "demo",
@@ -114,14 +114,14 @@ image = "alpine:latest"
           "options": {"max-size": "10m", "max-file": "3"},
         },
         "labels": {
-          "harbor.app_id": "demo",
-          "harbor.version": "1.2.3",
-          "harbor.run_unit": "main",
+          "kelso.app_id": "demo",
+          "kelso.version": "1.2.3",
+          "kelso.run_unit": "main",
         },
         "environment": {
-          "HAPP_ID": "demo",
-          "HAPP_VERSION": "1.2.3",
-          "HAPP_RUN_UNIT": "main",
+          "KLSO_ID": "demo",
+          "KLSO_VERSION": "1.2.3",
+          "KLSO_RUN_UNIT": "main",
         },
       }
     },
@@ -130,7 +130,7 @@ image = "alpine:latest"
 
 def test_the_project_name_is_the_app_id_made_compose_safe(tmp_path):
   """Compose project names are lowercase and take a narrow character set."""
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -142,13 +142,13 @@ image = "alpine"
     app_id="io.p2net.Basic-Features",
   )
 
-  compose = make_compose_dict(stack, run_data(stack))
+  compose = make_compose_dict(spec, run_data(spec))
 
   assert compose["name"] == "io_p2net_basic-features"
 
 
 def test_volumes_become_relative_bind_mounts(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -164,7 +164,7 @@ volumes = { bin = "/opt/bin", app_config = "/config" }
 """,
   )
 
-  service = make_compose_dict(stack, run_data(stack))["services"]["main"]
+  service = make_compose_dict(spec, run_data(spec))["services"]["main"]
 
   # Relative to the compose file, so the run dir stays movable. `app` volumes
   # are read-only, which is what `:ro` records.
@@ -172,11 +172,11 @@ volumes = { bin = "/opt/bin", app_config = "/config" }
     "./volumes/app/bin:/opt/bin:ro",
     "./volumes/data/app_config:/config",
   ]
-  assert "HAPP_VOLUMES" not in service["environment"]
+  assert "KLSO_VOLUMES" not in service["environment"]
 
 
 def test_routes_become_published_ports(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -193,16 +193,16 @@ dns   = { port = "53/udp" }
 """,
   )
 
-  data = run_data(stack, host_ports={"main": 41000, "dns": 41001})
-  service = make_compose_dict(stack, data)["services"]["main"]
+  data = run_data(spec, host_ports={"main": 41000, "dns": 41001})
+  service = make_compose_dict(spec, data)["services"]["main"]
 
   assert service["ports"] == ["41000:8080", "9000:80", "41001:53/udp"]
-  assert "HAPP_ROUTES" not in service["environment"]
+  assert "KLSO_ROUTES" not in service["environment"]
 
 
-def test_harbor_mounts_land_after_the_happs_own_and_outside_happ_volumes(tmp_path):
-  """`${happ.volumes}` is the happ's own [volumes]; harbor mounts are not among them."""
-  stack = stack_of(
+def test_kelso_mounts_land_after_the_bundles_own_and_outside_bundle_volumes(tmp_path):
+  """`${klso.volumes}` is the bundle's own [volumes]; kelso mounts are not among them."""
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -214,12 +214,12 @@ app_config = { kind = "data" }
 [run.main]
 image = "alpine"
 volumes = { app_config = "/config" }
-env = { VOLS = "${happ.volumes}" }
+env = { VOLS = "${klso.volumes}" }
 """,
   )
 
-  data = run_data(stack, host_mounts=("/etc/localtime:/etc/localtime:ro",))
-  service = make_compose_dict(stack, data)["services"]["main"]
+  data = run_data(spec, host_mounts=("/etc/localtime:/etc/localtime:ro",))
+  service = make_compose_dict(spec, data)["services"]["main"]
 
   assert service["volumes"] == [
     "./volumes/data/app_config:/config",
@@ -228,8 +228,8 @@ env = { VOLS = "${happ.volumes}" }
   assert service["environment"]["VOLS"] == "app_config:/config"
 
 
-def test_a_unit_with_no_volumes_of_its_own_still_gets_the_harbor_mounts(tmp_path):
-  stack = stack_of(
+def test_a_unit_with_no_volumes_of_its_own_still_gets_the_kelso_mounts(tmp_path):
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -240,11 +240,11 @@ image = "alpine"
 """,
   )
 
-  data = run_data(stack, host_mounts=("/etc/localtime:/etc/localtime:ro",))
-  service = make_compose_dict(stack, data)["services"]["main"]
+  data = run_data(spec, host_mounts=("/etc/localtime:/etc/localtime:ro",))
+  service = make_compose_dict(spec, data)["services"]["main"]
 
   assert service["volumes"] == ["/etc/localtime:/etc/localtime:ro"]
-  assert "HAPP_VOLUMES" not in service["environment"]
+  assert "KLSO_VOLUMES" not in service["environment"]
 
 
 def test_the_host_clock_is_mounted_read_only_when_the_host_has_one():
@@ -257,7 +257,7 @@ def test_the_host_clock_is_mounted_read_only_when_the_host_has_one():
 
 
 def test_a_command_is_published_to_the_container_too(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -269,15 +269,15 @@ cmd = ["/bin/sh", "-c", "exec sleep 1"]
 """,
   )
 
-  service = make_compose_dict(stack, run_data(stack))["services"]["main"]
+  service = make_compose_dict(spec, run_data(spec))["services"]["main"]
 
   assert service["command"] == ["/bin/sh", "-c", "exec sleep 1"]
-  assert "HAPP_CMD" not in service["environment"]
+  assert "KLSO_CMD" not in service["environment"]
 
 
 def test_compose_passthrough_lands_verbatim_in_the_service(tmp_path):
-  """[run.<unit>.compose] is the escape hatch for anything harbor doesn't model."""
-  stack = stack_of(
+  """[run.<unit>.compose] is the escape hatch for anything kelso doesn't model."""
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -296,7 +296,7 @@ compose = { healthcheck = { disable = true } }
 """,
   )
 
-  services = make_compose_dict(stack, run_data(stack))["services"]
+  services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert services["main"]["healthcheck"] == {
     "test": "redis-cli ping || exit 1",
@@ -306,8 +306,8 @@ compose = { healthcheck = { disable = true } }
 
 
 def test_container_log_rotation_defaults_on_and_is_overridable(tmp_path):
-  """Harbor caps container logs by default; a manifest's own logging wins."""
-  stack = stack_of(
+  """Kelso caps container logs by default; a manifest's own logging wins."""
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -322,17 +322,17 @@ compose = { logging = { driver = "journald" } }
 """,
   )
 
-  services = make_compose_dict(stack, run_data(stack))["services"]
+  services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert services["main"]["logging"] == {
     "driver": "json-file",
     "options": {"max-size": "10m", "max-file": "3"},
   }
-  # Passthrough replaces the whole key, so a happ can opt out entirely.
+  # Passthrough replaces the whole key, so a bundle can opt out entirely.
   assert services["side"]["logging"] == {"driver": "journald"}
 
 
-def test_compose_passthrough_may_not_shadow_harbor_managed_keys():
+def test_compose_passthrough_may_not_shadow_kelso_managed_keys():
   manifest = b"""
 [app]
 version = "1"
@@ -342,16 +342,16 @@ image = "alpine"
 compose = { image = "other", healthcheck = { disable = true } }
 """
 
-  with pytest.raises(ConfigError, match="harbor manages these service keys"):
+  with pytest.raises(ConfigError, match="kelso manages these service keys"):
     parse_manifest(manifest, AppID("demo"), Path("manifest.toml"))
 
 
 def test_the_app_domain_reaches_labels_not_env(tmp_path):
-  """The label is what `harbor doctor` and the route provider read back.
+  """The label is what `kelso doctor` and the route provider read back.
 
-  Apps that want the domain in env ask via `${happ.domain}`.
+  Apps that want the domain in env ask via `${klso.domain}`.
   """
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -363,21 +363,21 @@ image = "alpine"
 """,
   )
 
-  data = run_data(stack, app_domain="photos.harbor.localhost")
-  service = make_compose_dict(stack, data)["services"]["main"]
+  data = run_data(spec, app_domain="photos.kelso.localhost")
+  service = make_compose_dict(spec, data)["services"]["main"]
 
-  assert "HAPP_DOMAIN" not in service["environment"]
-  assert service["labels"][HARBOR_SUBDOMAIN_LABEL] == "photos.harbor.localhost"
+  assert "KLSO_DOMAIN" not in service["environment"]
+  assert service["labels"][KELSO_SUBDOMAIN_LABEL] == "photos.kelso.localhost"
 
 
 def test_a_route_reference_in_env_becomes_the_published_url(tmp_path):
   """`${routes.<name>}` is the app telling itself where it answers.
 
-  The URL is not knowable when the stack is built -- it needs the harbor
+  The URL is not knowable when the spec is built -- it needs the kelso
   domain and an allocated route -- so it survives as a placeholder until the
   compose file is written.
   """
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -394,7 +394,7 @@ api  = { port = "9001" }
 """,
   )
 
-  env = make_compose_dict(stack, run_data(stack))["services"]["main"]["environment"]
+  env = make_compose_dict(spec, run_data(spec))["services"]["main"]["environment"]
 
   # Assigned non-private routes use the provider domain. Public URLs are
   # https (TLS terminates at the reverse proxy); `scheme` on a route is only
@@ -406,7 +406,7 @@ api  = { port = "9001" }
 
 def test_a_route_reference_survives_alongside_a_config_reference(tmp_path):
   """One flat map, two value kinds: config becomes a compose env var name."""
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -425,20 +425,20 @@ main = { port = "9000" }
 """,
   )
 
-  assert stack.run_units["main"].environment["GREETING"] == (
+  assert spec.run_units["main"].environment["GREETING"] == (
     "${timezone} at ${routes.main}"
   )
 
-  env = make_compose_dict(stack, run_data(stack))["services"]["main"]["environment"]
+  env = make_compose_dict(spec, run_data(spec))["services"]["main"]["environment"]
 
   assert env["GREETING"] == (
-    "${__HARBOR_CONFIG__timezone} at https://mealie.home.example"
+    "${__KELSO_CONFIG__timezone} at https://mealie.home.example"
   )
 
 
-def test_happ_references_in_env_become_runtime_context(tmp_path):
-  """`${happ.x}` is the app asking for what harbor used to inject as HAPP_*."""
-  stack = stack_of(
+def test_klso_references_in_env_become_runtime_context(tmp_path):
+  """`${klso.x}` is the app asking for what kelso used to inject as KLSO_*."""
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -454,31 +454,31 @@ cmd = ["/bin/sh", "-c", "exec sleep 1"]
 volumes = { data = "/data" }
 
 [run.main.env]
-DOMAIN = "${happ.domain}"
-VOLS = "${happ.volumes}"
-CMD = "${happ.cmd}"
-ROUTES = "${happ.routes}"
+DOMAIN = "${klso.domain}"
+VOLS = "${klso.volumes}"
+CMD = "${klso.cmd}"
+ROUTES = "${klso.routes}"
 
 [run.main.routes]
 main = { port = "8080" }
 """,
   )
 
-  data = run_data(stack, app_domain="jrnl.home.example", host_ports={"main": 41000})
-  env = make_compose_dict(stack, data)["services"]["main"]["environment"]
+  data = run_data(spec, app_domain="jrnl.home.example", host_ports={"main": 41000})
+  env = make_compose_dict(spec, data)["services"]["main"]["environment"]
 
   assert env["DOMAIN"] == "jrnl.home.example"
   assert env["VOLS"] == "data:/data"
   assert env["CMD"] == "/bin/sh -c exec sleep 1"
   assert env["ROUTES"] == "main:8080"
-  assert "HAPP_DOMAIN" not in env
-  assert "HAPP_VOLUMES" not in env
-  assert "HAPP_CMD" not in env
-  assert "HAPP_ROUTES" not in env
+  assert "KLSO_DOMAIN" not in env
+  assert "KLSO_VOLUMES" not in env
+  assert "KLSO_CMD" not in env
+  assert "KLSO_ROUTES" not in env
 
 
 def test_host_network_mode_is_set_per_service(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -490,13 +490,13 @@ image = "alpine"
 """,
   )
 
-  service = make_compose_dict(stack, run_data(stack))["services"]["main"]
+  service = make_compose_dict(spec, run_data(spec))["services"]["main"]
 
   assert service["network_mode"] == "host"
 
 
 def test_every_run_unit_gets_its_own_service(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -512,7 +512,7 @@ restart = "always"
 """,
   )
 
-  services = make_compose_dict(stack, run_data(stack))["services"]
+  services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert set(services) == {"web", "db"}
   assert services["db"]["restart"] == "always"
@@ -527,16 +527,16 @@ def test_start_blockers_leave_out_what_staging_repairs_itself():
   """`stage()` reallocates every route before judging readiness.
 
   An unallocated route is therefore the normal pre-start state, not something
-  the operator has to fix -- counting it made `harbor ps` report CONFIG as
+  the operator has to fix -- counting it made `kelso ps` report CONFIG as
   missing for an app that needed none.
   """
-  operator = ConfigIssue("config api_key is unset", "Set with `harbor config`")
+  operator = ConfigIssue("config api_key is unset", "Set with `kelso config`")
   allocation = ConfigIssue("route web: not allocated", "…", self_healing=True)
   fatal = ConfigIssue("volume data: unreadable", "…", stage_blocking=True)
 
   data = AppRunData(
     app="demo",
-    run_path=Path("/harbor/run/demo"),
+    run_path=Path("/kelso/run/demo"),
     app_domain=None,
     volume_links={},
     config_values={},
@@ -551,14 +551,14 @@ def test_start_blockers_leave_out_what_staging_repairs_itself():
 
 
 def test_config_env_names_every_value_including_the_unset_ones():
-  """compose interpolates every `${__HARBOR_CONFIG__*}` the stack mentions.
+  """compose interpolates every `${__KELSO_CONFIG__*}` the spec mentions.
 
   A missing key would make compose warn and render the variable blank, so an
   unset value has to appear as an empty string rather than not at all.
   """
   data = AppRunData(
     app="demo",
-    run_path=Path("/harbor/run/demo"),
+    run_path=Path("/kelso/run/demo"),
     app_domain=None,
     volume_links={},
     config_values={
@@ -572,8 +572,8 @@ def test_config_env_names_every_value_including_the_unset_ones():
   )
 
   assert data.config_env() == {
-    "__HARBOR_CONFIG__admin_user": "alice",
-    "__HARBOR_CONFIG__api_key": "",
+    "__KELSO_CONFIG__admin_user": "alice",
+    "__KELSO_CONFIG__api_key": "",
   }
 
 
@@ -581,13 +581,13 @@ def test_config_env_names_every_value_including_the_unset_ones():
 #
 # The allowlist exists so that `[run.<unit>.compose]` cannot ask for host root
 # without saying so. Nothing here refuses a manifest: the box is the operator's,
-# and harbor cannot say what an arbitrary compose key does -- only that it does
+# and kelso cannot say what an arbitrary compose key does -- only that it does
 # not know, and what was asked for.
 
 
 def test_allowed_compose_keys_warn_about_nothing(tmp_path):
-  """Everything the example happs already use passes through silently."""
-  stack = stack_of(
+  """Everything the example bundles already use passes through silently."""
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -606,12 +606,12 @@ healthcheck = { test = "pg_isready" }
 """,
   )
 
-  assert stack.compose_warnings == ()
+  assert spec.compose_warnings == ()
 
 
 def test_unmodelled_compose_keys_warn_once_per_run_unit(tmp_path):
   """One warning per unit, carrying the keys and the values as written."""
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -627,7 +627,7 @@ compose = { pid = "host" }
 """,
   )
 
-  main, side = stack.compose_warnings
+  main, side = spec.compose_warnings
 
   assert main.run_unit == "main"
   # mem_limit is allowed, so it is not part of what the operator is shown.
@@ -636,16 +636,16 @@ compose = { pid = "host" }
   assert side.option_lines() == ('pid = "host"',)
 
   # Still copied through verbatim -- warning is not refusing.
-  services = make_compose_dict(stack, run_data(stack))["services"]
+  services = make_compose_dict(spec, run_data(spec))["services"]
   assert services["main"]["privileged"] is True
   assert services["side"]["pid"] == "host"
 
 
 def test_compose_warnings_reach_the_capability_receipt(tmp_path):
-  """`harbor inspect` reads these beside host networking and writable binds."""
-  from harbor.lib.receipt import danger_callouts
+  """`kelso inspect` reads these beside host networking and writable binds."""
+  from kelso.lib.receipt import danger_callouts
 
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -657,15 +657,15 @@ compose = { privileged = true }
 """,
   )
 
-  assert danger_callouts(stack) == [
+  assert danger_callouts(spec) == [
     "free-form docker options on main: privileged = true"
   ]
 
 
 def test_a_managed_key_is_still_refused_outright(tmp_path):
   """The allowlist is a second gate, not a replacement for the managed set."""
-  with pytest.raises(ConfigError, match="harbor manages these service keys"):
-    stack_of(
+  with pytest.raises(ConfigError, match="kelso manages these service keys"):
+    spec_of(
       tmp_path,
       """\
 [app]
