@@ -40,9 +40,9 @@ to 0.25s.
 | `test_logtab.py` | The append-only key-value log |
 | `test_routes.py`, `test_ports.py` | Route records and host port allocation |
 | `test_config_schema.py` | Config store, encryption, binds, metadata |
-| `test_stack.py` | Manifest bytes in, `AppStack` out |
+| `test_spec.py` | Manifest bytes in, `AppSpec` out |
 | `test_bundle_md.py` | Single-file `.klso.md` bundles |
-| `test_compose.py` | `AppStack` + run data out to a compose file; readiness |
+| `test_compose.py` | `AppSpec` + run data out to a compose file; readiness |
 | `test_repo.py` | Repos and mirroring, against an in-process fake GitHub |
 | `test_repo_catalog.py` | Several repos: the catalog, ambiguity, and bindings |
 | `test_layout.py` | Staging: the run dir, volume links, re-staging |
@@ -57,8 +57,8 @@ to 0.25s.
 | `test_activity.py` | The activity log: kelso's own run output, on disk and indexed |
 | `test_metrics.py` | Volume-size and host-resource metric jobs |
 
-`test_stack.py` and `test_compose.py` share `stack_of` from `conftest.py`:
-manifest TOML in, `AppStack` out, through the real parse-and-validate path.
+`test_spec.py` and `test_compose.py` share `spec_of` from `conftest.py`:
+manifest TOML in, `AppSpec` out, through the real parse-and-validate path.
 Reach for it before writing another CLI test — most questions about what a
 manifest *means* are answerable in a hundredth of the time.
 

@@ -13,7 +13,7 @@ def register(subparsers) -> None:
   parser = subparsers.add_parser("repo", help="Manage the repos apps come from")
   sub = parser.add_subparsers(dest="repo_command", required=True)
 
-  add = sub.add_parser("add", help="Add a repo of bundles", description=USAGE)
+  add = sub.add_parser("add", help="Add a repo of apps", description=USAGE)
   add.add_argument("location", help="A github:// url, or a directory on this machine")
   add.add_argument(
     "--name", default="", help="Name it something other than the default"
@@ -38,7 +38,7 @@ def _add(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   if result.mirrored is not None:
     done = result.mirrored
     conn.out(
-      f"Mirrored {len(done.bundles)} bundles at {done.sha[:8]} "
+      f"Mirrored {len(done.bundles)} apps at {done.sha[:8]} "
       f"({fmt_size(done.total_bytes)})"
     )
   _report_contested(ctx, conn)
@@ -55,7 +55,7 @@ def _update(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
     else:
       conn.out(
         f"{result.name}: {result.sha[:8]} "
-        f"({len(result.bundles)} bundles, {fmt_size(result.total_bytes)})"
+        f"({len(result.bundles)} apps, {fmt_size(result.total_bytes)})"
       )
   _report_contested(ctx, conn)
 

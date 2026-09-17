@@ -3,17 +3,17 @@ import shlex
 from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import run_command
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 
 class CmdJob(Job):
   name = "cmd"
-  description = "Run a command declared in a bundle's manifest"
+  description = "Run a command declared in an app's manifest"
   required_args = ("app", "command")
   optional_args = ("args",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    """`command` names an entry the bundle's manifest already declares.
+    """`command` names an entry the app's manifest already declares.
 
     A caller holding an argv list must build `args` with `shlex.join`.
     """
@@ -28,9 +28,9 @@ class CmdJob(Job):
 
     if not ctx.is_staged(app):
       raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
-    stack = AppStack.from_file(ctx.staged_paths(app).manifest_path, app)
-    if kwargs["command"] not in stack.commands:
-      available = ", ".join(sorted(stack.commands)) or "(none)"
+    spec = AppSpec.from_file(ctx.staged_paths(app).manifest_path, app)
+    if kwargs["command"] not in spec.commands:
+      available = ", ".join(sorted(spec.commands)) or "(none)"
       raise ValueError(
         f"Unknown command {kwargs['command']!r} for {app}; "
         f"available: {available}. List with `kelso cmd {app}`"

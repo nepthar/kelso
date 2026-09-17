@@ -10,7 +10,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "start",
-    help="Start a bundle, staging it first if needed (accepts app id or .klso path)",
+    help="Start an app, staging it first if needed (accepts app id or .klso path)",
   )
   parser.add_argument(
     "app",
@@ -58,7 +58,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       target.app_id, bundle, ctx, sets=sets, binds=binds, bound=target.bound_to
     )
 
-    compact = capability_receipt(result.stack, result.run_data, ctx, compact=True)
+    compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
     if compact.strip():
       conn.out(compact)
-    conn.out(location_receipt(result.stack, result.run_data, ctx))
+    conn.out(location_receipt(result.spec, result.run_data, ctx))

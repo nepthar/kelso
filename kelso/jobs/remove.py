@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import PURGE, RESET, UNINSTALL, removal_plan, rm
 
 class UninstallJob(Job):
   name = "uninstall"
-  description = "Uninstall a bundle, keeping its data and config unless purged"
+  description = "Uninstall an app, keeping its data and config unless purged"
   required_args = ("app",)
   optional_args = ("purge",)
 
@@ -29,7 +29,7 @@ class UninstallJob(Job):
 
 class ResetJob(Job):
   name = "reset"
-  description = "Delete a bundle's data and install it again from the bundle"
+  description = "Delete an app's data and install it again from its bundle"
   required_args = ("app",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:

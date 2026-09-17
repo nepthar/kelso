@@ -18,7 +18,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS
 from kelso.lib.logtab import LogTab
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.store import JsonLogtabStore
 
 # The contention tests wait this out in full; 5s each is more than the rest of
@@ -26,12 +26,12 @@ from kelso.lib.store import JsonLogtabStore
 LOCK_TIMEOUT = 0.25
 
 
-def stack_of(tmp_path: Path, manifest: str, app_id: str = "demo") -> AppStack:
-  """Build an `AppStack` from manifest TOML, via the real parse-and-validate path."""
+def spec_of(tmp_path: Path, manifest: str, app_id: str = "demo") -> AppSpec:
+  """Build an `AppSpec` from manifest TOML, via the real parse-and-validate path."""
   bundle = tmp_path / f"{app_id}.klso"
   bundle.mkdir()
   (bundle / "manifest.toml").write_text(manifest)
-  return AppStack.from_file(bundle / "manifest.toml", AppID(app_id))
+  return AppSpec.from_file(bundle / "manifest.toml", AppID(app_id))
 
 
 # `pytester` runs a throwaway pytest inside a test, which is how

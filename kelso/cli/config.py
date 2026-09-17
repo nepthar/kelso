@@ -9,19 +9,19 @@ from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, bind
 from kelso.lib.run_layout import load_run_data, make_compose_dict
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "config",
-    help="List or set bundle config, route assignments, and host volume binds",
+    help="List or set app config, route assignments, and host volume binds",
   )
   parser.add_argument(
     "app",
     metavar="APP",
-    help="App ID of an installed bundle, or of one in an app source",
+    help="App ID of an installed app, or of an app in the catalog",
   )
   parser.add_argument(
     "--set",
@@ -65,42 +65,42 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   app = ctx.resolve_app(args.app)
   with ctx.locked(f"config {app}", app):
     store = ctx.app_store(app)
-    stack = _config_stack(app, ctx)
+    spec = _config_spec(app, ctx)
 
     if args.get_name is not None:
       if args.sets or args.binds or args.routes:
         raise ValueError("--get cannot be combined with --set, --route, or --bind")
-      _get(stack, store, args.get_name, conn, show_secret=args.show_secret)
+      _get(spec, store, args.get_name, conn, show_secret=args.show_secret)
       return
 
     if args.show_secret:
       raise ValueError("--show-secret requires --get")
 
     if args.sets or args.binds or args.routes:
-      _apply(app, stack, args.sets, args.binds, args.routes, ctx, conn)
+      _apply(app, spec, args.sets, args.binds, args.routes, ctx, conn)
       return
 
-    _list(app, stack, store, conn)
+    _list(app, spec, store, conn)
 
 
-def _config_stack(app: AppID, ctx: KelsoCtx) -> AppStack:
+def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The manifest this command reads its schema from."""
   paths = ctx.staged_paths(app)
   if paths.exists():
-    return AppStack.from_file(paths.manifest_path, app)
+    return AppSpec.from_file(paths.manifest_path, app)
   # Refuses an id carried by two sources, and a bundle with no manifest.
-  return load_bundle(ctx.bundle_path(app)).app_stack()
+  return load_bundle(ctx.bundle_path(app)).app_spec()
 
 
 def _get(
-  stack: AppStack,
+  spec: AppSpec,
   store: AppStore,
   name: str,
   conn,
   *,
   show_secret: bool,
 ) -> None:
-  config = stack.config.get(name)
+  config = spec.config.get(name)
   if not config:
     raise ValueError(f"config {name!r} not declared in manifest")
 
@@ -119,7 +119,7 @@ def _get(
 
 def _apply(
   app: AppID,
-  stack: AppStack,
+  spec: AppSpec,
   sets_raw: list[str],
   binds_raw: list[str],
   routes_raw: list[str],
@@ -131,11 +131,11 @@ def _apply(
   routes = [parse_kv(item, "--route") for item in routes_raw]
 
   if sets:
-    apply_config_sets(stack, sets, ctx)
+    apply_config_sets(spec, sets, ctx)
   for volname, host_volume_tag in binds:
-    bind(stack, volname, host_volume_tag, ctx)
+    bind(spec, volname, host_volume_tag, ctx)
   if routes:
-    _apply_routes(app, stack, routes, ctx, conn)
+    _apply_routes(app, spec, routes, ctx, conn)
 
   try:
     state = ctx.run_state(app)
@@ -157,15 +157,15 @@ def _apply(
 
 def _apply_routes(
   app: AppID,
-  stack: AppStack,
+  spec: AppSpec,
   routes: list[tuple[str, str]],
   ctx: KelsoCtx,
   conn,
 ) -> None:
   store = ctx.app_store(app)
   for route_name, tag in routes:
-    if route_name not in stack.routes:
-      known = ", ".join(sorted(stack.routes)) or "(none)"
+    if route_name not in spec.routes:
+      known = ", ".join(sorted(spec.routes)) or "(none)"
       raise ValueError(
         f"route {route_name!r} is not declared in {app}'s manifest; "
         f"known routes: {known}"
@@ -182,15 +182,15 @@ def _apply_routes(
 
   # Rewrite compose so the next start picks up new ${routes.*} URLs.
   if ctx.is_staged(app):
-    run_data = load_run_data(stack, ctx)
+    run_data = load_run_data(spec, ctx)
     compose_path = ctx.staged_paths(app).compose_path
     with open(compose_path, "w") as f:
-      yaml.safe_dump(make_compose_dict(stack, run_data), f, sort_keys=False)
+      yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
 
-def _list(app: AppID, stack: AppStack, store: AppStore, conn) -> None:
+def _list(app: AppID, spec: AppSpec, store: AppStore, conn) -> None:
   rows = []
-  for name, entry in stack.config.items():
+  for name, entry in spec.config.items():
     secret, value = store.get_config(name)
     if value is None:
       if entry.has_default():
@@ -205,10 +205,10 @@ def _list(app: AppID, stack: AppStack, store: AppStore, conn) -> None:
   conn.out(f"Configuration parameters for: {app}")
   conn.out(tabulate(rows, headers=["name", "value", "description"]))
 
-  if stack.routes:
+  if spec.routes:
     assignments = store.list_route_assignments()
     route_rows = []
-    for name, route in stack.routes.items():
+    for name, route in spec.routes.items():
       tag = assignments.get(name)
       if tag is None:
         display = "(unassigned)"
@@ -226,7 +226,7 @@ def _list(app: AppID, stack: AppStack, store: AppStore, conn) -> None:
       )
     )
 
-  host = [(n, v) for n, v in stack.volumes.items() if v.kind == "host"]
+  host = [(n, v) for n, v in spec.volumes.items() if v.kind == "host"]
   if not host:
     return
 

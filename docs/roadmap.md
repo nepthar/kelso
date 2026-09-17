@@ -1,7 +1,9 @@
 # Roadmap
 
 ## Audience
-This roadmap is based on the desire to become a tool that someone technical enough to install linux on an old machine, and can paste in terminal commands would reach for. We want more people to run self hosted stuff.
+This roadmap is based on the desire to become a tool that someone technical enough to install linux on an old machine, and can paste in terminal commands would reach for. We want more people to run apps on their own hardware.
+
+Later, it should also be a real option for small businesses: a semi-technical owner with an always-on box on site, running something like Frigate and a homepage for employees.
 
 Kubernetes and similar can be overkill, while raw Docker Compose files alone still leave missing pices of the puzzle.
 
@@ -21,7 +23,7 @@ Right now, we just check to see if the container is running
 Default state - not running, but can be started triggered on a cron or incoming http request
 
 ### Automated snapshot backup strategy
-Use cron to copy snapshot bundles somewhere
+Use cron to copy snapshot archives somewhere
 
 ### First run setup wizard
 
@@ -30,7 +32,7 @@ Use cron to copy snapshot bundles somewhere
 ### Kelso config.toml editing and validation from the webui
 
 ### Services & Service Catalog
-Allow bundle developers to better focus on their own app by saying "Just give me a postgres instance + login for my app" rather than adding postgres to their stack manually. This `services` system would enable an bundle to list the services it "provides" and have other services "require" them. This feature will require a lot of thought.
+Allow bundle developers to better focus on their own app by saying "Just give me a postgres instance + login for my app" rather than adding postgres to their manifest manually. This `services` system would enable a bundle to list the services it "provides" and have other services "require" them. This feature will require a lot of thought.
 
 
 ## Other issues the LLMs find:

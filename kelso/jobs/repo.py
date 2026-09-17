@@ -13,7 +13,7 @@ from kelso.lib.util import fmt_size
 
 class RepoAddJob(Job):
   name = "repo-add"
-  description = "Add a GitHub folder of bundles as a repo, and mirror it"
+  description = "Add a GitHub folder of apps as a repo, and mirror it"
   required_args = ("url",)
   optional_args = ("name",)
 
@@ -35,7 +35,7 @@ class RepoAddJob(Job):
     if result.mirrored is not None:
       done = result.mirrored
       lines.append(
-        f"Mirrored {len(done.bundles)} bundles at {done.sha[:8]} "
+        f"Mirrored {len(done.bundles)} apps at {done.sha[:8]} "
         f"({fmt_size(done.total_bytes)})"
       )
       lines += [f"  {app_id}" for app_id in done.bundles]
@@ -65,7 +65,7 @@ class RepoUpdateJob(Job):
       else:
         lines.append(
           f"{result.name}: {result.sha[:8]} "
-          f"({len(result.bundles)} bundles, {fmt_size(result.total_bytes)})"
+          f"({len(result.bundles)} apps, {fmt_size(result.total_bytes)})"
         )
     lines += _contested(ctx)
     logger.info("\n".join(lines))

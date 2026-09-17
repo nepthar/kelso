@@ -97,7 +97,7 @@ is a POST too.
 ## Trust
 
 Anything that can open the admin socket can run every verb the API exposes, so
-this app is exactly as privileged as `kelsod` is. It is the one bundle that
+this app is exactly as privileged as `kelsod` is. It is the one app that
 should be bound to it, which is why it serves TLS itself rather than trusting
 whatever is in front of it — the password is never on the wire in the clear,
 even between a reverse proxy and this container.

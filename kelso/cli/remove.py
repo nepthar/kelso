@@ -23,9 +23,9 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   uninstall = subparsers.add_parser(
     "uninstall",
-    help="Uninstall a bundle, keeping its data and config unless --purge",
+    help="Uninstall an app, keeping its data and config unless --purge",
   )
-  uninstall.add_argument("app_id", help="App ID of the bundle to uninstall")
+  uninstall.add_argument("app_id", help="App ID to uninstall")
   uninstall.add_argument(
     "--purge",
     action="store_true",
@@ -36,9 +36,9 @@ def register(subparsers) -> None:
 
   reset = subparsers.add_parser(
     "reset",
-    help="Stop a bundle and delete its data, keeping its config and settings",
+    help="Stop an app and delete its data, keeping its config and settings",
   )
-  reset.add_argument("app_id", help="App ID of the bundle to reset")
+  reset.add_argument("app_id", help="App ID to reset")
   _add_yes(reset)
   reset.set_defaults(func=_run(RESET))
 
@@ -46,7 +46,7 @@ def register(subparsers) -> None:
     "rm",
     help="Alias for `uninstall --purge`",
   )
-  remove.add_argument("app_id", help="App ID of the bundle to remove")
+  remove.add_argument("app_id", help="App ID to remove")
   _add_yes(remove)
   remove.set_defaults(func=_run(PURGE))
 

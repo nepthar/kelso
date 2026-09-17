@@ -21,7 +21,7 @@ from kelso.lib.lifecycle.stage import (
 )
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, load_run_data
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 
 def recovery_lines(app_id: AppID, issues: tuple[ConfigIssue, ...]) -> list[str]:
@@ -49,10 +49,10 @@ def start(
   if sets or binds or not ctx.is_staged(app):
     result = stage(app, bundle, ctx, sets=sets, binds=binds, bound=bound)
   else:
-    stack = AppStack.from_file(paths.manifest_path, app)
-    result = StageSuccess(stack, load_run_data(stack, ctx))
+    spec = AppSpec.from_file(paths.manifest_path, app)
+    result = StageSuccess(spec, load_run_data(spec, ctx))
 
-  stack, run_data = result.stack, result.run_data
+  spec, run_data = result.spec, result.run_data
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
 
@@ -67,7 +67,7 @@ def start(
 
   # Rebuilt from scratch every start, so a bind recorded since the last one --
   # staging does not touch these -- takes effect now.
-  link_host_volumes(stack, run_data)
+  link_host_volumes(spec, run_data)
 
   try:
     docker_run_command(
@@ -96,8 +96,8 @@ def start(
 def _compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
   """The config environment compose.yml interpolates `${__KELSO_CONFIG__*}` from."""
   try:
-    stack = AppStack.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
-    return load_run_data(stack, ctx).config_env()
+    spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
+    return load_run_data(spec, ctx).config_env()
   except ValueError as e:
     logger.debug("no config env for %s: %s", app_id, e)
     return {}
@@ -156,10 +156,10 @@ def run_command(
       f"App {app_id} is not installed; run `kelso install {app_id}` first"
     )
 
-  stack = AppStack.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
-  entry = stack.commands.get(cmd_name)
+  spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
+  entry = spec.commands.get(cmd_name)
   if entry is None:
-    available = ", ".join(sorted(stack.commands)) or "(none)"
+    available = ", ".join(sorted(spec.commands)) or "(none)"
     raise ValueError(
       f"Unknown command {cmd_name!r} for {app_id}; "
       f"available: {available}. List with `kelso cmd {app_id}`"
@@ -182,7 +182,7 @@ def run_command(
   # so compose mounts resolve, then tear them down again if nothing else is up.
   was_fully_stopped = state.running_count == 0
   if was_fully_stopped:
-    link_host_volumes(stack, load_run_data(stack, ctx))
+    link_host_volumes(spec, load_run_data(spec, ctx))
   try:
     return docker_run_command(
       ["compose", "run", "--rm", "--no-deps", entry.run_unit, *argv],

@@ -34,7 +34,7 @@ from kelso.lib.routes import (
   get_route_provider,
 )
 from kelso.lib.run_layout import AppRunData, AssignedRoute, _route_urls
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 
 def _model(body: str) -> Manifest:
@@ -42,8 +42,8 @@ def _model(body: str) -> Manifest:
   return Manifest.model_validate(tomllib.loads(body))
 
 
-def _stack(body: str, app_id: str = "io.test.example"):
-  return AppStack.from_bytes(body.encode(), AppID(app_id), Path("manifest.toml"))
+def _spec(body: str, app_id: str = "io.test.example"):
+  return AppSpec.from_bytes(body.encode(), AppID(app_id), Path("manifest.toml"))
 
 
 ROUTES = """
@@ -65,25 +65,25 @@ metrics = { port = "9090:9091/udp", private = true }
 
 # ── resolution ────────────────────────────────────────────────────────────
 def test_private_defaults_to_false():
-  stack = _stack(ROUTES)
-  assert stack.routes["main"].private is False
-  assert stack.routes["api"].private is False
+  spec = _spec(ROUTES)
+  assert spec.routes["main"].private is False
+  assert spec.routes["api"].private is False
 
 
 def test_private_true_resolved():
-  stack = _stack(ROUTES)
-  assert stack.routes["default"].private is True
-  assert stack.routes["admin"].private is True
+  spec = _spec(ROUTES)
+  assert spec.routes["default"].private is True
+  assert spec.routes["admin"].private is True
 
 
 def test_scheme_defaults_to_http():
-  stack = _stack(ROUTES)
-  assert stack.routes["main"].scheme == "http"
-  assert stack.routes["admin"].scheme == "http"
+  spec = _spec(ROUTES)
+  assert spec.routes["main"].scheme == "http"
+  assert spec.routes["admin"].scheme == "http"
 
 
 def test_scheme_https_resolved():
-  stack = _stack(
+  spec = _spec(
     """
 [app]
 version = "0.1.0"
@@ -97,31 +97,31 @@ main  = { port = "8080" }
 admin = { port = "8443:8443", scheme = "https" }
 """
   )
-  assert stack.routes["main"].scheme == "http"
-  assert stack.routes["admin"].scheme == "https"
+  assert spec.routes["main"].scheme == "http"
+  assert spec.routes["admin"].scheme == "https"
 
 
 def test_primary_route_subdomain_is_bare_app_subdomain():
-  stack = _stack(ROUTES)
-  main = stack.routes["main"]
+  spec = _spec(ROUTES)
+  main = spec.routes["main"]
   assert main.subdomain("photos") == "photos"
   assert main.private is False
 
 
 def test_named_route_subdomain_is_prefixed():
-  stack = _stack(ROUTES)
-  assert stack.routes["api"].subdomain("photos") == "api-photos"
-  assert stack.routes["admin"].subdomain("photos") == "admin-photos"
+  spec = _spec(ROUTES)
+  assert spec.routes["api"].subdomain("photos") == "api-photos"
+  assert spec.routes["admin"].subdomain("photos") == "admin-photos"
 
 
 def test_port_spec_parsed_onto_route():
-  stack = _stack(ROUTES)
+  spec = _spec(ROUTES)
   # bare "8080" -> host auto-assigned, container 8080
-  main = stack.routes["main"]
+  main = spec.routes["main"]
   assert (main.host_port, main.container_port, main.proto) == (-1, 8080, "tcp")
   assert main.needs_allocation is True
   # "9090:9091/udp" -> host 9090, container 9091, udp (no allocation)
-  metrics = stack.routes["metrics"]
+  metrics = spec.routes["metrics"]
   assert (metrics.host_port, metrics.container_port, metrics.proto) == (
     9090,
     9091,
@@ -131,10 +131,10 @@ def test_port_spec_parsed_onto_route():
 
 
 def test_routes_report_their_run_unit():
-  stack = _stack(ROUTES)
-  assert {r.run_unit_name for r in stack.routes.values()} == {"main"}
+  spec = _spec(ROUTES)
+  assert {r.run_unit_name for r in spec.routes.values()} == {"main"}
   # the resolved port also lands on the run unit's port map
-  assert set(stack.run_units["main"].routes) == {
+  assert set(spec.run_units["main"].routes) == {
     "main",
     "api",
     "admin",
@@ -144,7 +144,7 @@ def test_routes_report_their_run_unit():
 
 
 def test_routes_across_multiple_run_units():
-  stack = _stack(
+  spec = _spec(
     """
 [app]
 version = "0.1.0"
@@ -162,14 +162,14 @@ image = "alpine:latest"
 metrics = { port = "9090" }
 """
   )
-  assert stack.routes["main"].run_unit_name == "web"
-  assert stack.routes["metrics"].run_unit_name == "worker"
+  assert spec.routes["main"].run_unit_name == "web"
+  assert spec.routes["metrics"].run_unit_name == "worker"
 
 
 # ── assigned-route filtering (lifecycle) ───────────────────────────────────
 def test_assigned_routes_skips_none_and_unassigned():
-  stack = _stack(ROUTES)
-  run_data = _run_data(stack)
+  spec = _spec(ROUTES)
+  run_data = _run_data(spec)
   store = SimpleNamespace(
     list_route_assignments=lambda: {"main": "web", "api": NONE_ROUTE_PROVIDER_TAG}
   )
@@ -219,7 +219,7 @@ dash = { port = "8081" }
   assert any("dash" in e and "multiple run units" in e for e in errors)
 
 
-def test_duplicate_route_name_never_reaches_a_stack():
+def test_duplicate_route_name_never_reaches_a_spec():
   """The app-level uniqueness rule, from the entry point rather than the check.
 
   `_build` flattens per-unit routes into one app-level mapping, so a duplicate
@@ -227,7 +227,7 @@ def test_duplicate_route_name_never_reaches_a_stack():
   quietly win, and the other unit's port would vanish from the compose file.
   """
   with pytest.raises(ConfigError, match="multiple run units"):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -269,7 +269,7 @@ admin = { port = "8082" }
 # ── schema ────────────────────────────────────────────────────────────────
 def test_invalid_port_spec_rejected():
   with pytest.raises(ConfigError, match="is not a port number"):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -285,7 +285,7 @@ bad = { port = "not-a-port" }
 
 def test_unknown_scheme_value_rejected():
   with pytest.raises(ConfigError):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -302,7 +302,7 @@ bad = { port = "8080", scheme = "ftp" }
 def test_removed_top_level_routes_section_rejected():
   # [routes] is gone; it must no longer be accepted at the top level.
   with pytest.raises(ConfigError):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -316,7 +316,7 @@ site = { audience = "web" }
 # ── ${routes.<name>} references in [run.*.env] ────────────────────────────
 def test_env_may_reference_any_declared_route():
   # Resolving it needs an allocated route; see test_compose.py for the value.
-  stack = _stack(
+  spec = _spec(
     """
 [app]
 version = "0.1.0"
@@ -330,13 +330,13 @@ main = { port = "8080" }
 admin = { port = "8082" }
 """
   )
-  assert stack.run_units["main"].environment["BASE_URL"] == "${routes.main}"
-  assert stack.run_units["main"].environment["ADMIN"] == "${routes.admin}"
+  assert spec.run_units["main"].environment["BASE_URL"] == "${routes.main}"
+  assert spec.run_units["main"].environment["ADMIN"] == "${routes.admin}"
 
 
 def test_env_may_reference_a_route_on_another_run_unit():
   """Routes are app-level, so a unit can name one it does not itself publish."""
-  stack = _stack(
+  spec = _spec(
     """
 [app]
 version = "0.1.0"
@@ -352,12 +352,12 @@ image = "alpine:latest"
 api = { port = "8080" }
 """
   )
-  assert stack.run_units["main"].environment["PEER"] == "${routes.api}"
+  assert spec.run_units["main"].environment["PEER"] == "${routes.api}"
 
 
 def test_env_reference_to_an_undeclared_route_is_rejected():
   with pytest.raises(ConfigError, match="not a known substitution"):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -372,7 +372,7 @@ env = { BASE_URL = "${routes.nope}" }
 
 def test_env_reference_to_an_unknown_dotted_key_is_rejected():
   with pytest.raises(ConfigError, match="not a known substitution"):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -385,8 +385,8 @@ env = { BASE_URL = "${volumes.data}" }
     )
 
 
-def test_env_may_reference_bundle_keys():
-  stack = _stack(
+def test_env_may_reference_klso_keys():
+  spec = _spec(
     """
 [app]
 version = "0.1.0"
@@ -397,13 +397,13 @@ image = "alpine:latest"
 env = { DOMAIN = "${klso.domain}", VOLS = "${klso.volumes}" }
 """
   )
-  assert stack.run_units["main"].environment["DOMAIN"] == "${klso.domain}"
-  assert stack.run_units["main"].environment["VOLS"] == "${klso.volumes}"
+  assert spec.run_units["main"].environment["DOMAIN"] == "${klso.domain}"
+  assert spec.run_units["main"].environment["VOLS"] == "${klso.volumes}"
 
 
-def test_env_reference_to_an_unknown_bundle_key_is_rejected():
+def test_env_reference_to_an_unknown_klso_key_is_rejected():
   with pytest.raises(ConfigError, match="not a known substitution"):
-    _stack(
+    _spec(
       """
 [app]
 version = "0.1.0"
@@ -411,7 +411,7 @@ subdomain = "photos"
 
 [run.main]
 image = "alpine:latest"
-env = { HOST = "${bundle.host}" }
+env = { HOST = "${klso.host}" }
 """
     )
 
@@ -1191,12 +1191,12 @@ def test_pangolin_validate_reports_missing_shared_policy():
 
 
 # ── preflight against the route provider ───────────────────────────────────
-def _assigned(stack, route_name: str, host_port: int = 41000) -> AssignedRoute:
-  route = stack.routes[route_name]
-  assert stack.subdomain is not None
+def _assigned(spec, route_name: str, host_port: int = 41000) -> AssignedRoute:
+  route = spec.routes[route_name]
+  assert spec.subdomain is not None
   return AssignedRoute(
     name=route_name,
-    subdomain=route.subdomain(stack.subdomain),
+    subdomain=route.subdomain(spec.subdomain),
     run_unit_name=route.run_unit_name,
     host_port=host_port,
     container_port=route.container_port,
@@ -1205,11 +1205,11 @@ def _assigned(stack, route_name: str, host_port: int = 41000) -> AssignedRoute:
   )
 
 
-def _run_data(stack, host_ports: dict[str, int] | None = None) -> AppRunData:
+def _run_data(spec, host_ports: dict[str, int] | None = None) -> AppRunData:
   ports = host_ports or {}
   assigned = {
-    name: _assigned(stack, name, ports.get(name, 41000 + i))
-    for i, name in enumerate(stack.routes)
+    name: _assigned(spec, name, ports.get(name, 41000 + i))
+    for i, name in enumerate(spec.routes)
   }
   config = SimpleNamespace(
     provider_domain=lambda tag: (
@@ -1217,12 +1217,12 @@ def _run_data(stack, host_ports: dict[str, int] | None = None) -> AppRunData:
     )
   )
   assignments = {
-    name: "web" for name, route in stack.routes.items() if not route.private
+    name: "web" for name, route in spec.routes.items() if not route.private
   }
   return AppRunData(
-    app=stack.app,
+    app=spec.app,
     run_path=Path("/tmp/unused"),
-    app_domain=f"{stack.subdomain}.home.example" if stack.subdomain else None,
+    app_domain=f"{spec.subdomain}.home.example" if spec.subdomain else None,
     volume_links={},
     config_values={},
     routes=assigned,
@@ -1232,8 +1232,8 @@ def _run_data(stack, host_ports: dict[str, int] | None = None) -> AppRunData:
   )
 
 
-def _web_stack(app_id: str, subdomain: str):
-  return _stack(
+def _web_spec(app_id: str, subdomain: str):
+  return _spec(
     f"""
 [app]
 version = "0.1.0"
@@ -1248,7 +1248,7 @@ main = {{ port = "8080" }}
   )
 
 
-def _preflight_with(provider, stack):
+def _preflight_with(provider, spec):
   store = SimpleNamespace(
     list_route_assignments=lambda: {"main": "web"},
   )
@@ -1261,21 +1261,21 @@ def _preflight_with(provider, stack):
     app_store=lambda _app: store,
   )
   with patch("kelso.lib.lifecycle.routes.get_route_provider", return_value=provider):
-    preflight_app_routes(_run_data(stack), ctx)
+    preflight_app_routes(_run_data(spec), ctx)
 
 
 def test_preflight_allows_free_and_own_routes():
   provider = NoopRouteProvider()
   provider.register_route(AppID("flame"), 41000, "flame", "home.example")
-  _preflight_with(provider, _web_stack("flame", "flame"))
-  _preflight_with(NoopRouteProvider(), _web_stack("fresh", "fresh"))
+  _preflight_with(provider, _web_spec("flame", "flame"))
+  _preflight_with(NoopRouteProvider(), _web_spec("fresh", "fresh"))
 
 
 def test_preflight_refuses_foreign_owner():
   provider = NoopRouteProvider()
   provider.register_route(AppID("first"), 41000, "shared", "home.example")
-  with pytest.raises(RouteProviderError, match="already owned by bundle 'first'"):
-    _preflight_with(provider, _web_stack("second", "shared"))
+  with pytest.raises(RouteProviderError, match="already owned by app 'first'"):
+    _preflight_with(provider, _web_spec("second", "shared"))
 
 
 def test_noop_first_publisher_wins():

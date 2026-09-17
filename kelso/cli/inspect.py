@@ -26,15 +26,15 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   if is_pathlike(args.app):
     source = Path(args.app).expanduser().resolve()
     with ctx.kelso_lock(f"inspect {source}"):
-      stack = load_bundle(source).app_stack()
-      conn.out(capability_receipt(stack, None, ctx, compact=False))
+      spec = load_bundle(source).app_spec()
+      conn.out(capability_receipt(spec, None, ctx, compact=False))
     return
 
   app = ctx.resolve_app(args.app)
   with ctx.locked(f"inspect {app}", app):
-    staged = ctx.staged_stack(app)
-    stack = staged or ctx.bundle_stack(app)
-    if stack is None:
+    staged = ctx.staged_spec(app)
+    spec = staged or ctx.bundle_spec(app)
+    if spec is None:
       raise ValueError(
         f"No manifest for {app}: it is neither installed nor in a catalog. "
         f"Pass a path to a .klso to inspect one directly."
@@ -54,8 +54,8 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
 
     conn.out(
       capability_receipt(
-        stack,
-        load_run_data(stack, ctx) if staged is not None else None,
+        spec,
+        load_run_data(spec, ctx) if staged is not None else None,
         ctx,
         compact=False,
         notes=notes,

@@ -12,7 +12,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, TextIO
 
-from kelso.lib.stack import KELSO_APP_ID_LABEL, KELSO_RUN_UNIT_LABEL
+from kelso.lib.spec import KELSO_APP_ID_LABEL, KELSO_RUN_UNIT_LABEL
 
 logger = getLogger("kelso.docker")
 

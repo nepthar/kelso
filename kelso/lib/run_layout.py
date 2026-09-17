@@ -10,13 +10,13 @@ from typing import Any, Literal
 from kelso.lib.apps import AppID
 from kelso.lib.config import Config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.stack import (
+from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
   PRIMARY_ROUTE_NAME,
   AppConfig,
   AppRoute,
   AppRunUnit,
-  AppStack,
+  AppSpec,
   AppVolume,
   BoundVolume,
 )
@@ -110,7 +110,7 @@ class AssignedRoute:
 
 @dataclass(frozen=True)
 class AppRunData:
-  """Runtime data used to materialize and run an AppStack."""
+  """Runtime data used to materialize and run an AppSpec."""
 
   app: AppID
   run_path: Path
@@ -139,11 +139,11 @@ class AppRunData:
 
 
 def _load_config_values(
-  stack: AppStack, issues: list[ConfigIssue], ctx: KelsoCtx
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
 ) -> dict[str, ConfigValue]:
-  store = ctx.app_store(stack.app)
+  store = ctx.app_store(spec.app)
   result = dict()
-  for config_name, config in stack.config.items():
+  for config_name, config in spec.config.items():
     is_secret, value = store.get_config(config_name)
     resolved = value
     if value is not None:
@@ -171,15 +171,15 @@ def _load_config_values(
 
 
 def _load_volume_links(
-  stack: AppStack, issues: list[ConfigIssue], ctx: KelsoCtx
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
 ) -> dict[str, VolumeLink]:
-  app_id = stack.app
+  app_id = spec.app
   run_path = ctx.config.run_root / app_id
 
   found_binds = ctx.app_store(app_id).list_binds()
 
   volume_links = {}
-  for volume_name, volume in stack.volumes.items():
+  for volume_name, volume in spec.volumes.items():
     mkdir = volume.kind not in ("app", "host")
     bind_cmd = f"`kelso config {app_id} --bind {volume_name}=<host_volume>`"
 
@@ -260,51 +260,51 @@ def _load_volume_links(
 
 
 def _compare_route(
-  issues: list[ConfigIssue], stack_route: AppRoute, conf_route: AssignedRoute
+  issues: list[ConfigIssue], spec_route: AppRoute, conf_route: AssignedRoute
 ) -> None:
   # Note: In the current impl, we ALWAYS clear out all configured routes before staging/running
   # so any stale data should be gone. I'm leaving this here out of caution for future work.
-  def mismatch(field: str, from_stack: Any, from_config: Any):
+  def mismatch(field: str, from_spec: Any, from_config: Any):
     issues.append(
       ConfigIssue(
-        f"route {stack_route.route_name}: {field} mismatch: stack={from_stack} config={from_config}",
+        f"route {spec_route.route_name}: {field} mismatch: manifest={from_spec} config={from_config}",
         "Examine w/ `kelso routes`, remove app data & runtime with `kelso rm`",
         self_healing=True,
       )
     )
 
-  if stack_route.route_name != conf_route.name:
-    mismatch("name", stack_route.route_name, conf_route.name)
-  if stack_route.run_unit_name != conf_route.run_unit_name:
-    mismatch("run unit", stack_route.run_unit_name, conf_route.run_unit_name)
+  if spec_route.route_name != conf_route.name:
+    mismatch("name", spec_route.route_name, conf_route.name)
+  if spec_route.run_unit_name != conf_route.run_unit_name:
+    mismatch("run unit", spec_route.run_unit_name, conf_route.run_unit_name)
 
-  if stack_route.needs_allocation:
+  if spec_route.needs_allocation:
     if conf_route.host_port == -1:
       issues.append(
         ConfigIssue(
-          f"route {stack_route.route_name}: host port not allocated",
+          f"route {spec_route.route_name}: host port not allocated",
           "Clear data with `kelso rm` and retry with `kelso start`",
           self_healing=True,
         )
       )
   else:
-    if stack_route.host_port != conf_route.host_port:
-      mismatch("host port", stack_route.host_port, conf_route.host_port)
-  if stack_route.container_port != conf_route.container_port:
-    mismatch("container port", stack_route.container_port, conf_route.container_port)
-  if stack_route.proto != conf_route.proto:
-    mismatch("proto", stack_route.proto, conf_route.proto)
-  if stack_route.scheme != conf_route.scheme:
-    mismatch("scheme", stack_route.scheme, conf_route.scheme)
+    if spec_route.host_port != conf_route.host_port:
+      mismatch("host port", spec_route.host_port, conf_route.host_port)
+  if spec_route.container_port != conf_route.container_port:
+    mismatch("container port", spec_route.container_port, conf_route.container_port)
+  if spec_route.proto != conf_route.proto:
+    mismatch("proto", spec_route.proto, conf_route.proto)
+  if spec_route.scheme != conf_route.scheme:
+    mismatch("scheme", spec_route.scheme, conf_route.scheme)
 
 
 def _load_routes(
-  stack: AppStack, issues: list[ConfigIssue], ctx: KelsoCtx
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
 ) -> dict[str, AssignedRoute]:
-  found_routes = ctx.kelso_db.list_routes(stack.app)
+  found_routes = ctx.kelso_db.list_routes(spec.app)
 
-  missing_routes = set(stack.routes.keys()) - set(found_routes.keys())
-  extra_routes = set(found_routes.keys()) - set(stack.routes.keys())
+  missing_routes = set(spec.routes.keys()) - set(found_routes.keys())
+  extra_routes = set(found_routes.keys()) - set(spec.routes.keys())
 
   for name in sorted(missing_routes):
     issues.append(
@@ -326,12 +326,12 @@ def _load_routes(
   loaded = {}
   for name, route_entry in found_routes.items():
     configd = AssignedRoute(**route_entry)
-    from_stack = stack.routes.get(name)
-    if from_stack is None:
+    from_spec = spec.routes.get(name)
+    if from_spec is None:
       # We already added an issue for extra/missing routes.
       continue
 
-    _compare_route(issues, from_stack, configd)
+    _compare_route(issues, from_spec, configd)
     loaded[name] = configd
 
   return loaded
@@ -360,20 +360,20 @@ def _route_urls(
   return urls
 
 
-def resolved_subdomain(stack: AppStack, ctx: KelsoCtx) -> str | None:
+def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
   """The DNS label this install uses: stored config, else the bundle default."""
-  cfg = stack.config.get("subdomain")
+  cfg = spec.config.get("subdomain")
   if cfg is not None:
-    _, value = ctx.app_store(stack.app).get_config("subdomain")
+    _, value = ctx.app_store(spec.app).get_config("subdomain")
     if value:
       return value
     if cfg.has_default():
       return cfg.default
-  return stack.subdomain
+  return spec.subdomain
 
 
 def _app_domain(
-  stack: AppStack,
+  spec: AppSpec,
   assignments: Mapping[str, str],
   config: Config,
   subdomain: str | None,
@@ -385,7 +385,7 @@ def _app_domain(
 
 
 def _env_substitutions(
-  stack: AppStack, run_unit: AppRunUnit, data: AppRunData
+  spec: AppSpec, run_unit: AppRunUnit, data: AppRunData
 ) -> dict[str, str]:
   """Flat key → value map for one unit's `[run.*.env]` placeholders."""
   volumes = ",".join(
@@ -396,7 +396,7 @@ def _env_substitutions(
     _env_kvpair(name, str(data.routes[name].container_port)) for name in run_unit.routes
   )
   return {
-    **{name: f"${{{cfg.env_name()}}}" for name, cfg in stack.config.items()},
+    **{name: f"${{{cfg.env_name()}}}" for name, cfg in spec.config.items()},
     **{f"{ROUTE_KEY_PREFIX}{name}": url for name, url in data.route_urls.items()},
     f"{KLSO_KEY_PREFIX}domain": data.app_domain or "",
     f"{KLSO_KEY_PREFIX}volumes": volumes,
@@ -405,14 +405,14 @@ def _env_substitutions(
   }
 
 
-def make_compose_dict(stack: AppStack, data: AppRunData) -> dict[str, Any]:
+def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
   services: dict[str, Any] = {}
-  for run_name, run_unit in stack.run_units.items():
+  for run_name, run_unit in spec.run_units.items():
     # The validator has already checked every dotted `${...}`, so the only way one
     # survives unsubstituted is a route that was never allocated.
     environment = {
       str(k): EnvTemplate(str(v)).safe_substitute(
-        _env_substitutions(stack, run_unit, data)
+        _env_substitutions(spec, run_unit, data)
       )
       for k, v in run_unit.environment.items()
     }
@@ -435,7 +435,7 @@ def make_compose_dict(stack: AppStack, data: AppRunData) -> dict[str, Any]:
     }
 
     mounts = [_mount_string(bound) for bound in run_unit.volumes.values()]
-    # Kelso's own mounts stay out of `${klso.volumes}`: that value tells a bundle
+    # Kelso's own mounts stay out of `${klso.volumes}`: that value tells an app
     # where the volumes it declared ended up.
     mounts.extend(data.host_mounts)
     if mounts:
@@ -454,7 +454,7 @@ def make_compose_dict(stack: AppStack, data: AppRunData) -> dict[str, Any]:
         for name in run_unit.routes
       ]
 
-    if stack.network_mode == "host":
+    if spec.network_mode == "host":
       service["network_mode"] = "host"
 
     if labels:
@@ -469,23 +469,23 @@ def make_compose_dict(stack: AppStack, data: AppRunData) -> dict[str, Any]:
     services[str(run_name)] = service
 
   return {
-    "name": _project_name(str(stack.app)),
+    "name": _project_name(str(spec.app)),
     "services": services,
   }
 
 
-def load_run_data(stack: AppStack, ctx: KelsoCtx) -> AppRunData:
+def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   issues: list[ConfigIssue] = []
-  run_path = ctx.staged_paths(stack.app).run_path
-  config_values = _load_config_values(stack, issues, ctx)
-  routes = _load_routes(stack, issues, ctx)
-  vol_links = _load_volume_links(stack, issues, ctx)
-  assignments = ctx.app_store(stack.app).list_route_assignments()
+  run_path = ctx.staged_paths(spec.app).run_path
+  config_values = _load_config_values(spec, issues, ctx)
+  routes = _load_routes(spec, issues, ctx)
+  vol_links = _load_volume_links(spec, issues, ctx)
+  assignments = ctx.app_store(spec.app).list_route_assignments()
   return AppRunData(
-    app=stack.app,
+    app=spec.app,
     run_path=run_path,
     app_domain=_app_domain(
-      stack, assignments, ctx.config, resolved_subdomain(stack, ctx)
+      spec, assignments, ctx.config, resolved_subdomain(spec, ctx)
     ),
     volume_links=vol_links,
     config_values=config_values,
@@ -507,7 +507,7 @@ def _volume_paths(
   match volume.kind:
     case "app":
       src = volume.src if volume.src else volume.name
-      return run_path / "bundle" / src, Path("../../bundle") / src
+      return run_path / "staged" / src, Path("../../staged") / src
     case "host":
       tag = binds.get(volume.name)
       if tag is None:

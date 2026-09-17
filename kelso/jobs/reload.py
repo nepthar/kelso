@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import reload_app
 
 class ReloadJob(Job):
   name = "reload"
-  description = "Stop a bundle if running, re-install it, and start it again if it was"
+  description = "Stop an app if running, re-install it, and start it again if it was"
   required_args = ("app",)
   optional_args = ("force",)
 

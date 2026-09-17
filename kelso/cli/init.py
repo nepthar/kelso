@@ -34,7 +34,7 @@ port_base = 41000
 [repo.staples]
 url = "github://nepthar/kelso/main/apps"
 
-# Small bundles that demonstrate one feature each. Useful while learning what a
+# Small apps that demonstrate one feature each. Useful while learning what a
 # manifest can do, and safe to remove once you are done.
 [repo.demos]
 url = "github://nepthar/kelso/main/demo-apps"
@@ -134,7 +134,7 @@ def _mirror_default_repos(config, conn) -> None:
         f"when you can reach GitHub."
       )
       continue
-    conn.out(f"Mirrored {repo.name}: {len(result.bundles)} bundles at {result.sha[:8]}")
+    conn.out(f"Mirrored {repo.name}: {len(result.bundles)} apps at {result.sha[:8]}")
 
 
 def run(args: argparse.Namespace, _ctx, conn) -> None:
@@ -194,7 +194,7 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
     "  kelso uninstall <app> remove the installation, keeping data and config"
   )
   conn.out(
-    "\nThe `demos` repo is there to explore what a bundle can do. You may wish "
+    "\nThe `demos` repo is there to explore what an app can do. You may wish "
     "to remove\nit once you are finished: `kelso repo remove demos`."
   )
 

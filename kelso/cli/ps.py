@@ -5,7 +5,7 @@ from tabulate import tabulate
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.observations import UNINSTALLED, AppObservation
 from kelso.lib.run_layout import load_run_data
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.views import config_status
 
 EMPTY = "-"
@@ -22,17 +22,17 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
     for observation in ctx.observations():
       if not observation.known:
         continue
-      stack = (
-        ctx.bundle_stack(observation.app_id)
+      spec = (
+        ctx.bundle_spec(observation.app_id)
         if observation.state == UNINSTALLED
-        else ctx.staged_stack(observation.app_id)
+        else ctx.staged_spec(observation.app_id)
       )
       rows.append(
         (
           observation.app_id,
           _status(observation),
-          _config(observation, stack, ctx),
-          _volumes(observation, stack),
+          _config(observation, spec, ctx),
+          _volumes(observation, spec),
           observation.last_action or EMPTY,
         )
       )
@@ -51,23 +51,23 @@ def _status(observation: AppObservation) -> str:
   return UNINSTALLED if observation.state == UNINSTALLED else EMPTY
 
 
-def _config(observation: AppObservation, stack: AppStack | None, ctx: KelsoCtx) -> str:
+def _config(observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx) -> str:
   """Whether this app's settings are complete -- kept config included."""
   if not observation.config_exists:
     return EMPTY
   if observation.state == UNINSTALLED:
-    if stack is None:
+    if spec is None:
       return "kept"
-    return config_status(stack, ctx.app_store(observation.app_id))
-  if stack is None:
+    return config_status(spec, ctx.app_store(observation.app_id))
+  if spec is None:
     return EMPTY
-  return "missing" if load_run_data(stack, ctx).start_blockers else "ready"
+  return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
 
 
-def _volumes(observation: AppObservation, stack: AppStack | None) -> str:
-  if stack is None:
+def _volumes(observation: AppObservation, spec: AppSpec | None) -> str:
+  if spec is None:
     return EMPTY
-  count = str(len(stack.volumes))
+  count = str(len(spec.volumes))
   if observation.state != UNINSTALLED:
     return count
   return f"{count} kept" if observation.volumes_exist else EMPTY

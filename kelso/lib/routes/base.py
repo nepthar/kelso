@@ -18,7 +18,7 @@ class RouteProviderError(Exception):
 
 
 def refuse_foreign_route(domain_name: str, owner: str | None) -> RouteProviderError:
-  owner_desc = f"bundle {owner!r}" if owner else "a non-Kelso proxy host"
+  owner_desc = f"app {owner!r}" if owner else "a non-Kelso proxy host"
   return RouteProviderError(
     f"Refusing to replace {domain_name}; it is already owned by {owner_desc}"
   )

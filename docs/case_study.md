@@ -1,11 +1,11 @@
 # Kelso App Case Study - Unifi Network Application
 
-In this case study, we walk through how I built the `unifi-network-application.klso` in about half an hour using Linuxserver.io's documentation and sample docker stack.
+In this case study, we walk through how I built the `unifi-network-application.klso` in about half an hour using Linuxserver.io's documentation and sample docker compose file.
 
 By following along, you will see:
 
-- How habor apps enable distribution of stacks of containers
-- How to translate docker compose stacks into kelso's world
+- How kelso apps make multi-container software easy to distribute
+- How to translate a docker compose file into kelso's world
 - How to provision volumes, secrets, and routes
 
 ## Goal - Run Unifi's Network Application so you can manage your wifi
@@ -162,7 +162,7 @@ MONGO_DBNAME = "unifi"
 MONGO_AUTHSOURCE = "admin"
 ```
 
-## Step 3. The full stack
+## Step 3. The full compose file
 
 Moving towards the end of the instructions, they provide a full-ish docker `compose.yml` file along with a command to run it via `docker`.
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import stage, staging_target
-from kelso.lib.stack import ComposeWarning
+from kelso.lib.spec import ComposeWarning
 from kelso.lib.util import Conn
 
 
@@ -57,7 +57,7 @@ def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
   about to fail on it with a better message than a prompt could give.
   """
   try:
-    return load_bundle(bundle).app_stack().compose_warnings
+    return load_bundle(bundle).app_spec().compose_warnings
   except (ValueError, RuntimeError, OSError):
     return ()
 

@@ -19,13 +19,13 @@ from kelso.lib.run_layout import (
   resolved_subdomain,
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import now_ts, validate_identifier
 
-# Scratch names used while swapping in a new bundle copy. Both are inside the run
+# Scratch names used while swapping in a new staged copy. Both are inside the run
 # dir so the swap is a rename on one filesystem rather than a second copy.
-INCOMING = ".bundle.incoming"
-OUTGOING = ".bundle.outgoing"
+INCOMING = ".staged.incoming"
+OUTGOING = ".staged.outgoing"
 
 
 def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
@@ -39,7 +39,7 @@ def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
 
 
 def _stage_incoming(source: Path, run_path: Path) -> Path:
-  """Extract the bundle into ``run/<id>/.bundle.incoming`` (not yet live)."""
+  """Extract the bundle into ``run/<id>/.staged.incoming`` (not yet live)."""
   bundle = load_bundle(source)
   incoming = run_path / INCOMING
   outgoing = run_path / OUTGOING
@@ -52,12 +52,12 @@ def _stage_incoming(source: Path, run_path: Path) -> Path:
 
 
 def _commit_incoming(paths: StagedAppPaths, incoming: Path) -> None:
-  """Promote a validated incoming copy to ``bundle/``."""
+  """Promote a validated incoming copy to ``staged/``."""
   outgoing = paths.run_path / OUTGOING
-  bundle = paths.bundle_path
-  if bundle.exists():
-    os.replace(bundle, outgoing)
-  os.replace(incoming, bundle)
+  staged = paths.staged_path
+  if staged.exists():
+    os.replace(staged, outgoing)
+  os.replace(incoming, staged)
   if outgoing.exists():
     shutil.rmtree(outgoing)
 
@@ -71,10 +71,10 @@ def _discard_incoming(run_path: Path) -> None:
     run_path.rmdir()
 
 
-def _generate_missing_config(stack: AppStack, ctx: KelsoCtx) -> None:
+def _generate_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
   """Fill in defaults and generate secrets for all keys possible"""
-  store = ctx.app_store(stack.app)
-  for config_name, config in stack.config.items():
+  store = ctx.app_store(spec.app)
+  for config_name, config in spec.config.items():
     if config.default is None or store.has_config(config_name):
       continue
     try:
@@ -84,18 +84,18 @@ def _generate_missing_config(stack: AppStack, ctx: KelsoCtx) -> None:
       logger.error(f"{config_name}: {e}")
 
 
-def _clear_and_reallocate_ports(stack: AppStack, ctx: KelsoCtx) -> None:
+def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
   """Claim pinned host ports and allocate free ones in kelsodb."""
-  if stack.network_mode == "host" or not stack.routes:
+  if spec.network_mode == "host" or not spec.routes:
     return
 
-  app_subdomain = resolved_subdomain(stack, ctx)
+  app_subdomain = resolved_subdomain(spec, ctx)
   if not app_subdomain:
-    raise ValueError(f"App {stack.app} declares routes but has no [app].subdomain")
+    raise ValueError(f"App {spec.app} declares routes but has no [app].subdomain")
 
   hdb = ctx.kelso_db
-  hdb.clear_routes(stack.app)
-  for route_name, route in stack.routes.items():
+  hdb.clear_routes(spec.app)
+  for route_name, route in spec.routes.items():
     if route.needs_allocation:
       host_port = hdb.next_free_port()
     else:
@@ -111,14 +111,14 @@ def _clear_and_reallocate_ports(stack: AppStack, ctx: KelsoCtx) -> None:
       scheme=route.scheme,
     )
 
-    hdb.set_route(stack.app, route_name, assigned.__dict__)
+    hdb.set_route(spec.app, route_name, assigned.__dict__)
 
 
-def _apply_default_route_assignments(stack: AppStack, ctx: KelsoCtx) -> None:
+def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
   """Write default_route_provider for non-private routes with no assignment yet."""
-  store = ctx.app_store(stack.app)
+  store = ctx.app_store(spec.app)
   default = ctx.config.default_route_provider
-  for route_name, route in stack.routes.items():
+  for route_name, route in spec.routes.items():
     if store.has_route_assignment(route_name):
       continue
     if not route.private:
@@ -143,7 +143,7 @@ def _make_link(destination: Path, target: Path) -> None:
   destination.symlink_to(target)
 
 
-def _rebuild_volume_links(stack: AppStack, run_data: AppRunData) -> tuple[str, ...]:
+def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...]:
   """Point `volumes/<kind>/<name>` at the current manifest's volumes.
 
   host/ volumes are linked at run time instead: they can change between install
@@ -153,21 +153,21 @@ def _rebuild_volume_links(stack: AppStack, run_data: AppRunData) -> tuple[str, .
   existing = _existing_volume_kinds(volumes_root)
 
   for name, kind in existing.items():
-    volume = stack.volumes.get(name)
+    volume = spec.volumes.get(name)
     if volume is not None and volume.kind != kind:
       raise ValueError(
-        f"App {stack.app} - volume {name} changed kind from {kind} to "
+        f"App {spec.app} - volume {name} changed kind from {kind} to "
         f"{volume.kind}, but its data lives under the {kind} root. Move it by "
-        f"hand, or run `kelso rm {stack.app}` to delete it."
+        f"hand, or run `kelso rm {spec.app}` to delete it."
       )
 
   # Only links live here; the data they point at is outside the run dir, or (for
-  # app volumes) under bundle/. So the whole tree can be torn down and rebuilt.
+  # app volumes) under staged/. So the whole tree can be torn down and rebuilt.
   if volumes_root.exists():
     shutil.rmtree(volumes_root)
 
   for volume_name, link in run_data.volume_links.items():
-    if stack.volumes[volume_name].kind == "host":
+    if spec.volumes[volume_name].kind == "host":
       continue
     logger.debug("volume %s: %s -> %s", volume_name, link.destination, link.target)
     if link.mkdir:
@@ -176,14 +176,14 @@ def _rebuild_volume_links(stack: AppStack, run_data: AppRunData) -> tuple[str, .
       raise ValueError(f"volume {volume_name} source does not exist: {link.source}")
     _make_link(link.destination, link.target)
 
-  return tuple(sorted(name for name in existing if name not in stack.volumes))
+  return tuple(sorted(name for name in existing if name not in spec.volumes))
 
 
-def link_host_volumes(stack: AppStack, run_data: AppRunData) -> None:
+def link_host_volumes(spec: AppSpec, run_data: AppRunData) -> None:
   """Build `volumes/host/` from the binds on file. Clobber existing links."""
   unlink_host_volumes(run_data.run_path)
   for volume_name, link in run_data.volume_links.items():
-    if stack.volumes[volume_name].kind != "host":
+    if spec.volumes[volume_name].kind != "host":
       continue
     logger.debug("host volume %s: %s -> %s", volume_name, link.destination, link.target)
     _make_link(link.destination, link.target)
@@ -198,22 +198,22 @@ def unlink_host_volumes(run_path: Path) -> None:
 
 @dataclass(frozen=True)
 class StageSuccess:
-  stack: AppStack
+  spec: AppSpec
   run_data: AppRunData
   dropped_volumes: tuple[str, ...] = ()
 
 
-def materialize(stack: AppStack, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ...]]:
-  """Rebuild everything derived from the bundle now sitting in the run dir."""
-  _clear_and_reallocate_ports(stack, ctx)
+def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ...]]:
+  """Rebuild everything derived from the staged copy in the run dir."""
+  _clear_and_reallocate_ports(spec, ctx)
 
-  run_data = load_run_data(stack, ctx)
+  run_data = load_run_data(spec, ctx)
   if run_data.stage_blockers:
     raise ValueError("\n".join(i.problem for i in run_data.stage_blockers))
 
-  dropped = _rebuild_volume_links(stack, run_data)
-  with open(ctx.staged_paths(stack.app).compose_path, "w") as f:
-    yaml.safe_dump(make_compose_dict(stack, run_data), f, sort_keys=False)
+  dropped = _rebuild_volume_links(spec, run_data)
+  with open(ctx.staged_paths(spec.app).compose_path, "w") as f:
+    yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
   return run_data, dropped
 
@@ -305,19 +305,19 @@ def _check_binding(ctx: KelsoCtx, target: StagingTarget, *, force: bool) -> None
 
 
 def apply_config_sets(
-  stack: AppStack, sets: list[tuple[str, str]], ctx: KelsoCtx
+  spec: AppSpec, sets: list[tuple[str, str]], ctx: KelsoCtx
 ) -> None:
-  store = ctx.app_store(stack.app)
+  store = ctx.app_store(spec.app)
   running = False
   try:
-    running = ctx.run_state(stack.app).running_count > 0
+    running = ctx.run_state(spec.app).running_count > 0
   except ValueError:
     pass
 
   for name, value in sets:
-    config = stack.config.get(name)
+    config = spec.config.get(name)
     if not config:
-      raise ValueError(f"No config {name} in {stack.app}'s manifest")
+      raise ValueError(f"No config {name} in {spec.app}'s manifest")
     if not value:
       raise ValueError(f"Empty value for config {name!r}")
     if name == "subdomain":
@@ -330,39 +330,39 @@ def apply_config_sets(
         ) from None
       if running:
         raise ValueError(
-          f"App {stack.app} is running; run `kelso stop {stack.app}` first"
+          f"App {spec.app} is running; run `kelso stop {spec.app}` first"
         )
     store.set_config(name, config.secret, value)
     if name == "subdomain":
-      _relabel_routes(stack, value, ctx)
+      _relabel_routes(spec, value, ctx)
 
 
-def _relabel_routes(stack: AppStack, app_subdomain: str, ctx: KelsoCtx) -> None:
+def _relabel_routes(spec: AppSpec, app_subdomain: str, ctx: KelsoCtx) -> None:
   """Rewrite allocated route labels to match a new app subdomain."""
   hdb = ctx.kelso_db
-  for name, entry in hdb.list_routes(stack.app).items():
-    route = stack.routes.get(name)
+  for name, entry in hdb.list_routes(spec.app).items():
+    route = spec.routes.get(name)
     if route is None:
       continue
     updated = dict(entry)
     updated["subdomain"] = route.subdomain(app_subdomain)
-    hdb.set_route(stack.app, name, updated)
+    hdb.set_route(spec.app, name, updated)
 
-  compose_path = ctx.staged_paths(stack.app).compose_path
+  compose_path = ctx.staged_paths(spec.app).compose_path
   if compose_path.is_file():
-    run_data = load_run_data(stack, ctx)
+    run_data = load_run_data(spec, ctx)
     with open(compose_path, "w") as f:
-      yaml.safe_dump(make_compose_dict(stack, run_data), f, sort_keys=False)
+      yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
 
-def bind(stack: AppStack, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:
+def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:
   """Record a host-volume bind against the staged bundle."""
-  app = stack.app
+  app = spec.app
 
-  if volname not in stack.volumes:
+  if volname not in spec.volumes:
     raise ValueError(f"App {app} - no such volume {volname}")
 
-  vol = stack.volumes[volname]
+  vol = spec.volumes[volname]
   if vol.kind != "host":
     raise ValueError(
       f"App {app} - volume {volname}, kind={vol.kind}, only host volumes can be bound"
@@ -437,12 +437,12 @@ def stage(
     )
 
   # Extract the bundle under run/ first, validate *that* copy, then promote it
-  # to bundle/. AppStack always comes from the run tree, never the bundle.
+  # to staged/. AppSpec always comes from the run tree, never the source bundle.
   run_path = paths.run_path
   run_path.mkdir(parents=True, exist_ok=True)
   try:
     incoming = _stage_incoming(bundle, run_path)
-    stack = AppStack.from_file(incoming / "manifest.toml", app)
+    spec = AppSpec.from_file(incoming / "manifest.toml", app)
   except Exception:
     _discard_incoming(run_path)
     raise
@@ -455,22 +455,22 @@ def stage(
 
   # Apply configuration sets if we're given them
   if sets:
-    apply_config_sets(stack, sets, ctx)
+    apply_config_sets(spec, sets, ctx)
 
   # Apply binds, if we're given them
   if binds:
     for volname, host_volume_tag in binds:
-      bind(stack, volname, host_volume_tag, ctx)
+      bind(spec, volname, host_volume_tag, ctx)
 
-  _generate_missing_config(stack, ctx)
-  _apply_default_route_assignments(stack, ctx)
+  _generate_missing_config(spec, ctx)
+  _apply_default_route_assignments(spec, ctx)
 
   try:
-    run_data, dropped = materialize(stack, ctx)
+    run_data, dropped = materialize(spec, ctx)
   except Exception:
     record_app_action("install-failed", app, ctx)
     raise
 
   store.set_meta("installed_at", now_ts())
   record_app_action("installed", app, ctx)
-  return StageSuccess(stack, run_data, dropped)
+  return StageSuccess(spec, run_data, dropped)

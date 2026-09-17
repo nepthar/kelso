@@ -5,7 +5,7 @@ from kelso.lib.kelso import KelsoCtx
 
 class StopJob(Job):
   name = "stop"
-  description = "Stop a running bundle"
+  description = "Stop a running app"
   required_args = ("app",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:

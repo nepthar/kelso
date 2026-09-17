@@ -35,7 +35,7 @@ RepoKind = Literal["local", "github"]
 USAGE = (
   f"{GITHUB_SCHEME}<user>/<repo>/<ref>[/<path>]\n"
   f"  e.g. {GITHUB_SCHEME}nepthar/kelso/main/apps\n"
-  f"  <ref> is a branch, tag, or commit sha; <path> is the folder of bundles\n"
+  f"  <ref> is a branch, tag, or commit sha; <path> is the folder of apps\n"
   f"  inside the repository, and defaults to its root."
 )
 
@@ -262,7 +262,7 @@ def _check_size(repo: Repo, bundles: tuple[RemoteBundle, ...]) -> None:
   total = sum(bundle.total_bytes for bundle in bundles)
   if len(bundles) > MAX_BUNDLES:
     raise ValueError(
-      f"{repo.describe()} holds {len(bundles)} bundles, over the {MAX_BUNDLES} limit."
+      f"{repo.describe()} holds {len(bundles)} apps, over the {MAX_BUNDLES} limit."
     )
   if files > MAX_REPO_FILES:
     raise ValueError(

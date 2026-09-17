@@ -10,7 +10,7 @@ from kelso.lib.kelso import CatalogEntry, KelsoCtx
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
-    "catalog", help="List available bundles and the app source each is in"
+    "catalog", help="List available apps and the repo each is in"
   )
   parser.set_defaults(func=run)
 

@@ -41,7 +41,7 @@ def _confirmed(plan: DevPlan, conn: Conn) -> bool:
   conn.out(
     f"{plan.app_id}'s manifest has changed since it was staged:\n"
     f"  source: {plan.source / 'manifest.toml'}\n"
-    f"  staged: {plan.run_path / 'bundle' / 'manifest.toml'}\n"
+    f"  staged: {plan.run_path / 'staged' / 'manifest.toml'}\n"
     f"Run `kelso install {plan.app_id}` to update it. Until then this dev run "
     f"uses the staged copy: images, env, ports and mounts are all from it."
   )
@@ -63,7 +63,7 @@ def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
   # The same block `kelso start` prints; only what is published differs.
   for i, line in enumerate(
     route_lines(
-      plan.stack,
+      plan.spec,
       plan.run_data,
       plan.published,
       host=ctx.config.kelso_address or "localhost",

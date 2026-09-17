@@ -305,7 +305,7 @@ def test_a_full_path_picks_which_source_to_stage(kelso_env):
   result = kelso_env.run("install", str(bundle))
 
   assert result.returncode == 0, result.stderr
-  staged = kelso_env.run_root / "ports-demo" / "bundle" / "manifest.toml"
+  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
   assert "From dev" in staged.read_text()
   # Picking one did not add a third entry for the id.
   assert len(ctx_for(kelso_env).app_catalog()["ports-demo"]) == 2
@@ -318,7 +318,7 @@ def test_only_one_app_is_staged_per_id(kelso_env):
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
   assert kelso_env.run("install", str(bundle)).returncode == 0
-  staged = kelso_env.run_root / "ports-demo" / "bundle" / "manifest.toml"
+  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
   assert "From dev" in staged.read_text()
 
   from_main = kelso_env.root / "repos" / "main" / "ports-demo.klso"
@@ -359,7 +359,7 @@ def test_a_repo_can_be_named_to_settle_an_ambiguous_id(kelso_env):
 
   assert kelso_env.run("install", "ports-demo@hrbr-dev").returncode == 0
 
-  staged = kelso_env.run_root / "ports-demo" / "bundle" / "manifest.toml"
+  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
   assert "From dev" in staged.read_text()
   assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo hrbr-dev"
 

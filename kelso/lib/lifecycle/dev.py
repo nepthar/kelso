@@ -20,7 +20,7 @@ from kelso.lib.lifecycle.run import recovery_lines
 from kelso.lib.lifecycle.stage import link_host_volumes, unlink_host_volumes
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import AppRunData, load_run_data
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class DevPlan:
   source: Path
   # app volume name -> the path inside `source` it will be mounted from.
   mounts: dict[str, Path]
-  stack: AppStack
+  spec: AppSpec
   run_data: AppRunData
   # The compose.yml about to run was generated from a manifest that has since
   # changed.
@@ -77,11 +77,11 @@ def dev_plan(app: AppID, ctx: KelsoCtx, *, publish_routes: bool = False) -> DevP
   # Required whether or not anything is mounted from it: `kelso dev` is for
   # an app you are editing in place, and that is what a folder bundle is.
   source = _dev_source(app, ctx)
-  stack = AppStack.from_file(paths.manifest_path, app)
+  spec = AppSpec.from_file(paths.manifest_path, app)
 
   mounts = {
     name: source / (volume.src or name)
-    for name, volume in stack.volumes.items()
+    for name, volume in spec.volumes.items()
     if volume.kind == "app"
   }
   for name, path in mounts.items():
@@ -90,7 +90,7 @@ def dev_plan(app: AppID, ctx: KelsoCtx, *, publish_routes: bool = False) -> DevP
 
   # Same bar as `start`: a dev run is a normal run with the bundle mounted from
   # somewhere else, so unset config, binds and routes block it identically.
-  run_data = load_run_data(stack, ctx)
+  run_data = load_run_data(spec, ctx)
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
 
@@ -107,7 +107,7 @@ def dev_plan(app: AppID, ctx: KelsoCtx, *, publish_routes: bool = False) -> DevP
     run_path=paths.run_path,
     source=source,
     mounts=mounts,
-    stack=stack,
+    spec=spec,
     run_data=run_data,
     manifest_stale=ctx.manifest_stale(app),
     published=published,
@@ -119,7 +119,7 @@ def source_volume_links(plan: DevPlan) -> Iterator[None]:
   """Point `volumes/app/*` at the source bundle, then put them back."""
   saved: list[tuple[Path, Path, Path]] = []
   for name, target in plan.mounts.items():
-    link = plan.run_path / plan.stack.volumes[name].run_rel_path
+    link = plan.run_path / plan.spec.volumes[name].run_rel_path
     if not link.is_symlink():
       raise ValueError(
         f"App {plan.app_id} - volume {name}: {link} is not a link; "
@@ -163,7 +163,7 @@ def _compose_down(plan: DevPlan) -> None:
 
 
 def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
-  """Run the stack in this terminal with its bundle mounted from source."""
+  """Run the app in this terminal with its bundle mounted from source."""
   app = plan.app_id
   if plan.published:
     try:
@@ -171,7 +171,7 @@ def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
     except RouteProviderError as e:
       raise ValueError(str(e)) from e
 
-  link_host_volumes(plan.stack, plan.run_data)
+  link_host_volumes(plan.spec, plan.run_data)
   try:
     with source_volume_links(plan):
       record_app_action("dev", app, ctx)

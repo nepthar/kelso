@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kelso.lib.apps import AppID
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 # The bundle flavors kelso knows, by filename suffix. These are the one
 # source of truth; everything that names a catalog entry derives from them.
@@ -32,7 +32,7 @@ class KelsoApp:
 
   def files(self) -> Iterator[Path]: ...
 
-  def app_stack(self) -> AppStack: ...
+  def app_spec(self) -> AppSpec: ...
 
   def extract_to(self, target: Path): ...
 
@@ -47,8 +47,8 @@ class BundleFolder(KelsoApp):
   def files(self) -> Iterator[Path]:
     return self.path.rglob("*")
 
-  def app_stack(self) -> AppStack:
-    return AppStack.from_file(self.path / "manifest.toml", self.app_id)
+  def app_spec(self) -> AppSpec:
+    return AppSpec.from_file(self.path / "manifest.toml", self.app_id)
 
   def extract_to(self, target: Path):
     target.mkdir(parents=True, exist_ok=True)
@@ -81,10 +81,10 @@ class BundleMdFile(KelsoApp):
   def files(self) -> Iterator[Path]:
     return (Path(file.path) for file in self._files)
 
-  def app_stack(self) -> AppStack:
+  def app_spec(self) -> AppSpec:
     for md_file in self._files:
       if md_file.path == "manifest.toml":
-        return AppStack.from_bytes(md_file.content.encode(), self.app_id, self.path)
+        return AppSpec.from_bytes(md_file.content.encode(), self.app_id, self.path)
     raise ValueError(f"{self.path.name} is missing a manifest.toml file")
 
   def extract_to(self, target: Path):
@@ -108,7 +108,7 @@ class BundleTarFile(KelsoApp):
   def files(self) -> Iterator[Path]:
     raise NotImplementedError("tar.gz kelso apps are not supported yet")
 
-  def app_stack(self) -> AppStack:
+  def app_spec(self) -> AppSpec:
     raise NotImplementedError("tar.gz kelso apps are not supported yet")
 
   def extract_to(self, target: Path):

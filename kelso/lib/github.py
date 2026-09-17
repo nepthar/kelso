@@ -151,7 +151,7 @@ def list_tree(folder: GithubFolder, sha: str) -> tuple[TreeEntry, ...]:
   if payload.get("truncated"):
     raise ValueError(
       f"{folder.url} is too large to list in one request. Kelso only "
-      f"distributes small bundles today."
+      f"distributes small apps today."
     )
   return _check_entries(payload.get("tree") or [], folder)
 

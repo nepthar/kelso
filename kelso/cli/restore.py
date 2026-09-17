@@ -18,9 +18,9 @@ _RECENT_SNAPSHOT_LIMIT = 10
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "restore",
-    help="Replace a bundle's run state and data volumes with a snapshot's",
+    help="Replace an app's run state and data volumes with a snapshot's",
   )
-  parser.add_argument("app_id", help="App ID of the bundle to restore")
+  parser.add_argument("app_id", help="App ID to restore")
   parser.add_argument(
     "snapshot",
     metavar="SNAPSHOT",
@@ -66,7 +66,7 @@ def _missing_snapshot_message(app: AppID, ctx: KelsoCtx) -> str:
 
 def _confirmed(plan: RestorePlan, snapshot_first: bool, conn: Conn) -> bool:
   conn.out(f"Restoring {plan.app_id} from {plan.snapshot_path} overwrites:")
-  conn.out(f"  {plan.run_path} (bundle, compose)")
+  conn.out(f"  {plan.run_path} (staged bundle, compose)")
   conn.out(f"  {plan.config_path} (config, secrets)")
   for _, dest in plan.data_volumes:
     conn.out(f"  {dest}")

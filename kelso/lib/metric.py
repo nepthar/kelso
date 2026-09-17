@@ -103,7 +103,7 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
       if not app_volumes.is_dir():
         continue
       # `exists` rather than `is_dir`: an app volume may name a single file
-      # (`pkg -> ../../bundle/package.json`), and `path_size` sizes either.
+      # (`pkg -> ../../staged/package.json`), and `path_size` sizes either.
       for entry in app_volumes.iterdir():
         if not entry.exists():
           continue

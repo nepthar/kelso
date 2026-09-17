@@ -71,11 +71,11 @@ def test_md_extract_writes_files_and_exec_bit(tmp_path: Path):
   assert "hello from markdown" in script.read_text()
 
 
-def test_md_app_stack_builds_from_embedded_manifest(tmp_path: Path):
-  stack = load_bundle(write_md_bundle(tmp_path)).app_stack()
-  assert str(stack.app) == "md-demo"
-  assert list(stack.run_units) == ["main"]
-  assert stack.volumes["hello"].kind == "app"
+def test_md_app_spec_builds_from_embedded_manifest(tmp_path: Path):
+  spec = load_bundle(write_md_bundle(tmp_path)).app_spec()
+  assert str(spec.app) == "md-demo"
+  assert list(spec.run_units) == ["main"]
+  assert spec.volumes["hello"].kind == "app"
 
 
 @pytest.mark.parametrize(
@@ -135,9 +135,9 @@ def test_stage_md_bundle_from_catalog(kelso_env):
   result = kelso_env.run("install", "md-demo")
   assert result.returncode == 0, result.stderr
 
-  bundle_dir = kelso_env.run_root / "md-demo" / "bundle"
-  assert (bundle_dir / "manifest.toml").is_file()
-  assert (bundle_dir / "bin" / "hello.sh").stat().st_mode & 0o111
+  staged_dir = kelso_env.run_root / "md-demo" / "staged"
+  assert (staged_dir / "manifest.toml").is_file()
+  assert (staged_dir / "bin" / "hello.sh").stat().st_mode & 0o111
 
 
 def test_stage_md_bundle_by_path_adds_nothing_to_a_repo(kelso_env):
@@ -147,7 +147,7 @@ def test_stage_md_bundle_by_path_adds_nothing_to_a_repo(kelso_env):
   assert result.returncode == 0, result.stderr
 
   assert not (kelso_env.main_repo / "md-demo.klso.md").exists()
-  assert (kelso_env.run_root / "md-demo" / "bundle" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / "md-demo" / "staged" / "manifest.toml").is_file()
 
 
 def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
@@ -171,7 +171,7 @@ def test_a_full_path_picks_the_flavor_to_stage(kelso_env):
   result = kelso_env.run("install", str(md))
   assert result.returncode == 0, result.stderr
   # The md flavor's manifest, not the fixture directory's.
-  staged = kelso_env.run_root / "ports-demo" / "bundle" / "manifest.toml"
+  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
   assert "Markdown demo" in staged.read_text()
   # Nothing new in apps/: it was already catalogued where it lay.
   assert not (kelso_env.main_repo / "ports-demo.klso.md").is_symlink()

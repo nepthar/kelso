@@ -6,7 +6,7 @@ from kelso.lib.receipt import published_urls
 
 class StartJob(Job):
   name = "start"
-  description = "Start a bundle, staging it first if needed"
+  description = "Start an app, staging it first if needed"
   required_args = ("app",)
   optional_args = ("force",)
 
@@ -27,7 +27,5 @@ class StartJob(Job):
       )
       result = start(app, bundle, ctx, bound=self.target.bound_to)
       lines = [f"Started {app}"]
-      lines += [
-        f"  {url}" for url in published_urls(result.stack, result.run_data, ctx)
-      ]
+      lines += [f"  {url}" for url in published_urls(result.spec, result.run_data, ctx)]
       logger.info("\n".join(lines))

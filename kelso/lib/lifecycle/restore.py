@@ -20,7 +20,7 @@ from kelso.lib.lifecycle.snapshot import (
 )
 from kelso.lib.lifecycle.stage import materialize
 from kelso.lib.run_layout import AppRunData
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import validate_identifier
 
 logger = getLogger("kelso.lifecycle.restore")
@@ -107,7 +107,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
     for rel in (
       f"{prefix}snapshot.toml",
       f"{prefix}config.logtab",
-      f"{prefix}bundle/manifest.toml",
+      f"{prefix}staged/manifest.toml",
     ):
       if rel not in infos:
         raise ValueError(
@@ -170,7 +170,7 @@ def _rebuild_run_dir(plan: RestorePlan) -> None:
   if plan.run_path.exists():
     shutil.rmtree(plan.run_path)
   plan.run_path.mkdir(parents=True, mode=0o700)
-  shutil.copytree(plan.snapshot_path / "bundle", plan.run_path / "bundle")
+  shutil.copytree(plan.snapshot_path / "staged", plan.run_path / "staged")
   plan.config_path.parent.mkdir(parents=True, exist_ok=True)
   shutil.copy2(plan.snapshot_path / "config.logtab", plan.config_path)
 
@@ -228,9 +228,9 @@ def _restore_extracted(
 ) -> AppRunData:
   app = plan.app_id
 
-  # Parse the snapshot's bundle before touching anything; a corrupt snapshot
+  # Parse the snapshot's staged copy before touching anything; a corrupt snapshot
   # fails here with the current state intact.
-  stack = AppStack.from_file(plan.snapshot_path / "bundle" / "manifest.toml", app)
+  spec = AppSpec.from_file(plan.snapshot_path / "staged" / "manifest.toml", app)
 
   take_snapshot = snapshot_first and plan.run_path.exists()
   if take_snapshot and plan.is_latest_pre_restore:
@@ -256,7 +256,7 @@ def _restore_extracted(
   _rebuild_run_dir(plan)
 
   try:
-    run_data, _ = materialize(stack, ctx)
+    run_data, _ = materialize(spec, ctx)
   except Exception as e:
     # The run dir and volumes are already the snapshot's; only the generated
     # half is missing, which is what re-staging rebuilds.

@@ -143,7 +143,7 @@ class AppCommand:
 
 
 @dataclass(frozen=True)
-class AppStack:
+class AppSpec:
   """An immutable, installation-independent app definition."""
 
   app: AppID
@@ -155,12 +155,12 @@ class AppStack:
   commands: Mapping[str, AppCommand]
 
   @classmethod
-  def from_bytes(cls, data: bytes, app_id: AppID, source: Path) -> "AppStack":
+  def from_bytes(cls, data: bytes, app_id: AppID, source: Path) -> "AppSpec":
     """Build from raw manifest.toml bytes; `source` only names them in errors."""
     return _build(parse_manifest(data, app_id, source), app_id)
 
   @classmethod
-  def from_file(cls, manifest_path: Path, app_id: AppID) -> "AppStack":
+  def from_file(cls, manifest_path: Path, app_id: AppID) -> "AppSpec":
     """Build from a manifest.toml on disk."""
     try:
       data = manifest_path.read_bytes()
@@ -203,7 +203,7 @@ class AppStack:
     return self.manifest.app.subdomain
 
 
-def _build(manifest: Manifest, app: AppID) -> AppStack:
+def _build(manifest: Manifest, app: AppID) -> AppSpec:
   # Both sections land in one flat namespace -- everything downstream (env
   # substitution, the config store, `kelso config`) sees a single dict. The
   # section a value came from survives only as `advanced`. `_validate_config`
@@ -245,7 +245,7 @@ def _build(manifest: Manifest, app: AppID) -> AppStack:
     for name, entry in manifest.commands.items()
   }
 
-  return AppStack(
+  return AppSpec(
     app=app,
     manifest=manifest,
     run_units=run_units,
@@ -269,7 +269,7 @@ def _resolve_run_units(
 
   for run_unit_name, run_entry in manifest.run.items():
     # Placeholders in env stay as written; `make_compose_dict` substitutes
-    # against the flat keyspace (config, routes.*, bundle.*).
+    # against the flat keyspace (config, routes.*, klso.*).
     run_env = {
       "KLSO_ID": app,
       "KLSO_VERSION": manifest.app.version,

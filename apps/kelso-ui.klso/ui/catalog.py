@@ -16,13 +16,13 @@ def catalog_app_entry(catalogs, app_id):
 
 
 def add_repo_button():
-  """The page-level action: subscribe to a folder of bundles on GitHub."""
+  """The page-level action: subscribe to a folder of apps on GitHub."""
   return job_button(
     "+ Add Repo",
     "repo-add",
     title="Add a repo",
     desc=(
-      "Kelso mirrors the folder and every bundle in it becomes part of your "
+      "Kelso mirrors the folder and every app in it becomes part of your "
       "catalog. Nothing is installed or started."
     ),
     fields=[
@@ -120,7 +120,7 @@ def catalog_tables(catalogs, repos, contested, open_app=""):
     parts.append(repo_meta(repo))
     apps = catalog.get("apps") or []
     if not apps:
-      parts.append('<div class="card"><p class="empty">No bundles here.</p></div>')
+      parts.append('<div class="card"><p class="empty">No apps here.</p></div>')
       continue
     rows = []
     for app in apps:
@@ -264,7 +264,7 @@ def catalog_card(app, card_id, hidden=True):
   ver = f'<span class="muted">v{esc(version)}</span>' if version else ""
   side = " ".join(p for p in (ver, pill) if p)
   if app.get("configured") is None:
-    summary = '<p class="lede">This bundle\'s manifest could not be read.</p>'
+    summary = '<p class="lede">This app\'s manifest could not be read.</p>'
   else:
     summary = (
       f'<p class="lede">{esc(app.get("description") or "")}</p>'

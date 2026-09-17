@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import PUBLIC_ROUTE_SCHEME
 
 # Every label in these receipts pads to at least this, so the capability block
@@ -14,34 +14,34 @@ LABEL_WIDTH = len("Containers:")
 
 
 def published_route_urls(
-  stack: AppStack, run_data: AppRunData, ctx: KelsoCtx
+  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> dict[str, str]:
   """Route name -> public URL, for routes assigned to a non-none provider."""
-  assignments = ctx.app_store(stack.app).list_route_assignments()
+  assignments = ctx.app_store(spec.app).list_route_assignments()
   urls: dict[str, str] = {}
-  for route_name, route in stack.routes.items():
+  for route_name, route in spec.routes.items():
     tag = assignments.get(route_name)
     if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
       continue
     if route_name in run_data.route_urls:
       urls[route_name] = run_data.route_urls[route_name]
       continue
-    if not stack.subdomain:
+    if not spec.subdomain:
       continue
     domain = ctx.config.provider_domain(tag)
     urls[route_name] = (
-      f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(stack.subdomain)}.{domain}"
+      f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(spec.subdomain)}.{domain}"
     )
   return urls
 
 
-def published_urls(stack: AppStack, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:
+def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:
   """URLs for routes assigned to a non-none provider, in declaration order."""
-  return list(published_route_urls(stack, run_data, ctx).values())
+  return list(published_route_urls(spec, run_data, ctx).values())
 
 
 def route_lines(
-  stack: AppStack,
+  spec: AppSpec,
   run_data: AppRunData | None,
   published: Mapping[str, str],
   *,
@@ -49,11 +49,11 @@ def route_lines(
 ) -> list[str]:
   """Every declared route, read right to left: where you reach it, then what answers."""
   lines: list[str] = []
-  for name, route in stack.routes.items():
+  for name, route in spec.routes.items():
     assigned = run_data.routes.get(name) if run_data else None
     if assigned is not None and assigned.host_port > 0:
       where = f"http://{host}:{assigned.host_port}"
-    elif stack.network_mode == "host":
+    elif spec.network_mode == "host":
       # Host networking maps nothing, so the container port is the host port
       # and kelso never allocated one.
       where = f"http://{host}:{route.container_port}"
@@ -67,15 +67,15 @@ def route_lines(
   return lines
 
 
-def config_lines(stack: AppStack, ctx: KelsoCtx, *, installed: bool) -> list[str]:
+def config_lines(spec: AppSpec, ctx: KelsoCtx, *, installed: bool) -> list[str]:
   """Per-key config status, same wording as `kelso config`."""
-  if not stack.config:
+  if not spec.config:
     return []
   store = None
-  if installed and ctx.config.app_config_path(stack.app).is_file():
-    store = ctx.app_store(stack.app)
+  if installed and ctx.config.app_config_path(spec.app).is_file():
+    store = ctx.app_store(spec.app)
   lines: list[str] = []
-  for name, entry in stack.config.items():
+  for name, entry in spec.config.items():
     if store is None:
       if entry.secret:
         display = "(secret)"
@@ -99,12 +99,12 @@ def config_lines(stack: AppStack, ctx: KelsoCtx, *, installed: bool) -> list[str
 
 
 def volume_lines(
-  stack: AppStack, run_data: AppRunData | None, ctx: KelsoCtx
+  spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
 ) -> list[str]:
   """Managed volume dirs and host-volume bind paths."""
   lines: list[str] = []
-  app_id = stack.app
-  for name, volume in stack.volumes.items():
+  app_id = spec.app
+  for name, volume in spec.volumes.items():
     if run_data is not None and name in run_data.volume_links:
       lines.append(f"{name}: {run_data.volume_links[name].source}")
       continue
@@ -120,27 +120,27 @@ def volume_lines(
 
 
 def location_receipt(
-  stack: AppStack,
+  spec: AppSpec,
   run_data: AppRunData,
   ctx: KelsoCtx,
   *,
   heading: str | None = None,
 ) -> str:
   """Post-up location block (Routes, Data, Logs)."""
-  app_id = stack.app
+  app_id = spec.app
   title = heading if heading is not None else f"Running {app_id}"
   rows: list[tuple[str, str]] = []
 
   routes = route_lines(
-    stack,
+    spec,
     run_data,
-    published_route_urls(stack, run_data, ctx),
+    published_route_urls(spec, run_data, ctx),
     host=ctx.config.kelso_address or "localhost",
   )
   for i, line in enumerate(routes):
     rows.append(("Routes:" if i == 0 else "", line))
 
-  vols = volume_lines(stack, run_data, ctx)
+  vols = volume_lines(spec, run_data, ctx)
   data_line = next((line for line in vols if line.startswith("data:")), None)
   if data_line is not None:
     rows.append(("Data:", data_line.split(": ", 1)[1]))
@@ -153,7 +153,7 @@ def location_receipt(
 
 
 def capability_receipt(
-  stack: AppStack,
+  spec: AppSpec,
   run_data: AppRunData | None,
   ctx: KelsoCtx,
   *,
@@ -164,13 +164,13 @@ def capability_receipt(
   show_logs: bool = False,
 ) -> str:
   """Bundle card for inspect / first-run up."""
-  app_id = stack.app
+  app_id = spec.app
   lines: list[str] = [f"{app_id}"]
 
   if state_line is not None:
     lines.append(_labeled_line("State:", state_line))
 
-  containers = [f"{name}, image={unit.image}" for name, unit in stack.run_units.items()]
+  containers = [f"{name}, image={unit.image}" for name, unit in spec.run_units.items()]
   if containers:
     lines.append(_labeled_line("Containers:", containers[0]))
     for extra in containers[1:]:
@@ -178,15 +178,15 @@ def capability_receipt(
 
   if not compact:
     declared_ports: list[str] = []
-    for unit_name, unit in stack.run_units.items():
+    for unit_name, unit in spec.run_units.items():
       for port_name, port in unit.routes.items():
         if port.host_port < 0:
-          spec = f"{port.container_port}/{port.proto} (allocated)"
+          port_desc = f"{port.container_port}/{port.proto} (allocated)"
         else:
-          spec = f"{port.host_port}:{port.container_port}/{port.proto}"
-        route = stack.routes.get(port_name)
+          port_desc = f"{port.host_port}:{port.container_port}/{port.proto}"
+        route = spec.routes.get(port_name)
         private = ", private" if route and route.private else ""
-        declared_ports.append(f"{unit_name}.{port_name}: {spec}{private}")
+        declared_ports.append(f"{unit_name}.{port_name}: {port_desc}{private}")
     if declared_ports:
       lines.append(_labeled_line("Ports:", declared_ports[0]))
       for extra in declared_ports[1:]:
@@ -194,25 +194,25 @@ def capability_receipt(
 
     if run_data is not None:
       reach = route_lines(
-        stack,
+        spec,
         run_data,
-        published_route_urls(stack, run_data, ctx),
+        published_route_urls(spec, run_data, ctx),
         host=ctx.config.kelso_address or "localhost",
       )
       if reach:
         lines.append(_labeled_line("Routes:", reach[0]))
         for extra in reach[1:]:
           lines.append(_labeled_line("", extra))
-    elif stack.subdomain:
-      lines.append(_labeled_line("Routes:", f"subdomain={stack.subdomain}"))
+    elif spec.subdomain:
+      lines.append(_labeled_line("Routes:", f"subdomain={spec.subdomain}"))
 
-    vols = volume_lines(stack, run_data, ctx)
+    vols = volume_lines(spec, run_data, ctx)
     if vols:
       lines.append(_labeled_line("Volumes:", vols[0]))
       for extra in vols[1:]:
         lines.append(_labeled_line("", extra))
 
-    configs = config_lines(stack, ctx, installed=run_data is not None)
+    configs = config_lines(spec, ctx, installed=run_data is not None)
     if configs:
       lines.append(_labeled_line("Config:", configs[0]))
       for extra in configs[1:]:
@@ -223,7 +223,7 @@ def capability_receipt(
     if show_logs:
       lines.append(_labeled_line("Logs:", f"kelso logs -f {app_id}"))
 
-  dangers = danger_callouts(stack)
+  dangers = danger_callouts(spec)
   for danger in dangers:
     lines.append(_labeled_line("Danger:", danger))
 
@@ -237,16 +237,16 @@ def capability_receipt(
   return "\n".join(lines)
 
 
-def danger_callouts(stack: AppStack) -> list[str]:
+def danger_callouts(spec: AppSpec) -> list[str]:
   callouts: list[str] = []
-  if stack.network_mode == "host":
+  if spec.network_mode == "host":
     callouts.append("host networking (no port isolation)")
-  for name, volume in stack.volumes.items():
+  for name, volume in spec.volumes.items():
     if volume.kind == "host" and not volume.readonly:
       callouts.append(f"writable host bind '{name}'")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
   # bind, and used to be the only one kelso made silently.
-  for warning in stack.compose_warnings:
+  for warning in spec.compose_warnings:
     callouts.append(
       f"free-form docker options on {warning.run_unit}: "
       + ", ".join(warning.option_lines())

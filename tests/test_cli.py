@@ -469,7 +469,7 @@ def test_reload_picks_up_a_changed_manifest_and_comes_back_up(kelso_env):
   assert reloaded.returncode == 0, reloaded.stderr
   assert f"Reloaded {app_id}" in reloaded.stdout
 
-  staged = (kelso_env.run_root / app_id / "bundle" / "manifest.toml").read_text()
+  staged = (kelso_env.run_root / app_id / "staged" / "manifest.toml").read_text()
   assert "0.2.0" in staged
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
 
@@ -1076,7 +1076,7 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
-  (kelso_env.run_root / app_id / "bundle" / "manifest.toml").write_text("not toml {[")
+  (kelso_env.run_root / app_id / "staged" / "manifest.toml").write_text("not toml {[")
 
   listed = kelso_env.run("ps")
   assert listed.returncode == 0, listed.stderr
@@ -1179,7 +1179,7 @@ def stub_provider(monkeypatch):
 def test_duplicate_fqdn_is_rejected_before_compose_up(
   kelso_env, monkeypatch, stub_provider
 ):
-  # Provider already owns photos.* under another bundle -- start must refuse
+  # Provider already owns photos.* under another app -- start must refuse
   # before compose.
   provider = stub_provider({"photos": "other-routes", "api-photos": "other-routes"})
   docker_calls = []
@@ -1531,7 +1531,7 @@ def test_reset_clears_data_and_stages_the_app_again(kelso_env):
 def test_reset_picks_up_a_changed_app_volume(kelso_env):
   """The reason reset re-stages: `app` volumes ship inside the bundle."""
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  staged = kelso_env.run_root / BASIC / "bundle" / "bin" / "hello.sh"
+  staged = kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh"
   assert "changed by the bundle author" not in staged.read_text()
 
   bundle = kelso_env.main_repo / f"{BASIC}.klso" / "bin" / "hello.sh"

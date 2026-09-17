@@ -21,7 +21,7 @@ from kelso.lib.observations import AppObservation
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import MAIN_REPO, bound_apps
 from kelso.lib.run_layout import AppRunData, load_run_data
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
 
@@ -60,27 +60,27 @@ def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
-  stack = _catalog_stack(entry)
+  spec = _catalog_spec(entry)
   # The logtab is what makes an id more than a catalog listing, and AppStore
   # creates it on contact -- so this is a file check, never a store lookup.
   has_config = ctx.config.app_config_path(entry.app_id).is_file()
-  store = ctx.app_store(stack.app) if stack is not None and has_config else None
+  store = ctx.app_store(spec.app) if spec is not None and has_config else None
   manifest = manifest_text(entry.path)
   return {
     "app_id": entry.app_id,
-    "display_name": stack.display_name if stack else "",
-    "version": stack.version if stack else None,
-    "description": stack.description if stack else "",
+    "display_name": spec.display_name if spec else "",
+    "version": spec.version if spec else None,
+    "description": spec.description if spec else "",
     "repo": entry.source,
     "state": ctx.app_state(entry.app_id),
-    "configured": config_status(stack, store) if stack else None,
+    "configured": config_status(spec, store) if spec else None,
     "manifest": manifest,
     "manifest_stale": _catalog_manifest_stale(entry, manifest, ctx),
-    "warnings": compose_warnings_view(stack) if stack else [],
+    "warnings": compose_warnings_view(spec) if spec else [],
   }
 
 
-def compose_warnings_view(stack: AppStack) -> list[dict[str, Any]]:
+def compose_warnings_view(spec: AppSpec) -> list[dict[str, Any]]:
   """`[run.<unit>.compose]` keys kelso does not model, for the UI to show.
 
   Sent whether or not the app is installed: it is a property of the manifest,
@@ -92,7 +92,7 @@ def compose_warnings_view(stack: AppStack) -> list[dict[str, Any]]:
       "message": w.message(),
       "options": list(w.option_lines()),
     }
-    for w in stack.compose_warnings
+    for w in spec.compose_warnings
   ]
 
 
@@ -118,9 +118,9 @@ def _catalog_manifest_stale(entry: CatalogEntry, manifest: str, ctx: KelsoCtx) -
     return False
 
 
-def config_status(stack: AppStack, store: AppStore | None) -> str:
+def config_status(spec: AppSpec, store: AppStore | None) -> str:
   """ "ready" when every config key is set or will be filled, else "missing"."""
-  for name, cfg in stack.config.items():
+  for name, cfg in spec.config.items():
     if cfg.default is not None:
       continue
     if store is not None and store.has_config(name):
@@ -160,10 +160,10 @@ def contested_view(ctx: KelsoCtx) -> dict[str, list[str]]:
   return {app_id: sorted(repos) for app_id, repos in ctx.contested_app_ids().items()}
 
 
-def _catalog_stack(entry: CatalogEntry) -> AppStack | None:
+def _catalog_spec(entry: CatalogEntry) -> AppSpec | None:
   """The bundle's schema, or None when the bundle on disk does not parse."""
   try:
-    return load_bundle(entry.path).app_stack()
+    return load_bundle(entry.path).app_spec()
   except (ValueError, RuntimeError):
     return None
 
@@ -197,8 +197,8 @@ def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         continue
       app_id = app_dir.name
       if app_id not in declared:
-        stack = ctx.staged_stack(app_id)
-        declared[app_id] = set(stack.volumes) if stack else set()
+        spec = ctx.staged_spec(app_id)
+        declared[app_id] = set(spec.volumes) if spec else set()
       for volume_dir in sorted(app_dir.iterdir()):
         if not volume_dir.is_dir():
           continue
@@ -303,41 +303,41 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   """One app in full: what `kelso inspect` shows, as data."""
   observation = _observation(app_id, ctx)
-  stack = ctx.staged_stack(app_id)
-  view = _summary(observation, ctx, stack=stack)
+  spec = ctx.staged_spec(app_id)
+  view = _summary(observation, ctx, spec=spec)
 
-  if stack is None:
+  if spec is None:
     return view
 
-  run_data = load_run_data(stack, ctx)
-  volumes = _volumes(stack, run_data, ctx)
+  run_data = load_run_data(spec, ctx)
+  volumes = _volumes(spec, run_data, ctx)
   view.update(
     {
-      "description": stack.description,
+      "description": spec.description,
       # The whole `[app]` table, extras included -- the section allows unknown
       # keys precisely so a bundle can carry author, source, license and the
       # like, and a viewer should show whatever the author wrote.
       "metadata": {
         key: value
-        for key, value in stack.manifest.app.model_dump().items()
+        for key, value in spec.manifest.app.model_dump().items()
         if value not in (None, "", {})
       },
       "options": {
         "route_providers": sorted(ctx.config.route_providers),
         "host_volumes": sorted(ctx.config.host_volumes),
       },
-      "subdomain": stack.subdomain,
-      "network_mode": stack.network_mode,
+      "subdomain": spec.subdomain,
+      "network_mode": spec.network_mode,
       "run_path": str(ctx.staged_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),
-      "units": _units(stack, observation),
-      "routes": _routes(stack, run_data, ctx),
+      "units": _units(spec, observation),
+      "routes": _routes(spec, run_data, ctx),
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
-      "config": _config(stack, run_data, ctx),
+      "config": _config(spec, run_data, ctx),
       "commands": [
         {"name": name, "desc": command.desc, "unit": command.run_unit}
-        for name, command in stack.commands.items()
+        for name, command in spec.commands.items()
       ],
       "issues": [
         {"problem": issue.problem, "fix": issue.fix}
@@ -359,41 +359,41 @@ def _summary(
   observation: AppObservation,
   ctx: KelsoCtx,
   *,
-  stack: AppStack | None = None,
+  spec: AppSpec | None = None,
 ) -> dict[str, Any]:
-  if stack is None:
-    stack = ctx.staged_stack(observation.app_id)
+  if spec is None:
+    spec = ctx.staged_spec(observation.app_id)
   return {
     "app_id": str(observation.app_id),
-    "display_name": stack.display_name if stack else "",
-    "version": stack.version if stack else None,
+    "display_name": spec.display_name if spec else "",
+    "version": spec.version if spec else None,
     "status": observation.status,
     "state": observation.state,
     "containers": {
       "running": observation.running_count,
       "total": len(observation.containers),
     },
-    "configured": _configured(observation, stack, ctx),
+    "configured": _configured(observation, spec, ctx),
     "config_pending": observation.config_pending,
-    "volume_count": len(stack.volumes) if stack else 0,
+    "volume_count": len(spec.volumes) if spec else 0,
     "last_action": observation.last_action,
   }
 
 
 def _configured(
-  observation: AppObservation, stack: AppStack | None, ctx: KelsoCtx
+  observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx
 ) -> str | None:
   """ "ready", "missing", or None when the app has no config store yet."""
-  if not observation.config_exists or stack is None:
+  if not observation.config_exists or spec is None:
     return None
-  return "missing" if load_run_data(stack, ctx).start_blockers else "ready"
+  return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
 
 
-def _units(stack: AppStack, observation: AppObservation) -> list[dict[str, Any]]:
+def _units(spec: AppSpec, observation: AppObservation) -> list[dict[str, Any]]:
   """Declared run units joined to whatever containers are actually up."""
   containers = {c.run_unit: c for c in observation.containers}
   units = []
-  for name, unit in stack.run_units.items():
+  for name, unit in spec.run_units.items():
     container = containers.get(name)
     units.append(
       {
@@ -423,13 +423,11 @@ def _units(stack: AppStack, observation: AppObservation) -> list[dict[str, Any]]
   return units
 
 
-def _routes(
-  stack: AppStack, run_data: AppRunData, ctx: KelsoCtx
-) -> list[dict[str, Any]]:
-  published = published_route_urls(stack, run_data, ctx)
-  assignments = ctx.app_store(stack.app).list_route_assignments()
+def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
+  published = published_route_urls(spec, run_data, ctx)
+  assignments = ctx.app_store(spec.app).list_route_assignments()
   routes = []
-  for name, route in stack.routes.items():
+  for name, route in spec.routes.items():
     assigned = run_data.routes.get(name)
     routes.append(
       {
@@ -449,15 +447,15 @@ def _routes(
 
 
 def _volumes(
-  stack: AppStack, run_data: AppRunData, ctx: KelsoCtx
+  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> list[dict[str, Any]]:
-  binds = ctx.app_store(stack.app).list_binds()
+  binds = ctx.app_store(spec.app).list_binds()
   # One read for every volume on this page. Sizes come from the gauges
   # volume-metrics records, never from walking the tree here: a `bulk` volume
   # or a bound media library is unbounded, and this runs on every page load.
   gauges = ctx.read_gauges("volume_size_bytes/")
   volumes = []
-  for name, volume in stack.volumes.items():
+  for name, volume in spec.volumes.items():
     link = run_data.volume_links.get(name)
     source = link.source if link else None
     # Host volumes are gauged under the tag they are bound to, since two apps
@@ -466,7 +464,7 @@ def _volumes(
       tag = binds.get(name)
       key = f"volume_size_bytes//host/{tag}" if tag else None
     else:
-      key = f"volume_size_bytes/{stack.app}/{volume.kind}/{name}"
+      key = f"volume_size_bytes/{spec.app}/{volume.kind}/{name}"
     volumes.append(
       {
         "name": name,
@@ -482,12 +480,10 @@ def _volumes(
   return volumes
 
 
-def _config(
-  stack: AppStack, run_data: AppRunData, ctx: KelsoCtx
-) -> list[dict[str, Any]]:
-  store = ctx.app_store(stack.app)
+def _config(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
+  store = ctx.app_store(spec.app)
   entries = []
-  for name, config in stack.config.items():
+  for name, config in spec.config.items():
     value = run_data.config_values.get(name)
     entries.append(
       {

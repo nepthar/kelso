@@ -9,7 +9,7 @@ from pathlib import Path
 from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.rootfs import run_as_root
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import validate_identifier
 
 logger = getLogger("kelso.lifecycle.snapshot")
@@ -181,7 +181,7 @@ def snapshot(
 
   try:
     included, excluded = _volume_names(paths.run_path / "volumes")
-    app_version = AppStack.from_file(paths.manifest_path, app).version
+    app_version = AppSpec.from_file(paths.manifest_path, app).version
     (staging / "snapshot.toml").write_text(
       "\n".join(
         [
@@ -198,9 +198,9 @@ def snapshot(
 
     # Secrets stay Fernet ciphertext; we never decrypt on this path. compose.yml is
     # not captured: its host ports are a photograph of kelsodb, and `restore`
-    # regenerates it from the bundle below.
+    # regenerates it from the staged copy below.
     shutil.copy2(ctx.config.app_config_path(app), staging / "config.logtab")
-    shutil.copytree(paths.bundle_path, staging / "bundle")
+    shutil.copytree(paths.staged_path, staging / "staged")
 
     data_vols = paths.run_path / "volumes" / "data"
     if data_vols.is_dir():

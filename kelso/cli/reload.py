@@ -9,7 +9,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "reload",
-    help="Re-install a bundle from its bundle, restarting it if it was running",
+    help="Re-install an app from its bundle, restarting it if it was running",
   )
   parser.add_argument(
     "app",
@@ -41,7 +41,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   stage = result.stage
   if result.was_running:
     conn.out(f"Reloaded {app}")
-    conn.out(capability_receipt(stage.stack, stage.run_data, ctx, compact=True))
+    conn.out(capability_receipt(stage.spec, stage.run_data, ctx, compact=True))
   else:
     # Not running before, so not running now: say so rather than let the
     # absence of an error read as "it came back up".

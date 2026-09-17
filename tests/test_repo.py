@@ -703,7 +703,7 @@ def test_repo_jobs_are_recorded_as_activity(github, ctx):
 
   assert job.state == "done"
   assert job.log
-  assert "Mirrored 1 bundles" in (ctx.config.activity_root / job.log).read_text()
+  assert "Mirrored 1 apps" in (ctx.config.activity_root / job.log).read_text()
 
 
 def test_a_duplicate_name_never_reaches_the_config_file(github, ctx, kelso_env):

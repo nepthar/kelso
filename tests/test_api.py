@@ -153,7 +153,7 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "configured": None,
     "manifest": "not toml",
     "manifest_stale": False,
-    # A bundle that does not parse has no stack, so nothing to warn about.
+    # A bundle that does not parse has no spec, so nothing to warn about.
     "warnings": [],
   }
 
@@ -322,7 +322,7 @@ def test_reload_stops_reinstalls_and_starts_a_running_app(kelso_env, client, job
   assert job["state"] == "done", job["error"]
   assert f"Reloaded {APP}" in read_log(job)
   assert client.get(f"/apps/{APP}").json()["status"] == "running"
-  staged = (kelso_env.run_root / APP / "bundle" / "manifest.toml").read_text()
+  staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
   assert 'version      = "0.2.0"' in staged
   assert _compose_calls(kelso_env) == [
     ["compose", "up", "-d"],
@@ -340,7 +340,7 @@ def test_reload_reinstalls_a_stopped_app_without_starting(kelso_env, client, job
   assert job["state"] == "done", job["error"]
   assert f"Re-installed {APP}" in read_log(job)
   assert client.get("/apps").json()["apps"][0]["status"] == "stopped"
-  staged = (kelso_env.run_root / APP / "bundle" / "manifest.toml").read_text()
+  staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
   assert 'version      = "0.2.0"' in staged
   assert _compose_calls(kelso_env) == []
 

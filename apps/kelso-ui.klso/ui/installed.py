@@ -346,7 +346,7 @@ def commands_section(app):
       "cmd",
       title=f"{app['app_id']}: {command['name']}",
       desc=desc
-      or f"Runs the {command['name']!r} command declared in this bundle's manifest.",
+      or f"Runs the {command['name']!r} command declared in this app's manifest.",
       args={"app": app["app_id"], "command": command["name"]},
       fields=[{"name": "args", "placeholder": "extra arguments (optional)"}],
       enabled=installed,

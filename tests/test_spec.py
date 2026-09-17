@@ -1,6 +1,6 @@
-"""Manifest bytes in, `AppStack` out.
+"""Manifest bytes in, `AppSpec` out.
 
-`app_stack` is the whole path: parse the TOML, validate it against the app id,
+`app_spec` is the whole path: parse the TOML, validate it against the app id,
 resolve it into an installation-independent definition. What a manifest *means*
 -- which defaults appear, how config interpolates into env, how a port string
 becomes a route -- was previously only observable through generated compose
@@ -12,16 +12,16 @@ from __future__ import annotations
 import pytest
 
 from kelso.lib.manifest import ConfigError
-from kelso.lib.stack import (
+from kelso.lib.spec import (
   KELSO_APP_ID_LABEL,
   KELSO_RUN_UNIT_LABEL,
   KELSO_VERSION_LABEL,
 )
-from tests.conftest import stack_of
+from tests.conftest import spec_of
 
 
 def test_a_minimal_manifest_fills_in_every_default(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -32,16 +32,16 @@ image = "alpine:latest"
 """,
   )
 
-  assert stack.app == "demo"
-  assert stack.network_mode == "normal"
-  assert stack.subdomain is None
-  assert stack.routes == {}
-  assert stack.config == {}
-  assert stack.volumes == {}
-  assert stack.commands == {}
+  assert spec.app == "demo"
+  assert spec.network_mode == "normal"
+  assert spec.subdomain is None
+  assert spec.routes == {}
+  assert spec.config == {}
+  assert spec.volumes == {}
+  assert spec.commands == {}
 
-  main = stack.run_units["main"]
-  assert list(stack.run_units) == ["main"]
+  main = spec.run_units["main"]
+  assert list(spec.run_units) == ["main"]
   assert main.image == "alpine:latest"
   assert main.hostname == "main"
   assert main.command is None
@@ -63,14 +63,14 @@ image = "alpine:latest"
   }
 
 
-def test_config_stays_as_placeholders_on_the_stack(tmp_path):
-  """A stack is installation-independent; compose rewrites config later.
+def test_config_stays_as_placeholders_on_the_spec(tmp_path):
+  """A spec is installation-independent; compose rewrites config later.
 
   `${admin_user}` survives until `make_compose_dict`, which turns it into
   `${__KELSO_CONFIG__admin_user}` so the value (and secrets) never land in
   compose.yml.
   """
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -88,21 +88,21 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
 """,
   )
 
-  admin_user = stack.config["admin_user"]
+  admin_user = spec.config["admin_user"]
   assert admin_user.desc == "who administers this"
   assert admin_user.secret is False
   assert admin_user.default is None
   assert admin_user.has_default() is False
   assert admin_user.env_name() == "__KELSO_CONFIG__admin_user"
 
-  assert stack.config["port"].has_default() is True
-  assert stack.config["admin_pass"].secret is True
+  assert spec.config["port"].has_default() is True
+  assert spec.config["admin_pass"].secret is True
   # A secret with a default is still generated per installation, never taken
   # from the manifest -- so it does not count as having one.
-  assert stack.config["mongo_pass"].default == "auto"
-  assert stack.config["mongo_pass"].has_default() is False
+  assert spec.config["mongo_pass"].default == "auto"
+  assert spec.config["mongo_pass"].has_default() is False
 
-  env = stack.run_units["main"].environment
+  env = spec.run_units["main"].environment
   assert env["USER"] == "${admin_user}"
   assert env["PASS"] == "${admin_pass}"
   assert env["PORT"] == "${port}"
@@ -113,7 +113,7 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
 
 def test_adv_config_declares_the_same_values_but_marked_advanced(tmp_path):
   """The section is the only difference: one namespace, one `advanced` flag."""
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -132,21 +132,21 @@ env = { USER = "${admin_user}", LEVEL = "${log_level}" }
 """,
   )
 
-  assert set(stack.config) == {"admin_user", "log_level", "debug_key"}
-  assert stack.config["admin_user"].advanced is False
-  assert stack.config["log_level"].advanced is True
-  assert stack.config["log_level"].default == "info"
-  assert stack.config["log_level"].desc == "internal log verbosity"
-  assert stack.config["debug_key"].secret is True
+  assert set(spec.config) == {"admin_user", "log_level", "debug_key"}
+  assert spec.config["admin_user"].advanced is False
+  assert spec.config["log_level"].advanced is True
+  assert spec.config["log_level"].default == "info"
+  assert spec.config["log_level"].desc == "internal log verbosity"
+  assert spec.config["debug_key"].secret is True
 
   # Advanced is a display hint, nothing more: an advanced name substitutes into
   # env exactly like a plain one.
-  assert stack.run_units["main"].environment["LEVEL"] == "${log_level}"
+  assert spec.run_units["main"].environment["LEVEL"] == "${log_level}"
 
 
 def test_a_name_in_both_config_sections_is_refused(tmp_path):
   with pytest.raises(ConfigError, match="already declared in \\[config\\]"):
-    stack_of(
+    spec_of(
       tmp_path,
       """\
 [app]
@@ -165,7 +165,7 @@ image = "alpine"
 
 
 def test_volumes_resolve_by_kind_and_app_volumes_are_forced_readonly(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -186,22 +186,22 @@ volumes = { bin = "/opt/bin", app_config = "/config", media = "/media" }
 
   # `app` volumes carry the bundle's own files, so kelso mounts them read-only
   # whether or not the manifest said so.
-  assert stack.volumes["bin"].readonly is True
-  assert stack.volumes["bin"].src == "scripts"
-  assert stack.volumes["bin"].desc == "shipped scripts"
-  assert stack.volumes["bin"].run_rel_path == "./volumes/app/bin"
+  assert spec.volumes["bin"].readonly is True
+  assert spec.volumes["bin"].src == "scripts"
+  assert spec.volumes["bin"].desc == "shipped scripts"
+  assert spec.volumes["bin"].run_rel_path == "./volumes/app/bin"
 
-  assert stack.volumes["app_config"].readonly is False
-  assert stack.volumes["app_config"].run_rel_path == "./volumes/data/app_config"
-  assert stack.volumes["cache"].run_rel_path == "./volumes/temp/cache"
-  assert stack.volumes["media"].readonly is True
-  assert stack.volumes["hostvol"].run_rel_path == "./volumes/host/hostvol"
+  assert spec.volumes["app_config"].readonly is False
+  assert spec.volumes["app_config"].run_rel_path == "./volumes/data/app_config"
+  assert spec.volumes["cache"].run_rel_path == "./volumes/temp/cache"
+  assert spec.volumes["media"].readonly is True
+  assert spec.volumes["hostvol"].run_rel_path == "./volumes/host/hostvol"
 
-  # Declared but unmounted volumes still belong to the stack -- staging links
+  # Declared but unmounted volumes still belong to the spec -- staging links
   # them regardless of whether a run unit asked for one.
-  assert set(stack.volumes) == {"bin", "app_config", "cache", "media", "hostvol"}
+  assert set(spec.volumes) == {"bin", "app_config", "cache", "media", "hostvol"}
 
-  mounts = stack.run_units["main"].volumes
+  mounts = spec.run_units["main"].volumes
   assert set(mounts) == {"bin", "app_config", "media"}
   assert mounts["app_config"].guest_path == "/config"
   assert mounts["app_config"].readonly is False
@@ -210,7 +210,7 @@ volumes = { bin = "/opt/bin", app_config = "/config", media = "/media" }
 
 
 def test_port_strings_become_routes(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -229,7 +229,7 @@ secure = { port = "8443", scheme = "https" }
   )
 
   # No host side, so kelso allocates one at start.
-  primary = stack.routes["main"]
+  primary = spec.routes["main"]
   assert primary.host_port == -1
   assert primary.needs_allocation is True
   assert primary.container_port == 8080
@@ -239,23 +239,23 @@ secure = { port = "8443", scheme = "https" }
   assert primary.run_unit_name == "main"
 
   # Pinned host port.
-  admin = stack.routes["admin"]
+  admin = spec.routes["admin"]
   assert (admin.host_port, admin.container_port) == (9000, 80)
   assert admin.needs_allocation is False
   assert admin.private is False
 
-  assert stack.routes["dns"].container_port == 53
-  assert stack.routes["dns"].proto == "udp"
-  assert stack.routes["secure"].scheme == "https"
+  assert spec.routes["dns"].container_port == 53
+  assert spec.routes["dns"].proto == "udp"
+  assert spec.routes["secure"].scheme == "https"
 
   # The reserved name "main" takes the bare app subdomain; everything else is
   # labelled by route name.
   assert primary.subdomain("photos") == "photos"
-  assert stack.routes["secure"].subdomain("photos") == "secure-photos"
+  assert spec.routes["secure"].subdomain("photos") == "secure-photos"
 
 
 def test_multiple_run_units_share_one_route_namespace(tmp_path):
-  stack = stack_of(
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -277,14 +277,14 @@ env = { POSTGRES_DB = "app" }
 """,
   )
 
-  assert set(stack.run_units) == {"web", "db"}
+  assert set(spec.run_units) == {"web", "db"}
 
   # Routes are app-level, so a route declared on one unit records which unit
-  # owns it and appears once in the stack.
-  assert set(stack.routes) == {"main"}
-  assert stack.routes["main"].run_unit_name == "web"
+  # owns it and appears once in the spec.
+  assert set(spec.routes) == {"main"}
+  assert spec.routes["main"].run_unit_name == "web"
 
-  db = stack.run_units["db"]
+  db = spec.run_units["db"]
   assert db.command == ("postgres", "-c", "max_connections=50")
   assert db.restart == "always"
   assert db.routes == {}
@@ -293,8 +293,8 @@ env = { POSTGRES_DB = "app" }
   assert db.labels[KELSO_RUN_UNIT_LABEL] == "db"
 
 
-def test_host_network_mode_carries_to_the_stack(tmp_path):
-  stack = stack_of(
+def test_host_network_mode_carries_to_the_spec(tmp_path):
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -306,11 +306,11 @@ image = "alpine"
 """,
   )
 
-  assert stack.network_mode == "host"
+  assert spec.network_mode == "host"
 
 
-def test_commands_resolve_onto_the_stack(tmp_path):
-  stack = stack_of(
+def test_commands_resolve_onto_the_spec(tmp_path):
+  spec = spec_of(
     tmp_path,
     """\
 [app]
@@ -333,19 +333,19 @@ desc = "Rebuild the search index"
 """,
   )
 
-  reset = stack.commands["reset"]
+  reset = spec.commands["reset"]
   assert reset.run_unit == "main"
   assert reset.desc == "Reset the admin password"
   assert reset.argv == ("/bin/sh", "-c", 'python manage.py reset "$@"', "_")
 
-  reindex = stack.commands["reindex"]
+  reindex = spec.commands["reindex"]
   assert reindex.run_unit == "worker"
   assert reindex.argv == ("python", "manage.py", "reindex")
 
 
 def test_command_targeting_unknown_run_unit_is_rejected(tmp_path):
   with pytest.raises(ConfigError, match="run_unit 'missing' is not declared"):
-    stack_of(
+    spec_of(
       tmp_path,
       """\
 [app]

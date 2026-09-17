@@ -8,12 +8,12 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "snapshot",
-    help="Capture a restore point for an installed bundle (config, bundle, and data volumes)",
+    help="Capture a restore point for an installed app (config, staged bundle, and data volumes)",
   )
   parser.add_argument(
     "app",
     metavar="APP",
-    help="App ID of the bundle to snapshot",
+    help="App ID to snapshot",
   )
   parser.add_argument(
     "--label",

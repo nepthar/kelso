@@ -1,6 +1,7 @@
 # Kelso
 
-Container stack management for self-hosters. **Pre-beta: one operator, no users
+Kelso Server runs apps on hardware you own: an app says what it needs, and kelso
+provides it. **Pre-beta: one operator, no users
 to migrate, no backwards compatibility.** Delete old code paths rather than
 deprecating them. Don't write migration or compatibility code unless asked.
 
@@ -35,6 +36,17 @@ this size. Handing over a document produces a document's worth of code.
 
 ## Conventions
 
+- **Vocabulary.** A *kelso app bundle* ("bundle") is a `.klso` folder or
+  `.klso.md` file: what you write, publish, and install from. A *kelso app*
+  ("app") is what is installed and running, named by its app id; commands act
+  on apps. The *staged* copy is the bundle frozen under `run/<id>/staged/`.
+  `kelso` is the tool; `klso` is the bundle format (`KLSO_*`, `${klso.*}`).
+  *AppSpec* is a parsed manifest resolved for one app id. The project's display
+  name is *Kelso Server*.
+- **User-facing text says "app".** Help text, CLI output, and the web UI say
+  "app". "Bundle" and "manifest" are for app authors and for places where the
+  file itself matters (`dev`, `snapshot`). Don't call anything a "stack", and
+  don't position kelso around "home", "cloud", or "data center".
 - ruff: 88 cols, **2-space indent**, double quotes, py312.
 - **Comments: only what the code can't say.** Default to none. Write one only
   when its absence would let a competent reader introduce a bug — a non-local

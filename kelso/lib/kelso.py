@@ -23,7 +23,7 @@ from kelso.lib.observations import (
   app_state,
   collect_observations,
 )
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore, KelsoStore
 
 logger = logging.getLogger("kelso")
@@ -114,12 +114,12 @@ class StagedAppPaths:
     return self.run_path / "compose.yml"
 
   @property
-  def bundle_path(self) -> Path:
-    return self.run_path / "bundle"
+  def staged_path(self) -> Path:
+    return self.run_path / "staged"
 
   @property
   def manifest_path(self) -> Path:
-    return self.bundle_path / "manifest.toml"
+    return self.staged_path / "manifest.toml"
 
 
 class KelsoCtx:
@@ -214,8 +214,8 @@ class KelsoCtx:
   def is_staged(self, app: AppID | str) -> bool:
     return self.staged_paths(app).exists()
 
-  def staged_stack(self, app: AppID | str) -> "AppStack | None":
-    """The installed app's stack, or None when it is not installed.
+  def staged_spec(self, app: AppID | str) -> "AppSpec | None":
+    """The installed app's spec, or None when it is not installed.
 
     A manifest that no longer parses also reads as None, so one broken app cannot
     take a whole listing down.
@@ -224,7 +224,7 @@ class KelsoCtx:
     if not paths.manifest_path.is_file():
       return None
     try:
-      return AppStack.from_file(paths.manifest_path, paths.app_id)
+      return AppSpec.from_file(paths.manifest_path, paths.app_id)
     except ValueError:
       return None
 
@@ -239,14 +239,14 @@ class KelsoCtx:
       ),
     )
 
-  def bundle_stack(self, app: AppID | str) -> "AppStack | None":
-    """The catalog bundle's stack, or None when there is no single bundle."""
+  def bundle_spec(self, app: AppID | str) -> "AppSpec | None":
+    """The catalog bundle's spec, or None when there is no single bundle."""
     try:
       bundle = self.bundle_path(app)
     except ValueError:
       return None
     try:
-      return load_bundle(bundle).app_stack()
+      return load_bundle(bundle).app_spec()
     except ValueError:
       return None
 
@@ -304,7 +304,7 @@ class KelsoCtx:
     }
 
   def staged_app_ids(self) -> set[str]:
-    """Every app id with a bundle copy under run/."""
+    """Every app id with a staged copy under run/."""
     run_root = self.config.run_root
     if not run_root.is_dir():
       return set()

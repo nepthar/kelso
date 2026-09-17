@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import logs
 
 
 def register(subparsers) -> None:
-  parser = subparsers.add_parser("logs", help="Show logs for an installed bundle")
+  parser = subparsers.add_parser("logs", help="Show logs for an installed app")
   parser.add_argument(
     "-f",
     "--follow",
@@ -17,7 +17,7 @@ def register(subparsers) -> None:
     metavar="N",
     help="Number of lines to show from the end of the logs",
   )
-  parser.add_argument("app_id", help="App ID of the bundle")
+  parser.add_argument("app_id", help="App ID")
   parser.add_argument(
     "passthrough",
     nargs=argparse.REMAINDER,

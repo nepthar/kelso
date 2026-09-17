@@ -29,7 +29,7 @@ from kelso.lib.config_edit import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, bind
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 # Bumped when a response shape changes in a way a client would notice. The web
 # UI ships separately from the daemon, so it has to be able to tell.
@@ -105,16 +105,16 @@ Ctx = Annotated[KelsoCtx, Depends(_ctx)]
 Jobs = Annotated[JobRunner, Depends(_runner)]
 
 
-def _bundle_stack(app: AppID, ctx: KelsoCtx) -> AppStack:
+def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The schema for an app that is not installed yet."""
-  return load_bundle(ctx.bundle_path(app)).app_stack()
+  return load_bundle(ctx.bundle_path(app)).app_spec()
 
 
 def _assign_route(
-  app: AppID, stack: AppStack, route_name: str, tag: str, ctx: KelsoCtx
+  app: AppID, spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx
 ) -> None:
-  if route_name not in stack.routes:
-    known = ", ".join(sorted(stack.routes)) or "(none)"
+  if route_name not in spec.routes:
+    known = ", ".join(sorted(spec.routes)) or "(none)"
     raise ValueError(
       f"route {route_name!r} is not declared in {app}'s manifest; known routes: {known}"
     )
@@ -200,13 +200,13 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     try:
       resolved = ctx.resolve_app(app_id)
       with ctx.locked(f"config {resolved}", resolved):
-        stack = ctx.staged_stack(resolved) or _bundle_stack(resolved, ctx)
+        spec = ctx.staged_spec(resolved) or _bundle_spec(resolved, ctx)
         if body.set:
-          apply_config_sets(stack, list(body.set.items()), ctx)
+          apply_config_sets(spec, list(body.set.items()), ctx)
         for volume_name, tag in body.bind.items():
-          bind(stack, volume_name, tag, ctx)
+          bind(spec, volume_name, tag, ctx)
         for route_name, tag in body.route.items():
-          _assign_route(resolved, stack, route_name, tag, ctx)
+          _assign_route(resolved, spec, route_name, tag, ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
     return views.app_view(resolved, _ctx_again(ctx))

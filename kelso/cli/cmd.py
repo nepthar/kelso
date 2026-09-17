@@ -4,15 +4,15 @@ from tabulate import tabulate
 
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import run_command
-from kelso.lib.stack import AppStack
+from kelso.lib.spec import AppSpec
 
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "cmd",
-    help="List or run commands defined in a bundle's manifest",
+    help="List or run commands defined in an app's manifest",
   )
-  parser.add_argument("app_id", help="App ID of the bundle")
+  parser.add_argument("app_id", help="App ID")
   parser.add_argument(
     "cmd_name",
     nargs="?",
@@ -46,14 +46,14 @@ def _list_commands(app, ctx: KelsoCtx, conn) -> None:
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
 
-  stack = AppStack.from_file(paths.manifest_path, app)
-  if not stack.commands:
+  spec = AppSpec.from_file(paths.manifest_path, app)
+  if not spec.commands:
     conn.out(f"No commands defined for {app}")
     return
 
   rows = [
     (name, entry.desc or "-", entry.run_unit)
-    for name, entry in sorted(stack.commands.items())
+    for name, entry in sorted(spec.commands.items())
   ]
   conn.out(
     tabulate(rows, headers=["COMMAND", "DESCRIPTION", "RUN_UNIT"], tablefmt="simple")

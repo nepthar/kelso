@@ -58,7 +58,7 @@ def test_stage_copies_the_bundle_into_the_run_dir(kelso_env):
 
   run_dir = kelso_env.run_root / app_id
   catalog = kelso_env.main_repo / f"{app_id}.klso"
-  copied = run_dir / "bundle" / "manifest.toml"
+  copied = run_dir / "staged" / "manifest.toml"
   assert copied.is_file()
   assert not copied.is_symlink()
   assert copied.read_text() == (catalog / "manifest.toml").read_text()
@@ -79,7 +79,7 @@ def test_editing_the_catalog_then_restaging_recopies(kelso_env):
   assert kelso_env.run("install", app_id).returncode == 0
   assert (
     'version = "9"'
-    in (kelso_env.run_root / app_id / "bundle" / "manifest.toml").read_text()
+    in (kelso_env.run_root / app_id / "staged" / "manifest.toml").read_text()
   )
 
 
@@ -88,13 +88,13 @@ def test_editing_the_run_copy_is_lost_on_the_next_stage(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("install", app_id).returncode == 0
 
-  copied = kelso_env.run_root / app_id / "bundle" / "manifest.toml"
+  copied = kelso_env.run_root / app_id / "staged" / "manifest.toml"
   copied.write_text(copied.read_text() + "\n# hand edit\n")
-  (kelso_env.run_root / app_id / "bundle" / "stowaway.txt").write_text("hi")
+  (kelso_env.run_root / app_id / "staged" / "stowaway.txt").write_text("hi")
 
   assert kelso_env.run("install", app_id).returncode == 0
   assert "# hand edit" not in copied.read_text()
-  assert not (kelso_env.run_root / app_id / "bundle" / "stowaway.txt").exists()
+  assert not (kelso_env.run_root / app_id / "staged" / "stowaway.txt").exists()
 
 
 def test_stage_preserves_config_and_volume_contents(kelso_env):
@@ -121,7 +121,7 @@ def test_stage_by_path_adds_nothing_to_a_repo(kelso_env):
   assert staged.returncode == 0, staged.stderr
 
   assert not (kelso_env.main_repo / f"{app_id}.klso").exists()
-  assert (kelso_env.run_root / app_id / "bundle" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / app_id / "staged" / "manifest.toml").is_file()
 
 
 def test_stage_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
@@ -191,8 +191,8 @@ def test_app_links_are_relative_and_managed_links_are_absolute(kelso_env):
 
   app_link = volumes / "app" / "bin"
   assert app_link.is_symlink()
-  assert app_link.readlink() == Path("../../bundle/bin")
-  assert app_link.resolve() == (kelso_env.run_root / BASIC / "bundle" / "bin").resolve()
+  assert app_link.readlink() == Path("../../staged/bin")
+  assert app_link.resolve() == (kelso_env.run_root / BASIC / "staged" / "bin").resolve()
 
   data_link = volumes / "data" / "config"
   assert data_link.is_symlink()
@@ -360,8 +360,8 @@ def test_dev_puts_the_app_links_back_when_it_is_over(kelso_env):
 
   assert kelso_env.run("dev", BASIC).returncode == 0
 
-  assert link.readlink() == Path("../../bundle/bin")
-  assert link.resolve() == (kelso_env.run_root / BASIC / "bundle" / "bin").resolve()
+  assert link.readlink() == Path("../../staged/bin")
+  assert link.resolve() == (kelso_env.run_root / BASIC / "staged" / "bin").resolve()
 
 
 def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
@@ -374,21 +374,21 @@ def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
   with pytest.raises(RuntimeError):
     with source_volume_links(plan):
       assert link.readlink() == plan.source / "bin"
-      raise RuntimeError("the stack blew up")
+      raise RuntimeError("the spec blew up")
 
-  assert link.readlink() == Path("../../bundle/bin")
+  assert link.readlink() == Path("../../staged/bin")
 
 
 def test_dev_leaves_the_staged_bundle_copy_alone(kelso_env):
-  """Only the links move. `bundle/` is still what `stage` put there."""
+  """Only the links move. `staged/` is still what `stage` put there."""
   source = _staged_for_dev(kelso_env)
-  copied = (kelso_env.run_root / BASIC / "bundle" / "bin" / "hello.sh").read_text()
+  copied = (kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh").read_text()
 
   assert kelso_env.run("dev", BASIC).returncode == 0
 
   (source / "bin" / "hello.sh").write_text("echo edited\n")
   assert (
-    kelso_env.run_root / BASIC / "bundle" / "bin" / "hello.sh"
+    kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh"
   ).read_text() == copied
 
 
@@ -601,7 +601,7 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
 
   restarted = kelso_env.run("start", BASIC, "--set", "admin_user=bob")
   assert restarted.returncode == 0, restarted.stderr
-  assert (kelso_env.run_root / BASIC / "bundle" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / BASIC / "staged" / "manifest.toml").is_file()
 
   # Config and data went together, so a fresh secret is correct here.
   fresh = kelso_env.run(

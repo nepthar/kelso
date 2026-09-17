@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import stage
 
 class InstallJob(Job):
   name = "install"
-  description = "Install a bundle from the catalog so it can be started"
+  description = "Install an app from the catalog so it can be started"
   required_args = ("app",)
   optional_args = ("force",)
 

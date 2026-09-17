@@ -146,7 +146,7 @@ def test_restore_clobbers_whatever_is_there_now(kelso_env):
   name = _snapshot(kelso_env, app_id, "photos")
 
   assert kelso_env.run("config", app_id, "--set", "subdomain=albums").returncode == 0
-  scratch = kelso_env.run_root / app_id / "bundle" / "scratch.txt"
+  scratch = kelso_env.run_root / app_id / "staged" / "scratch.txt"
   scratch.write_text("left over from today")
 
   restored = kelso_env.run("restore", app_id, name, "-y")
@@ -262,7 +262,7 @@ def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "kept")
-  marker = kelso_env.run_root / app_id / "bundle" / "marker.txt"
+  marker = kelso_env.run_root / app_id / "staged" / "marker.txt"
   marker.write_text("still here")
 
   declined = kelso_env.run("restore", app_id, name, input="n\n")
