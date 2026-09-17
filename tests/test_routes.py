@@ -26,6 +26,7 @@ from kelso.lib.lifecycle.routes import assigned_routes, preflight_app_routes
 from kelso.lib.manifest import ConfigError, Manifest, _validate_routes
 from kelso.lib.routes import (
   PROVIDERS,
+  CloudflareTunnelRouteProvider,
   NginxProxyManagerRouteProvider,
   NoopRouteProvider,
   PangolinRouteProvider,
@@ -1285,3 +1286,239 @@ def test_noop_first_publisher_wins():
     provider.register_route(AppID("second"), 41001, "photos", "home.example")
   provider.register_route(AppID("first"), 41002, "photos", "home.example")
   assert provider.routes["photos"] == ":41002"
+
+
+# ── cloudflare tunnel ──────────────────────────────────────────────────────
+TUNNEL = "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d"
+
+
+class _FakeCloudflare:
+  """Stands in for `_request`, tracking the tunnel config and one DNS record."""
+
+  def __init__(self, ingress=None, records=None):
+    self.config = {"ingress": [*(ingress or []), {"service": "http_status:404"}]}
+    self.records = list(records or [])
+    self.calls: list[tuple[str, str]] = []
+
+  def __call__(self, method: str, path: str, **kwargs):
+    self.calls.append((method, path))
+    json_body = kwargs.get("json") or {}
+    if path.endswith("/configurations"):
+      if method == "PUT":
+        self.config = json_body["config"]
+        return None
+      return {"config": self.config}
+    if path == "/zones":
+      return [{"id": "zone-1"}]
+    if path.endswith("/dns_records"):
+      if method == "POST":
+        self.records.append({"id": "rec-new", **json_body})
+        return json_body
+      name = kwargs["params"]["name"]
+      return [r for r in self.records if r["name"] == name]
+    if "/dns_records/" in path:
+      record_id = path.rsplit("/", 1)[1]
+      if method == "DELETE":
+        self.records = [r for r in self.records if r["id"] != record_id]
+        return None
+      for record in self.records:
+        if record["id"] == record_id:
+          record.update(json_body)
+      return json_body
+    return {}
+
+  @property
+  def ingress(self) -> list[dict]:
+    return self.config["ingress"]
+
+
+def _cf_provider(api=None):
+  provider = CloudflareTunnelRouteProvider(
+    account_id="acct-1",
+    tunnel_id=TUNNEL,
+    api_token="cf-token",
+    kelso_domain="home.example",
+    kelso_address="192.168.1.10",
+  )
+  provider._request = api or _FakeCloudflare()
+  return provider
+
+
+def test_documented_cloudflare_config_constructs(tmp_path):
+  ctx = _ctx(
+    tmp_path,
+    {
+      "cf": RouteProviderEntry(
+        kind="cloudflare_tunnel",
+        domain="home.example",
+        args={
+          "account_id": "acct-1",
+          "tunnel_id": TUNNEL,
+          "api_token_secret": "cf.api_token",
+        },
+      ),
+    },
+    secrets={"cf.api_token": "cf-token"},
+  )
+
+  provider = get_route_provider(ctx, "cf")
+
+  assert isinstance(provider, CloudflareTunnelRouteProvider)
+  assert provider.tunnel_id == TUNNEL
+  assert provider.kelso_address == "192.168.1.10"
+  assert provider.kelso_domain == "home.example"
+
+
+def test_cloudflare_register_adds_ingress_rule_and_proxied_cname():
+  api = _FakeCloudflare(ingress=[{"hostname": "other.home.example", "service": "x"}])
+  provider = _cf_provider(api)
+
+  provider.register_route(AppID("io.test.photos"), 41000, "photos", "home.example")
+
+  # The new rule lands before the catch-all, and the unrelated one is kept.
+  assert api.ingress == [
+    {"hostname": "other.home.example", "service": "x"},
+    {
+      "hostname": "photos.home.example",
+      "service": "http://192.168.1.10:41000",
+    },
+    {"service": "http_status:404"},
+  ]
+  [record] = api.records
+  assert record["type"] == "CNAME"
+  assert record["content"] == f"{TUNNEL}.cfargotunnel.com"
+  assert record["proxied"] is True
+  assert record["comment"] == "kelso:io.test.photos"
+
+
+def test_cloudflare_register_replaces_its_own_rule_and_record():
+  api = _FakeCloudflare(
+    ingress=[{"hostname": "photos.home.example", "service": "http://old:1"}],
+    records=[
+      {
+        "id": "rec-1",
+        "name": "photos.home.example",
+        "comment": "kelso:io.test.photos",
+      }
+    ],
+  )
+  provider = _cf_provider(api)
+
+  provider.register_route(
+    AppID("io.test.photos"), 8443, "photos", "home.example", scheme="https"
+  )
+
+  assert api.ingress == [
+    {"hostname": "photos.home.example", "service": "https://192.168.1.10:8443"},
+    {"service": "http_status:404"},
+  ]
+  assert ("PUT", "/zones/zone-1/dns_records/rec-1") in api.calls
+  assert len(api.records) == 1
+
+
+def test_cloudflare_register_refuses_a_hostname_it_does_not_own():
+  api = _FakeCloudflare(
+    records=[
+      {"id": "rec-1", "name": "photos.home.example", "comment": "kelso:io.test.other"}
+    ]
+  )
+  provider = _cf_provider(api)
+
+  with pytest.raises(RouteProviderError, match="already owned by app 'io.test.other'"):
+    provider.register_route(AppID("io.test.photos"), 41000, "photos", "home.example")
+
+  # Refused before the tunnel config was touched.
+  assert api.ingress == [{"service": "http_status:404"}]
+
+
+def test_cloudflare_register_refuses_a_record_with_no_kelso_comment():
+  api = _FakeCloudflare(
+    records=[{"id": "rec-1", "name": "photos.home.example", "comment": ""}]
+  )
+  provider = _cf_provider(api)
+
+  with pytest.raises(RouteProviderError, match="non-Kelso proxy host"):
+    provider.register_route(AppID("io.test.photos"), 41000, "photos", "home.example")
+
+
+def test_cloudflare_unregister_drops_the_rule_and_its_own_record():
+  api = _FakeCloudflare(
+    ingress=[
+      {"hostname": "photos.home.example", "service": "http://192.168.1.10:41000"},
+      {"hostname": "other.home.example", "service": "x"},
+    ],
+    records=[
+      {
+        "id": "rec-1",
+        "name": "photos.home.example",
+        "comment": "kelso:io.test.photos",
+      }
+    ],
+  )
+  provider = _cf_provider(api)
+
+  provider.unregister_route("photos", "home.example")
+
+  assert api.ingress == [
+    {"hostname": "other.home.example", "service": "x"},
+    {"service": "http_status:404"},
+  ]
+  assert api.records == []
+
+
+def test_cloudflare_unregister_leaves_a_foreign_dns_record_alone():
+  api = _FakeCloudflare(
+    ingress=[{"hostname": "photos.home.example", "service": "http://x:1"}],
+    records=[{"id": "rec-1", "name": "photos.home.example", "comment": "hand made"}],
+  )
+  provider = _cf_provider(api)
+
+  provider.unregister_route("photos", "home.example")
+
+  assert api.ingress == [{"service": "http_status:404"}]
+  assert len(api.records) == 1
+  assert not any(method == "DELETE" for method, _ in api.calls)
+
+
+def test_cloudflare_routes_and_owners_cover_only_the_kelso_domain():
+  api = _FakeCloudflare(
+    ingress=[
+      {"hostname": "photos.home.example", "service": "http://192.168.1.10:41000"},
+      {"hostname": "manual.home.example", "service": "http://10.0.0.9:80"},
+      {"hostname": "qbt.arr.home.example", "service": "http://10.0.0.20:9405"},
+      {"hostname": "other.example.com", "service": "http://1.2.3.4:443"},
+      {"hostname": "home.example", "service": "http://10.0.0.1:80"},
+    ],
+    records=[
+      {
+        "id": "rec-1",
+        "name": "photos.home.example",
+        "comment": "kelso:io.test.photos",
+      },
+      {"id": "rec-2", "name": "manual.home.example", "comment": "hand made"},
+    ],
+  )
+  provider = _cf_provider(api)
+
+  assert provider.list_routes() == [
+    ("photos", "http://192.168.1.10:41000"),
+    ("manual", "http://10.0.0.9:80"),
+  ]
+  assert provider.route_owners() == {"photos": "io.test.photos", "manual": None}
+
+
+def test_cloudflare_zone_is_looked_up_once_by_domain():
+  api = _FakeCloudflare()
+  provider = _cf_provider(api)
+
+  assert provider.zone_id() == "zone-1"
+  assert provider.zone_id() == "zone-1"
+  assert [path for _, path in api.calls].count("/zones") == 1
+
+
+def test_cloudflare_missing_zone_names_the_domain():
+  provider = _cf_provider()
+  provider._request = Mock(return_value=[])
+
+  with pytest.raises(RouteProviderError, match="no zone 'home.example'"):
+    provider.zone_id()

@@ -31,7 +31,9 @@ NONE_ROUTE_PROVIDER_TAG = "none"
 # Domain used for route URLs when a route is unassigned or assigned to none.
 PLACEHOLDER_DOMAIN = "kelso.localhost"
 
-RouteProviderKind = Literal["nginx_proxy_manager", "pangolin", "noop"]
+RouteProviderKind = Literal[
+  "nginx_proxy_manager", "pangolin", "cloudflare_tunnel", "noop"
+]
 
 
 logger = logging.getLogger("kelso.config")

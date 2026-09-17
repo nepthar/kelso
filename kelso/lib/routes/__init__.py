@@ -10,6 +10,7 @@ from .base import (
   RouteProviderError,
   refuse_foreign_route,
 )
+from .cloudflare import CloudflareTunnelRouteProvider
 from .npm import NginxProxyManagerRouteProvider
 from .pangolin import PangolinRouteProvider
 
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
 
 __all__ = [
+  "CloudflareTunnelRouteProvider",
   "NginxProxyManagerRouteProvider",
   "NoopRouteProvider",
   "PangolinRouteProvider",
@@ -32,6 +34,7 @@ PROVIDERS: dict[str, type[RouteProvider]] = {
   cls.KIND: cls
   for cls in (
     NginxProxyManagerRouteProvider,
+    CloudflareTunnelRouteProvider,
     PangolinRouteProvider,
     NoopRouteProvider,
   )

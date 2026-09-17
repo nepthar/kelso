@@ -85,6 +85,22 @@ url = "github://nepthar/kelso/main/demo-apps"
 # site           = "substantial-atractaspis-branchi"
 # api_key_secret = "route_provider.tunnel.api_key"
 
+# Cloudflare Tunnel publishes each route as an ingress rule on a remotely-managed
+# tunnel plus a proxied CNAME in the zone, so nothing is exposed on your router.
+# Run the connector itself with `kelso install cloudflared`. `account_id` and
+# `tunnel_id` are in the Zero Trust dashboard; the API token needs Account >
+# Cloudflare Tunnel: Edit and Zone > DNS: Edit. Store the token with
+# `kelso config-sys --stdin route_provider.cf.api_token`.
+#
+# [route_provider.cf]
+# kind   = "cloudflare_tunnel"
+# domain = "example.com"
+# [route_provider.cf.args]
+# account_id       = "0123456789abcdef0123456789abcdef"
+# tunnel_id        = "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d"
+# api_token_secret = "route_provider.cf.api_token"
+# # zone_id is optional; kelso looks the zone up by domain when it is omitted.
+
 # Optional: tagged host paths that apps with kind = "host" volumes can bind to.
 # Paths must exist before `kelso config|start --bind`. Assign with
 # `kelso config <app> --bind media=media`.
