@@ -515,6 +515,23 @@ def test_config_before_staging_reads_the_bundle(kelso_env):
   assert kept.stdout.strip() == "alice"
 
 
+def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
+  """`--edit` renders the app's ConfigRequest and applies the response."""
+  edited = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\ns\n")
+
+  assert edited.returncode == 0, edited.stderr
+  assert "Set admin_user" in edited.stdout
+  assert kelso_env.run("config", BASIC, "--get", "admin_user").stdout.strip() == "alice"
+
+
+def test_config_edit_writes_nothing_when_cancelled(kelso_env):
+  cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nq\n")
+
+  assert cancelled.returncode == 0, cancelled.stderr
+  assert "Cancelled" in cancelled.stdout
+  assert kelso_env.run("config", BASIC, "--get", "admin_user").returncode == 1
+
+
 def test_binding_before_staging_applies_at_the_first_start(kelso_env):
   """The bind is recorded against the source's manifest, so the very first
   stage already has it -- no start-then-bind-then-restage round trip."""

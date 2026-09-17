@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
+from kelso.lib.configreq import ConfigField
 from kelso.lib.store import KelsoStore
 
 if TYPE_CHECKING:
@@ -30,6 +31,16 @@ class RouteProvider:
   KIND: str = ""
   # `args` keys that must be present and non-empty in the provider's block.
   REQUIRED_ARGS: tuple[str, ...] = ()
+
+  @classmethod
+  def config_fields(cls) -> tuple[ConfigField, ...]:
+    """What to ask an operator for, in the order asked.
+
+    A secret field named X is stored in the kelso db and referenced from the
+    block as `X_secret`; every other field is an `args` key verbatim, so these
+    have to cover REQUIRED_ARGS.
+    """
+    return ()
 
   @classmethod
   def from_config(

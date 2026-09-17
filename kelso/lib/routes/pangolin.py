@@ -7,6 +7,7 @@ import requests
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
+from kelso.lib.configreq import ConfigField
 
 from .base import RouteProvider, RouteProviderError, refuse_foreign_route
 
@@ -26,6 +27,21 @@ class PangolinRouteProvider(RouteProvider):
   API_PREFIX = "/v1"
   # Ownership marker, in lieu of a metadata field. See the class docstring.
   NAME_PREFIX = "kelso:"
+
+  @classmethod
+  def config_fields(cls) -> tuple[ConfigField, ...]:
+    return (
+      ConfigField(name="endpoint", desc="Integration API URL; must be https"),
+      ConfigField(name="org_id", desc="Org name from the dashboard URL"),
+      ConfigField(name="site", desc="Site name that can reach kelso"),
+      ConfigField(name="api_key", secret=True, desc="Integration API key"),
+      ConfigField(
+        name="shared_policy",
+        required=False,
+        advanced=True,
+        desc="Resource policy to attach to every route",
+      ),
+    )
 
   @classmethod
   def from_config(

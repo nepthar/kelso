@@ -2,9 +2,12 @@ import argparse
 
 from tabulate import tabulate
 
+from kelso.cli.configform import run_form
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.configtargets import resolve_target
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.providerconfig import provider_target
 from kelso.lib.routes import NoopRouteProvider, RouteProviderError, get_route_provider
 
 
@@ -42,6 +45,17 @@ def register(subparsers) -> None:
   )
   remove.set_defaults(func=run_remove)
 
+  add_provider = sub.add_parser(
+    "add-provider", help="Configure a route provider interactively"
+  )
+  add_provider.add_argument("tag", help="Tag to file it under in config.toml")
+  add_provider.add_argument(
+    "--kind",
+    default="",
+    help="Provider implementation, e.g. cloudflare_tunnel",
+  )
+  add_provider.set_defaults(func=run_add_provider)
+
   list_parser = sub.add_parser("list", help="List registered routes")
   list_parser.add_argument(
     "provider",
@@ -49,6 +63,21 @@ def register(subparsers) -> None:
     help="Provider tag (default: default_route_provider)",
   )
   list_parser.set_defaults(func=run_list)
+
+
+def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+  with ctx.kelso_lock("routes add-provider"):
+    target = resolve_target(provider_target(args.tag), ctx, kind=args.kind)
+    response = run_form(target.config_request(), conn)
+    if response is None:
+      conn.out("Cancelled; nothing was written")
+      return
+
+    target.apply_config(response)
+    conn.out(
+      f"Configured route provider {args.tag!r}; "
+      f"check it with `kelso routes check {args.tag}`"
+    )
 
 
 def _resolve_tag(ctx: KelsoCtx, tag: str | None) -> str:

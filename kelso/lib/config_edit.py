@@ -183,3 +183,45 @@ def remove_repo(ctx: KelsoCtx, name: str) -> None:
     if name not in repos:
       raise ValueError(f"Repo {name!r} is not in {ctx.config.config_path}")
     del repos[name]
+
+
+def _route_providers(document: TOMLDocument):
+  """The `[route_provider]` super table, created on first use."""
+  if "route_provider" not in document:
+    document["route_provider"] = tomlkit.table(is_super_table=True)
+  return document["route_provider"]
+
+
+def set_route_provider(
+  ctx: KelsoCtx, tag: str, *, kind: str, domain: str, args: dict[str, str]
+) -> None:
+  """Write a `[route_provider.<tag>]` block, replacing one already there."""
+  validate_identifier(tag)
+  with edit_config(ctx) as document:
+    providers = _route_providers(document)
+    table = tomlkit.table()
+    table["kind"] = kind
+    table["domain"] = domain
+    if args:
+      arg_table = tomlkit.table()
+      for name, value in args.items():
+        arg_table[name] = value
+      table["args"] = arg_table
+    providers[tag] = table
+
+
+def remove_route_provider(ctx: KelsoCtx, tag: str) -> None:
+  """Drop a `[route_provider.<tag>]` block."""
+  with edit_config(ctx) as document:
+    providers = document.get("route_provider") or {}
+    if tag not in providers:
+      raise ValueError(f"Route provider {tag!r} is not in {ctx.config.config_path}")
+    del providers[tag]
+
+
+def set_kelso_address(ctx: KelsoCtx, address: str) -> None:
+  """Set the top-level `kelso_address` every route provider points traffic at."""
+  if not address:
+    raise ValueError("kelso_address cannot be empty")
+  with edit_config(ctx) as document:
+    document["kelso_address"] = address
