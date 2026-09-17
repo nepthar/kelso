@@ -26,17 +26,12 @@ class CloudflareTunnelRouteProvider(RouteProvider):
   which tells cloudflared where to send a hostname, and a proxied CNAME in the
   zone, which points that hostname at the tunnel. Ownership is marked in the
   DNS record's comment, the only field Cloudflare lets us write on either side.
-
-  The tunnel must be remotely managed (configured in the dashboard, not by a
-  config.yml next to cloudflared), because a locally managed one ignores the
-  ingress rules written here. Run the connector itself as the `cloudflared` app.
   """
 
   KIND = "cloudflare_tunnel"
   REQUIRED_ARGS = ("account_id", "tunnel_id", "api_token_secret")
 
   API_BASE = "https://api.cloudflare.com/client/v4"
-  # Ownership marker, in lieu of a metadata field. See the class docstring.
   COMMENT_PREFIX = "kelso:"
   # Every tunnel config ends with a catch-all; ingress rules go before it.
   CATCH_ALL = {"service": "http_status:404"}
@@ -71,8 +66,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     self.tunnel_id = tunnel_id
     self._api_token = api_token
     self.kelso_domain = kelso_domain
-    # LAN IP/hostname of the docker host cloudflared forwards traffic to. The
-    # app's published port is reachable there.
     self.kelso_address = kelso_address
     self._zone_id = zone_id or None
     self._timeout = timeout
@@ -261,8 +254,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     """Route hostname -> kelso_address:port, over the tunnel."""
     hostname = self._hostname(subdomain, domain)
 
-    # DNS first: it carries ownership, so a foreign hostname refuses before
-    # the tunnel config is touched.
     record = self._dns_record(hostname)
     if record is not None and self._dns_owner(record) != app:
       raise refuse_foreign_route(hostname, self._dns_owner(record))
