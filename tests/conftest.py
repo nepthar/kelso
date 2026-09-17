@@ -161,8 +161,8 @@ class KelsoEnv:
   docker_log: Path
 
   @property
-  def main_repo(self) -> Path:
-    return self.root / "repos" / "main"
+  def local_repo(self) -> Path:
+    return self.root / "repos" / "local"
 
   @property
   def run_root(self) -> Path:
@@ -345,7 +345,7 @@ def kelso_env(
   block_real_docker: Path | None,
 ) -> KelsoEnv:
   root = tmp_path / "kelso"
-  apps = root / "repos" / "main"
+  apps = root / "repos" / "local"
   apps.mkdir(parents=True)
   (root / "run").mkdir()
   (root / "config").mkdir()

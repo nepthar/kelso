@@ -22,7 +22,7 @@ BASIC = "io.p2net.basic-features"
 
 def _write_bundle(kelso_env, app_id: str, manifest: str) -> Path:
   """Create (or overwrite) a catalog entry with the given manifest."""
-  bundle = kelso_env.main_repo / f"{app_id}.klso"
+  bundle = kelso_env.local_repo / f"{app_id}.klso"
   bundle.mkdir(parents=True, exist_ok=True)
   (bundle / "manifest.toml").write_text(manifest)
   return bundle
@@ -57,7 +57,7 @@ def test_stage_copies_the_bundle_into_the_run_dir(kelso_env):
   assert staged.returncode == 0, staged.stderr
 
   run_dir = kelso_env.run_root / app_id
-  catalog = kelso_env.main_repo / f"{app_id}.klso"
+  catalog = kelso_env.local_repo / f"{app_id}.klso"
   copied = run_dir / "staged" / "manifest.toml"
   assert copied.is_file()
   assert not copied.is_symlink()
@@ -71,7 +71,7 @@ def test_editing_the_catalog_then_restaging_recopies(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("install", app_id).returncode == 0
 
-  catalog = kelso_env.main_repo / f"{app_id}.klso" / "manifest.toml"
+  catalog = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
   catalog.write_text(
     catalog.read_text().replace('version      = "0.1.0"', 'version = "9"')
   )
@@ -115,12 +115,12 @@ def test_stage_by_path_adds_nothing_to_a_repo(kelso_env):
   app_id = "ports-demo"
   elsewhere = kelso_env.root / "checkout" / f"{app_id}.klso"
   elsewhere.parent.mkdir()
-  (kelso_env.main_repo / f"{app_id}.klso").rename(elsewhere)
+  (kelso_env.local_repo / f"{app_id}.klso").rename(elsewhere)
 
   staged = kelso_env.run("install", str(elsewhere))
   assert staged.returncode == 0, staged.stderr
 
-  assert not (kelso_env.main_repo / f"{app_id}.klso").exists()
+  assert not (kelso_env.local_repo / f"{app_id}.klso").exists()
   assert (kelso_env.run_root / app_id / "staged" / "manifest.toml").is_file()
 
 
@@ -132,7 +132,7 @@ def test_stage_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
   _write_bundle(
     kelso_env, "scratch", '[app]\nversion = "1"\n\n[run.main]\nimage = "alpine"\n'
   )
-  (kelso_env.main_repo / "scratch.klso").rename(other)
+  (kelso_env.local_repo / "scratch.klso").rename(other)
 
   assert kelso_env.run("install", app_id).returncode == 0
 
@@ -333,7 +333,7 @@ def _staged_for_dev(kelso_env) -> Path:
   """Stage BASIC with its required config set, and return the source bundle."""
   assert kelso_env.run("install", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
-  return kelso_env.main_repo / f"{BASIC}.klso"
+  return kelso_env.local_repo / f"{BASIC}.klso"
 
 
 def test_dev_runs_in_the_foreground_against_the_source(kelso_env):
@@ -411,7 +411,7 @@ def test_dev_refuses_unset_config_like_start_does(kelso_env):
 def test_dev_refuses_a_markdown_bundle(kelso_env):
   """There is no source folder to edit: the files only exist as a copy."""
   app_id = "md-demo"
-  (kelso_env.main_repo / f"{app_id}.klso.md").write_text(
+  (kelso_env.local_repo / f"{app_id}.klso.md").write_text(
     '```toml klso_path="manifest.toml"\n'
     '[app]\nversion = "1"\n\n'
     '[volumes]\nhello = { kind = "app", src = "bin/hello.sh" }\n\n'
@@ -433,7 +433,7 @@ def test_dev_refuses_a_markdown_bundle(kelso_env):
 def test_dev_refuses_a_markdown_bundle_with_nothing_to_mount(kelso_env):
   """The folder requirement is about what the app *is*, not about mounts."""
   app_id = "md-plain"
-  (kelso_env.main_repo / f"{app_id}.klso.md").write_text(
+  (kelso_env.local_repo / f"{app_id}.klso.md").write_text(
     '```toml klso_path="manifest.toml"\n'
     '[app]\nversion = "1"\n\n'
     '[volumes]\nstate = { kind = "data" }\n\n'
@@ -560,7 +560,7 @@ def test_rm_removes_the_run_dir_volumes_and_routes(kelso_env):
     assert not (kelso_env.volumes_root / kind / app_id).exists()
   assert app_id not in kelso_env.read_db().get("routes", {})
   # The catalog entry is the reinstall path, so it survives on purpose.
-  assert (kelso_env.main_repo / f"{app_id}.klso").is_dir()
+  assert (kelso_env.local_repo / f"{app_id}.klso").is_dir()
 
 
 def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):

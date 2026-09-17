@@ -137,7 +137,7 @@ def test_cmd_holds_the_app_lock(kelso_env):
 
 
 def _stage_cmd_demo(kelso_env):
-  app = kelso_env.main_repo / "cmd-demo.klso"
+  app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\

@@ -15,7 +15,7 @@ from pydantic import (
 
 from kelso.lib.apps import AppID
 from kelso.lib.logtab import LogTab
-from kelso.lib.repo import MAIN_REPO, Repo, parse_github_url
+from kelso.lib.repo import LOCAL_REPO, Repo, parse_github_url
 from kelso.lib.util import validate_identifier
 
 VOLUME_KINDS = ("data", "temp", "bulk", "logs")
@@ -170,7 +170,7 @@ class Config:
     self.volume_roots = volume_roots
     self.repos_root = repos_root
     self.repos = {
-      MAIN_REPO: Repo(MAIN_REPO, repos_root / MAIN_REPO, "local"),
+      LOCAL_REPO: Repo(LOCAL_REPO, repos_root / LOCAL_REPO, "local"),
       **(extra_repos or {}),
     }
     self.run_root = run_root
@@ -427,8 +427,8 @@ def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
     return refuse("repo must be a table of [repo.<name>] entries")
 
   repos: dict[str, Repo] = {}
-  main_path = repos_root / MAIN_REPO
-  names_by_path = {main_path: MAIN_REPO}
+  local_path = repos_root / LOCAL_REPO
+  names_by_path = {local_path: LOCAL_REPO}
 
   for name, entry in entries.items():
     try:
@@ -450,10 +450,10 @@ def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
     except ValueError as e:
       return refuse(f"repo name {name!r} is not a valid name: {e}")
 
-    if name == MAIN_REPO:
+    if name == LOCAL_REPO:
       return refuse(
-        f"repo {name!r} collides with the built-in {MAIN_REPO!r} repo at "
-        f"{main_path}; give it another name"
+        f"repo {name!r} collides with the built-in {LOCAL_REPO!r} repo at "
+        f"{local_path}; give it another name"
       )
 
     if parsed.url is not None:

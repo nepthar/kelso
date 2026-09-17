@@ -5,6 +5,7 @@ from pathlib import Path
 
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config_file
 from kelso.lib.logtab import LogTab
+from kelso.lib.repo import LOCAL_REPO
 
 DEFAULT_ROOT = Path("~/.kelso")
 
@@ -18,7 +19,7 @@ volume_root = "volumes"
 master_keyfile = "master.key"
 port_base = 41000
 
-# Repos are where the catalog comes from. `repos/main` is always there and is
+# Repos are where the catalog comes from. `repos/local` is always there and is
 # where you drop bundles by hand. Add more with `kelso repo add`, which writes
 # tables like the ones below -- a directory on this machine, or a folder in a
 # GitHub repository that kelso mirrors into repos/<name>.
@@ -154,7 +155,7 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
     conn.err("If you want to re-initialize, remove it first.")
     raise SystemExit(1)
 
-  (root / "repos" / "main").mkdir(parents=True, exist_ok=True)
+  (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
   (root / "run").mkdir(parents=True, exist_ok=True)
   (root / "config").mkdir(parents=True, exist_ok=True)
   for kind in VOLUME_KINDS:

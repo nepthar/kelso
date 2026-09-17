@@ -119,11 +119,15 @@ class LogTab:
       for line_number, line in enumerate(f, start=1):
         if line.startswith("#") or not line.strip():
           continue
-        split = line.strip("\n").split(LogTab.FS, 3)
-        if len(split) != 4 or split[1] not in LogTab.OPERATIONS:
+        try:
+          split = line.strip("\n").split(LogTab.FS, 3)
+          if len(split) != 4 or split[1] not in LogTab.OPERATIONS:
+            raise ValueError
+          datetime.fromisoformat(split[0])
+        except ValueError:
           errmsg = (
             f"Skipping malformed logtab record at {self.path}:{line_number}: "
-            f"{line.rstrip('\n')}"
+            f"{line.rstrip('\n')!r}"
           )
           self._value_err(errmsg)
           continue

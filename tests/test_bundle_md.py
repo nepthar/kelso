@@ -130,7 +130,7 @@ def test_scan_bundles_prefers_the_folder_flavor(tmp_path: Path):
 
 
 def test_stage_md_bundle_from_catalog(kelso_env):
-  write_md_bundle(kelso_env.main_repo)
+  write_md_bundle(kelso_env.local_repo)
 
   result = kelso_env.run("install", "md-demo")
   assert result.returncode == 0, result.stderr
@@ -146,14 +146,14 @@ def test_stage_md_bundle_by_path_adds_nothing_to_a_repo(kelso_env):
   result = kelso_env.run("install", str(source))
   assert result.returncode == 0, result.stderr
 
-  assert not (kelso_env.main_repo / "md-demo.klso.md").exists()
+  assert not (kelso_env.local_repo / "md-demo.klso.md").exists()
   assert (kelso_env.run_root / "md-demo" / "staged" / "manifest.toml").is_file()
 
 
 def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
   """Both flavors in one repo is the same ambiguity as two repos."""
   # ports-demo.klso (a fixture directory) already owns this id.
-  write_md_bundle(kelso_env.main_repo, app_id="ports-demo")
+  write_md_bundle(kelso_env.local_repo, app_id="ports-demo")
 
   by_id = kelso_env.run("install", "ports-demo")
   assert by_id.returncode == 1
@@ -165,8 +165,8 @@ def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
 
 
 def test_a_full_path_picks_the_flavor_to_stage(kelso_env):
-  write_md_bundle(kelso_env.main_repo, app_id="ports-demo")
-  md = kelso_env.main_repo / "ports-demo.klso.md"
+  write_md_bundle(kelso_env.local_repo, app_id="ports-demo")
+  md = kelso_env.local_repo / "ports-demo.klso.md"
 
   result = kelso_env.run("install", str(md))
   assert result.returncode == 0, result.stderr
@@ -174,11 +174,11 @@ def test_a_full_path_picks_the_flavor_to_stage(kelso_env):
   staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
   assert "Markdown demo" in staged.read_text()
   # Nothing new in apps/: it was already catalogued where it lay.
-  assert not (kelso_env.main_repo / "ports-demo.klso.md").is_symlink()
+  assert not (kelso_env.local_repo / "ports-demo.klso.md").is_symlink()
 
 
 def test_invalid_md_bundle_fails_stage_and_leaves_no_run_dir(kelso_env):
-  bad = kelso_env.main_repo / "broken.klso.md"
+  bad = kelso_env.local_repo / "broken.klso.md"
   bad.write_text("just prose, no files\n")
 
   result = kelso_env.run("install", "broken")

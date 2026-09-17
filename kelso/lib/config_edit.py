@@ -19,7 +19,7 @@ import tomlkit
 from tomlkit import TOMLDocument
 
 from kelso.lib.config import _expand_path, load_config_file
-from kelso.lib.repo import MAIN_REPO
+from kelso.lib.repo import LOCAL_REPO
 from kelso.lib.util import validate_identifier
 
 logger = logging.getLogger("kelso.config_edit")
@@ -155,9 +155,9 @@ def add_repo(ctx: KelsoCtx, name: str, *, path: str = "", url: str = "") -> None
   validate_identifier(name)
   if bool(path) == bool(url):
     raise ValueError("A repo needs exactly one of a local path or a github:// url")
-  if name == MAIN_REPO:
+  if name == LOCAL_REPO:
     raise ValueError(
-      f"{MAIN_REPO!r} is the built-in repo at {ctx.config.repos_root / MAIN_REPO}; "
+      f"{LOCAL_REPO!r} is the built-in repo at {ctx.config.repos_root / LOCAL_REPO}; "
       f"give this one another name."
     )
   with edit_config(ctx) as document:

@@ -2,7 +2,7 @@
 
 A `local` repo is a directory the operator keeps; a `github` repo is one kelso
 mirrors into `repos/<name>/`. Nothing below `Repo.path` knows which kind it
-has. `main` is built in at `repos/main`.
+has. `local` is built in at `repos/local`.
 
 This module owns the repo model and the verbs over it. Talking to GitHub is
 `kelso.lib.github`.
@@ -26,7 +26,7 @@ from kelso.lib.util import (
   validate_identifier,
 )
 
-MAIN_REPO = "main"
+LOCAL_REPO = "local"
 
 GITHUB_SCHEME = "github://"
 
@@ -348,8 +348,8 @@ def remove(ctx, name: str) -> RemoveResult:
   from kelso.lib.config_edit import remove_repo
 
   repo = get(ctx, name)
-  if repo.name == MAIN_REPO:
-    raise ValueError(f"{MAIN_REPO} is built in and cannot be removed")
+  if repo.name == LOCAL_REPO:
+    raise ValueError(f"{LOCAL_REPO} is built in and cannot be removed")
 
   bound = bound_apps(ctx, repo.name)
   with ctx.locked(f"repo remove {name}"):

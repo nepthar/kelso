@@ -19,7 +19,7 @@ from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
 from kelso.lib.metric import KELSO_DIRS
 from kelso.lib.observations import AppObservation
 from kelso.lib.receipt import published_route_urls
-from kelso.lib.repo import MAIN_REPO, bound_apps
+from kelso.lib.repo import LOCAL_REPO, bound_apps
 from kelso.lib.run_layout import AppRunData, load_run_data
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
@@ -143,7 +143,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         "url": repo.remote.url if repo.remote else None,
         "path": str(repo.path),
         "exists": repo.path.is_dir(),
-        "removable": name != MAIN_REPO,
+        "removable": name != LOCAL_REPO,
         "apps": sum(
           1 for entries in catalog.values() for e in entries if e.source == name
         ),

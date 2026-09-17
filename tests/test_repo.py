@@ -601,13 +601,13 @@ def test_remove_drops_the_entry_and_the_mirror(github, ctx, kelso_env):
   assert "kelso" not in load_config_file(kelso_env.config).repos
 
 
-def test_main_cannot_be_removed(ctx):
+def test_local_cannot_be_removed(ctx):
   with pytest.raises(ValueError, match="built in"):
-    repo_lib.remove(ctx, "main")
+    repo_lib.remove(ctx, "local")
 
 
 def test_removing_an_unknown_repo_names_the_known_ones(ctx):
-  with pytest.raises(ValueError, match="configured repos: main"):
+  with pytest.raises(ValueError, match="configured repos: local"):
     repo_lib.remove(ctx, "nope")
 
 
@@ -692,9 +692,9 @@ def test_repo_remove_job_drops_it(github, ctx, kelso_env):
   assert "kelso" not in load_config_file(kelso_env.config).repos
 
 
-def test_repo_remove_job_refuses_main(ctx):
+def test_repo_remove_job_refuses_local(ctx):
   with pytest.raises(ValueError, match="built in"):
-    RepoRemoveJob.call({"name": "main"}, ctx)
+    RepoRemoveJob.call({"name": "local"}, ctx)
 
 
 def test_repo_jobs_are_recorded_as_activity(github, ctx):
@@ -720,8 +720,8 @@ def test_a_duplicate_name_never_reaches_the_config_file(github, ctx, kelso_env):
   assert "kelso" in load_config_file(kelso_env.config).repos
 
 
-def test_main_cannot_be_shadowed_by_a_configured_repo(ctx, kelso_env):
+def test_local_cannot_be_shadowed_by_a_configured_repo(ctx, kelso_env):
   before = kelso_env.config.read_text()
   with pytest.raises(ValueError, match="built-in repo"):
-    repo_lib.add(ctx, URL, name="main")
+    repo_lib.add(ctx, URL, name="local")
   assert kelso_env.config.read_text() == before

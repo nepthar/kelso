@@ -136,7 +136,7 @@ def test_rm_removes_run_state_configuration_and_managed_volumes(kelso_env):
 
 def test_rm_leaves_the_catalog_entry_alone(kelso_env):
   app_id = "ports-demo"
-  bundle = kelso_env.main_repo / f"{app_id}.klso"
+  bundle = kelso_env.local_repo / f"{app_id}.klso"
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
@@ -167,7 +167,7 @@ def test_catalog_shows_available_apps_ps_hides_until_installed(kelso_env):
   assert app_id not in ps.stdout
 
   # Unstaged apps have no run/ copy; inspect a path instead of the catalog id.
-  bundle = kelso_env.main_repo / f"{app_id}.klso"
+  bundle = kelso_env.local_repo / f"{app_id}.klso"
   inspected = kelso_env.run("inspect", str(bundle))
   assert inspected.returncode == 0, inspected.stderr
 
@@ -189,7 +189,7 @@ def test_inspect_shows_config_status(kelso_env):
 
 def test_inspect_notes_when_the_source_manifest_has_drifted(kelso_env):
   assert kelso_env.run("install", BASIC).returncode == 0
-  source = kelso_env.main_repo / f"{BASIC}.klso" / "manifest.toml"
+  source = kelso_env.local_repo / f"{BASIC}.klso" / "manifest.toml"
   source.write_text(source.read_text() + "\n# edited after staging\n")
 
   inspected = kelso_env.run("inspect", BASIC)
@@ -202,7 +202,7 @@ def test_inspect_notes_when_the_source_manifest_has_drifted(kelso_env):
 
 
 def test_inspect_by_path_shows_declared_config_without_installing(kelso_env):
-  bundle = kelso_env.main_repo / f"{BASIC}.klso"
+  bundle = kelso_env.local_repo / f"{BASIC}.klso"
   inspected = kelso_env.run("inspect", str(bundle))
   assert inspected.returncode == 0, inspected.stderr
   assert "admin_user: (required)" in inspected.stdout
@@ -228,7 +228,7 @@ def test_logs_accepts_native_flags_before_app(kelso_env):
 
 
 def test_cmd_lists_and_runs_manifest_commands(kelso_env):
-  app = kelso_env.main_repo / "cmd-demo.klso"
+  app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\
@@ -287,7 +287,7 @@ desc = "List-form command"
 
 
 def test_cmd_uses_run_when_container_is_stopped(kelso_env):
-  app = kelso_env.main_repo / "cmd-demo.klso"
+  app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\
@@ -337,7 +337,7 @@ cmd = "echo pong"
 
 
 def test_invalid_manifest_is_rejected_before_start(kelso_env):
-  app = kelso_env.main_repo / "invalid-mount.klso"
+  app = kelso_env.local_repo / "invalid-mount.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\
@@ -386,13 +386,13 @@ def test_start_invalid_path_arg_errors(kelso_env):
 def test_start_by_path_from_arbitrary_dir(kelso_env):
   app_id = "ports-demo"
   elsewhere = kelso_env.root / "elsewhere" / f"{app_id}.klso"
-  shutil.copytree(kelso_env.main_repo / f"{app_id}.klso", elsewhere)
-  shutil.rmtree(kelso_env.main_repo / f"{app_id}.klso")
+  shutil.copytree(kelso_env.local_repo / f"{app_id}.klso", elsewhere)
+  shutil.rmtree(kelso_env.local_repo / f"{app_id}.klso")
 
   started = kelso_env.run("start", str(elsewhere))
   assert started.returncode == 0, started.stderr
   # A bundle named by path belongs to no repo, so nothing is added to one.
-  assert not (kelso_env.main_repo / f"{app_id}.klso").exists()
+  assert not (kelso_env.local_repo / f"{app_id}.klso").exists()
   assert kelso_env.app_logtab(app_id).read_text().count(str(elsewhere.resolve()))
 
   stopped = kelso_env.run("stop", app_id)
@@ -406,7 +406,7 @@ def test_start_from_a_conflicting_path_is_refused(kelso_env):
   assert kelso_env.run("stop", app_id).returncode == 0
 
   other = kelso_env.root / "elsewhere" / f"{app_id}.klso"
-  shutil.copytree(kelso_env.main_repo / f"{app_id}.klso", other)
+  shutil.copytree(kelso_env.local_repo / f"{app_id}.klso", other)
 
   result = kelso_env.run("start", str(other))
   assert result.returncode == 1
@@ -441,7 +441,7 @@ def test_removed_app_bundle_remains_runnable_from_the_staged_copy(kelso_env):
   """
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
-  shutil.rmtree(kelso_env.main_repo / f"{app_id}.klso")
+  shutil.rmtree(kelso_env.local_repo / f"{app_id}.klso")
 
   doctor = kelso_env.run("doctor")
   assert doctor.returncode == 1
@@ -462,7 +462,7 @@ def test_reload_picks_up_a_changed_manifest_and_comes_back_up(kelso_env):
   """The whole point: edit the bundle, reload, and the running app has it."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
-  manifest = kelso_env.main_repo / f"{app_id}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
   reloaded = kelso_env.run("reload", app_id)
@@ -535,7 +535,7 @@ def test_config_of_a_staged_app_reads_the_run_copy(kelso_env):
   app will actually start with."""
   assert kelso_env.run("install", BASIC).returncode == 0
 
-  manifest = kelso_env.main_repo / f"{BASIC}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{BASIC}.klso" / "manifest.toml"
   manifest.write_text(
     manifest.read_text().replace("[volumes]", "since_staging = {}\n\n[volumes]")
   )
@@ -942,7 +942,7 @@ def test_readonly_host_volume_refuses_writable_app_volume(kelso_env):
 
 def test_missing_secret_blocks_start_with_recovery_command(kelso_env):
   app_id = "needs-secret"
-  app = kelso_env.main_repo / f"{app_id}.klso"
+  app = kelso_env.local_repo / f"{app_id}.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\
@@ -983,7 +983,7 @@ def test_a_required_non_secret_value_blocks_start_and_shows_as_missing_config(
   blocker cannot be attributed to some other value.
   """
   app_id = "needs-value"
-  app = kelso_env.main_repo / f"{app_id}.klso"
+  app = kelso_env.local_repo / f"{app_id}.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
     """\
@@ -1212,7 +1212,7 @@ def test_stop_uses_staged_manifest_when_bundle_is_missing(
   lifecycle.stage(app, stage_ctx.bundle_path(app), stage_ctx)
   start_ctx = KelsoCtx(load_config_file(kelso_env.config))
   lifecycle.start(app, start_ctx.bundle_path(app), start_ctx)
-  shutil.rmtree(kelso_env.main_repo / "routes-demo.klso")
+  shutil.rmtree(kelso_env.local_repo / "routes-demo.klso")
 
   fresh_ctx = KelsoCtx(load_config_file(kelso_env.config))
   lifecycle.stop("routes-demo", fresh_ctx)
@@ -1233,11 +1233,11 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
 
   config = load_config_file(root / "config.toml")
 
-  assert set(config.repos) == {"main", "staples", "demos"}
+  assert set(config.repos) == {"local", "staples", "demos"}
   assert config.repos["staples"].remote.url == "github://nepthar/kelso/main/apps"
   assert config.repos["demos"].remote.url == "github://nepthar/kelso/main/demo-apps"
   # main is the hand-drop directory and is never mirrored.
-  assert not config.repos["main"].mirrored
+  assert not config.repos["local"].mirrored
   # --no-mirror leaves them configured but unfetched, and says so.
   assert "Skipped mirroring" in result.stdout
   assert "kelso repo update" in result.stdout
@@ -1259,7 +1259,7 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
   assert result.returncode == 0, result.stderr
   assert (root / "config.toml").is_file()
   assert (root / "master.key").is_file()
-  assert (root / "repos" / "main").is_dir()
+  assert (root / "repos" / "local").is_dir()
   assert (root / "run").is_dir()
   assert (root / "config").is_dir()
   for kind in VOLUME_KINDS:
@@ -1297,7 +1297,7 @@ def test_every_shipped_bundle_stages(kelso_env):
   assert shipped, "no bundles found in apps/ or demo-apps/"
 
   for app_id, source in shipped:
-    dest = kelso_env.main_repo / source.name
+    dest = kelso_env.local_repo / source.name
     if source.is_dir():
       shutil.copytree(source, dest, dirs_exist_ok=True)
     else:
@@ -1534,7 +1534,7 @@ def test_reset_picks_up_a_changed_app_volume(kelso_env):
   staged = kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh"
   assert "changed by the bundle author" not in staged.read_text()
 
-  bundle = kelso_env.main_repo / f"{BASIC}.klso" / "bin" / "hello.sh"
+  bundle = kelso_env.local_repo / f"{BASIC}.klso" / "bin" / "hello.sh"
   bundle.write_text("#!/bin/sh\necho changed by the bundle author\n")
 
   assert kelso_env.run("reset", BASIC, "-y").returncode == 0
@@ -1545,7 +1545,7 @@ def test_reset_refuses_before_deleting_when_the_bundle_is_gone(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   data = kelso_env.volumes_root / "data" / BASIC / "config"
   (data / "app.db").write_text("rows")
-  shutil.rmtree(kelso_env.main_repo / f"{BASIC}.klso")
+  shutil.rmtree(kelso_env.local_repo / f"{BASIC}.klso")
 
   failed = kelso_env.run("reset", BASIC, "-y")
   assert failed.returncode != 0

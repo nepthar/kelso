@@ -245,6 +245,30 @@ def test_load_skips_malformed_line(tmp_path, caplog):
   assert "Skipping malformed logtab record" in caplog.text
 
 
+def test_load_skips_record_with_bad_timestamp(tmp_path, caplog):
+  path = tmp_path / "bad.logtab"
+  path.write_text("yesterday\tset\ta\t1\n2026-01-01T00:00:01Z\tset\tb\t2\n")
+
+  tab = LogTab(path)
+  assert _values(tab.load()) == {"b": "2"}
+  assert tab.last_ts() == "2026-01-01T00:00:01Z"
+  assert "Skipping malformed logtab record" in caplog.text
+
+
+def test_load_skips_record_behind_nul_bytes(tmp_path, caplog):
+  path = tmp_path / "crashed.logtab"
+  path.write_bytes(
+    b"2026-01-01T00:00:00Z\tset\ta\t1\n"
+    + b"\x00" * 66
+    + b"2026-01-01T00:00:02Z\tset\tb\t2\n"
+  )
+
+  tab = LogTab(path)
+  assert _values(tab.load()) == {"a": "1"}
+  assert tab.last_ts() == "2026-01-01T00:00:00Z"
+  assert "Skipping malformed logtab record" in caplog.text
+
+
 # ── key / value validation ────────────────────────────────────────────────
 @pytest.mark.parametrize(
   "key", ["", "has space", "bad!char", "x" * (LogTab.MAX_KEY_LENGTH + 1)]

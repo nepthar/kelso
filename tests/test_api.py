@@ -61,13 +61,13 @@ def test_version(kelso_env, client):
 
 def test_catalog_lists_available_apps_grouped_by_source(kelso_env, client):
   catalogs = client.get("/catalog").json()["catalogs"]
-  assert [c["name"] for c in catalogs] == ["main"]
+  assert [c["name"] for c in catalogs] == ["local"]
 
   apps = {app["app_id"]: app for app in catalogs[0]["apps"]}
   assert apps[APP]["display_name"] == "Basic Features"
   assert apps[APP]["version"] == "0.1.0"
   assert apps[APP]["description"] == "Config and volumes fixture"
-  assert apps[APP]["repo"] == "main"
+  assert apps[APP]["repo"] == "local"
   assert apps[APP]["configured"] == "missing"
   assert 'display_name = "Basic Features"' in apps[APP]["manifest"]
   assert "[config]" in apps[APP]["manifest"]
@@ -97,7 +97,7 @@ def test_catalog_reports_installed_and_manifest_drift(kelso_env, client, jobs):
 
   # Editing the bundle leaves the staged copy behind: that is the drift the
   # catalog card offers to close with a re-install.
-  manifest = kelso_env.main_repo / f"{APP}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(
     manifest.read_text() + "\n# a comment the staged copy has not seen\n"
   )
@@ -121,8 +121,8 @@ def test_catalog_groups_a_second_repo(kelso_env, client):
     f.write(f'\n[repo.dev]\npath = "{extra}"\n')
 
   catalogs = {c["name"]: c["apps"] for c in client.get("/catalog").json()["catalogs"]}
-  assert list(catalogs) == ["main", "dev"]
-  assert APP in {app["app_id"] for app in catalogs["main"]}
+  assert list(catalogs) == ["local", "dev"]
+  assert APP in {app["app_id"] for app in catalogs["local"]}
   [dev] = catalogs["dev"]
   assert dev["app_id"] == "dev-app"
   assert dev["display_name"] == "Dev App"
@@ -134,7 +134,7 @@ def test_catalog_groups_a_second_repo(kelso_env, client):
 
 
 def test_catalog_keeps_a_broken_bundle(kelso_env, client):
-  broken = kelso_env.main_repo / "broken.klso"
+  broken = kelso_env.local_repo / "broken.klso"
   broken.mkdir()
   (broken / "manifest.toml").write_text("not toml")
 
@@ -148,7 +148,7 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "display_name": "",
     "version": None,
     "description": "",
-    "repo": "main",
+    "repo": "local",
     "state": "available",
     "configured": None,
     "manifest": "not toml",
@@ -315,7 +315,7 @@ def _compose_calls(kelso_env) -> list[list[str]]:
 
 def test_reload_stops_reinstalls_and_starts_a_running_app(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=root")
-  manifest = kelso_env.main_repo / f"{APP}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
   job = submit(client, jobs, "reload", {"app": APP})
@@ -333,7 +333,7 @@ def test_reload_stops_reinstalls_and_starts_a_running_app(kelso_env, client, job
 
 def test_reload_reinstalls_a_stopped_app_without_starting(kelso_env, client, jobs):
   kelso_env.run("install", APP)
-  manifest = kelso_env.main_repo / f"{APP}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
   job = submit(client, jobs, "reload", {"app": APP})
@@ -443,7 +443,7 @@ def test_activity_log_rejects_a_bad_name(kelso_env, client):
 
 
 def _install_cmd_demo(kelso_env):
-  app_dir = kelso_env.main_repo / "cmd-demo.klso"
+  app_dir = kelso_env.local_repo / "cmd-demo.klso"
   app_dir.mkdir()
   (app_dir / "manifest.toml").write_text(
     '[app]\nversion = "1"\n\n'
@@ -770,7 +770,7 @@ def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
     "cache",
   }
 
-  manifest = kelso_env.main_repo / f"{APP}.klso" / "manifest.toml"
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   # Dropped from [volumes] *and* from the unit that mounted it -- a manifest
   # that declares neither is what re-staging leaves data behind for.
   text = manifest.read_text().replace(

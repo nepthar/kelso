@@ -18,7 +18,7 @@ Feel free to skip to the completed kelso app at [apps/unifi-network-application.
 
 
 ## Step 1. Make the bare kelso app:
-Let's start with a barebones app containing what we already know, placed in our `$kelso/repos/main` folder:
+Let's start with a barebones app containing what we already know, placed in our `$kelso/repos/local` folder:
 ```
 # unifi-network-app.klso/manifest.toml
 [app]
