@@ -1522,3 +1522,51 @@ def test_cloudflare_missing_zone_names_the_domain():
 
   with pytest.raises(RouteProviderError, match="no zone 'home.example'"):
     provider.zone_id()
+
+
+def _cf_validate(tunnel: dict) -> list[str]:
+  provider = _cf_provider()
+  provider._request = Mock(
+    side_effect=lambda method, path, **kw: (
+      [{"id": "zone-1"}] if path == "/zones" else tunnel
+    )
+  )
+  return provider.validate()
+
+
+def test_cloudflare_validate_accepts_a_healthy_tunnel():
+  assert _cf_validate({"status": "healthy", "remote_config": True}) == []
+
+
+def test_cloudflare_validate_reports_a_tunnel_with_no_connector():
+  [error] = _cf_validate({"status": "down", "connections": [], "remote_config": True})
+  assert "is down" in error
+  assert "kelso start cloudflared" in error
+
+  [error] = _cf_validate({"connections": []})
+  assert "not connected" in error
+
+
+def test_cloudflare_validate_reports_a_locally_managed_tunnel():
+  [error] = _cf_validate({"status": "healthy", "remote_config": False})
+  assert "locally managed" in error
+
+
+def test_cloudflare_validate_refuses_a_loopback_kelso_address():
+  provider = CloudflareTunnelRouteProvider(
+    account_id="acct-1",
+    tunnel_id=TUNNEL,
+    api_token="cf-token",
+    kelso_domain="home.example",
+    kelso_address="localhost",
+  )
+  provider._request = Mock(
+    side_effect=lambda method, path, **kw: (
+      [{"id": "zone-1"}]
+      if path == "/zones"
+      else {"status": "healthy", "remote_config": True}
+    )
+  )
+
+  [error] = provider.validate()
+  assert "means the container itself" in error

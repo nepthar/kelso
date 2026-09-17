@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("kelso.routes")
 
+# Addresses that resolve to the cloudflared container rather than the host.
+LOOPBACK_ADDRESSES = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+
 
 class CloudflareTunnelRouteProvider(RouteProvider):
   """Publish kelso app routes through a remotely-managed Cloudflare Tunnel.
@@ -218,18 +221,33 @@ class CloudflareTunnelRouteProvider(RouteProvider):
         self._request("GET", f"/accounts/{self.account_id}/cfd_tunnel/{self.tunnel_id}")
         or {}
       )
+      status = str(tunnel.get("status") or "").lower()
       if tunnel.get("deleted_at"):
         errors.append(f"Cloudflare tunnel {self.tunnel_id} is deleted")
-      elif not tunnel.get("conns"):
+      elif status in ("down", "inactive") or (
+        not status and not tunnel.get("connections")
+      ):
         errors.append(
-          f"Cloudflare tunnel {self.tunnel_id} has no active connections; "
+          f"Cloudflare tunnel {self.tunnel_id} is {status or 'not connected'}; "
           f"start the connector with `kelso start cloudflared`"
+        )
+      if tunnel.get("remote_config") is False:
+        errors.append(
+          f"Cloudflare tunnel {self.tunnel_id} is locally managed, so it reads a "
+          f"config.yml and ignores the ingress rules kelso writes. Recreate it "
+          f"in the dashboard (Zero Trust > Networks > Tunnels)"
         )
     except RouteProviderError as e:
       errors.append(f"Cloudflare tunnel {self.tunnel_id} is not usable: {e}")
 
     if not self.kelso_address:
       errors.append("kelso_address is unset, so routes have nowhere to point")
+    elif self.kelso_address in LOOPBACK_ADDRESSES:
+      errors.append(
+        f"kelso_address is {self.kelso_address!r}, which inside the cloudflared "
+        f"container means the container itself. Set it to the LAN address of the "
+        f"host running the apps (or host.docker.internal on Docker Desktop)"
+      )
     return errors
 
   def register_route(
