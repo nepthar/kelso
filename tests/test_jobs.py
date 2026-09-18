@@ -1,7 +1,5 @@
 """Job: parse first, then file a run log, then do the work."""
 
-from __future__ import annotations
-
 import io
 
 import pytest

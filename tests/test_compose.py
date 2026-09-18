@@ -7,8 +7,6 @@ path is covered end to end in test_cli.py. The readiness section at the bottom
 covers the rest of what `AppRunData` decides.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

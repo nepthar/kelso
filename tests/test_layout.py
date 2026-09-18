@@ -4,8 +4,6 @@ Everything here goes through the CLI against the `kelso_env` fixture, whose
 fake docker is the only docker these tests are allowed to see.
 """
 
-from __future__ import annotations
-
 import json
 import shutil
 from pathlib import Path

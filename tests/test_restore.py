@@ -7,8 +7,6 @@ kelso builds and the data that survives the round trip; whether the *real*
 container preserves root ownership is a live test in docs/testing.md.
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import os

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import shlex
 import shutil
 import tarfile

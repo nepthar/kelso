@@ -3,8 +3,6 @@
 Note that secrets should never be rendered to the user through this module.
 """
 
-from __future__ import annotations
-
 import difflib
 from dataclasses import asdict
 from datetime import UTC, datetime

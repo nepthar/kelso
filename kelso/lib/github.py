@@ -7,8 +7,6 @@ not on the API quota.
 Nothing here knows what a bundle or a repo is; see `kelso.lib.repo`.
 """
 
-from __future__ import annotations
-
 import os
 import re
 from dataclasses import dataclass

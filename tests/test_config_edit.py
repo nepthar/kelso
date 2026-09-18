@@ -1,8 +1,6 @@
 """Editing config.toml: what survives, what is refused, and what is never left
 half-written."""
 
-from __future__ import annotations
-
 import json
 
 import pytest

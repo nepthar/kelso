@@ -6,8 +6,6 @@ file, so neither is a client of the other and `kelso` keeps working whether
 or not this is running.
 """
 
-from __future__ import annotations
-
 import argparse
 import logging
 import os

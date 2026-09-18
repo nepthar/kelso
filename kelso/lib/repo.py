@@ -8,8 +8,6 @@ This module owns the repo model and the verbs over it. Talking to GitHub is
 `kelso.lib.github`.
 """
 
-from __future__ import annotations
-
 import os
 import shutil
 from collections.abc import Mapping

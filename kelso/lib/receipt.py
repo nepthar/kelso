@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG

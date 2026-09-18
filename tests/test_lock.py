@@ -9,8 +9,6 @@ same process just as it does across processes. The one test that would be
 vacuous that way spawns a real child.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import time

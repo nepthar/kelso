@@ -7,8 +7,6 @@ becomes a route -- was previously only observable through generated compose
 files in the CLI tests.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from kelso.lib.manifest import ConfigError

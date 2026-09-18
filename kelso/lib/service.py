@@ -3,8 +3,6 @@
 systemd only. Anywhere else, kelsod is something you run in a terminal.
 """
 
-from __future__ import annotations
-
 import os
 import shutil
 import subprocess

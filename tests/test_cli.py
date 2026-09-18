@@ -6,8 +6,6 @@ daemon, a real route provider, or root-owned volume data is in docs/testing.md
 instead.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import shutil

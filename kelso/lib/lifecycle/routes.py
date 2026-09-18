@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.kelso import KelsoCtx

@@ -4,8 +4,6 @@
 otherwise, so piped input and tests still work.
 """
 
-from __future__ import annotations
-
 import sys
 from getpass import getpass
 

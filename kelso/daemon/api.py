@@ -5,8 +5,6 @@ Every handler is a plain `def`: `kelso.lib` blocks, and FastAPI runs a
 non-async endpoint in a threadpool. Errors have one shape, `{"error": "..."}`.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from typing import Annotated
 

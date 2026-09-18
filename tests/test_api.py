@@ -1,7 +1,5 @@
 """The admin API surface: what it projects, what it refuses, and what it runs."""
 
-from __future__ import annotations
-
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path

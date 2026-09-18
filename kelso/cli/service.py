@@ -9,7 +9,7 @@ from kelso.lib.util import Conn
 
 NO_SYSTEMD = (
   "This machine does not run systemd, so kelsod was not installed as a service. "
-  "Run `kelsod` in a terminal when you want the web UI."
+  "Run `kelsod` in a terminal if you need the admin socket and daemon."
 )
 
 

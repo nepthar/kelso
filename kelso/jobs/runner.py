@@ -5,8 +5,6 @@ waits for them dies long before the work does. Execution is serial by
 construction: each job takes the same locks the CLI does.
 """
 
-from __future__ import annotations
-
 import logging
 import queue
 import threading

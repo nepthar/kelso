@@ -3,8 +3,6 @@ app's installation under `run/`, its data under the volume roots, and its
 config under `config/`.
 """
 
-from __future__ import annotations
-
 import argparse
 
 from kelso.lib.kelso import KelsoCtx

@@ -5,8 +5,6 @@ archive, or delete them. A throwaway container with the right binds does that
 work instead.
 """
 
-from __future__ import annotations
-
 import subprocess
 from collections.abc import Iterable
 from logging import getLogger

@@ -1,7 +1,5 @@
 """Where an app stands, and whether what is running is current."""
 
-from __future__ import annotations
-
 from kelso.lib.apps import AppID
 from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.observations import AppObservation
