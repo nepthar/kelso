@@ -331,6 +331,13 @@ def block_real_docker(
     )
 
 
+@pytest.fixture(autouse=True)
+def block_real_systemd(tmp_path_factory: pytest.TempPathFactory, monkeypatch):
+  """No test writes a real user unit or asks the real systemd to run one."""
+  monkeypatch.setattr("kelso.lib.service.has_systemd", lambda: False)
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
+
+
 @pytest.fixture
 def expect_docker_calls(block_real_docker: Path):
   """For tests that deliberately trip the guard, so it does not fail them."""

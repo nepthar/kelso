@@ -3,6 +3,8 @@ import os
 import secrets
 from pathlib import Path
 
+from kelso.cli.service import NO_SYSTEMD, install_service
+from kelso.lib import service
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config_file
 from kelso.lib.logtab import LogTab
 from kelso.lib.repo import LOCAL_REPO
@@ -201,6 +203,15 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
     conn.out("  Fetch them with `kelso repo update`.")
   else:
     _mirror_default_repos(config, conn)
+
+  conn.out("")
+  if not service.has_systemd():
+    conn.out(NO_SYSTEMD)
+  else:
+    try:
+      install_service(config.config_path, conn)
+    except RuntimeError as e:
+      conn.err(str(e))
 
   conn.out(f"\nTo change your configuration, edit {config_path}")
   conn.out(

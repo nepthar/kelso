@@ -23,6 +23,7 @@ from kelso.cli import (
   repo,
   restore,
   routes,
+  service,
   snapshot,
   start,
   stop,
@@ -55,6 +56,7 @@ COMMANDS = [
   config_sys,
   decrypt,
   routes,
+  service,
 ]
 
 

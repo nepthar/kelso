@@ -66,6 +66,9 @@ once you are done exploring: `kelso repo remove demos`.
 
 That install carries both commands: `kelso`, the CLI, and `kelsod`, the
 admin API the web UI talks to.
+On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
+service; `kelso service install` does the same for a root that already exists.
+Elsewhere, run `kelsod` in a terminal when you want the web UI.
 
 ## Why kelso?
 

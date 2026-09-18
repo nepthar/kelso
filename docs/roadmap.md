@@ -10,8 +10,8 @@ Kubernetes and similar can be overkill, while raw Docker Compose files alone sti
 ## Features
 Our feature roadmap, roughly in order of priority
 
-### Systemd unit and one-command installer
-At the moment, `kelsod` runs foreground-only. We need persistence and installability
+### One-command installer
+`kelso init` installs `kelsod` as a systemd user service. Installing kelso itself still takes `uv` and a separate `kelso init`.
 
 ### Cron Jobs
 Add the ability to define and execute commands and cron jobs from within the manifest.toml. Think regular admin tasks, database cleanup, password reset, etc.
