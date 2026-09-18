@@ -445,7 +445,10 @@ def test_removed_app_bundle_remains_runnable_from_the_staged_copy(kelso_env):
 
   doctor = kelso_env.run("doctor")
   assert doctor.returncode == 1
-  assert "app bundle missing" in doctor.stderr
+  assert (
+    f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
+    in doctor.stderr
+  )
 
   stopped = kelso_env.run("stop", app_id)
   assert stopped.returncode == 0, stopped.stderr
@@ -513,6 +516,23 @@ def test_config_before_staging_reads_the_bundle(kelso_env):
   assert kelso_env.run("install", BASIC).returncode == 0
   kept = kelso_env.run("config", BASIC, "--get", "admin_user")
   assert kept.stdout.strip() == "alice"
+
+
+def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
+  """`--edit` renders the app's ConfigRequest and applies the response."""
+  edited = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\ns\n")
+
+  assert edited.returncode == 0, edited.stderr
+  assert "Set admin_user" in edited.stdout
+  assert kelso_env.run("config", BASIC, "--get", "admin_user").stdout.strip() == "alice"
+
+
+def test_config_edit_writes_nothing_when_cancelled(kelso_env):
+  cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nq\n")
+
+  assert cancelled.returncode == 0, cancelled.stderr
+  assert "Cancelled" in cancelled.stdout
+  assert kelso_env.run("config", BASIC, "--get", "admin_user").returncode == 1
 
 
 def test_binding_before_staging_applies_at_the_first_start(kelso_env):

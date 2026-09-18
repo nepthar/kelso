@@ -9,6 +9,7 @@ import requests
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
+from kelso.lib.configflow import ConfigField
 from kelso.lib.store import KelsoStore
 
 from .base import RouteProvider, RouteProviderError, refuse_foreign_route
@@ -30,6 +31,14 @@ class NginxProxyManagerRouteProvider(RouteProvider):
   # State keys under SystemDB.
   _TOKEN_KEY = "npm_token"
   _TOKEN_EXPIRE_KEY = "npm_token_expire"
+
+  @classmethod
+  def config_fields(cls) -> tuple[ConfigField, ...]:
+    return (
+      ConfigField(name="endpoint", desc="NPM's admin URL, e.g. http://npm-host:81"),
+      ConfigField(name="email", desc="Login for the NPM admin account"),
+      ConfigField(name="password", secret=True, desc="Password for that account"),
+    )
 
   @classmethod
   def from_config(

@@ -15,7 +15,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   with ctx.kelso_lock("doctor"):
     problems: list[str] = list(_catalog_notes(ctx))
     for observation in ctx.observations():
-      for note in _notes(observation):
+      for note in _notes(observation, ctx):
         problems.append(f"{observation.app_id}: {note}")
 
     if not problems:
@@ -47,12 +47,19 @@ def _catalog_notes(ctx: KelsoCtx) -> list[str]:
   return notes
 
 
-def _notes(observation: AppObservation) -> tuple[str, ...]:
+def _missing_bundle(observation: AppObservation, ctx: KelsoCtx) -> str:
+  origin = ctx.staged_origin(observation.app_id)
+  if origin is None:
+    return "app bundle missing (no install source recorded)"
+  return f"app bundle missing, was: {origin}"
+
+
+def _notes(observation: AppObservation, ctx: KelsoCtx) -> tuple[str, ...]:
   notes = []
   if observation.bundle_path is None and (
     observation.run_dir_exists or observation.containers or observation.db_present
   ):
-    notes.append("app bundle missing")
+    notes.append(_missing_bundle(observation, ctx))
   if not observation.run_dir_exists and observation.containers:
     notes.append("run directory missing")
   elif observation.run_dir_exists and not observation.compose_exists:

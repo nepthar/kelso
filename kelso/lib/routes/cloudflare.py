@@ -7,6 +7,7 @@ import requests
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
+from kelso.lib.configflow import ConfigField
 
 from .base import RouteProvider, RouteProviderError, refuse_foreign_route
 
@@ -35,6 +36,24 @@ class CloudflareTunnelRouteProvider(RouteProvider):
   COMMENT_PREFIX = "kelso:"
   # Every tunnel config ends with a catch-all; ingress rules go before it.
   CATCH_ALL = {"service": "http_status:404"}
+
+  @classmethod
+  def config_fields(cls) -> tuple[ConfigField, ...]:
+    return (
+      ConfigField(name="account_id", desc="Account id from the dashboard URL"),
+      ConfigField(name="tunnel_id", desc="Tunnel id from Zero Trust > Networks"),
+      ConfigField(
+        name="api_token",
+        secret=True,
+        desc="Token with Cloudflare Tunnel: Edit and DNS: Edit",
+      ),
+      ConfigField(
+        name="zone_id",
+        required=False,
+        advanced=True,
+        desc="Only needed when the token cannot list zones",
+      ),
+    )
 
   @classmethod
   def from_config(

@@ -3,9 +3,11 @@ import argparse
 import yaml
 from tabulate import tabulate
 
+from kelso.cli.configform import run_form
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, bind
 from kelso.lib.run_layout import load_run_data, make_compose_dict
@@ -54,6 +56,12 @@ def register(subparsers) -> None:
     help="Print a single config value (secrets show as 'set' unless --show-secret)",
   )
   parser.add_argument(
+    "--edit",
+    "-e",
+    action="store_true",
+    help="Fill in this app's config interactively",
+  )
+  parser.add_argument(
     "--show-secret",
     action="store_true",
     help="With --get, print secret values in plaintext",
@@ -80,7 +88,26 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
       _apply(app, spec, args.sets, args.binds, args.routes, ctx, conn)
       return
 
+    if args.edit:
+      _edit(app, spec, ctx, conn)
+      return
+
     _list(app, spec, store, conn)
+
+
+def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
+  request = app_config_request(spec, ctx)
+  if not request.fields:
+    conn.out(f"App {app} declares no config")
+    return
+
+  response = run_form(request, conn)
+  if response is None:
+    conn.out("Cancelled; nothing was written")
+    return
+
+  written = apply_app_config(spec, response, ctx)
+  conn.out(f"Set {', '.join(written)}" if written else "No changes")
 
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
