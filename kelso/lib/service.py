@@ -10,7 +10,20 @@ import sys
 from pathlib import Path
 
 UNIT_NAME = "kelsod.service"
-CONFIG_ENV = "KELSO_CONFIG"
+
+UNIT_TEMPLATE = """\
+[Unit]
+Description=Kelso admin daemon
+
+[Service]
+Type=simple
+ExecStart="{kelsod}"
+Environment="KELSO_CONFIG={config_path}"
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+"""
 
 ACTIVATE = (
   ("systemctl", "--user", "daemon-reload"),
@@ -46,25 +59,9 @@ def kelsod_path() -> Path:
   )
 
 
-def unit_text(kelsod: Path, config_path: Path) -> str:
-  return (
-    "[Unit]\n"
-    "Description=Kelso admin daemon\n"
-    "\n"
-    "[Service]\n"
-    "Type=simple\n"
-    f'ExecStart="{kelsod}"\n'
-    f'Environment="{CONFIG_ENV}={config_path}"\n'
-    "Restart=on-failure\n"
-    "\n"
-    "[Install]\n"
-    "WantedBy=default.target\n"
-  )
-
-
 def _unit_config(text: str) -> str | None:
   """The config path an existing unit runs kelsod against."""
-  prefix = f'Environment="{CONFIG_ENV}='
+  prefix = 'Environment="KELSO_CONFIG='
   for line in text.splitlines():
     if line.startswith(prefix):
       return line.removeprefix(prefix).removesuffix('"')
@@ -85,7 +82,7 @@ def write_unit(config_path: Path) -> Path:
         f"machine's kelsod should serve {config_path} instead."
       )
   path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(unit_text(kelsod_path(), config_path))
+  path.write_text(UNIT_TEMPLATE.format(kelsod=kelsod_path(), config_path=config_path))
   return path
 
 
