@@ -226,19 +226,19 @@ class Config:
 
   @property
   def conn_root(self) -> Path:
-    """Where kelsod's sockets live. One path to mount for admin access."""
+    """Where kelsod's sockets live."""
     return self.var_root / "conn"
 
   @property
   def admin_socket_path(self) -> Path:
-    return self.conn_root / "admin.sock"
+    return self.conn_root / "admin" / "admin.sock"
 
   @property
   def system_volumes(self) -> dict[str, Path]:
-    """Where each `kind = "system"` volume name points."""
-    # The directory, not the socket: kelsod recreates the socket on every start,
-    # and a file bind mount would keep the dead one.
-    return {"kelso_admin": self.conn_root}
+    """Where each `kind = "system"` volume's `src` points."""
+    # Directories, not sockets: kelsod recreates its socket on every start, and
+    # a file bind mount would keep the dead one.
+    return {"kelso_admin_socket": self.admin_socket_path.parent}
 
   @property
   def config_root(self) -> Path:

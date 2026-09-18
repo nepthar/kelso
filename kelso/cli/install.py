@@ -53,7 +53,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
 # What a system volume hands the app, in the operator's terms.
 SYSTEM_GRANTS = {
-  "kelso_admin": (
+  "kelso_admin_socket": (
     "kelso's admin socket. It will be able to start, stop, uninstall and "
     "restore any app"
   ),
@@ -73,15 +73,12 @@ def _bundle_spec(app: AppID, bundle: Path) -> AppSpec | None:
 
 
 def _new_system_volumes(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> list[str]:
-  """System volumes the installed copy, if any, was not already granted."""
+  """System volume `src`s the installed copy, if any, was not already granted."""
   staged = ctx.staged_spec(app)
-  granted = staged.volumes if staged else {}
-  return [
-    name
-    for name, volume in spec.volumes.items()
-    if volume.kind == "system"
-    and not (name in granted and granted[name].kind == "system")
-  ]
+  granted = {
+    v.src for v in (staged.volumes.values() if staged else ()) if v.kind == "system"
+  }
+  return sorted({v.src for v in spec.volumes.values() if v.kind == "system"} - granted)
 
 
 def confirm_install(app: AppID, bundle: Path, ctx: KelsoCtx, conn: Conn) -> bool:
@@ -98,8 +95,8 @@ def confirm_install(app: AppID, bundle: Path, ctx: KelsoCtx, conn: Conn) -> bool
     conn.out(f"Warning: {warning.message()}:")
     for line in warning.option_lines():
       conn.out(f"  {line}")
-  for name in system:
-    conn.out(f"Warning: {app} asks for {SYSTEM_GRANTS[name]}.")
+  for src in system:
+    conn.out(f"Warning: {app} asks for {SYSTEM_GRANTS[src]}.")
 
   try:
     answer = conn.read(f"Install {app} anyway? [y/N] ")

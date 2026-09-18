@@ -89,7 +89,7 @@ that does not, with no change to the bundle.
 | `kind` | one of the above | **required** | |
 | `desc` | string | `""` | Shown to the operator, and worth writing for `host` volumes. |
 | `readonly` | bool | `false` | `app` volumes are always read-only; setting `readonly = false` on one is an error. |
-| `src` | string | volume name | `app` volumes only: which file or directory in the bundle to mount. |
+| `src` | string | volume name | `app`: which file or directory in the bundle to mount. `system`: which kelso resource (required). |
 
 ```toml
 [volumes]
@@ -106,20 +106,24 @@ kelso config <app> --bind media=photos
 ```
 
 A `system` volume is also a request, but for something of kelso's own, so the
-operator has nothing to bind. The volume's name says which one, and kelso
-refuses any name it does not know:
+operator has nothing to bind. Its `src` says which one, and kelso refuses any
+it does not know:
 
-| Name | Mounts | Grants |
+| `src` | Mounts | Grants |
 | --- | --- | --- |
-| `kelso_admin` | The directory holding `admin.sock` | Every verb kelsod's API exposes |
+| `kelso_admin_socket` | A directory holding only `admin.sock` | Every verb kelsod's API exposes |
 
 ```toml
 [volumes]
-kelso_admin = { kind = "system" }
+admin = { kind = "system", src = "kelso_admin_socket" }
 
 [run.main]
-volumes = { kelso_admin = "/kelso/conn" }
+volumes = { admin = "/kelso/admin" }
 ```
+
+The socket is at `/kelso/admin/admin.sock` inside the container. A directory is
+mounted rather than the socket itself because kelsod makes a new socket each
+time it starts.
 
 `install`, `start` and `dev` ask the operator to confirm the first time an app
 asks for one. System volumes are never snapshotted or removed with the app.

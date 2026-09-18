@@ -6,7 +6,7 @@ import json
 import os
 import socket
 
-SOCKET = os.environ.get("KELSO_SOCKET", "/kelso/conn/admin.sock")
+SOCKET = os.environ.get("KELSO_SOCKET", "/kelso/admin/admin.sock")
 # host:port wins over the socket when set. Docker Desktop's bind mounts cannot
 # carry AF_UNIX, so a mac host serves this over TCP instead.
 API = os.environ.get("KELSO_API", "").strip()
@@ -56,8 +56,7 @@ def api(path, method="GET", payload=None, timeout=10):
     status = response.status
   except FileNotFoundError as e:
     raise ApiError(
-      f"No socket at {SOCKET}. Is kelsod running, and is $kelso/var/conn bound "
-      f"into this container?"
+      f"No socket at {SOCKET}. Is kelsod running on the host?"
     ) from e
   except OSError as e:
     hint = ""

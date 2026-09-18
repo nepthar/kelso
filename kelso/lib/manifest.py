@@ -26,9 +26,9 @@ from kelso.lib.util import (
 NetworkMode = Literal["normal", "host"]
 VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host", "system"]
 
-# The kelso resources a `kind = "system"` volume may name. `Config.system_volumes`
-# says where each one is.
-SYSTEM_VOLUMES = ("kelso_admin",)
+# What a `kind = "system"` volume's `src` may name. `Config.system_volumes` says
+# where each one is.
+SYSTEM_VOLUMES = ("kelso_admin_socket",)
 
 
 class ConfigError(ValueError):
@@ -58,8 +58,12 @@ class VolumeEntry(BaseModel):
 
   @model_validator(mode="after")
   def check_src(self) -> Self:
-    if self.src and self.kind != "app":
-      raise ValueError("src: can only be set for app volumes")
+    if self.src and self.kind not in ("app", "system"):
+      raise ValueError("src: can only be set for app and system volumes")
+    if self.kind == "system" and self.src not in SYSTEM_VOLUMES:
+      raise ValueError(
+        f"src: a system volume must name one of: {', '.join(SYSTEM_VOLUMES)}"
+      )
     return self
 
 
@@ -352,7 +356,7 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
 
 
 def _validate_volumes(manifest: Manifest) -> list[str]:
-  """`app` volumes are read-only; `system` volumes name something kelso has."""
+  """`app` volumes are the bundle's own files: input, never state."""
   errors: list[str] = []
   for name, volume in manifest.volumes.items():
     if (
@@ -363,11 +367,6 @@ def _validate_volumes(manifest: Manifest) -> list[str]:
       errors.append(
         f"[volumes.{name}]: app volumes are always mounted read-only; "
         "remove `readonly = false`"
-      )
-    if volume.kind == "system" and name not in SYSTEM_VOLUMES:
-      errors.append(
-        f"[volumes.{name}]: there is no system volume named {name}; "
-        f"known: {', '.join(SYSTEM_VOLUMES)}"
       )
   return errors
 

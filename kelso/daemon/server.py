@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument(
     "--socket",
     metavar="PATH",
-    help="Admin socket path (default: <kelso_root>/var/conn/admin.sock)",
+    help="Admin socket path (default: <kelso_root>/var/conn/admin/admin.sock)",
   )
   parser.add_argument(
     "--port",

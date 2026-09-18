@@ -230,11 +230,11 @@ ADMIN_MANIFEST = """\
 version = "1"
 
 [volumes]
-kelso_admin = { kind = "system" }
+admin = { kind = "system", src = "kelso_admin_socket" }
 
 [run.main]
 image   = "alpine:latest"
-volumes = { kelso_admin = "/kelso/conn" }
+volumes = { admin = "/kelso/admin" }
 """
 
 
@@ -244,21 +244,35 @@ def test_a_system_volume_links_to_kelso_with_nothing_to_bind(kelso_env):
   started = kelso_env.run("start", "admin-app", "-y")
   assert started.returncode == 0, started.stderr
 
-  link = kelso_env.run_root / "admin-app" / "volumes" / "system" / "kelso_admin"
-  assert link.readlink() == kelso_env.root / "var" / "conn"
+  link = kelso_env.run_root / "admin-app" / "volumes" / "system" / "admin"
+  assert link.readlink() == kelso_env.root / "var" / "conn" / "admin"
+  assert link.is_dir()
   mounts = _compose(kelso_env, "admin-app")["services"]["main"]["volumes"]
-  assert "./volumes/system/kelso_admin:/kelso/conn" in mounts
+  assert "./volumes/system/admin:/kelso/admin" in mounts
 
 
-def test_an_unknown_system_volume_is_a_manifest_error(kelso_env):
-  _write_bundle(
-    kelso_env, "bad-system", _volumes_manifest('docker = { kind = "system" }')
-  )
+@pytest.mark.parametrize(
+  "volume", ['{ kind = "system", src = "docker" }', '{ kind = "system" }']
+)
+def test_a_system_volume_must_name_a_known_src(kelso_env, volume):
+  _write_bundle(kelso_env, "bad-system", _volumes_manifest(f"sock = {volume}"))
 
   refused = kelso_env.run("install", "bad-system", "-y")
   assert refused.returncode == 1
-  assert "no system volume named docker" in refused.stderr
-  assert "kelso_admin" in refused.stderr
+  assert "kelso_admin_socket" in refused.stderr
+  assert not (kelso_env.run_root / "bad-system").exists()
+
+
+def test_src_is_refused_on_a_data_volume(kelso_env):
+  _write_bundle(
+    kelso_env,
+    "bad-src",
+    _volumes_manifest('state = { kind = "data", src = "kelso_admin_socket" }'),
+  )
+
+  refused = kelso_env.run("install", "bad-src", "-y")
+  assert refused.returncode == 1
+  assert "only be set for app and system volumes" in refused.stderr
 
 
 def test_install_asks_once_before_granting_a_system_volume(kelso_env):

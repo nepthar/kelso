@@ -111,7 +111,7 @@ def volume_lines(
     elif volume.kind == "app":
       continue
     elif volume.kind == "system":
-      lines.append(f"{name}: {ctx.config.system_volumes[name]}")
+      lines.append(f"{name}: {ctx.config.system_volumes[volume.src]}")
     else:
       root = ctx.config.volume_roots.get(volume.kind)
       if root is not None:
@@ -245,7 +245,7 @@ def danger_callouts(spec: AppSpec) -> list[str]:
     if volume.kind == "host" and not volume.readonly:
       callouts.append(f"writable host bind '{name}'")
     if volume.kind == "system":
-      callouts.append(f"kelso system access '{name}'")
+      callouts.append(f"kelso system access '{volume.src}' as '{name}'")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
   # bind, and used to be the only one kelso made silently.
   for warning in spec.compose_warnings:
