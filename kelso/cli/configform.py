@@ -11,7 +11,12 @@ from getpass import getpass
 
 from tabulate import tabulate
 
-from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import (
+  EMPTY_CONFIG_RESPONSE,
+  ConfigField,
+  ConfigRequest,
+  ConfigResponse,
+)
 from kelso.lib.util import Conn
 
 REVIEW = "'s' to submit, a name or number to change, 'q' to cancel"
@@ -63,8 +68,8 @@ def _pick(request: ConfigRequest, choice: str) -> ConfigField | None:
   return request.field(choice)
 
 
-def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
-  """Walk the fields, then review; None when the operator cancels."""
+def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse:
+  """Walk the fields, then review; EMPTY_CONFIG_RESPONSE on cancel or no change."""
   edits: dict[str, str] = {}
   missing = request.missing()
   basic = [f for f in request.fields if not f.advanced or f.name in missing]
@@ -88,11 +93,11 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
       choice = conn.read(f"[{REVIEW}] ").strip()
 
       if choice in ("q", "quit"):
-        return None
+        return EMPTY_CONFIG_RESPONSE
       if choice in ("s", "submit", ""):
         errors = request.validate(edits)
         if not errors:
-          return ConfigResponse(values=edits)
+          return ConfigResponse(values=edits) if edits else EMPTY_CONFIG_RESPONSE
         for err in errors:
           conn.err(f"  - {err}")
         continue
@@ -103,11 +108,11 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
         continue
       _ask(entry, edits, conn)
   except EOFError:
-    return None
+    return EMPTY_CONFIG_RESPONSE
 
 
-def collect(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
-  """Collect a response from the operator; None when they cancel."""
+def collect(request: ConfigRequest, conn: Conn) -> ConfigResponse:
+  """Collect a response; EMPTY_CONFIG_RESPONSE when there is nothing to apply."""
   if sys.stdin.isatty() and sys.stdout.isatty():
     from kelso.cli.configtui import run_tui
 

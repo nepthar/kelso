@@ -93,3 +93,6 @@ class ConfigResponse:
   """What a front end collected, ready for the source to apply."""
 
   values: dict[str, str] = field(default_factory=dict)
+
+
+EMPTY_CONFIG_RESPONSE = ConfigResponse(values=dict())

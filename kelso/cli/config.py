@@ -6,6 +6,7 @@ from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
@@ -100,8 +101,8 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
     return
 
   response = collect(request, conn)
-  if response is None:
-    conn.out("Cancelled; nothing was written")
+  if response == EMPTY_CONFIG_RESPONSE:
+    conn.out("No changes")
     return
 
   written = apply_app_config(spec, response, ctx)

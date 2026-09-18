@@ -9,7 +9,12 @@ import pytest
 
 from kelso.cli.configform import run_form
 from kelso.lib.config import load_config_file
-from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import (
+  EMPTY_CONFIG_RESPONSE,
+  ConfigField,
+  ConfigRequest,
+  ConfigResponse,
+)
 from kelso.lib.configflow.route_provider import (
   apply_route_provider_config,
   resolve_route_provider,
@@ -108,29 +113,23 @@ def test_wizard_walks_the_fields_then_submits():
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values == {"admin_email": "a@b.c", "api_key": "secret-value"}
 
 
 def test_enter_keeps_what_is_already_there():
   conn = _ScriptedConn("", "", "", "n", "s")
 
-  response = run_form(_request(), conn)
-
-  assert response is not None
-  assert response.values == {}
+  assert run_form(_request(), conn) == EMPTY_CONFIG_RESPONSE
 
 
 def test_advanced_fields_are_offered_but_skipped_by_default():
   # Declining the offer means the extra "20" is never consumed as an answer.
   conn = _ScriptedConn("a@b.c", "", "k", "n", "20", "s")
   response = run_form(_request(), conn)
-  assert response is not None
   assert "pool_size" not in response.values
 
   conn = _ScriptedConn("a@b.c", "", "k", "y", "20", "s")
   response = run_form(_request(), conn)
-  assert response is not None
   assert response.values["pool_size"] == "20"
 
 
@@ -140,7 +139,6 @@ def test_a_missing_required_field_is_asked_even_when_advanced():
 
   response = run_form(request, conn)
 
-  assert response is not None
   assert response.values == {"token": "t"}
 
 
@@ -149,7 +147,6 @@ def test_review_can_send_you_back_to_one_field():
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values["timezone"] == "America/Denver"
   assert response.values["admin_email"] == "a@b.c"
 
@@ -159,7 +156,6 @@ def test_a_partial_answer_can_be_submitted():
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values == {"admin_email": "a@b.c"}
 
 
@@ -172,8 +168,9 @@ def test_the_form_never_echoes_a_secret():
 
 
 def test_form_cancels_on_quit_and_on_eof():
-  assert run_form(_request(), _ScriptedConn("a@b.c", "", "k", "n", "q")) is None
-  assert run_form(_request(), _ScriptedConn()) is None
+  quit_ = _ScriptedConn("a@b.c", "", "k", "n", "q")
+  assert run_form(_request(), quit_) == EMPTY_CONFIG_RESPONSE
+  assert run_form(_request(), _ScriptedConn()) == EMPTY_CONFIG_RESPONSE
 
 
 def test_an_unknown_choice_at_review_says_so_and_keeps_going():
@@ -182,7 +179,7 @@ def test_an_unknown_choice_at_review_says_so_and_keeps_going():
   response = run_form(_request(), conn)
 
   assert any("No field 'nope'" in line for line in conn.err_lines)
-  assert response is not None
+  assert response.values == {"admin_email": "a@b.c", "api_key": "k"}
 
 
 # ── route providers ────────────────────────────────────────────────────────

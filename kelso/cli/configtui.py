@@ -7,11 +7,16 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Input, Label, Select, Static
 
-from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import (
+  EMPTY_CONFIG_RESPONSE,
+  ConfigField,
+  ConfigRequest,
+  ConfigResponse,
+)
 
 
-class ConfigApp(App[ConfigResponse | None]):
-  """Exits with the collected response, or None when cancelled."""
+class ConfigApp(App[ConfigResponse]):
+  """Exits with the collected response, or EMPTY_CONFIG_RESPONSE."""
 
   ENABLE_COMMAND_PALETTE = False
 
@@ -150,13 +155,14 @@ class ConfigApp(App[ConfigResponse | None]):
     if errors:
       self.notify("\n".join(errors), severity="error")
       return
-    self.exit(ConfigResponse(values=edits))
+    self.exit(ConfigResponse(values=edits) if edits else EMPTY_CONFIG_RESPONSE)
 
   def action_cancel(self) -> None:
-    self.exit(None)
+    self.exit(EMPTY_CONFIG_RESPONSE)
 
 
-def run_tui(request: ConfigRequest) -> ConfigResponse | None:
+def run_tui(request: ConfigRequest) -> ConfigResponse:
   # Inline draws below the prompt and keeps scrollback. With mouse capture on,
   # Textual swallows drags and the terminal can't select text.
-  return ConfigApp(request).run(inline=True, mouse=False)
+  # `run` returns None when the app ends without an exit value, e.g. on ctrl+c.
+  return ConfigApp(request).run(inline=True, mouse=False) or EMPTY_CONFIG_RESPONSE

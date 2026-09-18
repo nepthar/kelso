@@ -5,7 +5,7 @@ import asyncio
 from textual.widgets import Static
 
 from kelso.cli.configtui import ConfigApp
-from kelso.lib.configflow import ConfigField, ConfigRequest
+from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigField, ConfigRequest
 
 
 def _request() -> ConfigRequest:
@@ -52,7 +52,6 @@ def test_submit_returns_only_what_changed():
 
   app = _drive(_request(), steps)
 
-  assert app.return_value is not None
   assert app.return_value.values == {"admin_email": "a@b.c"}
 
 
@@ -120,7 +119,7 @@ def test_ctrl_q_quits_without_saving():
   async def steps(app, pilot):
     await pilot.press(*"a@b.c", "ctrl+q")
 
-  assert _drive(_request(), steps).return_value is None
+  assert _drive(_request(), steps).return_value == EMPTY_CONFIG_RESPONSE
 
 
 def test_help_leaves_out_advanced_when_there_is_none():
@@ -150,7 +149,7 @@ def test_escape_cancels():
 
   app = _drive(_request(), steps)
 
-  assert app.return_value is None
+  assert app.return_value == EMPTY_CONFIG_RESPONSE
 
 
 def test_there_is_no_command_palette():
