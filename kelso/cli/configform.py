@@ -7,7 +7,7 @@ from getpass import getpass
 
 from tabulate import tabulate
 
-from kelso.lib.configreq import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.util import Conn
 
 REVIEW = "'s' to submit, a name or number to change, 'q' to cancel"

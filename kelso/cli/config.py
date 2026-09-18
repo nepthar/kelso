@@ -5,9 +5,9 @@ from tabulate import tabulate
 
 from kelso.cli.configform import run_form
 from kelso.cli.kv import parse_kv
-from kelso.lib.appconfig import AppTarget
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, bind
 from kelso.lib.run_layout import load_run_data, make_compose_dict
@@ -96,8 +96,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
 
 
 def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
-  target = AppTarget(spec=spec, ctx=ctx)
-  request = target.config_request()
+  request = app_config_request(spec, ctx)
   if not request.fields:
     conn.out(f"App {app} declares no config")
     return
@@ -107,7 +106,7 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
     conn.out("Cancelled; nothing was written")
     return
 
-  written = target.apply_config(response)
+  written = apply_app_config(spec, response, ctx)
   conn.out(f"Set {', '.join(written)}" if written else "No changes")
 
 

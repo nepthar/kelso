@@ -9,9 +9,15 @@ import pytest
 
 from kelso.cli.configform import run_form
 from kelso.lib.config import load_config_file
-from kelso.lib.configreq import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow.route_provider import (
+  apply_route_provider_config,
+  resolve_route_provider,
+  route_provider_config_request,
+  secret_ref,
+)
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.providerconfig import ProviderTarget
+from kelso.lib.routes import PROVIDERS, CloudflareTunnelRouteProvider
 
 
 class _ScriptedConn:
@@ -183,32 +189,33 @@ def test_an_unknown_choice_at_review_says_so_and_keeps_going():
 
 
 # ── route providers ────────────────────────────────────────────────────────
+CF = CloudflareTunnelRouteProvider
+
+CF_ANSWERS = {
+  "domain": "example.com",
+  "kelso_address": "10.0.0.5",
+  "account_id": "acct-1",
+  "tunnel_id": "tun-1",
+  "api_token": "cf-token",
+}
+
+
 def ctx_for(kelso_env) -> KelsoCtx:
+  """A fresh ctx per call: config.toml is re-read after every write."""
   return KelsoCtx(load_config_file(kelso_env.config))
 
 
-def _cf_target(kelso_env) -> ProviderTarget:
-  """A fresh target per call: config.toml is re-read after every write."""
-  return ProviderTarget(kind="cloudflare_tunnel", tag="cf", ctx=ctx_for(kelso_env))
-
-
-def test_every_provider_is_a_config_target():
-  from kelso.lib.configreq import HasConfig
-  from kelso.lib.routes import PROVIDERS
-
-  ctx = None
-  for kind in PROVIDERS:
-    assert isinstance(ProviderTarget(kind=kind, tag="t", ctx=ctx), HasConfig), kind
+def _configure_cf(kelso_env, values: dict[str, str]) -> list[str]:
+  ctx = ctx_for(kelso_env)
+  request = route_provider_config_request("cf", CF, ctx)
+  return apply_route_provider_config("cf", CF, request.response(values), ctx)
 
 
 def test_provider_fields_cover_required_args():
-  """FIELDS is what an operator is asked; REQUIRED_ARGS is what the block needs.
-
-  A secret field named X becomes `X_secret` in args, so the two have to line up
-  or the flow would write a block its own provider then refuses.
+  """config_fields is what an operator is asked; REQUIRED_ARGS is what the block
+  needs. A secret field named X becomes `X_secret` in args, so the two have to
+  line up or the flow would write a block its own provider then refuses.
   """
-  from kelso.lib.routes import PROVIDERS
-
   for kind, provider in PROVIDERS.items():
     offered = {
       f"{f.name}_secret" if f.secret else f.name
@@ -218,8 +225,29 @@ def test_provider_fields_cover_required_args():
     assert set(provider.REQUIRED_ARGS) <= offered, kind
 
 
+def test_resolving_a_new_tag_needs_a_kind_and_refuses_an_unknown_one(kelso_env):
+  ctx = ctx_for(kelso_env)
+
+  assert resolve_route_provider("cf", ctx, "cloudflare_tunnel") is CF
+  with pytest.raises(ValueError, match="needs --kind"):
+    resolve_route_provider("cf", ctx)
+  with pytest.raises(ValueError, match="Unknown route provider kind 'nope'"):
+    resolve_route_provider("cf", ctx, "nope")
+
+
+def test_resolving_an_existing_tag_reads_its_kind_and_refuses_a_different_one(
+  kelso_env,
+):
+  _configure_cf(kelso_env, CF_ANSWERS)
+  ctx = ctx_for(kelso_env)
+
+  assert resolve_route_provider("cf", ctx) is CF
+  with pytest.raises(ValueError, match="already 'cloudflare_tunnel'"):
+    resolve_route_provider("cf", ctx, "pangolin")
+
+
 def test_provider_request_asks_for_the_secret_not_its_reference(kelso_env):
-  request = _cf_target(kelso_env).config_request()
+  request = route_provider_config_request("cf", CF, ctx_for(kelso_env))
 
   names = [f.name for f in request.fields]
   assert names[:2] == ["domain", "kelso_address"]
@@ -227,25 +255,13 @@ def test_provider_request_asks_for_the_secret_not_its_reference(kelso_env):
   assert "api_token_secret" not in names
 
 
-def test_applying_a_provider_response_writes_the_block_and_stores_the_secret(kelso_env):
-  from kelso.lib.providerconfig import secret_ref
+def test_applying_a_provider_response_writes_the_block_and_stores_the_secret(
+  kelso_env,
+):
+  assert "api_token" in _configure_cf(kelso_env, CF_ANSWERS)
 
-  target = _cf_target(kelso_env)
-  ctx = target.ctx
-  request = target.config_request()
-  response = request.response(
-    {
-      "domain": "example.com",
-      "kelso_address": "10.0.0.5",
-      "account_id": "acct-1",
-      "tunnel_id": "tun-1",
-      "api_token": "cf-token",
-    }
-  )
-
-  assert "api_token" in target.apply_config(response)
-
-  written = load_config_file(ctx.config.config_path).route_providers["cf"]
+  ctx = ctx_for(kelso_env)
+  written = ctx.config.route_providers["cf"]
   assert written.kind == "cloudflare_tunnel"
   assert written.domain == "example.com"
   assert written.args["account_id"] == "acct-1"
@@ -256,36 +272,16 @@ def test_applying_a_provider_response_writes_the_block_and_stores_the_secret(kel
 
 
 def test_a_second_pass_keeps_answers_it_was_not_given_again(kelso_env):
-  target = _cf_target(kelso_env)
-  ctx = target.ctx
-  target.apply_config(
-    target.config_request().response(
-      {
-        "domain": "example.com",
-        "kelso_address": "10.0.0.5",
-        "account_id": "acct-1",
-        "tunnel_id": "tun-1",
-        "api_token": "cf-token",
-      }
-    )
-  )
+  _configure_cf(kelso_env, CF_ANSWERS)
 
-  again = _cf_target(kelso_env)
-  request = again.config_request()
+  request = route_provider_config_request("cf", CF, ctx_for(kelso_env))
   assert request.field("account_id").value == "acct-1"
   assert request.field("api_token").secret_set is True
   assert request.missing() == []
 
-  again.apply_config(request.response({"tunnel_id": "tun-2"}))
+  _configure_cf(kelso_env, {"tunnel_id": "tun-2"})
 
-  written = load_config_file(ctx.config.config_path).route_providers["cf"]
+  written = ctx_for(kelso_env).config.route_providers["cf"]
   assert written.args["tunnel_id"] == "tun-2"
   assert written.args["account_id"] == "acct-1"
   assert written.domain == "example.com"
-
-
-def test_provider_request_refuses_an_unknown_kind(kelso_env):
-  from kelso.lib.providerconfig import ProviderTarget
-
-  with pytest.raises(ValueError, match="Unknown route provider kind"):
-    ProviderTarget(kind="nope", tag="cf", ctx=ctx_for(kelso_env)).config_request()

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
-from kelso.lib.configreq import ConfigField
+from kelso.lib.configflow import ConfigField
 from kelso.lib.store import KelsoStore
 
 if TYPE_CHECKING:

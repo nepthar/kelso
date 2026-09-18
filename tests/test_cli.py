@@ -445,7 +445,10 @@ def test_removed_app_bundle_remains_runnable_from_the_staged_copy(kelso_env):
 
   doctor = kelso_env.run("doctor")
   assert doctor.returncode == 1
-  assert "app bundle missing" in doctor.stderr
+  assert (
+    f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
+    in doctor.stderr
+  )
 
   stopped = kelso_env.run("stop", app_id)
   assert stopped.returncode == 0, stopped.stderr

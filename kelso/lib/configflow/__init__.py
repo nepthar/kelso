@@ -1,17 +1,15 @@
-"""What has to be configured, as data.
+"""What has to be configured, as data, and the functions that fill it in.
 
 A `ConfigRequest` describes the fields one thing needs -- an app's `[config]`,
 a route provider's `args` -- with each field's current value, so any front end
-can render the same question. A front end hands back a `ConfigResponse`, which
-the source that built the request applies. This module owns the shapes and the
-validation; applying belongs to the source, because an app writes its store and
-a route provider writes config.toml.
+can render the same question. A front end hands back a `ConfigResponse`. The
+`app` and `route_provider` modules build requests and apply responses; this one
+owns the shapes and the validation.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -94,20 +92,3 @@ class ConfigResponse:
   """What a front end collected, ready for the source to apply."""
 
   values: dict[str, str] = field(default_factory=dict)
-
-
-@runtime_checkable
-class HasConfig(Protocol):
-  """Something an operator configures: it describes itself, and applies answers.
-
-  Implementations are bound to one thing (this app, this provider tag), so a
-  front end renders and applies without knowing which kind it holds.
-  """
-
-  def config_request(self) -> ConfigRequest:
-    """What this needs, with what is on file now."""
-    ...
-
-  def apply_config(self, response: ConfigResponse) -> list[str]:
-    """Apply a response, returning the field names actually written."""
-    ...

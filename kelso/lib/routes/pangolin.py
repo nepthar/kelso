@@ -7,7 +7,7 @@ import requests
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
-from kelso.lib.configreq import ConfigField
+from kelso.lib.configflow import ConfigField
 
 from .base import RouteProvider, RouteProviderError, refuse_foreign_route
 

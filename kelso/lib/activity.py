@@ -262,6 +262,9 @@ class Activity:
   def __exit__(self, exc_type, exc, tb) -> None:
     if self._stack is not None:
       self._stack.close()
+    if self._sink is not None:
+      # IOBase flushes on garbage collection, so close it while its file is open.
+      self._sink.close()
     if exc is not None:
       self.error = _describe(exc)
     if self._file is not None:

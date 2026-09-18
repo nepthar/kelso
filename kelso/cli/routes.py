@@ -5,8 +5,12 @@ from tabulate import tabulate
 from kelso.cli.configform import run_form
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.configflow.route_provider import (
+  apply_route_provider_config,
+  resolve_route_provider,
+  route_provider_config_request,
+)
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.providerconfig import ProviderTarget
 from kelso.lib.routes import NoopRouteProvider, RouteProviderError, get_route_provider
 
 
@@ -66,13 +70,14 @@ def register(subparsers) -> None:
 
 def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   with ctx.kelso_lock("routes add-provider"):
-    target = ProviderTarget.for_tag(args.tag, ctx, args.kind)
-    response = run_form(target.config_request(), conn)
+    provider = resolve_route_provider(args.tag, ctx, args.kind)
+    request = route_provider_config_request(args.tag, provider, ctx)
+    response = run_form(request, conn)
     if response is None:
       conn.out("Cancelled; nothing was written")
       return
 
-    target.apply_config(response)
+    apply_route_provider_config(args.tag, provider, response, ctx)
     conn.out(
       f"Configured route provider {args.tag!r}; "
       f"check it with `kelso routes check {args.tag}`"
