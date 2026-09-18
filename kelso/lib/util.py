@@ -80,6 +80,17 @@ class EnvTemplate(string.Template):
   idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+)?)"
 
 
+def same_path(a: Path, b: Path) -> bool:
+  """Whether two paths name the same file on disk; by spelling if either is gone.
+
+  `resolve()` keeps case, and macOS filesystems ignore it.
+  """
+  try:
+    return a.samefile(b)
+  except OSError:
+    return a.resolve() == b.resolve()
+
+
 def fmt_size(n: float) -> str:
   for unit in ("B", "KB", "MB", "GB", "TB"):
     if n < 1024:

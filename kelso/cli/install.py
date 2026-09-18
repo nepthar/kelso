@@ -36,7 +36,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   target = staging_target(ctx, args.app, force=args.force)
   app = target.app_id
   bundle = target.bundle or ctx.bundle_path(app)
-  if not args.yes and not _confirmed(app, bundle, conn):
+  if not args.yes and not confirm_compose_warnings(app, bundle, conn):
     conn.out("Nothing installed.")
     return
   with ctx.locked(f"stage {app}", app):
@@ -62,7 +62,7 @@ def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
     return ()
 
 
-def _confirmed(app: str, bundle: Path, conn: Conn) -> bool:
+def confirm_compose_warnings(app: str, bundle: Path, conn: Conn) -> bool:
   """Ask only when the manifest passes something through unmodelled."""
   warnings = _compose_warnings(bundle)
   if not warnings:

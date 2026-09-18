@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
-from kelso.lib.bundle import KLSO_SUFFIX
 from kelso.lib.docker import DockerError, docker_run_command
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import logger
@@ -21,6 +20,7 @@ from kelso.lib.lifecycle.stage import link_host_volumes, unlink_host_volumes
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import AppRunData, load_run_data
 from kelso.lib.spec import AppSpec
+from kelso.lib.util import same_path
 
 
 @dataclass(frozen=True)
@@ -30,60 +30,44 @@ class DevPlan:
   app_id: AppID
   run_path: Path
   source: Path
-  # app volume name -> the path inside `source` it will be mounted from.
+  # app volume name -> the path inside `source` it will be mounted from. Empty
+  # for a `.klso.md` source, which has no folder to mount from.
   mounts: dict[str, Path]
   spec: AppSpec
   run_data: AppRunData
-  # The compose.yml about to run was generated from a manifest that has since
-  # changed.
-  manifest_stale: bool
   # route name -> public URL, for the routes this run will publish. Empty
   # unless `--routes` asked for it; a dev run is unpublished by default.
   published: dict[str, str]
 
 
-def _dev_source(app: AppID, ctx: KelsoCtx) -> Path:
-  """The `.klso` folder the staged app came from."""
+def refuse_other_origin(app: AppID, source: Path, ctx: KelsoCtx) -> None:
+  """Refuse an app id whose config and data belong to a bundle other than `source`."""
   origin = ctx.staged_origin(app)
-  if origin is None:
+  if origin is not None and not same_path(origin, source):
     raise ValueError(
-      f"App {app} has no recorded origin; reinstall it with `kelso install {app}`"
+      f"App {app}'s config and data were made for {origin}, not {source}. "
+      f"Run `kelso dev` against that bundle, or remove them with "
+      f"`kelso uninstall --purge {app}`."
     )
-  if (
-    not origin.name.endswith(KLSO_SUFFIX)
-    or not origin.is_dir()
-    or not (origin / "manifest.toml").is_file()
-  ):
-    raise ValueError(
-      f"App {app} was staged from {origin}, which is not a {KLSO_SUFFIX} folder. "
-      f"`kelso dev` mounts the source in place, so it needs a directory bundle."
-    )
-  return origin.resolve()
 
 
-def dev_plan(app: AppID, ctx: KelsoCtx, *, publish_routes: bool = False) -> DevPlan:
-  """Work out what a dev run would mount, and refuse if it cannot run at all."""
+def dev_plan(
+  app: AppID, source: Path, ctx: KelsoCtx, *, publish_routes: bool = False
+) -> DevPlan:
+  """Work out what a dev run of the staged `app` would mount from `source`.
+
+  Assumes `app` was just staged from `source`; refuses if it cannot run.
+  """
   paths = ctx.staged_paths(app)
-  if not paths.exists() or not paths.compose_path.is_file():
-    raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
-
-  running = ctx.run_state(app).running_count
-  if running:
-    raise ValueError(
-      f"App {app} has {running} running Kelso-labeled container(s); "
-      f"run `kelso stop {app}` first"
-    )
-
-  # Required whether or not anything is mounted from it: `kelso dev` is for
-  # an app you are editing in place, and that is what a folder bundle is.
-  source = _dev_source(app, ctx)
   spec = AppSpec.from_file(paths.manifest_path, app)
 
-  mounts = {
-    name: source / (volume.src or name)
-    for name, volume in spec.volumes.items()
-    if volume.kind == "app"
-  }
+  mounts: dict[str, Path] = {}
+  if source.is_dir():
+    mounts = {
+      name: source / (volume.src or name)
+      for name, volume in spec.volumes.items()
+      if volume.kind == "app"
+    }
   for name, path in mounts.items():
     if not path.exists():
       raise ValueError(f"App {app} - volume {name}: {path} does not exist")
@@ -109,7 +93,6 @@ def dev_plan(app: AppID, ctx: KelsoCtx, *, publish_routes: bool = False) -> DevP
     mounts=mounts,
     spec=spec,
     run_data=run_data,
-    manifest_stale=ctx.manifest_stale(app),
     published=published,
   )
 

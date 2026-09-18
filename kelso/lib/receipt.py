@@ -52,11 +52,11 @@ def route_lines(
   for name, route in spec.routes.items():
     assigned = run_data.routes.get(name) if run_data else None
     if assigned is not None and assigned.host_port > 0:
-      where = f"http://{host}:{assigned.host_port}"
+      where = f"{route.scheme}://{host}:{assigned.host_port}"
     elif spec.network_mode == "host":
       # Host networking maps nothing, so the container port is the host port
       # and kelso never allocated one.
-      where = f"http://{host}:{route.container_port}"
+      where = f"{route.scheme}://{host}:{route.container_port}"
     else:
       where = "(no host port allocated)"
 

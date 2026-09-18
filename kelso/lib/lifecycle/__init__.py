@@ -1,4 +1,10 @@
-from kelso.lib.lifecycle.dev import DevPlan, dev, dev_plan, source_volume_links
+from kelso.lib.lifecycle.dev import (
+  DevPlan,
+  dev,
+  dev_plan,
+  refuse_other_origin,
+  source_volume_links,
+)
 from kelso.lib.lifecycle.restore import (
   RestorePlan,
   resolve_snapshot_app,
@@ -69,6 +75,7 @@ __all__ = [
   "reload_app",
   "register_app_routes",
   "PURGE",
+  "refuse_other_origin",
   "RESET",
   "UNINSTALL",
   "RemovalMode",

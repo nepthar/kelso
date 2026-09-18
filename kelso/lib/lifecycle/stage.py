@@ -20,7 +20,7 @@ from kelso.lib.run_layout import (
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
-from kelso.lib.util import now_ts, validate_identifier
+from kelso.lib.util import now_ts, same_path, validate_identifier
 
 # Scratch names used while swapping in a new staged copy. Both are inside the run
 # dir so the swap is a rename on one filesystem rather than a second copy.
@@ -288,11 +288,20 @@ def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> StagingTarget:
   return StagingTarget(app, entries[0].path, entries[0].source)
 
 
+def _same_source(was: str, now: str) -> bool:
+  """Whether two recorded sources name the same repo or the same bundle path."""
+  if was == now:
+    return True
+  if Path(was).is_absolute() and Path(now).is_absolute():
+    return same_path(Path(was), Path(now))
+  return False
+
+
 def _check_binding(ctx: KelsoCtx, target: StagingTarget, *, force: bool) -> None:
   """Refuse an id whose surviving config and secrets were made for another source."""
   was = bound_to(target.app_id, ctx)
   now = target.bound_to
-  if force or not was or not now or was == now:
+  if force or not was or not now or _same_source(was, now):
     return
   raise ValueError(
     f"{target.app_id} was previously installed from {was}, and this would "
