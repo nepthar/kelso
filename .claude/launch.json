@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kelsod-scratch",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["KELSO_ROOT=/tmp/kelso-flow", "uv", "run", "kelsod", "--port", "9797", "--host", "127.0.0.1"],
+      "port": 9797
+    },
+    {
+      "name": "kelso-ui",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["KELSO_API=127.0.0.1:9797", "KELSO_UI_NO_AUTH=1", "uv", "run", "--directory", "apps/kelso-ui.klso/ui", "uvicorn", "server:app", "--port", "9798"],
+      "port": 9798
+    }
+  ]
+}

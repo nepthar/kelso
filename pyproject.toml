@@ -21,6 +21,7 @@ dependencies = [
     "requests>=2.32.0",
     "tomlkit>=0.13.0",
     "psutil>=6.0",
+    "textual>=8.2.8",
     # kelsod's. The CLI never imports them -- see kelso/daemon/__init__.py --
     # but kelsod is how kelso is normally run, so they are not optional.
     "fastapi>=0.121.0",

@@ -1,16 +1,14 @@
 import argparse
 
-import yaml
 from tabulate import tabulate
 
-from kelso.cli.configform import run_form
+from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import apply_config_sets, bind
-from kelso.lib.run_layout import load_run_data, make_compose_dict
+from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
@@ -101,7 +99,7 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
     conn.out(f"App {app} declares no config")
     return
 
-  response = run_form(request, conn)
+  response = collect(request, conn)
   if response is None:
     conn.out("Cancelled; nothing was written")
     return
@@ -189,30 +187,9 @@ def _apply_routes(
   ctx: KelsoCtx,
   conn,
 ) -> None:
-  store = ctx.app_store(app)
   for route_name, tag in routes:
-    if route_name not in spec.routes:
-      known = ", ".join(sorted(spec.routes)) or "(none)"
-      raise ValueError(
-        f"route {route_name!r} is not declared in {app}'s manifest; "
-        f"known routes: {known}"
-      )
-    if tag not in ctx.config.route_providers:
-      known = ", ".join(sorted(ctx.config.route_providers))
-      raise ValueError(
-        f"route provider {tag!r} is not configured; known tags: {known}. "
-        f"Add [route_provider.{tag}] to config.toml"
-      )
-
-    store.set_route_assignment(route_name, tag)
+    assign_route(spec, route_name, tag, ctx)
     conn.out(f"route {route_name} -> {tag} (applied on next start)")
-
-  # Rewrite compose so the next start picks up new ${routes.*} URLs.
-  if ctx.is_staged(app):
-    run_data = load_run_data(spec, ctx)
-    compose_path = ctx.staged_paths(app).compose_path
-    with open(compose_path, "w") as f:
-      yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
 
 def _list(app: AppID, spec: AppSpec, store: AppStore, conn) -> None:

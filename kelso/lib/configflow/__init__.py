@@ -24,6 +24,9 @@ class ConfigField:
   desc: str = ""
   advanced: bool = False
   required: bool = True
+  # None for free text. Otherwise the value must be one of these; an empty tuple
+  # means "pick one" with nothing defined to pick from yet.
+  choices: tuple[str, ...] | None = None
 
   @property
   def is_set(self) -> bool:
@@ -64,7 +67,6 @@ class ConfigRequest:
 
     A required field left unset is not one of them: a partial answer is still
     worth storing, and `start` is what refuses to run an under-configured app.
-    Front ends show `still_needed` instead.
     """
     errors = []
     for name, value in values.items():
@@ -73,11 +75,10 @@ class ConfigRequest:
         errors.append(f"{self.title}: no config named {name!r}")
       elif not value:
         errors.append(f"{self.title}: {name} cannot be empty")
+      elif entry.choices is not None and value not in entry.choices:
+        known = ", ".join(entry.choices) or "(none defined)"
+        errors.append(f"{self.title}: {name} must be one of: {known}")
     return errors
-
-  def still_needed(self, values: dict[str, str]) -> list[str]:
-    """Required fields this response would leave with nothing to fall back on."""
-    return [name for name in self.missing() if not values.get(name)]
 
   def response(self, values: dict[str, str]) -> ConfigResponse:
     """Build a response for this request, refusing one that cannot apply."""

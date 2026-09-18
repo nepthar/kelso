@@ -8,6 +8,7 @@ resetting the password invalidates every session issued under the old one.
 import hashlib
 import hmac
 import os
+import sys
 import time
 
 COOKIE = "kelso_session"
@@ -15,7 +16,16 @@ SESSION_SECONDS = 7 * 24 * 3600
 
 PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
 
-if not PASSWORD:
+# For running the UI on a dev machine. The manifest fixes the container's env,
+# so a deployed kelso-ui cannot be switched into this through `kelso config`.
+NO_AUTH = os.environ.get("KELSO_UI_NO_AUTH") == "1"
+
+if NO_AUTH:
+  print(
+    "kelso-ui: KELSO_UI_NO_AUTH=1 -- every request is signed in. Dev only.",
+    file=sys.stderr,
+  )
+elif not PASSWORD:
   raise RuntimeError(
     "ADMIN_PASSWORD is empty. Set it with: "
     "kelso config kelso-ui --set admin_pass=<password>"
@@ -43,6 +53,8 @@ def issue():
 
 
 def valid(cookie):
+  if NO_AUTH:
+    return True
   if not cookie:
     return False
   payload, _, signature = cookie.partition(".")

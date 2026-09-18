@@ -31,7 +31,9 @@ an earlier decision pointless. Name it instead of building on top of it.
 this size. Handing over a document produces a document's worth of code.
 
 
-** TESTS ** Only run focused tests, don't bother running the full test suite for cosmetic changes.
+**Tests cost my token budget.** Don't run the full suite unless I ask for it.
+Run a specific test or file only when you judge that one is needed to trust a
+change; skip tests entirely for cosmetic ones.
 
 
 ## Conventions
@@ -68,5 +70,6 @@ this size. Handing over a document produces a document's worth of code.
 - The suite runs in ~65s and commands run in-process; see `docs/testing.md`
   before adding a test that spawns a subprocess or waits on a timeout. What
   cannot be tested without a real daemon is a live test, listed in that doc.
-- Run `uv run ruff check kelso tests`, `uv run ruff format --check kelso tests`,
-  and `uv run pytest` before reporting done. Don't report unrun tests as passing.
+- Run `uv run ruff check kelso tests` and `uv run ruff format --check kelso tests`
+  before reporting done. Don't report unrun tests as passing -- say which tests
+  you ran, or that you ran none.

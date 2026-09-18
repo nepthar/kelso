@@ -98,11 +98,13 @@ and it is the only way to see whether a change landed:
 
 ```
 KELSO_ROOT=$HOME/kelso uv run kelsod --port 9797 --host 127.0.0.1
-cd apps/kelso-ui.klso/ui && KELSO_API=127.0.0.1:9797 ADMIN_PASSWORD=dev \
-  ./.venv/bin/uvicorn server:app --port 9798 --reload
+cd apps/kelso-ui.klso/ui && KELSO_API=127.0.0.1:9797 KELSO_UI_NO_AUTH=1 \
+  uv run uvicorn server:app --port 9798 --reload
 ```
 
-`ADMIN_PASSWORD` is not optional — `auth.py` refuses to import without one.
+`KELSO_UI_NO_AUTH=1` signs every request in, so an agent can drive the UI
+without typing a password. Without it, `ADMIN_PASSWORD` is required —
+`auth.py` refuses to import without one.
 Plain http is fine here: the session cookie only asks to be `Secure` when the
 request that minted it arrived over TLS, which in the container it does.
 

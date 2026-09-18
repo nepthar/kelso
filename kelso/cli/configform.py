@@ -1,4 +1,8 @@
-"""Fill in a ConfigRequest at the terminal: walk the fields, then approve."""
+"""Fill in a ConfigRequest at the terminal.
+
+`collect` picks the full-screen form on a terminal and the line-by-line wizard
+otherwise, so piped input and tests still work.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +24,8 @@ def _ask(entry: ConfigField, edits: dict[str, str], conn: Conn) -> None:
   prompt = f"{entry.name} [{shown}]: "
   if entry.desc:
     conn.out(f"  {entry.desc}")
+  if entry.choices is not None:
+    conn.out(f"  one of: {', '.join(entry.choices) or '(none defined)'}")
 
   if entry.secret and sys.stdin.isatty():
     # Keep a secret off the screen; Conn.read cannot turn echo off.
@@ -47,9 +53,6 @@ def _review(request: ConfigRequest, edits: dict[str, str], conn: Conn) -> None:
   ]
   conn.out("")
   conn.out(tabulate(rows, headers=["", "name", "value"]))
-  needed = request.still_needed(edits)
-  if needed:
-    conn.out(f"Still needed before this can start: {', '.join(needed)}")
 
 
 def _pick(request: ConfigRequest, choice: str) -> ConfigField | None:
@@ -101,3 +104,12 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
       _ask(entry, edits, conn)
   except EOFError:
     return None
+
+
+def collect(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
+  """Collect a response from the operator; None when they cancel."""
+  if sys.stdin.isatty() and sys.stdout.isatty():
+    from kelso.cli.configtui import run_tui
+
+    return run_tui(request)
+  return run_form(request, conn)
