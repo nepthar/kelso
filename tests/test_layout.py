@@ -225,6 +225,70 @@ def test_readonly_false_on_an_app_volume_is_a_manifest_error(kelso_env):
   assert not (kelso_env.run_root / "bad-app-volume").exists()
 
 
+ADMIN_MANIFEST = """\
+[app]
+version = "1"
+
+[volumes]
+kelso_admin = { kind = "system" }
+
+[run.main]
+image   = "alpine:latest"
+volumes = { kelso_admin = "/kelso/conn" }
+"""
+
+
+def test_a_system_volume_links_to_kelso_with_nothing_to_bind(kelso_env):
+  _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
+
+  started = kelso_env.run("start", "admin-app", "-y")
+  assert started.returncode == 0, started.stderr
+
+  link = kelso_env.run_root / "admin-app" / "volumes" / "system" / "kelso_admin"
+  assert link.readlink() == kelso_env.root / "var" / "conn"
+  mounts = _compose(kelso_env, "admin-app")["services"]["main"]["volumes"]
+  assert "./volumes/system/kelso_admin:/kelso/conn" in mounts
+
+
+def test_an_unknown_system_volume_is_a_manifest_error(kelso_env):
+  _write_bundle(
+    kelso_env, "bad-system", _volumes_manifest('docker = { kind = "system" }')
+  )
+
+  refused = kelso_env.run("install", "bad-system", "-y")
+  assert refused.returncode == 1
+  assert "no system volume named docker" in refused.stderr
+  assert "kelso_admin" in refused.stderr
+
+
+def test_install_asks_once_before_granting_a_system_volume(kelso_env):
+  _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
+
+  declined = kelso_env.run("install", "admin-app", input="n\n")
+  assert declined.returncode == 0, declined.stderr
+  assert "admin socket" in declined.stdout
+  assert "Nothing installed." in declined.stdout
+  assert not (kelso_env.run_root / "admin-app").exists()
+
+  accepted = kelso_env.run("install", "admin-app", input="y\n")
+  assert accepted.returncode == 0, accepted.stderr
+  assert (kelso_env.run_root / "admin-app" / "compose.yml").is_file()
+
+  # Already granted: reinstalling does not ask again.
+  again = kelso_env.run("install", "admin-app")
+  assert again.returncode == 0, again.stderr
+  assert "admin socket" not in again.stdout
+
+
+def test_start_asks_before_granting_a_system_volume(kelso_env):
+  _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
+
+  declined = kelso_env.run("start", "admin-app", input="n\n")
+  assert declined.returncode == 0, declined.stderr
+  assert "Nothing started." in declined.stdout
+  assert not (kelso_env.run_root / "admin-app").exists()
+
+
 def test_a_dropped_volume_keeps_its_data_and_is_reported(kelso_env):
   app_id = "vol-churn"
   _write_bundle(

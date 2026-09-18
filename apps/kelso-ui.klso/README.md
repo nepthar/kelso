@@ -27,12 +27,13 @@ matches.
 
 ## Setup
 
-It needs `kelsod` running on the host, and `$kelso/var/conn` bound in. For now
-that is manual — declare the directory as a host volume:
+It needs `kelsod` running on the host, which `kelso init` sets up on a machine
+with systemd. The admin socket is a `system` volume, so there is nothing to
+bind; installing asks you to confirm the app may have it.
 
 ```
-kelso config-sys host-volume --add kelso_conn=${kelso_root}/var/conn
-kelso config kelso-ui --bind conn=kelso_conn
+kelso install kelso-ui
+kelso config kelso-ui --edit
 kelso start kelso-ui
 ```
 

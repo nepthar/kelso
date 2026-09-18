@@ -595,8 +595,8 @@ def error_card(message):
   return (
     f'<div class="error"><h2>Cannot reach kelsod</h2>'
     f"<p>{esc(message)}</p>"
-    f'<p class="muted">The socket is bound with '
-    f"<code>kelso config kelso-ui --bind conn=&lt;host_volume&gt;</code>.</p></div>"
+    f'<p class="muted">Check that kelsod is running on the host: '
+    f"<code>systemctl --user status kelsod</code>.</p></div>"
   )
 
 

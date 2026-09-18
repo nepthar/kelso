@@ -178,7 +178,7 @@ def _load_volume_links(
 
   volume_links = {}
   for volume_name, volume in spec.volumes.items():
-    mkdir = volume.kind not in ("app", "host")
+    mkdir = volume.kind not in ("app", "host", "system")
     bind_cmd = f"`kelso config {app_id} --bind {volume_name}=<host_volume>`"
 
     if volume.kind == "host":
@@ -514,6 +514,9 @@ def _volume_paths(
       if host_vol is None:
         return None
       return host_vol.path, host_vol.path
+    case "system":
+      path = config.system_volumes[volume.name]
+      return path, path
     case other:
       path = config.volume_roots[other] / app_id / volume.name
       return path, path

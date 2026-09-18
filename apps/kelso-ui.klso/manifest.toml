@@ -1,5 +1,5 @@
 [app]
-version      = "0.6.0"
+version      = "0.7.0"
 display_name = "Kelso UI"
 description  = "Web interface for kelso, over the kelsod admin socket"
 subdomain    = "kelso"
@@ -16,12 +16,12 @@ admin_pass  = { secret = true, desc = "password for the web ui" }
 ui   = { kind = "app", src = "ui", desc = "The application"}
 venv = { kind = "temp", desc = "virtual env, dependencies, etc." }
 tls  = { kind = "data", desc = "self-signed cert for the https listener" }
-conn = { kind = "host", desc = "The $kelso/var/conn directory holding admin.sock" }
+kelso_admin = { kind = "system", desc = "kelsod's admin socket" }
 
 [run.main]
 image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
-volumes = { ui = "/app", venv = "/venv", tls = "/tls", conn = "/kelso/conn" }
+volumes = { ui = "/app", venv = "/venv", tls = "/tls", kelso_admin = "/kelso/conn" }
 routes  = { main = { port = "8080", scheme = "https" } }
 
 [run.main.env]

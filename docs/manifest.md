@@ -82,6 +82,7 @@ that does not, with no change to the bundle.
 | `temp` | Caches and scratch. Safe to delete when the app is not running. |
 | `app` | Files the bundle itself ships. Always mounted read-only. |
 | `host` | A directory on the machine, chosen by the operator at install time. |
+| `system` | Something kelso itself provides, named by the volume. See below. |
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -103,6 +104,25 @@ app until the operator binds it to one of the host volumes they declared:
 ```
 kelso config <app> --bind media=photos
 ```
+
+A `system` volume is also a request, but for something of kelso's own, so the
+operator has nothing to bind. The volume's name says which one, and kelso
+refuses any name it does not know:
+
+| Name | Mounts | Grants |
+| --- | --- | --- |
+| `kelso_admin` | The directory holding `admin.sock` | Every verb kelsod's API exposes |
+
+```toml
+[volumes]
+kelso_admin = { kind = "system" }
+
+[run.main]
+volumes = { kelso_admin = "/kelso/conn" }
+```
+
+`install`, `start` and `dev` ask the operator to confirm the first time an app
+asks for one. System volumes are never snapshotted or removed with the app.
 
 ## `[config]` and `[adv_config]`
 

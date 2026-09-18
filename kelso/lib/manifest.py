@@ -24,7 +24,11 @@ from kelso.lib.util import (
 )
 
 NetworkMode = Literal["normal", "host"]
-VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
+VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host", "system"]
+
+# The kelso resources a `kind = "system"` volume may name. `Config.system_volumes`
+# says where each one is.
+SYSTEM_VOLUMES = ("kelso_admin",)
 
 
 class ConfigError(ValueError):
@@ -348,7 +352,7 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
 
 
 def _validate_volumes(manifest: Manifest) -> list[str]:
-  """`app` volumes are the bundle's own files: input, never state."""
+  """`app` volumes are read-only; `system` volumes name something kelso has."""
   errors: list[str] = []
   for name, volume in manifest.volumes.items():
     if (
@@ -359,6 +363,11 @@ def _validate_volumes(manifest: Manifest) -> list[str]:
       errors.append(
         f"[volumes.{name}]: app volumes are always mounted read-only; "
         "remove `readonly = false`"
+      )
+    if volume.kind == "system" and name not in SYSTEM_VOLUMES:
+      errors.append(
+        f"[volumes.{name}]: there is no system volume named {name}; "
+        f"known: {', '.join(SYSTEM_VOLUMES)}"
       )
   return errors
 

@@ -1,5 +1,6 @@
 import argparse
 
+from kelso.cli.install import confirm_install
 from kelso.cli.kv import parse_kv
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import staging_target, start
@@ -38,6 +39,12 @@ def register(subparsers) -> None:
     action="store_true",
     help="Start even though this id was last installed from somewhere else",
   )
+  parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Skip the confirmation for unmodelled compose keys and system volumes",
+  )
   parser.set_defaults(func=run)
 
 
@@ -47,13 +54,17 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   with ctx.locked(f"start {app}", app):
     sets = [parse_kv(item, "--set") for item in args.sets]
     binds = [parse_kv(item, "--bind") for item in args.binds]
+    stages = bool(sets or binds) or not ctx.is_staged(app)
     if target.bundle is not None:
       bundle = target.bundle
-    elif sets or binds or not ctx.is_staged(target.app_id):
-      bundle = ctx.bundle_path(target.app_id)
+    elif stages:
+      bundle = ctx.bundle_path(app)
     else:
       # Catalog may be gone; start will use the run copy as-is.
-      bundle = ctx.config.app_run_path(target.app_id)
+      bundle = ctx.config.app_run_path(app)
+    if stages and not args.yes and not confirm_install(app, bundle, ctx, conn):
+      conn.out("Nothing started.")
+      return
     result = start(
       target.app_id, bundle, ctx, sets=sets, binds=binds, bound=target.bound_to
     )

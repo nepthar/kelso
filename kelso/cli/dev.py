@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from kelso.cli.configform import collect
-from kelso.cli.install import confirm_compose_warnings
+from kelso.cli.install import confirm_install
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, is_pathlike
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
@@ -49,7 +49,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
   with ctx.locked(f"dev {app}", app):
     refuse_other_origin(app, source, ctx)
-    if not confirm_compose_warnings(app, source, conn):
+    if not confirm_install(app, source, ctx, conn):
       conn.out("Nothing started.")
       return
 

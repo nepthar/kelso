@@ -473,6 +473,8 @@ def _volumes(
     if volume.kind == "host":
       tag = binds.get(name)
       key = f"volume_size_bytes//host/{tag}" if tag else None
+    elif volume.kind == "system":
+      key = None
     else:
       key = f"volume_size_bytes/{spec.app}/{volume.kind}/{name}"
     volumes.append(

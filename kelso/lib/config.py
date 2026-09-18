@@ -234,6 +234,13 @@ class Config:
     return self.conn_root / "admin.sock"
 
   @property
+  def system_volumes(self) -> dict[str, Path]:
+    """Where each `kind = "system"` volume name points."""
+    # The directory, not the socket: kelsod recreates the socket on every start,
+    # and a file bind mount would keep the dead one.
+    return {"kelso_admin": self.conn_root}
+
+  @property
   def config_root(self) -> Path:
     return self.kelso_root / "config"
 

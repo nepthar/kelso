@@ -1,10 +1,11 @@
 import argparse
 from pathlib import Path
 
+from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import stage, staging_target
-from kelso.lib.spec import ComposeWarning
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import Conn
 
 
@@ -27,7 +28,7 @@ def register(subparsers) -> None:
     "-y",
     "--yes",
     action="store_true",
-    help="Skip the confirmation for compose keys kelso does not model",
+    help="Skip the confirmation for unmodelled compose keys and system volumes",
   )
   parser.set_defaults(func=run)
 
@@ -36,7 +37,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   target = staging_target(ctx, args.app, force=args.force)
   app = target.app_id
   bundle = target.bundle or ctx.bundle_path(app)
-  if not args.yes and not confirm_compose_warnings(app, bundle, conn):
+  if not args.yes and not confirm_install(app, bundle, ctx, conn):
     conn.out("Nothing installed.")
     return
   with ctx.locked(f"stage {app}", app):
@@ -50,28 +51,55 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
     conn.out(f"Start it with: kelso start {app}")
 
 
-def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
-  """This bundle's off-allowlist compose keys, or none if it does not parse.
+# What a system volume hands the app, in the operator's terms.
+SYSTEM_GRANTS = {
+  "kelso_admin": (
+    "kelso's admin socket. It will be able to start, stop, uninstall and "
+    "restore any app"
+  ),
+}
 
-  A manifest that cannot be read has nothing to warn about yet -- `stage` is
+
+def _bundle_spec(app: AppID, bundle: Path) -> AppSpec | None:
+  """The bundle's spec, or None if it does not parse.
+
+  A manifest that cannot be read has nothing to ask about yet -- `stage` is
   about to fail on it with a better message than a prompt could give.
   """
   try:
-    return load_bundle(bundle).app_spec().compose_warnings
+    return load_bundle(bundle).app_spec()
   except (ValueError, RuntimeError, OSError):
-    return ()
+    return None
 
 
-def confirm_compose_warnings(app: str, bundle: Path, conn: Conn) -> bool:
-  """Ask only when the manifest passes something through unmodelled."""
-  warnings = _compose_warnings(bundle)
-  if not warnings:
+def _new_system_volumes(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> list[str]:
+  """System volumes the installed copy, if any, was not already granted."""
+  staged = ctx.staged_spec(app)
+  granted = staged.volumes if staged else {}
+  return [
+    name
+    for name, volume in spec.volumes.items()
+    if volume.kind == "system"
+    and not (name in granted and granted[name].kind == "system")
+  ]
+
+
+def confirm_install(app: AppID, bundle: Path, ctx: KelsoCtx, conn: Conn) -> bool:
+  """Ask before installing unmodelled compose keys or a new system volume."""
+  spec = _bundle_spec(app, bundle)
+  if spec is None:
+    return True
+  warnings = spec.compose_warnings
+  system = _new_system_volumes(app, spec, ctx)
+  if not warnings and not system:
     return True
 
   for warning in warnings:
     conn.out(f"Warning: {warning.message()}:")
     for line in warning.option_lines():
       conn.out(f"  {line}")
+  for name in system:
+    conn.out(f"Warning: {app} asks for {SYSTEM_GRANTS[name]}.")
 
   try:
     answer = conn.read(f"Install {app} anyway? [y/N] ")
