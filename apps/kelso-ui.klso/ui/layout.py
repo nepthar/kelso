@@ -12,6 +12,7 @@ NAV = (
   ("/", "Dashboard"),
   ("/snapshots", "Snapshots"),
   ("/volumes", "Volumes"),
+  ("/routes", "Routes"),
   ("/catalog", "Repos"),
   ("/activity", "Activity"),
 )
@@ -130,16 +131,22 @@ def page(path, title, body, version="", actions="", subtitle=""):
     else localStorage.removeItem("kelso-nav");
     sync();
   }});
-  document.querySelectorAll(".cfg-edit").forEach(function (form) {{
-    var input = form.querySelector("input:not([type=hidden])");
+  document.querySelectorAll(".cfg-edit, .cfg-form").forEach(function (form) {{
+    var controls = form.querySelectorAll("input:not([type=hidden]), select");
     var save = form.querySelector(".cfg-save");
-    if (!input || !save) return;
+    if (!controls.length || !save) return;
+    var initial = Array.prototype.map.call(controls, function (c) {{ return c.value; }});
     function dirty() {{
-      var on = input.value !== input.defaultValue;
+      var on = Array.prototype.some.call(controls, function (c, i) {{
+        return c.value !== initial[i];
+      }});
       form.classList.toggle("is-dirty", on);
       save.disabled = !on;
     }}
-    input.addEventListener("input", dirty);
+    controls.forEach(function (c) {{
+      c.addEventListener("input", dirty);
+      c.addEventListener("change", dirty);
+    }});
   }});
   var fetchShade = document.getElementById("fetch-shade");
   if (fetchShade) {{

@@ -9,7 +9,12 @@ import pytest
 
 from kelso.cli.configform import run_form
 from kelso.lib.config import load_config_file
-from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.configflow import (
+  EMPTY_CONFIG_RESPONSE,
+  ConfigField,
+  ConfigRequest,
+  ConfigResponse,
+)
 from kelso.lib.configflow.route_provider import (
   apply_route_provider_config,
   resolve_route_provider,
@@ -86,11 +91,9 @@ def test_validate_refuses_unknown_names_and_empty_values():
   assert "timezone cannot be empty" in errors[1]
 
 
-def test_a_partial_answer_is_valid_but_still_needs_the_rest():
+def test_a_partial_answer_is_valid():
   """`start` refuses an under-configured app; the form should not also refuse."""
-  request = _request()
-  assert request.validate({"admin_email": "a@b.c"}) == []
-  assert request.still_needed({"admin_email": "a@b.c"}) == ["api_key"]
+  assert _request().validate({"admin_email": "a@b.c"}) == []
 
 
 def test_response_refuses_values_it_cannot_apply():
@@ -110,29 +113,23 @@ def test_wizard_walks_the_fields_then_submits():
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values == {"admin_email": "a@b.c", "api_key": "secret-value"}
 
 
 def test_enter_keeps_what_is_already_there():
   conn = _ScriptedConn("", "", "", "n", "s")
 
-  response = run_form(_request(), conn)
-
-  assert response is not None
-  assert response.values == {}
+  assert run_form(_request(), conn) == EMPTY_CONFIG_RESPONSE
 
 
 def test_advanced_fields_are_offered_but_skipped_by_default():
   # Declining the offer means the extra "20" is never consumed as an answer.
   conn = _ScriptedConn("a@b.c", "", "k", "n", "20", "s")
   response = run_form(_request(), conn)
-  assert response is not None
   assert "pool_size" not in response.values
 
   conn = _ScriptedConn("a@b.c", "", "k", "y", "20", "s")
   response = run_form(_request(), conn)
-  assert response is not None
   assert response.values["pool_size"] == "20"
 
 
@@ -142,7 +139,6 @@ def test_a_missing_required_field_is_asked_even_when_advanced():
 
   response = run_form(request, conn)
 
-  assert response is not None
   assert response.values == {"token": "t"}
 
 
@@ -151,19 +147,16 @@ def test_review_can_send_you_back_to_one_field():
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values["timezone"] == "America/Denver"
   assert response.values["admin_email"] == "a@b.c"
 
 
-def test_review_says_what_is_still_needed():
+def test_a_partial_answer_can_be_submitted():
   conn = _ScriptedConn("a@b.c", "", "", "n", "s")
 
   response = run_form(_request(), conn)
 
-  assert response is not None
   assert response.values == {"admin_email": "a@b.c"}
-  assert any("Still needed" in line and "api_key" in line for line in conn.out_lines)
 
 
 def test_the_form_never_echoes_a_secret():
@@ -175,8 +168,9 @@ def test_the_form_never_echoes_a_secret():
 
 
 def test_form_cancels_on_quit_and_on_eof():
-  assert run_form(_request(), _ScriptedConn("a@b.c", "", "k", "n", "q")) is None
-  assert run_form(_request(), _ScriptedConn()) is None
+  quit_ = _ScriptedConn("a@b.c", "", "k", "n", "q")
+  assert run_form(_request(), quit_) == EMPTY_CONFIG_RESPONSE
+  assert run_form(_request(), _ScriptedConn()) == EMPTY_CONFIG_RESPONSE
 
 
 def test_an_unknown_choice_at_review_says_so_and_keeps_going():
@@ -185,7 +179,7 @@ def test_an_unknown_choice_at_review_says_so_and_keeps_going():
   response = run_form(_request(), conn)
 
   assert any("No field 'nope'" in line for line in conn.err_lines)
-  assert response is not None
+  assert response.values == {"admin_email": "a@b.c", "api_key": "k"}
 
 
 # ── route providers ────────────────────────────────────────────────────────
@@ -229,7 +223,7 @@ def test_resolving_a_new_tag_needs_a_kind_and_refuses_an_unknown_one(kelso_env):
   ctx = ctx_for(kelso_env)
 
   assert resolve_route_provider("cf", ctx, "cloudflare_tunnel") is CF
-  with pytest.raises(ValueError, match="needs --kind"):
+  with pytest.raises(ValueError, match="needs a kind"):
     resolve_route_provider("cf", ctx)
   with pytest.raises(ValueError, match="Unknown route provider kind 'nope'"):
     resolve_route_provider("cf", ctx, "nope")
@@ -285,3 +279,84 @@ def test_a_second_pass_keeps_answers_it_was_not_given_again(kelso_env):
   assert written.args["tunnel_id"] == "tun-2"
   assert written.args["account_id"] == "acct-1"
   assert written.domain == "example.com"
+
+
+# ── apps: binds and routes ─────────────────────────────────────────────────
+def _app_request(kelso_env, app: str) -> tuple:
+  from kelso.lib.bundle import load_bundle
+  from kelso.lib.configflow.app import app_config_request
+
+  ctx = ctx_for(kelso_env)
+  spec = load_bundle(ctx.bundle_path(ctx.resolve_app(app))).app_spec()
+  return spec, ctx, app_config_request(spec, ctx)
+
+
+def test_choices_are_validated():
+  request = ConfigRequest(
+    title="demo",
+    fields=(
+      ConfigField(name="pick", choices=("a", "b")),
+      ConfigField(name="empty", choices=()),
+    ),
+  )
+
+  assert request.validate({"pick": "a"}) == []
+  assert request.validate({"pick": "c"}) == ["demo: pick must be one of: a, b"]
+  assert request.validate({"empty": "x"}) == [
+    "demo: empty must be one of: (none defined)"
+  ]
+
+
+def test_a_host_volume_is_a_choice_of_the_declared_host_volumes(kelso_env):
+  _, _, request = _app_request(kelso_env, "host-volumes")
+
+  bind = request.field("volume.hostvol1")
+  assert bind.choices == ("media", "other")
+  assert bind.desc == "Where your extra stuff lives"
+  assert "volume.hostvol1" in request.missing()
+
+
+def test_every_route_is_a_choice_of_providers_private_ones_included(kelso_env):
+  _, _, request = _app_request(kelso_env, "routes-demo")
+
+  routes = {f.name: f for f in request.fields if f.name.startswith("route.")}
+  assert set(routes) == {"route.main", "route.api", "route.admin"}
+  assert routes["route.admin"].choices == ("none", "web")
+  assert all(not field.required for field in routes.values())
+
+
+def test_applying_binds_and_routes_goes_through_bind_and_assign_route(kelso_env):
+  from kelso.lib.configflow.app import apply_app_config
+
+  (kelso_env.root / "external-data").mkdir()
+  spec, ctx, _ = _app_request(kelso_env, "host-volumes")
+  written = apply_app_config(
+    spec, ConfigResponse(values={"volume.hostvol1": "media"}), ctx
+  )
+  assert written == ["volume.hostvol1"]
+  assert ctx.app_store(spec.app).list_binds() == {"hostvol1": "media"}
+
+  spec, ctx, _ = _app_request(kelso_env, "routes-demo")
+  apply_app_config(spec, ConfigResponse(values={"route.admin": "web"}), ctx)
+  assert ctx.app_store(spec.app).get_route_assignment("admin") == "web"
+
+
+def test_a_bind_to_an_undeclared_host_volume_is_refused(kelso_env):
+  from kelso.lib.configflow.app import apply_app_config
+
+  spec, ctx, _ = _app_request(kelso_env, "host-volumes")
+  with pytest.raises(ValueError, match="must be one of: media, other"):
+    apply_app_config(spec, ConfigResponse(values={"volume.hostvol1": "nope"}), ctx)
+
+
+def test_the_line_form_lists_a_fields_choices():
+  request = ConfigRequest(
+    title="demo",
+    fields=(ConfigField(name="volume.files", choices=("media", "other")),),
+  )
+  conn = _ScriptedConn("media", "s")
+
+  response = run_form(request, conn)
+
+  assert "  one of: media, other" in conn.out_lines
+  assert response.values == {"volume.files": "media"}

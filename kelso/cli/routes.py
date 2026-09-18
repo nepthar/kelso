@@ -2,9 +2,10 @@ import argparse
 
 from tabulate import tabulate
 
-from kelso.cli.configform import run_form
+from kelso.cli.configform import collect
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.route_provider import (
   apply_route_provider_config,
   resolve_route_provider,
@@ -72,9 +73,9 @@ def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   with ctx.kelso_lock("routes add-provider"):
     provider = resolve_route_provider(args.tag, ctx, args.kind)
     request = route_provider_config_request(args.tag, provider, ctx)
-    response = run_form(request, conn)
-    if response is None:
-      conn.out("Cancelled; nothing was written")
+    response = collect(request, conn)
+    if response == EMPTY_CONFIG_RESPONSE:
+      conn.out("No changes")
       return
 
     apply_route_provider_config(args.tag, provider, response, ctx)

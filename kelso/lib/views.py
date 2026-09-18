@@ -6,12 +6,15 @@ Note that secrets should never be rendered to the user through this module.
 from __future__ import annotations
 
 import difflib
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
 from kelso.lib import activity
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle, manifest_text
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.configflow import ConfigRequest
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
@@ -236,6 +239,20 @@ def host_volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   ]
 
 
+def config_request_view(request: ConfigRequest) -> dict[str, Any]:
+  """A ConfigRequest as JSON. Fields never carry a secret's value to begin with."""
+  return {**asdict(request), "missing": request.missing()}
+
+
+def route_providers_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
+  """Configured route providers in tag order, less the built-in no-op."""
+  return [
+    {"tag": tag, "kind": entry.kind, "domain": entry.domain}
+    for tag, entry in sorted(ctx.config.route_providers.items())
+    if tag != NONE_ROUTE_PROVIDER_TAG
+  ]
+
+
 def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Kelso's own directories, as last recorded by volume-metrics.
 
@@ -322,10 +339,6 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
         for key, value in spec.manifest.app.model_dump().items()
         if value not in (None, "", {})
       },
-      "options": {
-        "route_providers": sorted(ctx.config.route_providers),
-        "host_volumes": sorted(ctx.config.host_volumes),
-      },
       "subdomain": spec.subdomain,
       "network_mode": spec.network_mode,
       "run_path": str(ctx.staged_paths(app_id).run_path),
@@ -334,7 +347,6 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "routes": _routes(spec, run_data, ctx),
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
-      "config": _config(spec, run_data, ctx),
       "commands": [
         {"name": name, "desc": command.desc, "unit": command.run_unit}
         for name, command in spec.commands.items()
@@ -478,24 +490,3 @@ def _volumes(
       }
     )
   return volumes
-
-
-def _config(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
-  store = ctx.app_store(spec.app)
-  entries = []
-  for name, config in spec.config.items():
-    value = run_data.config_values.get(name)
-    entries.append(
-      {
-        "name": name,
-        "secret": config.secret,
-        "desc": config.desc,
-        "advanced": config.advanced,
-        "set": store.has_config(name),
-        "has_default": config.has_default(),
-        # A secret's value is never projected -- not even when it is set, and
-        # not even to say how long it is.
-        "value": None if config.secret or value is None else value.value,
-      }
-    )
-  return entries

@@ -283,6 +283,10 @@ button.link:hover:not(:disabled) { color: var(--bad); border: 0; }
 .cfg-edit.is-dirty .cfg-save { visibility: visible; }
 .cfg-edit { display: flex; align-items: center; gap: 10px; }
 .cfg-edit input { width: 16em; max-width: 100%; }
+/* A whole config request in one form: one Save for all of it, once anything moved. */
+.cfg-form.is-dirty .cfg-save { visibility: visible; }
+.cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
+.cfg-form .cfg-actions { display: flex; justify-content: flex-end; padding: 12px 0; }
 /* Icon buttons are ghosts that take on their verb's colour on hover. */
 button.icon { padding: 5px 7px; line-height: 0; color: var(--dim); }
 button.icon svg, a.btn.icon svg {

@@ -3,6 +3,7 @@
 from urllib.parse import quote, unquote
 
 from api import ApiError, api
+from configform import config_form
 from layout import (
   error_card,
   esc,
@@ -205,79 +206,14 @@ def issues_card(app):
   return f'<div class="error"><h2>Not ready to start</h2><ul>{items}</ul></div>'
 
 
-def config_row(entry, app_id):
-  name = entry["name"]
-  if entry["secret"]:
-    hint = "set — type to replace" if entry["set"] else "not set"
-    field = (
-      f'<input type="password" name="set.{esc(name)}" '
-      f'placeholder="{esc(hint)}" autocomplete="new-password">'
-    )
-  else:
-    value = entry.get("value") or ""
-    field = f'<input name="set.{esc(name)}" value="{esc(value)}">'
-  note = entry.get("desc") or ""
-  if not entry["set"] and entry.get("has_default"):
-    note = (note + " " if note else "") + "(using the manifest default)"
-  return (
-    f'<tr><td class="key">{esc(name)}'
-    f"{'<span class=sub>secret</span>' if entry['secret'] else ''}</td>"
-    f'<td class="field"><form method="post" action="/apps/{quote(app_id)}" '
-    f'class="cfg-edit">'
-    f'<input type="hidden" name="action" value="config">'
-    f"{field}"
-    f'<button type="submit" class="cfg-save" disabled>Save</button>'
-    f"</form></td>"
-    f'<td class="muted wrap">{esc(note)}</td></tr>'
-  )
-
-
-def config_table(entries, app_id):
-  rows = "".join(config_row(entry, app_id) for entry in entries)
-  return f'<div class="scroll"><table class="kv"><tbody>{rows}</tbody></table></div>'
-
-
-def config_form(app):
-  entries = app.get("config") or []
-  if not entries:
-    return '<p class="empty">This app declares no configuration.</p>'
-  app_id = app["app_id"]
-  basic = [c for c in entries if not c.get("advanced")]
-  advanced = [c for c in entries if c.get("advanced")]
-  body = config_table(basic, app_id) if basic else ""
-  if advanced:
-    body += (
-      '<details class="reveal">'
-      "<summary>Show advanced configuration options</summary>"
-      f"{config_table(advanced, app_id)}</details>"
-    )
-  return body
-
-
 def volumes_section(app):
   volumes = app.get("volumes", [])
   if not volumes:
     return '<p class="empty">This app declares no volumes.</p>'
-  options = app.get("options", {}).get("host_volumes", [])
   rows = []
   for volume in volumes:
-    if volume["kind"] == "host":
-      choices = "".join(
-        f'<option value="{esc(tag)}"'
-        f"{' selected' if tag == volume.get('bind') else ''}>{esc(tag)}</option>"
-        for tag in options
-      )
-      cell = (
-        f'<form method="post" action="/apps/{quote(app["app_id"])}" class="row">'
-        f'<input type="hidden" name="action" value="bind">'
-        f'<input type="hidden" name="volume" value="{esc(volume["name"])}">'
-        f'<select name="tag"><option value="">(not bound)</option>{choices}'
-        "</select><button type=submit>Bind</button></form>"
-        if options
-        else '<span class="muted">no host volumes declared yet</span>'
-      )
-    else:
-      cell = f'<span class="muted">{esc(volume["path"] or "—")}</span>'
+    unbound = volume["kind"] == "host" and not volume.get("bind")
+    cell = f'<span class="muted">{"not bound" if unbound else esc(volume["path"] or "—")}</span>'
     rows.append(
       f'<tr><td class="key">{esc(volume["name"])}</td>'
       f'<td class="muted">{esc(volume["kind"])}'
@@ -297,14 +233,8 @@ def routes_section(app):
   routes = app.get("routes", [])
   if not routes:
     return '<p class="empty">This app publishes no routes.</p>'
-  providers = app.get("options", {}).get("route_providers", [])
   rows = []
   for route in routes:
-    choices = "".join(
-      f'<option value="{esc(tag)}"'
-      f"{' selected' if tag == route.get('provider') else ''}>{esc(tag)}</option>"
-      for tag in providers
-    )
     url = route.get("published_url") or route.get("url")
     url_cell = (
       f'<a href="{esc(url)}" target="_blank" rel="noopener">{esc(url)}</a>'
@@ -316,11 +246,7 @@ def routes_section(app):
       f'<td class="muted">{esc(route["unit"])}:{esc(route["container_port"])}'
       f" &rarr; {esc(route['host_port'] or 'unallocated')}</td>"
       f'<td class="path muted">{url_cell}</td>'
-      f'<td><form method="post" action="/apps/{quote(app["app_id"])}" class="row">'
-      f'<input type="hidden" name="action" value="route">'
-      f'<input type="hidden" name="route" value="{esc(route["name"])}">'
-      f"<select name=tag>{choices}</select>"
-      "<button type=submit>Assign</button></form></td></tr>"
+      f'<td class="muted">{esc(route.get("provider") or "—")}</td></tr>'
     )
   return (
     '<div class="scroll"><table><thead><tr><th>Route</th><th>Port</th>'
@@ -415,7 +341,7 @@ def units_section(app):
   return "".join(blocks) or '<p class="empty">No run units.</p>'
 
 
-def app_page(app, notice=""):
+def app_page(app, config_request, notice=""):
   meta = app.get("metadata", {})
   skip = {"display_name", "description", "app_id"}
   pairs = [(k, v) for k, v in sorted(meta.items()) if k not in skip]
@@ -433,7 +359,9 @@ def app_page(app, notice=""):
       else '<div class="card"><p class="empty">No extra metadata.</p></div>'
     )
     + "<h2>Configuration</h2>"
-    + f'<div class="card">{config_form(app)}</div>'
+    + '<div class="card">'
+    + config_form(config_request, f"/apps/{quote(app['app_id'])}", {"action": "config"})
+    + "</div>"
     + "<h2>Volumes</h2>"
     + f'<div class="card">{volumes_section(app)}</div>'
     + "<h2>Routes</h2>"
@@ -450,6 +378,7 @@ def detail_page(app_id, version, notice=""):
   app_id = unquote(app_id)
   try:
     app = api(f"/apps/{quote(app_id)}")
+    config_request = api(f"/apps/{quote(app_id)}/config-request")
     title = app.get("display_name") or app_id
     logs = (
       f'<a class="btn icon" href="/apps/{quote(app_id)}/logs" title="Logs" '
@@ -457,7 +386,7 @@ def detail_page(app_id, version, notice=""):
     )
     return (
       title,
-      app_page(app, notice),
+      app_page(app, config_request, notice),
       version,
       (f'<span class="head-actions">{logs}{lifecycle_bar(app)}</span>'),
     )

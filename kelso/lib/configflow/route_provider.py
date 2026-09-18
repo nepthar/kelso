@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.config_edit import set_kelso_address, set_route_provider
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.routes import PROVIDERS, RouteProvider
@@ -32,6 +33,11 @@ def secret_ref(tag: str, name: str) -> str:
   return f"route_provider.{tag}.{name}"
 
 
+def configurable_kinds() -> list[str]:
+  """Kinds an operator can add; `noop` publishes nothing, so it is not one."""
+  return sorted(kind for kind in PROVIDERS if kind != "noop")
+
+
 def resolve_route_provider(
   tag: str, ctx: KelsoCtx, kind: str = ""
 ) -> type[RouteProvider]:
@@ -39,6 +45,8 @@ def resolve_route_provider(
 
   An existing tag takes its kind from config.toml; a new one needs `kind`.
   """
+  if tag == NONE_ROUTE_PROVIDER_TAG:
+    raise ValueError(f"{tag!r} is the built-in no-op provider; pick another tag")
   existing = ctx.config.route_providers.get(tag)
   if existing and kind and kind != existing.kind:
     raise ValueError(
@@ -47,11 +55,11 @@ def resolve_route_provider(
     )
   resolved = kind or (existing.kind if existing else "")
   if not resolved:
-    raise ValueError(f"Route provider {tag!r} is new, so it needs --kind")
+    raise ValueError(f"Route provider {tag!r} is new, so it needs a kind")
 
   provider = PROVIDERS.get(resolved)
-  if provider is None:
-    known = ", ".join(sorted(PROVIDERS))
+  if provider is None or resolved not in configurable_kinds():
+    known = ", ".join(configurable_kinds())
     raise ValueError(
       f"Unknown route provider kind {resolved!r}; expected one of {known}"
     )

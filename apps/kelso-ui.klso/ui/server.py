@@ -9,9 +9,11 @@ import auth
 import catalog
 import dashboard
 import installed
+import routeproviders
 import snapshots
 import volumes
 from api import ApiError, api
+from configform import submitted_values
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -292,6 +294,54 @@ def volumes_get(ok: str | None = None, err: str | None = None):
   return html("/volumes", "Volumes", body, version)
 
 
+@app.get("/routes")
+def routes_get(ok: str | None = None, err: str | None = None):
+  version, unreachable = kelso_version("/routes", "Routes")
+  if unreachable:
+    return unreachable
+  try:
+    body = routeproviders.routes_page(banner(ok, err))
+  except ApiError as e:
+    return html("/routes", "Routes", error_card(e), version)
+  return html("/routes", "Routes", body, version)
+
+
+@app.get("/routes/new")
+def routes_new(tag: str = "", kind: str = ""):
+  """The add row is a GET form; its tag belongs in the path, not the query."""
+  return see(f"/routes/{quote(tag.strip())}?kind={quote(kind)}")
+
+
+@app.get("/routes/{tag}")
+def route_provider_get(
+  tag: str, kind: str = "", ok: str | None = None, err: str | None = None
+):
+  version, unreachable = kelso_version(f"/routes/{tag}", "Routes")
+  if unreachable:
+    return unreachable
+  try:
+    body = routeproviders.provider_page(tag, kind, banner(ok, err))
+  except ApiError as e:
+    return html(f"/routes/{tag}", tag, error_card(e), version)
+  return html(f"/routes/{tag}", tag, body, version)
+
+
+@app.post("/routes/{tag}")
+async def route_provider_post(tag: str, request: Request):
+  form = await request.form()
+  kind = field(form, "kind")
+  query = f"?kind={quote(kind)}" if kind else ""
+  try:
+    api(
+      f"/route-providers/{quote(tag)}/config-response{query}",
+      "POST",
+      {"values": submitted_values(form)},
+    )
+  except ApiError as e:
+    return see(f"/routes/{quote(tag)}{query}{'&' if query else '?'}err={quote(str(e))}")
+  return see(f"/routes?ok=Saved+{quote(tag)}")
+
+
 @app.get("/catalog")
 def catalog_get(app: str = "", ok: str | None = None, err: str | None = None):
   version, unreachable = kelso_version("/catalog", catalog.TITLE)
@@ -347,34 +397,15 @@ async def post_volumes(request: Request):
 
 @app.post("/apps/{app_id}")
 async def post_app(app_id: str, request: Request):
-  """One config change per submit; lifecycle verbs go through the job modal."""
+  """The config form; lifecycle verbs go through the job modal."""
   form = await request.form()
   app_id = unquote(app_id)
   here = f"/apps/{quote(app_id)}"
   action = field(form, "action")
   try:
     if action == "config":
-      # Blank means "leave it alone" -- especially for secrets, whose
-      # current value the UI never had in the first place.
-      values = {
-        key[len("set.") :]: str(form.get(key) or "")
-        for key in form
-        if key.startswith("set.") and str(form.get(key) or "").strip()
-      }
-      if not values:
-        return see(f"{here}?ok=Nothing+to+change")
-      api(f"{here}/config", "POST", {"set": values})
-      return see(f"{here}?ok=Saved+{quote(str(len(values)))}+value(s)")
-    if action == "bind":
-      api(
-        f"{here}/config", "POST", {"bind": {field(form, "volume"): field(form, "tag")}}
-      )
-      return see(f"{here}?ok=Bound+{quote(field(form, 'volume'))}")
-    if action == "route":
-      api(
-        f"{here}/config", "POST", {"route": {field(form, "route"): field(form, "tag")}}
-      )
-      return see(f"{here}?ok=Assigned+{quote(field(form, 'route'))}")
+      api(f"{here}/config-response", "POST", {"values": submitted_values(form)})
+      return see(f"{here}?ok=Saved")
     return see(here)
   except ApiError as e:
     return see(f"{here}?err={quote(str(e))}")

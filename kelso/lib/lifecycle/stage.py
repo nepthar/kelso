@@ -355,6 +355,30 @@ def _relabel_routes(spec: AppSpec, app_subdomain: str, ctx: KelsoCtx) -> None:
       yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
 
+def assign_route(spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx) -> None:
+  """Record which provider publishes a route. `start` registers it with them."""
+  app = spec.app
+  if route_name not in spec.routes:
+    known = ", ".join(sorted(spec.routes)) or "(none)"
+    raise ValueError(
+      f"route {route_name!r} is not declared in {app}'s manifest; known routes: {known}"
+    )
+  if tag not in ctx.config.route_providers:
+    known = ", ".join(sorted(ctx.config.route_providers))
+    raise ValueError(
+      f"route provider {tag!r} is not configured; known tags: {known}. "
+      f"Add [route_provider.{tag}] to config.toml"
+    )
+
+  ctx.app_store(app).set_route_assignment(route_name, tag)
+  # The compose file carries ${routes.*} URLs, so the next start needs it rewritten.
+  if ctx.is_staged(app):
+    with open(ctx.staged_paths(app).compose_path, "w") as f:
+      yaml.safe_dump(
+        make_compose_dict(spec, load_run_data(spec, ctx)), f, sort_keys=False
+      )
+
+
 def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:
   """Record a host-volume bind against the staged bundle."""
   app = spec.app

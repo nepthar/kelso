@@ -531,7 +531,7 @@ def test_config_edit_writes_nothing_when_cancelled(kelso_env):
   cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nq\n")
 
   assert cancelled.returncode == 0, cancelled.stderr
-  assert "Cancelled" in cancelled.stdout
+  assert "No changes" in cancelled.stdout
   assert kelso_env.run("config", BASIC, "--get", "admin_user").returncode == 1
 
 

@@ -228,11 +228,6 @@ def test_app_detail(kelso_env, client):
   assert mounts["bin"]["readonly"] is True
   assert mounts["bin"]["desc"] == "shipped binaries"
 
-  config = {c["name"]: c for c in body["config"]}
-  assert config["admin_user"]["advanced"] is False
-  assert config["log_level"]["advanced"] is True
-  assert config["log_level"]["value"] == "info"
-
   # admin_user is the one thing standing between this app and a start.
   assert [issue["problem"] for issue in body["issues"]] == [
     "config admin_user is unset and no default specified"
@@ -260,13 +255,26 @@ def test_app_logs_for_an_uninstalled_app_is_404(kelso_env, client):
   assert client.get("/apps/basic-features/logs").status_code == 404
 
 
-def test_app_detail_never_projects_a_secret(kelso_env, client):
+def test_app_config_request_describes_every_field(kelso_env, client):
+  kelso_env.run("install", "basic-features")
+
+  body = client.get(f"/apps/{APP}/config-request").json()
+  fields = {f["name"]: f for f in body["fields"]}
+  assert fields["admin_user"]["advanced"] is False
+  assert fields["log_level"]["advanced"] is True
+  assert fields["log_level"]["default"] == "info"
+  # admin_pass has `default = "auto"`: kelso generates it, nobody supplies it.
+  assert fields["admin_pass"]["required"] is False
+  assert body["missing"] == ["admin_user"]
+
+
+def test_app_config_request_never_projects_a_secret(kelso_env, client):
   kelso_env.run("start", "basic-features", "--set", "admin_user=root")
 
-  body = client.get(f"/apps/{APP}").json()
-  config = {c["name"]: c for c in body["config"]}
+  body = client.get(f"/apps/{APP}/config-request").json()
+  config = {f["name"]: f for f in body["fields"]}
   assert config["admin_pass"]["secret"] is True
-  assert config["admin_pass"]["set"] is True
+  assert config["admin_pass"]["secret_set"] is True
   assert config["admin_pass"]["value"] is None
 
   # A non-secret value is shown, exactly as `kelso inspect` prints it.
@@ -798,47 +806,102 @@ def test_app_view_carries_what_a_detail_page_needs(kelso_env, client):
   assert unit["environment"]["ADMIN_PASS"] == "${admin_pass}"
 
   assert body["metadata"]["display_name"] == "Basic Features"
-  assert body["options"]["host_volumes"] == ["media", "other"]
-  assert "none" in body["options"]["route_providers"]
 
 
 def test_app_view_never_leaks_a_secret_through_the_environment(kelso_env, client):
   assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
   _, secret = ctx().app_store(APP).get_config("admin_pass")
   assert secret
-  assert secret not in json.dumps(client.get(f"/apps/{APP}").json())
+  assert secret not in json.dumps(client.get(f"/apps/{APP}/config-request").json())
 
 
 def test_setting_config_through_the_api(kelso_env, client):
   assert kelso_env.run("install", APP).returncode == 0
 
-  updated = client.post(f"/apps/{APP}/config", json={"set": {"admin_user": "alice"}})
+  updated = client.post(
+    f"/apps/{APP}/config-response", json={"values": {"admin_user": "alice"}}
+  )
   assert updated.status_code == 200, updated.text
-  values = {c["name"]: c for c in updated.json()["config"]}
-  assert values["admin_user"]["value"] == "alice"
+  fields = {f["name"]: f for f in updated.json()["fields"]}
   # The response is read back after the write, not from the request's context.
-  assert not updated.json()["issues"]
+  assert fields["admin_user"]["value"] == "alice"
+  assert updated.json()["missing"] == []
+
+
+def test_resubmitting_unchanged_values_writes_nothing(kelso_env, client):
+  """The UI sends every field it showed; only real changes may be written."""
+  kelso_env.run("start", APP, "--set", "admin_user=root")
+  before = client.get(f"/apps/{APP}/config-request").json()["fields"]
+
+  again = client.post(
+    f"/apps/{APP}/config-response",
+    json={"values": {f["name"]: f["value"] for f in before if f["value"]}},
+  )
+
+  assert again.status_code == 200, again.text
+  assert again.json()["fields"] == before
+
+
+def test_configuring_a_route_provider_through_the_api(kelso_env, client):
+  refused = client.get("/route-providers/cf/config-request")
+  assert refused.status_code == 400
+  assert "needs a kind" in refused.json()["error"]
+
+  request = client.get("/route-providers/cf/config-request?kind=cloudflare_tunnel")
+  assert request.status_code == 200, request.text
+  assert "api_token" in {f["name"] for f in request.json()["fields"]}
+
+  written = client.post(
+    "/route-providers/cf/config-response?kind=cloudflare_tunnel",
+    json={
+      "values": {
+        "domain": "example.com",
+        "kelso_address": "10.0.0.5",
+        "account_id": "acct-1",
+        "tunnel_id": "tun-1",
+        "api_token": "cf-token",
+      }
+    },
+  )
+  assert written.status_code == 200, written.text
+  assert {"tag": "cf", "kind": "cloudflare_tunnel", "domain": "example.com"} in (
+    written.json()["route_providers"]
+  )
+  assert "cf-token" not in json.dumps(
+    client.get("/route-providers/cf/config-request").json()
+  )
+
+
+def test_route_providers_lists_what_can_be_added_but_not_noop(kelso_env, client):
+  body = client.get("/route-providers").json()
+  assert "cloudflare_tunnel" in body["kinds"]
+  assert "noop" not in body["kinds"]
+  assert all(p["tag"] != "none" for p in body["route_providers"])
 
 
 def test_binding_a_host_volume_through_the_api(kelso_env, client):
   (kelso_env.root / "external-data").mkdir()
   assert kelso_env.run("install", "host-volumes").returncode == 0
 
-  bound = client.post("/apps/host-volumes/config", json={"bind": {"hostvol1": "media"}})
+  bound = client.post(
+    "/apps/host-volumes/config-response",
+    json={"values": {"volume.hostvol1": "media"}},
+  )
   assert bound.status_code == 200, bound.text
-  volumes = {v["name"]: v for v in bound.json()["volumes"]}
+  volumes = {v["name"]: v for v in client.get("/apps/host-volumes").json()["volumes"]}
   assert volumes["hostvol1"]["bind"] == "media"
 
 
 def test_config_changes_are_refused_with_a_reason(kelso_env, client):
   assert kelso_env.run("install", APP).returncode == 0
 
-  for payload, expected in (
-    ({"set": {"nope": "x"}}, "No config nope"),
-    ({"bind": {"config": "media"}}, "only host volumes can be bound"),
-    ({"route": {"main": "media"}}, "not declared"),
+  for values, expected in (
+    ({"nope": "x"}, "no config named 'nope'"),
+    # `config` is a data volume, so it is not offered as a bind at all.
+    ({"volume.config": "media"}, "no config named 'volume.config'"),
+    ({"route.main": "web"}, "no config named 'route.main'"),
   ):
-    refused = client.post(f"/apps/{APP}/config", json=payload)
+    refused = client.post(f"/apps/{APP}/config-response", json={"values": values})
     assert refused.status_code == 400, refused.text
     assert expected in refused.json()["error"]
 
@@ -925,7 +988,9 @@ def test_route_assignment_is_recorded_without_calling_the_provider(
   kelso_env, client, jobs
 ):
   submit(client, jobs, "install", {"app": "routes-demo"})
-  response = client.post("/apps/routes-demo/config", json={"route": {"main": "web"}})
+  response = client.post(
+    "/apps/routes-demo/config-response", json={"values": {"route.main": "web"}}
+  )
   assert response.status_code == 200, response.text
   assert client.get("/apps/routes-demo").json()["config_pending"] is False
 

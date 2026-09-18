@@ -27,8 +27,15 @@ from kelso.lib.config_edit import (
   remove_host_volume,
   set_host_volume,
 )
+from kelso.lib.configflow import ConfigResponse
+from kelso.lib.configflow.app import app_config_request, apply_app_config
+from kelso.lib.configflow.route_provider import (
+  apply_route_provider_config,
+  configurable_kinds,
+  resolve_route_provider,
+  route_provider_config_request,
+)
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import apply_config_sets, bind
 from kelso.lib.spec import AppSpec
 
 # Bumped when a response shape changes in a way a client would notice. The web
@@ -73,14 +80,12 @@ class NewHostVolume(HostVolumeBody):
   tag: str
 
 
-class ConfigChange(BaseModel):
-  """One `kelso config <app>` invocation, as the UI sends it."""
+class ConfigValues(BaseModel):
+  """A ConfigResponse: what a front end collected for one ConfigRequest."""
 
   model_config = ConfigDict(extra="forbid")
 
-  set: dict[str, str] = Field(default_factory=dict)
-  bind: dict[str, str] = Field(default_factory=dict)
-  route: dict[str, str] = Field(default_factory=dict)
+  values: dict[str, str] = Field(default_factory=dict)
 
 
 class JobSubmission(BaseModel):
@@ -108,22 +113,6 @@ Jobs = Annotated[JobRunner, Depends(_runner)]
 def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The schema for an app that is not installed yet."""
   return load_bundle(ctx.bundle_path(app)).app_spec()
-
-
-def _assign_route(
-  app: AppID, spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx
-) -> None:
-  if route_name not in spec.routes:
-    known = ", ".join(sorted(spec.routes)) or "(none)"
-    raise ValueError(
-      f"route {route_name!r} is not declared in {app}'s manifest; known routes: {known}"
-    )
-  if tag not in ctx.config.route_providers:
-    known = ", ".join(sorted(ctx.config.route_providers))
-    raise ValueError(f"route provider {tag!r} is not configured; known tags: {known}")
-  # Recorded only. `start` registers assigned routes with their provider, so
-  # a change lands the next time the app starts, like any other config value.
-  ctx.app_store(app).set_route_assignment(route_name, tag)
 
 
 def _ctx_again(ctx: KelsoCtx) -> KelsoCtx:
@@ -194,22 +183,58 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
 
-  @app.post("/apps/{app_id}/config", tags=["apps"])
-  def change_app_config(app_id: str, body: ConfigChange, ctx: Ctx) -> dict:
-    """Set config values, host-volume binds and route assignments."""
+  @app.get("/apps/{app_id}/config-request", tags=["config"])
+  def get_app_config_request(app_id: str, ctx: Ctx) -> dict:
+    """The app's `[config]`, with what is on file now."""
+    try:
+      resolved = ctx.resolve_app(app_id)
+      spec = ctx.staged_spec(resolved) or _bundle_spec(resolved, ctx)
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(404, str(e)) from e
+    return views.config_request_view(app_config_request(spec, ctx))
+
+  @app.post("/apps/{app_id}/config-response", tags=["config"])
+  def apply_app_config_response(app_id: str, body: ConfigValues, ctx: Ctx) -> dict:
+    """Write the values collected for the app; unchanged ones are skipped."""
     try:
       resolved = ctx.resolve_app(app_id)
       with ctx.locked(f"config {resolved}", resolved):
         spec = ctx.staged_spec(resolved) or _bundle_spec(resolved, ctx)
-        if body.set:
-          apply_config_sets(spec, list(body.set.items()), ctx)
-        for volume_name, tag in body.bind.items():
-          bind(spec, volume_name, tag, ctx)
-        for route_name, tag in body.route.items():
-          _assign_route(resolved, spec, route_name, tag, ctx)
+        apply_app_config(spec, ConfigResponse(values=body.values), ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
-    return views.app_view(resolved, _ctx_again(ctx))
+    return views.config_request_view(app_config_request(spec, _ctx_again(ctx)))
+
+  @app.get("/route-providers", tags=["config"])
+  def list_route_providers(ctx: Ctx) -> dict:
+    return {
+      "route_providers": views.route_providers_view(ctx),
+      "kinds": configurable_kinds(),
+    }
+
+  @app.get("/route-providers/{tag}/config-request", tags=["config"])
+  def get_route_provider_config_request(tag: str, ctx: Ctx, kind: str = "") -> dict:
+    """What the provider needs; `kind` only for a tag not configured yet."""
+    try:
+      provider = resolve_route_provider(tag, ctx, kind)
+    except ValueError as e:
+      raise HTTPException(400, str(e)) from e
+    return views.config_request_view(route_provider_config_request(tag, provider, ctx))
+
+  @app.post("/route-providers/{tag}/config-response", tags=["config"])
+  def apply_route_provider_config_response(
+    tag: str, body: ConfigValues, ctx: Ctx, kind: str = ""
+  ) -> dict:
+    """Store its secrets and write `[route_provider.<tag>]` to config.toml."""
+    try:
+      with ctx.kelso_lock(f"route-provider {tag}"):
+        provider = resolve_route_provider(tag, ctx, kind)
+        apply_route_provider_config(
+          tag, provider, ConfigResponse(values=body.values), ctx
+        )
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(400, str(e)) from e
+    return {"route_providers": views.route_providers_view(_ctx_again(ctx))}
 
   @app.get("/volumes", tags=["volumes"])
   def list_volumes(ctx: Ctx) -> dict:
