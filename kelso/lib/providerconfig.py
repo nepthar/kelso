@@ -16,8 +16,6 @@ from kelso.lib.configreq import ConfigField, ConfigRequest, ConfigResponse
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
 
-TARGET_PREFIX = "route_provider:"
-
 DOMAIN_FIELD = ConfigField(
   name="domain",
   desc="Domain routes are published under, e.g. example.com",
@@ -28,10 +26,6 @@ ADDRESS_FIELD = ConfigField(
   name="kelso_address",
   desc="LAN address this host is reachable at, e.g. 10.0.0.5",
 )
-
-
-def provider_target(tag: str) -> str:
-  return f"{TARGET_PREFIX}{tag}"
 
 
 def secret_ref(tag: str, name: str) -> str:
@@ -45,6 +39,20 @@ class ProviderTarget:
   kind: str
   tag: str
   ctx: KelsoCtx
+
+  @classmethod
+  def for_tag(cls, tag: str, ctx: KelsoCtx, kind: str = "") -> ProviderTarget:
+    """Configure `tag`, taking the kind from config.toml when it is already there."""
+    existing = ctx.config.route_providers.get(tag)
+    if existing and kind and kind != existing.kind:
+      raise ValueError(
+        f"Route provider {tag!r} is already {existing.kind!r}; remove it from "
+        f"config.toml before configuring it as {kind!r}"
+      )
+    resolved = kind or (existing.kind if existing else "")
+    if not resolved:
+      raise ValueError(f"Route provider {tag!r} is new, so it needs --kind")
+    return cls(kind=resolved, tag=tag, ctx=ctx)
 
   def _provider(self):
     from kelso.lib.routes import PROVIDERS
@@ -89,20 +97,12 @@ class ProviderTarget:
       )
 
     return ConfigRequest(
-      target=provider_target(self.tag),
       title=f"route provider {self.tag} ({self.kind})",
       fields=tuple(fields),
       note=f"Check it afterwards with `kelso routes check {self.tag}`",
     )
 
   def apply_config(self, response: ConfigResponse) -> list[str]:
-    expected = provider_target(self.tag)
-    if response.target != expected:
-      raise ValueError(
-        f"Response is for {response.target!r}, not {expected!r}; "
-        f"build a new request for this provider"
-      )
-
     request = self.config_request()
     errors = request.validate(response.values)
     if errors:

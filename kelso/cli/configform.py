@@ -89,7 +89,7 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse | None:
       if choice in ("s", "submit", ""):
         errors = request.validate(edits)
         if not errors:
-          return ConfigResponse(target=request.target, values=edits)
+          return ConfigResponse(values=edits)
         for err in errors:
           conn.err(f"  - {err}")
         continue

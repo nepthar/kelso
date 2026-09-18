@@ -48,7 +48,7 @@ def _request(**overrides) -> ConfigRequest:
       ConfigField(name="pool_size", default="5", advanced=True),
     ),
   )
-  return ConfigRequest(target="app:demo", title="demo", fields=fields, **overrides)
+  return ConfigRequest(title="demo", fields=fields, **overrides)
 
 
 # ── the model ──────────────────────────────────────────────────────────────
@@ -87,13 +87,11 @@ def test_a_partial_answer_is_valid_but_still_needs_the_rest():
   assert request.still_needed({"admin_email": "a@b.c"}) == ["api_key"]
 
 
-def test_response_carries_the_target_and_refuses_an_invalid_one():
+def test_response_refuses_values_it_cannot_apply():
   request = _request()
   response = request.response({"admin_email": "a@b.c", "api_key": "k"})
 
-  assert response == ConfigResponse(
-    target="app:demo", values={"admin_email": "a@b.c", "api_key": "k"}
-  )
+  assert response == ConfigResponse(values={"admin_email": "a@b.c", "api_key": "k"})
   with pytest.raises(ValueError, match="no config named 'nope'"):
     request.response({"nope": "x"})
 
@@ -108,7 +106,6 @@ def test_wizard_walks_the_fields_then_submits():
 
   assert response is not None
   assert response.values == {"admin_email": "a@b.c", "api_key": "secret-value"}
-  assert response.target == "app:demo"
 
 
 def test_enter_keeps_what_is_already_there():
@@ -228,7 +225,6 @@ def test_provider_request_asks_for_the_secret_not_its_reference(kelso_env):
   assert names[:2] == ["domain", "kelso_address"]
   assert "api_token" in names
   assert "api_token_secret" not in names
-  assert request.target == "route_provider:cf"
 
 
 def test_applying_a_provider_response_writes_the_block_and_stores_the_secret(kelso_env):

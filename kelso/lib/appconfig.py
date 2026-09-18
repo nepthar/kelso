@@ -11,12 +11,6 @@ from kelso.lib.spec import AppSpec
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
 
-TARGET_PREFIX = "app:"
-
-
-def app_target(app: str) -> str:
-  return f"{TARGET_PREFIX}{app}"
-
 
 @dataclass(frozen=True)
 class AppTarget:
@@ -42,7 +36,6 @@ class AppTarget:
         )
       )
     return ConfigRequest(
-      target=app_target(str(self.spec.app)),
       title=str(self.spec.app),
       fields=tuple(fields),
       note=self.spec.description,
@@ -50,13 +43,6 @@ class AppTarget:
 
   def apply_config(self, response: ConfigResponse) -> list[str]:
     from kelso.lib.lifecycle import apply_config_sets
-
-    expected = app_target(str(self.spec.app))
-    if response.target != expected:
-      raise ValueError(
-        f"Response is for {response.target!r}, not {expected!r}; "
-        f"build a new request for this app"
-      )
 
     sets = [(name, value) for name, value in response.values.items() if value]
     if sets:

@@ -43,9 +43,8 @@ class ConfigField:
 
 @dataclass(frozen=True)
 class ConfigRequest:
-  """The fields one target needs, and what each holds now."""
+  """The fields one thing needs, and what each holds now."""
 
-  target: str
   title: str
   fields: tuple[ConfigField, ...] = ()
   note: str = ""
@@ -87,14 +86,13 @@ class ConfigRequest:
     errors = self.validate(values)
     if errors:
       raise ValueError("; ".join(errors))
-    return ConfigResponse(target=self.target, values=dict(values))
+    return ConfigResponse(values=dict(values))
 
 
 @dataclass(frozen=True)
 class ConfigResponse:
   """What a front end collected, ready for the source to apply."""
 
-  target: str
   values: dict[str, str] = field(default_factory=dict)
 
 
@@ -103,7 +101,7 @@ class HasConfig(Protocol):
   """Something an operator configures: it describes itself, and applies answers.
 
   Implementations are bound to one thing (this app, this provider tag), so a
-  front end can render and apply without knowing which kind it holds.
+  front end renders and applies without knowing which kind it holds.
   """
 
   def config_request(self) -> ConfigRequest:
