@@ -229,58 +229,60 @@ ADMIN_MANIFEST = """\
 [app]
 version = "1"
 
-[volumes]
-admin = { kind = "system", src = "kelso_admin_socket" }
+[connections]
+admin = { kind = "kelso_admin" }
 
 [run.main]
-image   = "alpine:latest"
-volumes = { admin = "/kelso/admin" }
+image       = "alpine:latest"
+connections = ["admin"]
+env         = { KELSO_SOCKET = "${connections.admin.socket}" }
 """
 
 
-def test_a_system_volume_links_to_kelso_with_nothing_to_bind(kelso_env):
+def test_a_connection_is_mounted_and_its_values_substituted(kelso_env):
   _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
 
   started = kelso_env.run("start", "admin-app", "-y")
   assert started.returncode == 0, started.stderr
 
-  link = kelso_env.run_root / "admin-app" / "volumes" / "system" / "admin"
-  assert link.readlink() == kelso_env.root / "var" / "conn" / "admin"
-  assert link.is_dir()
-  mounts = _compose(kelso_env, "admin-app")["services"]["main"]["volumes"]
-  assert "./volumes/system/admin:/kelso/admin" in mounts
+  socket_dir = kelso_env.root / "var" / "conn" / "admin"
+  assert socket_dir.is_dir()
+  main = _compose(kelso_env, "admin-app")["services"]["main"]
+  assert f"{socket_dir}:/run/kelso/admin" in main["volumes"]
+  assert main["environment"]["KELSO_SOCKET"] == "/run/kelso/admin/admin.sock"
 
 
-@pytest.mark.parametrize(
-  "volume", ['{ kind = "system", src = "docker" }', '{ kind = "system" }']
-)
-def test_a_system_volume_must_name_a_known_src(kelso_env, volume):
-  _write_bundle(kelso_env, "bad-system", _volumes_manifest(f"sock = {volume}"))
-
-  refused = kelso_env.run("install", "bad-system", "-y")
-  assert refused.returncode == 1
-  assert "kelso_admin_socket" in refused.stderr
-  assert not (kelso_env.run_root / "bad-system").exists()
-
-
-def test_src_is_refused_on_a_data_volume(kelso_env):
+def test_a_connection_value_is_only_known_where_it_is_attached(kelso_env):
   _write_bundle(
     kelso_env,
-    "bad-src",
-    _volumes_manifest('state = { kind = "data", src = "kelso_admin_socket" }'),
+    "unattached",
+    ADMIN_MANIFEST.replace('connections = ["admin"]', "connections = []"),
   )
 
-  refused = kelso_env.run("install", "bad-src", "-y")
+  refused = kelso_env.run("install", "unattached", "-y")
   assert refused.returncode == 1
-  assert "only be set for app and system volumes" in refused.stderr
+  assert "connections.admin.socket" in refused.stderr
+  assert "not a known substitution" in refused.stderr
 
 
-def test_install_asks_once_before_granting_a_system_volume(kelso_env):
+def test_a_run_unit_may_only_attach_declared_connections(kelso_env):
+  _write_bundle(
+    kelso_env,
+    "undeclared",
+    ADMIN_MANIFEST.replace('connections = ["admin"]', 'connections = ["db"]'),
+  )
+
+  refused = kelso_env.run("install", "undeclared", "-y")
+  assert refused.returncode == 1
+  assert "connection 'db' is not declared in [connections]" in refused.stderr
+
+
+def test_install_asks_once_before_granting_a_connection(kelso_env):
   _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
 
   declined = kelso_env.run("install", "admin-app", input="n\n")
   assert declined.returncode == 0, declined.stderr
-  assert "admin socket" in declined.stdout
+  assert "control of kelso" in declined.stdout
   assert "Nothing installed." in declined.stdout
   assert not (kelso_env.run_root / "admin-app").exists()
 
@@ -291,10 +293,10 @@ def test_install_asks_once_before_granting_a_system_volume(kelso_env):
   # Already granted: reinstalling does not ask again.
   again = kelso_env.run("install", "admin-app")
   assert again.returncode == 0, again.stderr
-  assert "admin socket" not in again.stdout
+  assert "control of kelso" not in again.stdout
 
 
-def test_start_asks_before_granting_a_system_volume(kelso_env):
+def test_start_asks_before_granting_a_connection(kelso_env):
   _write_bundle(kelso_env, "admin-app", ADMIN_MANIFEST)
 
   declined = kelso_env.run("start", "admin-app", input="n\n")

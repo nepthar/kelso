@@ -62,8 +62,9 @@ def validate_github_segment(value: str, kind: str) -> str:
 Identifier = Annotated[str, AfterValidator(validate_identifier)]
 
 # Flat substitution key prefixes. Keys look namespaced (`routes.main`,
-# `klso.domain`) but the keyspace itself is flat — see EnvTemplate.
+# `connections.admin.socket`) but the keyspace itself is flat — see EnvTemplate.
 ROUTE_KEY_PREFIX = "routes."
+CONNECTION_KEY_PREFIX = "connections."
 KLSO_KEY_PREFIX = "klso."
 KLSO_KEYS = frozenset({"domain", "volumes", "cmd", "routes"})
 
@@ -75,7 +76,7 @@ PUBLIC_ROUTE_SCHEME = "https"
 class EnvTemplate(string.Template):
   """`[run.<unit>.env]` placeholders against a flat substitution keyspace."""
 
-  idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+)?)"
+  idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+){0,2})"
 
 
 def same_path(a: Path, b: Path) -> bool:

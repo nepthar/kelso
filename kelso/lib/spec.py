@@ -65,6 +65,13 @@ class AppVolume:
 
 
 @dataclass(frozen=True)
+class AppConnection:
+  name: str
+  kind: str
+  desc: str = ""
+
+
+@dataclass(frozen=True)
 class BoundVolume:
   volume: AppVolume
   guest_path: str
@@ -101,6 +108,7 @@ class AppRunUnit:
   command: tuple[str, ...] | None
   environment: Mapping[str, str]
   volumes: Mapping[str, BoundVolume]
+  connections: tuple[str, ...]
   routes: Mapping[str, AppRoute]
   labels: Mapping[str, str]
   restart: str
@@ -152,6 +160,7 @@ class AppSpec:
   routes: Mapping[str, AppRoute]
   config: Mapping[str, AppConfig]
   volumes: Mapping[str, AppVolume]
+  connections: Mapping[str, AppConnection]
   commands: Mapping[str, AppCommand]
 
   @classmethod
@@ -256,6 +265,10 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
     },
     config=config,
     volumes=volumes,
+    connections={
+      name: AppConnection(name, entry.kind, entry.desc)
+      for name, entry in manifest.connections.items()
+    },
     commands=commands,
   )
 
@@ -286,6 +299,7 @@ def _resolve_run_units(
         name: BoundVolume(volumes[name], guest_path)
         for name, guest_path in run_entry.volumes.items()
       },
+      connections=tuple(run_entry.connections),
       routes={
         name: AppRoute(
           route_name=name,

@@ -1,12 +1,13 @@
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import Config
+from kelso.lib.connections import Wiring, wire
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
@@ -19,6 +20,7 @@ from kelso.lib.spec import (
   BoundVolume,
 )
 from kelso.lib.util import (
+  CONNECTION_KEY_PREFIX,
   KLSO_KEY_PREFIX,
   PUBLIC_ROUTE_SCHEME,
   ROUTE_KEY_PREFIX,
@@ -122,6 +124,7 @@ class AppRunData:
   # is looked at in one pass.
   host_mounts: tuple[str, ...]
   issues: tuple[ConfigIssue, ...]
+  connections: Mapping[str, Wiring] = field(default_factory=dict)
 
   @property
   def stage_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -400,6 +403,11 @@ def _env_substitutions(
     f"{KLSO_KEY_PREFIX}volumes": volumes,
     f"{KLSO_KEY_PREFIX}cmd": cmd,
     f"{KLSO_KEY_PREFIX}routes": routes,
+    **{
+      f"{CONNECTION_KEY_PREFIX}{name}.{field}": value
+      for name in run_unit.connections
+      for field, value in data.connections[name].values.items()
+    },
   }
 
 
@@ -436,6 +444,8 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     # Kelso's own mounts stay out of `${klso.volumes}`: that value tells an app
     # where the volumes it declared ended up.
     mounts.extend(data.host_mounts)
+    for name in run_unit.connections:
+      mounts.extend(data.connections[name].mounts)
     if mounts:
       service["volumes"] = mounts
 
@@ -489,6 +499,10 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     config_values=config_values,
     routes=routes,
     route_urls=_route_urls(routes, assignments, ctx.config),
+    connections={
+      name: wire(connection, ctx.config)
+      for name, connection in spec.connections.items()
+    },
     host_mounts=_host_mounts(),
     issues=tuple(issues),
   )
@@ -514,9 +528,6 @@ def _volume_paths(
       if host_vol is None:
         return None
       return host_vol.path, host_vol.path
-    case "system":
-      path = config.system_volumes[volume.src]
-      return path, path
     case other:
       path = config.volume_roots[other] / app_id / volume.name
       return path, path

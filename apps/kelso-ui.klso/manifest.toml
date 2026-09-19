@@ -16,16 +16,19 @@ admin_pass  = { secret = true, desc = "password for the web ui" }
 ui   = { kind = "app", src = "ui", desc = "The application"}
 venv = { kind = "temp", desc = "virtual env, dependencies, etc." }
 tls  = { kind = "data", desc = "self-signed cert for the https listener" }
-admin = { kind = "system", src = "kelso_admin_socket", desc = "kelsod's admin socket" }
+
+[connections]
+admin = { kind = "kelso_admin", desc = "the kelsod admin API" }
 
 [run.main]
-image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
-cmd     = ["/app/start.sh"]
-volumes = { ui = "/app", venv = "/venv", tls = "/tls", admin = "/kelso/admin" }
-routes  = { main = { port = "8080", scheme = "https" } }
+image       = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
+cmd         = ["/app/start.sh"]
+volumes     = { ui = "/app", venv = "/venv", tls = "/tls" }
+connections = ["admin"]
+routes      = { main = { port = "8080", scheme = "https" } }
 
 [run.main.env]
-KELSO_SOCKET            = "/kelso/admin/admin.sock"
+KELSO_SOCKET            = "${connections.admin.socket}"
 KELSO_API               = "${api_address}"
 ADMIN_PASSWORD           = "${admin_pass}"
 TLS_DOMAIN               = "${klso.domain}"

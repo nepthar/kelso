@@ -3,6 +3,7 @@ from pathlib import Path
 
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.connections import grants
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import stage, staging_target
 from kelso.lib.spec import AppSpec
@@ -28,7 +29,7 @@ def register(subparsers) -> None:
     "-y",
     "--yes",
     action="store_true",
-    help="Skip the confirmation for unmodelled compose keys and system volumes",
+    help="Skip the confirmation for unmodelled compose keys and connections",
   )
   parser.set_defaults(func=run)
 
@@ -51,15 +52,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
     conn.out(f"Start it with: kelso start {app}")
 
 
-# What a system volume hands the app, in the operator's terms.
-SYSTEM_GRANTS = {
-  "kelso_admin_socket": (
-    "kelso's admin socket. It will be able to start, stop, uninstall and "
-    "restore any app"
-  ),
-}
-
-
 def _bundle_spec(app: AppID, bundle: Path) -> AppSpec | None:
   """The bundle's spec, or None if it does not parse.
 
@@ -72,31 +64,33 @@ def _bundle_spec(app: AppID, bundle: Path) -> AppSpec | None:
     return None
 
 
-def _new_system_volumes(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> list[str]:
-  """System volume `src`s the installed copy, if any, was not already granted."""
+def _new_grants(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> list[str]:
+  """What `spec`'s connections grant that the installed copy, if any, did not."""
   staged = ctx.staged_spec(app)
-  granted = {
-    v.src for v in (staged.volumes.values() if staged else ()) if v.kind == "system"
-  }
-  return sorted({v.src for v in spec.volumes.values() if v.kind == "system"} - granted)
+  granted = {grants(c) for c in staged.connections.values()} if staged else set()
+  return [
+    f"{grants(c)} (connection {name})"
+    for name, c in spec.connections.items()
+    if grants(c) not in granted
+  ]
 
 
 def confirm_install(app: AppID, bundle: Path, ctx: KelsoCtx, conn: Conn) -> bool:
-  """Ask before installing unmodelled compose keys or a new system volume."""
+  """Ask before installing unmodelled compose keys or a new connection grant."""
   spec = _bundle_spec(app, bundle)
   if spec is None:
     return True
   warnings = spec.compose_warnings
-  system = _new_system_volumes(app, spec, ctx)
-  if not warnings and not system:
+  new_grants = _new_grants(app, spec, ctx)
+  if not warnings and not new_grants:
     return True
 
   for warning in warnings:
     conn.out(f"Warning: {warning.message()}:")
     for line in warning.option_lines():
       conn.out(f"  {line}")
-  for src in system:
-    conn.out(f"Warning: {app} asks for {SYSTEM_GRANTS[src]}.")
+  for grant in new_grants:
+    conn.out(f"Warning: {app} asks for {grant}.")
 
   try:
     answer = conn.read(f"Install {app} anyway? [y/N] ")

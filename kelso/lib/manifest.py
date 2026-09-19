@@ -16,6 +16,7 @@ from pydantic import (
 
 from kelso.lib.apps import AppID
 from kelso.lib.util import (
+  CONNECTION_KEY_PREFIX,
   KLSO_KEY_PREFIX,
   KLSO_KEYS,
   ROUTE_KEY_PREFIX,
@@ -24,11 +25,11 @@ from kelso.lib.util import (
 )
 
 NetworkMode = Literal["normal", "host"]
-VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host", "system"]
+VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
+ConnectionKind = Literal["kelso_admin"]
 
-# What a `kind = "system"` volume's `src` may name. `Config.system_volumes` says
-# where each one is.
-SYSTEM_VOLUMES = ("kelso_admin_socket",)
+# What each connection kind publishes, as `${connections.<name>.<field>}`.
+CONNECTION_FIELDS: dict[str, tuple[str, ...]] = {"kelso_admin": ("socket",)}
 
 
 class ConfigError(ValueError):
@@ -58,13 +59,16 @@ class VolumeEntry(BaseModel):
 
   @model_validator(mode="after")
   def check_src(self) -> Self:
-    if self.src and self.kind not in ("app", "system"):
-      raise ValueError("src: can only be set for app and system volumes")
-    if self.kind == "system" and self.src not in SYSTEM_VOLUMES:
-      raise ValueError(
-        f"src: a system volume must name one of: {', '.join(SYSTEM_VOLUMES)}"
-      )
+    if self.src and self.kind != "app":
+      raise ValueError("src: can only be set for app volumes")
     return self
+
+
+class ConnectionEntry(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  kind: ConnectionKind
+  desc: str = ""
 
 
 class ConfigEntry(BaseModel):
@@ -206,6 +210,7 @@ class RunEntry(BaseModel):
   image: str
   cmd: list[str] | None = None
   volumes: dict[Identifier, str] = Field(default_factory=dict)
+  connections: list[Identifier] = Field(default_factory=list)
   env: dict[Identifier, str] = Field(default_factory=dict)
   routes: dict[Identifier, RouteEntry] = Field(default_factory=dict)
   restart: Literal["no", "always", "on-failure", "unless-stopped"] = "unless-stopped"
@@ -251,6 +256,7 @@ class Manifest(BaseModel):
   config: dict[Identifier, ConfigEntry] = Field(default_factory=dict)
   adv_config: dict[Identifier, ConfigEntry] = Field(default_factory=dict)
   volumes: dict[Identifier, VolumeEntry] = Field(default_factory=dict)
+  connections: dict[Identifier, ConnectionEntry] = Field(default_factory=dict)
   commands: dict[Identifier, CommandEntry] = Field(default_factory=dict)
 
   # Reserved:
@@ -304,6 +310,7 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_config(manifest))
   errors.extend(_validate_volumes(manifest))
   errors.extend(_validate_run_volumes(manifest))
+  errors.extend(_validate_run_connections(manifest))
   errors.extend(_validate_routes(manifest))
   errors.extend(_validate_env_refs(manifest))
   errors.extend(_validate_commands(manifest))
@@ -344,9 +351,16 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
 
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
+    # A connection's values exist only in the units it is attached to.
+    attached = {
+      f"{CONNECTION_KEY_PREFIX}{name}.{field}"
+      for name in run_entry.connections
+      if name in manifest.connections
+      for field in CONNECTION_FIELDS[manifest.connections[name].kind]
+    }
     for var, value in run_entry.env.items():
       for ref in sorted(EnvTemplate(value).get_identifiers()):
-        if ref in known:
+        if ref in known or ref in attached:
           continue
         if "." not in ref:
           continue  # Undeclared config-style; compose leaves it unsubstituted.
@@ -379,6 +393,18 @@ def _validate_run_volumes(manifest: Manifest) -> list[str]:
         errors.append(
           f"[run.{unit_name}.volumes]: volume {volume_name!r} is not declared "
           "in [volumes]"
+        )
+  return errors
+
+
+def _validate_run_connections(manifest: Manifest) -> list[str]:
+  errors: list[str] = []
+  for unit_name, run_entry in manifest.run.items():
+    for name in run_entry.connections:
+      if name not in manifest.connections:
+        errors.append(
+          f"[run.{unit_name}.connections]: connection {name!r} is not declared "
+          "in [connections]"
         )
   return errors
 

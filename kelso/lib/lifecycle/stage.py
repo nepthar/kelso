@@ -210,6 +210,9 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
     raise ValueError("\n".join(i.problem for i in run_data.stage_blockers))
 
   dropped = _rebuild_volume_links(spec, run_data)
+  for wiring in run_data.connections.values():
+    for host_dir in wiring.host_dirs:
+      host_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
   with open(ctx.staged_paths(spec.app).compose_path, "w") as f:
     yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 

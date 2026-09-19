@@ -6,7 +6,7 @@ import json
 import os
 import socket
 
-SOCKET = os.environ.get("KELSO_SOCKET", "/kelso/admin/admin.sock")
+SOCKET = os.environ.get("KELSO_SOCKET", "/run/kelso/admin/admin.sock")
 # host:port wins over the socket when set. Docker Desktop's bind mounts cannot
 # carry AF_UNIX, so a mac host serves this over TCP instead.
 API = os.environ.get("KELSO_API", "").strip()

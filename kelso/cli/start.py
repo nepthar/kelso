@@ -43,7 +43,7 @@ def register(subparsers) -> None:
     "-y",
     "--yes",
     action="store_true",
-    help="Skip the confirmation for unmodelled compose keys and system volumes",
+    help="Skip the confirmation for unmodelled compose keys and connections",
   )
   parser.set_defaults(func=run)
 

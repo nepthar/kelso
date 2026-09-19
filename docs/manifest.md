@@ -50,6 +50,7 @@ creates.
 | `image` | string | **required** | Pin a tag. `latest` makes a bundle unreproducible. |
 | `cmd` | list of strings | image default | Overrides the image's command. |
 | `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. |
+| `connections` | list of names | `[]` | Every name must be declared in `[connections]`. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `no` \| `always` \| `on-failure` \| `unless-stopped` | `unless-stopped` | Compose restart policy. |
@@ -82,14 +83,13 @@ that does not, with no change to the bundle.
 | `temp` | Caches and scratch. Safe to delete when the app is not running. |
 | `app` | Files the bundle itself ships. Always mounted read-only. |
 | `host` | A directory on the machine, chosen by the operator at install time. |
-| `system` | Something kelso itself provides, named by the volume. See below. |
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `kind` | one of the above | **required** | |
 | `desc` | string | `""` | Shown to the operator, and worth writing for `host` volumes. |
 | `readonly` | bool | `false` | `app` volumes are always read-only; setting `readonly = false` on one is an error. |
-| `src` | string | volume name | `app`: which file or directory in the bundle to mount. `system`: which kelso resource (required). |
+| `src` | string | volume name | `app` volumes only: which file or directory in the bundle to mount. |
 
 ```toml
 [volumes]
@@ -105,28 +105,29 @@ app until the operator binds it to one of the host volumes they declared:
 kelso config <app> --bind media=photos
 ```
 
-A `system` volume is also a request, but for something of kelso's own, so the
-operator has nothing to bind. Its `src` says which one, and kelso refuses any
-it does not know:
+## `[connections]`
 
-| `src` | Mounts | Grants |
+Things outside the app it needs to reach. Each has a `kind`; kelso does the
+wiring, and the app reads what it needs through `${connections.<name>.<field>}`
+in the env of a run unit it is attached to.
+
+| Kind | Fields | Grants |
 | --- | --- | --- |
-| `kelso_admin_socket` | A directory holding only `admin.sock` | Every verb kelsod's API exposes |
+| `kelso_admin` | `socket`: path of kelsod's admin socket | Every verb kelsod's API exposes |
 
 ```toml
-[volumes]
-admin = { kind = "system", src = "kelso_admin_socket" }
+[connections]
+admin = { kind = "kelso_admin" }
 
 [run.main]
-volumes = { admin = "/kelso/admin" }
+connections = ["admin"]
+
+[run.main.env]
+KELSO_SOCKET = "${connections.admin.socket}"
 ```
 
-The socket is at `/kelso/admin/admin.sock` inside the container. A directory is
-mounted rather than the socket itself because kelsod makes a new socket each
-time it starts.
-
-`install`, `start` and `dev` ask the operator to confirm the first time an app
-asks for one. System volumes are never snapshotted or removed with the app.
+`install`, `start` and `dev` ask the operator to confirm what a connection
+grants before kelso wires it in the first time.
 
 ## `[config]` and `[adv_config]`
 
@@ -209,6 +210,8 @@ an empty string:
 
 - `${<config key>}` — anything from `[config]` or `[adv_config]`.
 - `${routes.<name>}` — the full public URL of a declared route.
+- `${connections.<name>.<field>}` — a field of a connection attached to this
+  run unit.
 - `${klso.domain}`, `${klso.volumes}`, `${klso.cmd}`, `${klso.routes}` — the
   app's own resolved values.
 

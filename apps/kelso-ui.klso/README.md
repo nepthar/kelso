@@ -28,8 +28,8 @@ matches.
 ## Setup
 
 It needs `kelsod` running on the host, which `kelso init` sets up on a machine
-with systemd. The admin socket is a `system` volume, so there is nothing to
-bind; installing asks you to confirm the app may have it.
+with systemd. The admin socket is a `kelso_admin` connection, so there is
+nothing to bind; installing asks you to confirm the app may have it.
 
 ```
 kelso install kelso-ui
