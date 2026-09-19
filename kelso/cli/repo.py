@@ -65,7 +65,7 @@ def _remove(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   if result.bound:
     conn.err(
       f"These apps were installed from {result.name}: {', '.join(result.bound)}.\n"
-      f"They keep running -- what is staged under run/ is already a copy -- but "
+      f"They keep running -- what is staged under var/run/ is already a copy -- but "
       f"kelso will no longer see updates for them."
     )
   conn.out(f"Removed repo {result.name}")

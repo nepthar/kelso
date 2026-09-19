@@ -5,8 +5,15 @@ from pathlib import Path
 
 from kelso.cli.service import NO_SYSTEMD, install_service
 from kelso.lib import service
-from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config_file
+from kelso.lib.config import (
+  CONF_DIR,
+  MASTER_KEYFILE,
+  VAR_DIRS,
+  VOLUME_KINDS,
+  load_config_file,
+)
 from kelso.lib.logtab import LogTab
+from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
 
 DEFAULT_ROOT = Path("~/.kelso")
@@ -14,12 +21,16 @@ DEFAULT_ROOT = Path("~/.kelso")
 CONFIG_TEMPLATE = """\
 # Kelso configuration — edit this file to change your setup.
 # Paths are relative to the directory containing this file unless absolute.
+# Installed apps live in var/run/, and the master key, kelsodb and per-app
+# config in conf/; those two are fixed.
 
 repos_root = "repos"
-run_root = "run"
-volume_root = "volumes"
-master_keyfile = "master.key"
 port_base = 41000
+
+# Volumes live in volumes/<kind>/ (data, temp, bulk, logs). To keep a kind
+# somewhere else, replace its directory with a symlink. See "Where volumes
+# live" in the README, including what to link to on a share that may not be
+# mounted.
 
 # Repos are where the catalog comes from. `repos/local` is always there and is
 # where you drop bundles by hand. Add more with `kelso repo add`, which writes
@@ -174,16 +185,18 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
     raise SystemExit(1)
 
   (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
-  (root / "run").mkdir(parents=True, exist_ok=True)
-  (root / "config").mkdir(parents=True, exist_ok=True)
+  (root / CONF_DIR / "apps").mkdir(parents=True, exist_ok=True)
   for kind in VOLUME_KINDS:
-    (root / "volumes" / kind).mkdir(parents=True, exist_ok=True)
+    # A link made before init is where the operator wants this kind to live.
+    kind_root = root / "volumes" / kind
+    if not kind_root.is_symlink():
+      kind_root.mkdir(parents=True, exist_ok=True)
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True, exist_ok=True)
 
   config_path.write_text(CONFIG_TEMPLATE)
 
-  master_key_path = root / "master.key"
+  master_key_path = root / CONF_DIR / MASTER_KEYFILE
   LogTab(master_key_path, title="Kelso Master Key").write(
     "master_key", secrets.token_hex(128)
   )
@@ -192,12 +205,13 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
   config = load_config_file(config_path)
 
   conn.out(f"Initialized kelso root at {root}")
+  conn.out(f"  config:      {config_path}")
+  conn.out(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   conn.out(f"  repos:       {root / 'repos'}")
-  conn.out(f"  run:         {root / 'run'}")
-  conn.out(f"  config:      {root / 'config'}")
-  conn.out(f"  volumes:     {root / 'volumes'} ({', '.join(VOLUME_KINDS)})")
   conn.out(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
-  conn.out(f"  master.key:  {master_key_path}")
+  conn.out("  volumes:")
+  for line in volume_root_lines(config):
+    conn.out(f"    {line}")
   if args.no_mirror:
     conn.out("\nSkipped mirroring the default repos (--no-mirror).")
     conn.out("  Fetch them with `kelso repo update`.")

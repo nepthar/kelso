@@ -2,6 +2,7 @@ import argparse
 
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
 from kelso.lib.observations import AppObservation
+from kelso.lib.receipt import volume_root_lines
 
 
 def register(subparsers) -> None:
@@ -13,7 +14,12 @@ def register(subparsers) -> None:
 
 def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   with ctx.kelso_lock("doctor"):
-    problems: list[str] = list(_catalog_notes(ctx))
+    conn.out("Volume roots:")
+    for line in volume_root_lines(ctx.config):
+      conn.out(f"  {line}")
+    conn.out("")
+
+    problems: list[str] = [*_volume_notes(ctx), *_catalog_notes(ctx)]
     for observation in ctx.observations():
       for note in _notes(observation, ctx):
         problems.append(f"{observation.app_id}: {note}")
@@ -25,6 +31,18 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
     for problem in problems:
       conn.err(problem)
     raise SystemExit(1)
+
+
+def _volume_notes(ctx: KelsoCtx) -> list[str]:
+  notes = []
+  for kind, root in ctx.config.volume_roots.items():
+    target = ctx.config.dangling_volume_root(kind)
+    if target is not None:
+      notes.append(
+        f"volumes {kind}: {root} links to {target}, which does not exist. "
+        f"Apps with {kind} volumes will not install or start until it does."
+      )
+  return notes
 
 
 def _catalog_notes(ctx: KelsoCtx) -> list[str]:

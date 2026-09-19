@@ -71,7 +71,7 @@ def snapshotted_app_ids(ctx: KelsoCtx) -> list[AppID]:
 
 
 def resolve_snapshot_app(ctx: KelsoCtx, query: str) -> AppID:
-  """Resolve an app id against snapshots/, not the catalog or run/."""
+  """Resolve an app id against snapshots/, not the catalog or var/run/."""
   ids = snapshotted_app_ids(ctx)
 
   if query in ids:

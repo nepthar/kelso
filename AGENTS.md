@@ -41,7 +41,7 @@ change; skip tests entirely for cosmetic ones.
 - **Vocabulary.** A *kelso app bundle* ("bundle") is a `.klso` folder or
   `.klso.md` file: what you write, publish, and install from. A *kelso app*
   ("app") is what is installed and running, named by its app id; commands act
-  on apps. The *staged* copy is the bundle frozen under `run/<id>/staged/`.
+  on apps. The *staged* copy is the bundle frozen under `var/run/<id>/staged/`.
   `kelso` is the tool; `klso` is the bundle format (`KLSO_*`, `${klso.*}`).
   *AppSpec* is a parsed manifest resolved for one app id. The project's display
   name is *Kelso Server*.

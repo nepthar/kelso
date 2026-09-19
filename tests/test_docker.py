@@ -101,9 +101,9 @@ def test_real_docker_up_and_down(tmp_path):
     pytest.skip("docker daemon is not available")
 
   root = tmp_path / "kelso"
-  app = root / "apps" / "docker-smoke.klso"
+  app = root / "repos" / "local" / "docker-smoke.klso"
   app.mkdir(parents=True)
-  (root / "run").mkdir()
+  (root / "conf" / "apps").mkdir(parents=True)
   (root / "volumes").mkdir()
   port = _free_port()
   (app / "manifest.toml").write_text(
@@ -118,14 +118,11 @@ image = "nginx:alpine"
 main = {{ port = "{port}:80" }}
 """
   )
-  LogTab(root / "master.key").write("master_key", "0" * 64)
+  LogTab(root / "conf" / "master.key").write("master_key", "0" * 64)
   config = root / "config.toml"
   config.write_text(
     """\
-apps_root = "apps"
-run_root = "run"
-volume_root = "volumes"
-master_keyfile = "master.key"
+repos_root = "repos"
 port_base = 41000
 """
   )
@@ -140,7 +137,7 @@ port_base = 41000
     )
 
   try:
-    started = kelso("up", "docker-smoke")
+    started = kelso("start", "docker-smoke")
     assert started.returncode == 0, started.stderr
 
     containers = subprocess.run(
@@ -164,4 +161,4 @@ port_base = 41000
     ).stdout
     assert str(port) in published
   finally:
-    kelso("down", "docker-smoke")
+    kelso("stop", "docker-smoke")

@@ -68,7 +68,7 @@ KELSO_DIRS = (
   ),
   KelsoDir(
     "var",
-    "Logs, locks, sockets, and temporary files",
+    "Installed apps, logs, locks, sockets, and temporary files",
     lambda ctx: ctx.config.var_root,
   ),
 )
@@ -92,7 +92,7 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
         )
         n += 1
   # `app` volumes are not under a volume root: they are the staged bundle's own
-  # files, symlinked into `run/<app>/volumes/app/`. Gauged here so that every
+  # files, symlinked into `var/run/<app>/volumes/app/`. Gauged here so that every
   # volume a manifest declares has a size a reader can look up, rather than the
   # app detail page walking the tree itself on every load.
   if ctx.config.run_root.is_dir():

@@ -37,7 +37,7 @@ def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
 
 
 def _stage_incoming(source: Path, run_path: Path) -> Path:
-  """Extract the bundle into ``run/<id>/.staged.incoming`` (not yet live)."""
+  """Extract the bundle into ``var/run/<id>/.staged.incoming`` (not yet live)."""
   bundle = load_bundle(source)
   incoming = run_path / INCOMING
   outgoing = run_path / OUTGOING
@@ -439,7 +439,7 @@ def stage(
   binds: list[tuple[str, str]] | None = None,
   bound: str | None = None,
 ) -> StageSuccess:
-  """Install `bundle` into `run/<id>/` without starting it.
+  """Install `bundle` into `var/run/<id>/` without starting it.
 
   `bound` is the source to record; None leaves the recorded one alone.
   """
@@ -467,7 +467,7 @@ def stage(
       f"`kelso rm {app}` to delete its config and data together."
     )
 
-  # Extract the bundle under run/ first, validate *that* copy, then promote it
+  # Extract the bundle under var/run/ first, validate *that* copy, then promote it
   # to staged/. AppSpec always comes from the run tree, never the source bundle.
   run_path = paths.run_path
   run_path.mkdir(parents=True, exist_ok=True)

@@ -421,12 +421,9 @@ def _config(tmp_path: Path, route_providers: dict) -> Config:
   return Config(
     config_path=tmp_path / "config.toml",
     kelso_root=tmp_path,
-    volume_roots={},
     repos_root=tmp_path / "repos",
-    run_root=tmp_path / "run",
     snapshot_root=tmp_path / "snapshots",
     master_key="",
-    master_keyfile=tmp_path / "master.key",
     port_base=41000,
     kelso_address="192.168.1.10",
     default_route_provider="web",
@@ -843,7 +840,6 @@ def test_config_requires_kelso_address_for_proxying_providers(tmp_path):
   config = tmp_path / "config.toml"
   config.write_text(
     """
-volume_root = "volumes"
 default_route_provider = "web"
 
 [route_provider.web]
@@ -859,7 +855,6 @@ def test_config_allows_missing_kelso_address_when_only_noop(tmp_path):
   config = tmp_path / "config.toml"
   config.write_text(
     """
-volume_root = "volumes"
 default_route_provider = "web"
 
 [route_provider.web]
