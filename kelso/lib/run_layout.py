@@ -35,12 +35,7 @@ def _project_name(app_id: str) -> str:
 
 
 def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
-  """One compose bind, in the long form.
-
-  The long form is what carries `create_host_path: false`: docker otherwise
-  creates a missing source as root, which for a volume root linked into a share
-  means writing to the local disk while the share is not mounted.
-  """
+  """One compose bind, long form to set create_host_path to false."""
   mount: dict[str, Any] = {"type": "bind", "source": source, "target": guest_path}
   if readonly:
     mount["read_only"] = True

@@ -27,11 +27,6 @@ CONFIG_TEMPLATE = """\
 repos_root = "repos"
 port_base = 41000
 
-# Volumes live in volumes/<kind>/ (data, temp, bulk, logs). To keep a kind
-# somewhere else, replace its directory with a symlink. See "Where volumes
-# live" in the README, including what to link to on a share that may not be
-# mounted.
-
 # Repos are where the catalog comes from. `repos/local` is always there and is
 # where you drop bundles by hand. Add more with `kelso repo add`, which writes
 # tables like the ones below -- a directory on this machine, or a folder in a
@@ -212,6 +207,11 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
   conn.out("  volumes:")
   for line in volume_root_lines(config):
     conn.out(f"    {line}")
+  conn.out(
+    "    To keep one of these somewhere else -- bulk on a NAS, say -- replace\n"
+    '    its directory with a symlink. See "Where volumes live" in the README,\n'
+    "    which covers what to link to on a share that may not be mounted."
+  )
   if args.no_mirror:
     conn.out("\nSkipped mirroring the default repos (--no-mirror).")
     conn.out("  Fetch them with `kelso repo update`.")
