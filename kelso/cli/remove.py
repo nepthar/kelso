@@ -1,5 +1,5 @@
 """The three removal verbs, which differ only in how much they take: an
-app's installation under `run/`, its data under the volume roots, and its
+app's installation under `var/run/`, its data under the volume roots, and its
 config under `config/`.
 """
 

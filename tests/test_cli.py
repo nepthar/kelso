@@ -733,7 +733,7 @@ def test_decrypt_refuses_empty_stdin(kelso_env):
 
 def test_decrypt_refuses_when_there_is_no_master_key(kelso_env):
   # Without a key the noop engine would echo the input back and call it success.
-  (kelso_env.root / "master.key").write_text("")
+  kelso_env.master_keyfile.write_text("")
   blob = FernetCryptoEngine("0" * 64).encrypt("hunter2")
 
   result = kelso_env.run("decrypt", input=f"{blob}\n")
@@ -1105,10 +1105,24 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
 # --- doctor ----------------------------------------------------------------
 
 
+def test_doctor_shows_where_volume_kinds_resolve(kelso_env):
+  bulk = kelso_env.root.parent / "nas" / "bulk"
+  bulk.mkdir(parents=True)
+  (kelso_env.volumes_root / "bulk").symlink_to(bulk)
+  (kelso_env.volumes_root / "logs").symlink_to(kelso_env.root.parent / "gone")
+
+  result = kelso_env.run("doctor")
+  assert result.returncode == 1
+  assert f"bulk:  {kelso_env.volumes_root / 'bulk'} -> {bulk}\n" in result.stdout
+  assert "(missing)" in result.stdout
+  assert "volumes logs:" in result.stderr
+  assert f"data:  {kelso_env.volumes_root / 'data'}\n" in result.stdout
+
+
 def test_doctor_reports_orphaned_routes(kelso_env):
   """Routes are the only per-app state kelsodb still holds.
 
-  Config and binds live in config/<app_id>.logtab, so a kelsodb entry with no
+  Config and binds live in conf/apps/<app_id>.logtab, so a kelsodb entry with no
   run directory can only be a route allocation nothing owns -- which still
   pins a host port and so is worth reporting.
   """
@@ -1261,6 +1275,17 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
   assert "kelso repo update" in result.stdout
 
 
+def test_init_keeps_a_volume_kind_linked_before_it_ran(kelso_env, tmp_path):
+  root = tmp_path / "fresh"
+  (root / "volumes").mkdir(parents=True)
+  (root / "volumes" / "bulk").symlink_to(tmp_path / "nas-not-mounted")
+
+  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+  assert result.returncode == 0, result.stderr
+  assert (root / "volumes" / "bulk").is_symlink()
+  assert "-> " + str(tmp_path / "nas-not-mounted") + " (missing)" in result.stdout
+
+
 def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
   """`kelso init` runs before any config or lock exists.
 
@@ -1276,10 +1301,9 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
 
   assert result.returncode == 0, result.stderr
   assert (root / "config.toml").is_file()
-  assert (root / "master.key").is_file()
+  assert (root / "conf" / "master.key").is_file()
+  assert (root / "conf" / "apps").is_dir()
   assert (root / "repos" / "local").is_dir()
-  assert (root / "run").is_dir()
-  assert (root / "config").is_dir()
   for kind in VOLUME_KINDS:
     assert (root / "volumes" / kind).is_dir(), kind
   for name in VAR_DIRS:
@@ -1292,11 +1316,11 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
 
 
 def test_gen_masterkey_appends_to_the_keyfile(kelso_env):
-  before = (kelso_env.root / "master.key").read_text()
+  before = kelso_env.master_keyfile.read_text()
   result = kelso_env.run("config-sys", "gen-masterkey")
 
   assert result.returncode == 0, result.stderr
-  after = (kelso_env.root / "master.key").read_text()
+  after = kelso_env.master_keyfile.read_text()
   assert after.startswith(before) and len(after) > len(before)
 
 

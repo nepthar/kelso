@@ -201,13 +201,47 @@ def test_app_links_are_relative_and_managed_links_are_absolute(kelso_env):
   assert temp_link.readlink() == kelso_env.volumes_root / "temp" / BASIC / "cache"
 
 
+def _link_volume_kind(kelso_env, kind: str, target: Path) -> None:
+  root = kelso_env.volumes_root / kind
+  if root.is_dir() and not root.is_symlink():
+    root.rmdir()
+  root.symlink_to(target)
+
+
+def test_a_linked_volume_kind_puts_the_data_at_the_target(kelso_env):
+  elsewhere = kelso_env.root.parent / "nas" / "data"
+  elsewhere.mkdir(parents=True)
+  _link_volume_kind(kelso_env, "data", elsewhere)
+
+  assert kelso_env.run("install", BASIC).returncode == 0
+
+  assert (elsewhere / BASIC / "config").is_dir()
+  link = kelso_env.run_root / BASIC / "volumes" / "data" / "config"
+  assert link.readlink() == kelso_env.volumes_root / "data" / BASIC / "config"
+
+
+def test_a_dangling_volume_kind_link_blocks_install(kelso_env):
+  missing = kelso_env.root.parent / "nas-not-mounted" / "data"
+  _link_volume_kind(kelso_env, "data", missing)
+
+  refused = kelso_env.run("install", BASIC)
+  assert refused.returncode == 1
+  assert f"links to {missing}, which does not exist" in refused.stderr
+  assert not missing.exists()
+
+
 def test_app_volumes_are_mounted_read_only(kelso_env):
   assert kelso_env.run("install", BASIC).returncode == 0
   mounts = _compose(kelso_env, BASIC)["services"]["main"]["volumes"]
 
-  assert "./volumes/app/bin:/myapp/bin:ro" in mounts
-  assert "./volumes/data/config:/myapp/config" in mounts
-  assert "./volumes/temp/cache:/myapp/cache" in mounts
+  by_target = {mount["target"]: mount for mount in mounts}
+  assert by_target["/myapp/bin"]["source"] == "./volumes/app/bin"
+  assert by_target["/myapp/bin"]["read_only"] is True
+  assert by_target["/myapp/config"]["source"] == "./volumes/data/config"
+  assert "read_only" not in by_target["/myapp/config"]
+  assert by_target["/myapp/cache"]["source"] == "./volumes/temp/cache"
+  # A missing source is docker's to refuse, not to create.
+  assert all(m["bind"] == {"create_host_path": False} for m in mounts)
 
 
 def test_readonly_false_on_an_app_volume_is_a_manifest_error(kelso_env):

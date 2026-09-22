@@ -3,14 +3,13 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal
 
 from pydantic import (
   BaseModel,
   ConfigDict,
   Field,
   ValidationError,
-  model_validator,
 )
 
 from kelso.lib.apps import AppID
@@ -20,9 +19,12 @@ from kelso.lib.util import validate_identifier
 
 VOLUME_KINDS = ("data", "temp", "bulk", "logs")
 
-# Runtime state under `$kelso/var/`. Operator-facing tree is repos/, run/,
-# volumes/, config/; this is sockets, activity files, scratch, and locks.
-VAR_DIRS = ("conn", "logs", "temp", "lock")
+# Under `$kelso/var/`: installed apps, sockets, activity files, scratch, locks.
+VAR_DIRS = ("run", "conn", "logs", "temp", "lock")
+
+# Under `$kelso/conf/`: the master key, kelsodb, and one logtab per app in apps/.
+CONF_DIR = "conf"
+MASTER_KEYFILE = "master.key"
 
 DEFAULT_REPOS_ROOT = "repos"
 
@@ -84,41 +86,18 @@ class HostVolumeEntry(BaseModel):
   require_mount: bool = False
 
 
-class VolumeRootsEntry(BaseModel):
-  model_config = ConfigDict(extra="forbid")
-
-  data: str
-  temp: str
-  bulk: str
-  logs: str
-
-
 class ConfigFile(BaseModel):
   """Shape of config.toml. Cross-cutting checks live in `_validate_config`."""
 
   model_config = ConfigDict(extra="forbid")
 
   repos_root: str = DEFAULT_REPOS_ROOT
-  run_root: str = "run"
   snapshot_root: str = "snapshots"
-  master_keyfile: str = "master.key"
   port_base: int = 41000
-  volume_root: str | None = None
-  volume_roots: VolumeRootsEntry | None = None
   kelso_address: str = ""
   default_route_provider: str = NONE_ROUTE_PROVIDER_TAG
   route_provider: dict[str, RouteProviderEntry] = Field(default_factory=dict)
   host_volume: dict[str, HostVolumeEntry] = Field(default_factory=dict)
-
-  @model_validator(mode="after")
-  def volume_root_xor(self) -> Self:
-    if self.volume_root is not None and self.volume_roots is not None:
-      raise ValueError(
-        "Specify either 'volume_root' or individual 'volume_roots', not both"
-      )
-    if self.volume_root is None and self.volume_roots is None:
-      raise ValueError("Specify 'volume_root' or individual 'volume_roots'")
-    return self
 
 
 @dataclass(frozen=True)
@@ -136,12 +115,9 @@ class HostVolume:
 class Config:
   config_path: Path
   kelso_root: Path
-  volume_roots: dict[str, Path]
   repos_root: Path
   repos: dict[str, Repo]
-  run_root: Path
   master_key: str
-  master_keyfile: Path
   port_base: int
   kelso_address: str
   default_route_provider: str
@@ -152,12 +128,9 @@ class Config:
     self,
     config_path: Path,
     kelso_root: Path,
-    volume_roots: dict[str, Path],
     repos_root: Path,
-    run_root: Path,
     snapshot_root: Path,
     master_key: str,
-    master_keyfile: Path,
     port_base: int,
     default_route_provider: str,
     route_providers: dict[str, RouteProviderEntry],
@@ -169,16 +142,13 @@ class Config:
     # and editing has to write back to the file kelso actually loaded.
     self.config_path = config_path
     self.kelso_root = kelso_root
-    self.volume_roots = volume_roots
     self.repos_root = repos_root
     self.repos = {
       LOCAL_REPO: Repo(LOCAL_REPO, repos_root / LOCAL_REPO, "local"),
       **(extra_repos or {}),
     }
-    self.run_root = run_root
     self.snapshot_root = snapshot_root
     self.master_key = master_key
-    self.master_keyfile = master_keyfile
     self.port_base = port_base
     self.kelso_address = kelso_address
     self.default_route_provider = default_route_provider
@@ -205,8 +175,32 @@ class Config:
     return self.var_root / "temp"
 
   @property
+  def volume_roots(self) -> dict[str, Path]:
+    """Where each volume kind lives. Each may be a symlink the operator made."""
+    return {kind: self.kelso_root / "volumes" / kind for kind in VOLUME_KINDS}
+
+  def dangling_volume_root(self, kind: str) -> Path | None:
+    """Where `volumes/<kind>` points, when it is a link to nothing."""
+    root = self.volume_roots[kind]
+    if root.is_symlink() and not root.exists():
+      return root.readlink()
+    return None
+
+  @property
+  def run_root(self) -> Path:
+    return self.var_root / "run"
+
+  @property
+  def conf_root(self) -> Path:
+    return self.kelso_root / CONF_DIR
+
+  @property
+  def master_keyfile(self) -> Path:
+    return self.conf_root / MASTER_KEYFILE
+
+  @property
   def kelsodb_path(self) -> Path:
-    return self.kelso_root / "kelsodb.logtab"
+    return self.conf_root / "kelsodb.logtab"
 
   @property
   def activity_log(self) -> Path:
@@ -234,15 +228,15 @@ class Config:
     return self.conn_root / "admin.sock"
 
   @property
-  def config_root(self) -> Path:
-    return self.kelso_root / "config"
+  def app_config_root(self) -> Path:
+    return self.conf_root / "apps"
 
   def app_config_path(self, app_id: AppID | str) -> Path:
-    return self.config_root / f"{app_id}.logtab"
+    return self.app_config_root / f"{app_id}.logtab"
 
   def app_config_ids(self) -> set[str]:
-    """App ids that have a config logtab under ``config/``."""
-    root = self.config_root
+    """App ids that have a config logtab under ``conf/apps/``."""
+    root = self.app_config_root
     if not root.is_dir():
       return set()
     found: set[str] = set()
@@ -295,19 +289,12 @@ def load_config_file(config_file: str | Path) -> Config:
   def ep(p: str) -> Path:
     return _expand_path(p, config_dir, kelso_root)
 
-  if parsed.volume_root is not None:
-    vr = ep(parsed.volume_root)
-    volume_roots = {kind: vr / kind for kind in VOLUME_KINDS}
-  else:
-    assert parsed.volume_roots is not None
-    volume_roots = {
-      kind: ep(getattr(parsed.volume_roots, kind)) for kind in VOLUME_KINDS
-    }
-
-  master_keyfile = ep(parsed.master_keyfile)
+  master_keyfile = kelso_root / CONF_DIR / MASTER_KEYFILE
 
   # NB: Should we technically hold the lock here? Eh.
-  master_key_entry = LogTab(master_keyfile).read("master_key")
+  master_key_entry = (
+    LogTab(master_keyfile).read("master_key") if master_keyfile.is_file() else None
+  )
   master_key = master_key_entry.value if master_key_entry else ""
 
   if master_key:
@@ -317,7 +304,6 @@ def load_config_file(config_file: str | Path) -> Config:
 
   repos_root = ep(parsed.repos_root)
   extra_repos = _resolve_repos(repo_raw, repos_root, ep)
-  run_root = ep(parsed.run_root)
   snapshot_root = ep(parsed.snapshot_root)
 
   route_providers: dict[str, RouteProviderEntry] = {
@@ -338,12 +324,9 @@ def load_config_file(config_file: str | Path) -> Config:
   return Config(
     config_path=config_path,
     kelso_root=kelso_root,
-    volume_roots=volume_roots,
     repos_root=repos_root,
-    run_root=run_root,
     snapshot_root=snapshot_root,
     master_key=master_key,
-    master_keyfile=master_keyfile,
     port_base=parsed.port_base,
     kelso_address=parsed.kelso_address,
     default_route_provider=parsed.default_route_provider,

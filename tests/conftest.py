@@ -40,9 +40,6 @@ FIXTURES = Path(__file__).parent / "fixtures" / "apps"
 
 CONFIG = """\
 repos_root = "repos"
-run_root = "run"
-volume_root = "volumes"
-master_keyfile = "master.key"
 port_base = 41000
 default_route_provider = "web"
 
@@ -164,14 +161,18 @@ class KelsoEnv:
 
   @property
   def run_root(self) -> Path:
-    return self.root / "run"
+    return self.root / "var" / "run"
 
   @property
-  def config_root(self) -> Path:
-    return self.root / "config"
+  def conf_root(self) -> Path:
+    return self.root / "conf"
+
+  @property
+  def master_keyfile(self) -> Path:
+    return self.conf_root / "master.key"
 
   def app_logtab(self, app_id: str) -> Path:
-    return self.config_root / f"{app_id}.logtab"
+    return self.conf_root / "apps" / f"{app_id}.logtab"
 
   @property
   def volumes_root(self) -> Path:
@@ -179,7 +180,7 @@ class KelsoEnv:
 
   @property
   def db_path(self) -> Path:
-    return self.root / "kelsodb.logtab"
+    return self.conf_root / "kelsodb.logtab"
 
   @property
   def kelso_lockfile_path(self) -> Path:
@@ -352,8 +353,7 @@ def kelso_env(
   root = tmp_path / "kelso"
   apps = root / "repos" / "local"
   apps.mkdir(parents=True)
-  (root / "run").mkdir()
-  (root / "config").mkdir()
+  (root / "conf" / "apps").mkdir(parents=True)
   (root / "volumes").mkdir()
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True)
@@ -365,7 +365,7 @@ def kelso_env(
     else:
       shutil.copy2(source, apps / source.name)
 
-  LogTab(root / "master.key").write("master_key", "0" * 64)
+  LogTab(root / "conf" / "master.key").write("master_key", "0" * 64)
   config = root / "config.toml"
   config.write_text(CONFIG)
 

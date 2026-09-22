@@ -28,6 +28,16 @@ from kelso.lib.spec import KELSO_SUBDOMAIN_LABEL, AppConfig, AppSpec
 from tests.conftest import spec_of
 
 
+def _localtime_mount() -> dict:
+  return {
+    "type": "bind",
+    "source": LOCALTIME_PATH,
+    "target": LOCALTIME_PATH,
+    "read_only": True,
+    "bind": {"create_host_path": False},
+  }
+
+
 def run_data(
   spec: AppSpec,
   *,
@@ -35,7 +45,7 @@ def run_data(
   domain: str = "home.example",
   host_ports: dict[str, int] | None = None,
   config_values: dict[str, ConfigValue] | None = None,
-  host_mounts: tuple[str, ...] = (),
+  host_mounts: tuple[dict, ...] = (),
   issues: tuple[ConfigIssue, ...] = (),
   assignments: dict[str, str] | None = None,
 ) -> AppRunData:
@@ -165,10 +175,21 @@ volumes = { bin = "/opt/bin", app_config = "/config" }
   service = make_compose_dict(spec, run_data(spec))["services"]["main"]
 
   # Relative to the compose file, so the run dir stays movable. `app` volumes
-  # are read-only, which is what `:ro` records.
+  # are read-only. create_host_path keeps docker from creating a missing source.
   assert service["volumes"] == [
-    "./volumes/app/bin:/opt/bin:ro",
-    "./volumes/data/app_config:/config",
+    {
+      "type": "bind",
+      "source": "./volumes/app/bin",
+      "target": "/opt/bin",
+      "read_only": True,
+      "bind": {"create_host_path": False},
+    },
+    {
+      "type": "bind",
+      "source": "./volumes/data/app_config",
+      "target": "/config",
+      "bind": {"create_host_path": False},
+    },
   ]
   assert "KLSO_VOLUMES" not in service["environment"]
 
@@ -216,12 +237,17 @@ env = { VOLS = "${klso.volumes}" }
 """,
   )
 
-  data = run_data(spec, host_mounts=("/etc/localtime:/etc/localtime:ro",))
+  data = run_data(spec, host_mounts=(_localtime_mount(),))
   service = make_compose_dict(spec, data)["services"]["main"]
 
   assert service["volumes"] == [
-    "./volumes/data/app_config:/config",
-    "/etc/localtime:/etc/localtime:ro",
+    {
+      "type": "bind",
+      "source": "./volumes/data/app_config",
+      "target": "/config",
+      "bind": {"create_host_path": False},
+    },
+    _localtime_mount(),
   ]
   assert service["environment"]["VOLS"] == "app_config:/config"
 
@@ -238,17 +264,17 @@ image = "alpine"
 """,
   )
 
-  data = run_data(spec, host_mounts=("/etc/localtime:/etc/localtime:ro",))
+  data = run_data(spec, host_mounts=(_localtime_mount(),))
   service = make_compose_dict(spec, data)["services"]["main"]
 
-  assert service["volumes"] == ["/etc/localtime:/etc/localtime:ro"]
+  assert service["volumes"] == [_localtime_mount()]
   assert "KLSO_VOLUMES" not in service["environment"]
 
 
 def test_the_host_clock_is_mounted_read_only_when_the_host_has_one():
   """Images without tzdata cannot resolve a TZ name; the zone file is the fix."""
   if Path(LOCALTIME_PATH).exists():
-    assert _host_mounts() == (f"{LOCALTIME_PATH}:{LOCALTIME_PATH}:ro",)
+    assert _host_mounts() == (_localtime_mount(),)
   else:
     # A mount docker cannot satisfy would fail every container at start.
     assert _host_mounts() == ()

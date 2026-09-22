@@ -69,7 +69,8 @@ volumes = { db_data = "/data/db" }
 ## `[volumes]`
 
 What the app needs to keep, and what kind of thing it is. The operator decides
-*where* each kind lives, once, in `config.toml` — the manifest only says which
+*where* each kind lives, once, by linking `volumes/<kind>` in the kelso root
+somewhere else (see the README) — the manifest only says which
 kind it wants. That split is the point: a bundle that says `kind = "bulk"` lands
 on the big disk on a machine that has one and in the default root on a machine
 that does not, with no change to the bundle.

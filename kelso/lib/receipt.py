@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import AppSpec
@@ -114,6 +114,19 @@ def volume_lines(
       root = ctx.config.volume_roots.get(volume.kind)
       if root is not None:
         lines.append(f"{name}: {root / app_id / name}")
+  return lines
+
+
+def volume_root_lines(config: Config) -> list[str]:
+  """Where each volume kind lives, following an operator's symlink."""
+  lines = []
+  for kind, root in config.volume_roots.items():
+    line = f"{kind + ':':<6} {root}"
+    if root.is_symlink():
+      line += f" -> {root.readlink()}"
+      if config.dangling_volume_root(kind) is not None:
+        line += " (missing)"
+    lines.append(line)
   return lines
 
 
@@ -274,4 +287,5 @@ __all__ = [
   "published_urls",
   "route_lines",
   "volume_lines",
+  "volume_root_lines",
 ]

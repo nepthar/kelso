@@ -159,7 +159,7 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
 def test_catalog_listing_does_not_create_config_stores(kelso_env, client):
   """Opening AppStore writes a logtab; a GET must not invent install state."""
   client.get("/catalog")
-  assert not (kelso_env.root / "config" / f"{APP}.logtab").exists()
+  assert not kelso_env.app_logtab(APP).exists()
 
 
 def test_catalog_config_turns_ready_once_required_values_are_set(kelso_env, client):

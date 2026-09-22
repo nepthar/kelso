@@ -16,7 +16,6 @@ from kelso.lib.spec import (
   AppRunUnit,
   AppSpec,
   AppVolume,
-  BoundVolume,
 )
 from kelso.lib.util import (
   KLSO_KEY_PREFIX,
@@ -35,10 +34,12 @@ def _project_name(app_id: str) -> str:
   return re.sub(r"[^a-z0-9_-]", "_", app_id.lower())
 
 
-def _mount_string(bound: BoundVolume) -> str:
-  mount = f"{bound.volume.run_rel_path}:{bound.guest_path}"
-  if bound.readonly:
-    mount += ":ro"
+def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
+  """One compose bind, long form to set create_host_path to false."""
+  mount: dict[str, Any] = {"type": "bind", "source": source, "target": guest_path}
+  if readonly:
+    mount["read_only"] = True
+  mount["bind"] = {"create_host_path": False}
   return mount
 
 
@@ -75,7 +76,7 @@ class ConfigIssue:
 
 @dataclass(frozen=True)
 class VolumeLink:
-  """One entry under ``run/<id>/volumes/<kind>/``."""
+  """One entry under ``var/run/<id>/volumes/<kind>/``."""
 
   source: Path
   target: Path
@@ -120,7 +121,7 @@ class AppRunData:
   route_urls: Mapping[str, str]
   # Decided once here rather than at compose time, so what a host happens to have
   # is looked at in one pass.
-  host_mounts: tuple[str, ...]
+  host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
 
   @property
@@ -235,6 +236,18 @@ def _load_volume_links(
         )
         continue
     else:
+      if volume.kind in ctx.config.volume_roots:
+        target = ctx.config.dangling_volume_root(volume.kind)
+        if target is not None:
+          root = ctx.config.volume_roots[volume.kind]
+          issues.append(
+            ConfigIssue(
+              f"volume {volume_name}: {root} links to {target}, which does not exist",
+              f"Mount what should be at {target}, or re-point {root}",
+              stage_blocking=True,
+            )
+          )
+          continue
       resolved = _volume_paths(run_path, app_id, volume, found_binds, ctx.config)
       if not resolved:
         continue
@@ -335,11 +348,11 @@ def _load_routes(
   return loaded
 
 
-def _host_mounts() -> tuple[str, ...]:
+def _host_mounts() -> tuple[dict[str, Any], ...]:
   """Binds kelso adds to every run unit, on top of the bundle's own [volumes]."""
   if not Path(LOCALTIME_PATH).exists():
     return ()
-  return (f"{LOCALTIME_PATH}:{LOCALTIME_PATH}:ro",)
+  return (_mount(LOCALTIME_PATH, LOCALTIME_PATH, readonly=True),)
 
 
 def _route_urls(
@@ -432,7 +445,10 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       "options": {"max-size": "10m", "max-file": "3"},
     }
 
-    mounts = [_mount_string(bound) for bound in run_unit.volumes.values()]
+    mounts = [
+      _mount(bound.volume.run_rel_path, bound.guest_path, readonly=bound.readonly)
+      for bound in run_unit.volumes.values()
+    ]
     # Kelso's own mounts stay out of `${klso.volumes}`: that value tells an app
     # where the volumes it declared ended up.
     mounts.extend(data.host_mounts)

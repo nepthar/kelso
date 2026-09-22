@@ -70,6 +70,26 @@ On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
 service; `kelso service install` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
+### Volume Storage Locations
+
+App volumes live in `<kelso_root>/volumes/<kind>/<app>/<volume>` where `<kind>`
+is one of `data`, `temp`, `bulk` and `logs`. You probably want to change where
+some of these volumes are stored and you can do so with symlinks.
+
+For example:
+```
+mv ~/.kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
+rmdir ~/.kelso/volumes/bulk
+ln -s /mnt/nas/kelso-bulk ~/.kelso/volumes/bulk
+```
+
+**Note: On a share that may not be mounted, link to a directory *inside* the share,
+never to the mount point itself.** Kelso checks for dangling links and this is its
+only signal that the volume has not been mounted yet.
+
+If kelso finds dangling links to volume roots, it will refuse to start apps
+rather than re-populate with empty folders.
+
 ## Why kelso?
 
 - **Configure your system layout once, install any app**

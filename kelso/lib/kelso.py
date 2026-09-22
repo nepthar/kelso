@@ -251,7 +251,7 @@ class KelsoCtx:
       return None
 
   def app_store(self, app: AppID | str) -> AppStore:
-    """The app's own config store at ``config/<app_id>.logtab``."""
+    """The app's own config store at ``conf/apps/<app_id>.logtab``."""
     return AppStore.from_path(
       self.config.app_config_path(app), crypto_from_config(self.config)
     )
@@ -304,7 +304,7 @@ class KelsoCtx:
     }
 
   def staged_app_ids(self) -> set[str]:
-    """Every app id with a staged copy under run/."""
+    """Every app id with a staged copy under var/run/."""
     run_root = self.config.run_root
     if not run_root.is_dir():
       return set()
