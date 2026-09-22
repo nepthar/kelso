@@ -209,7 +209,7 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
     conn.out(f"    {line}")
   conn.out(
     "    To keep one of these somewhere else -- bulk on a NAS, say -- replace\n"
-    '    its directory with a symlink. See "Where volumes live" in the README,\n'
+    '    its directory with a symlink. See "Volume Storage Locations" in the README,\n'
     "    which covers what to link to on a share that may not be mounted."
   )
   if args.no_mirror:

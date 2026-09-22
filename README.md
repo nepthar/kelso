@@ -70,27 +70,25 @@ On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
 service; `kelso service install` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
-### Where volumes live
+### Volume Storage Locations
 
-Every app volume is in `volumes/<kind>/<app>/<volume>` under the kelso root,
-for kinds `data`, `temp`, `bulk` and `logs`. To keep a kind somewhere else,
-stop the apps using it, move its contents, and replace the directory with a
-symlink:
+App volumes live in `<kelso_root>/volumes/<kind>/<app>/<volume>` where `<kind>`
+is one of `data`, `temp`, `bulk` and `logs`. You probably want to change where
+some of these volumes are stored and you can do so with symlinks.
 
+For example:
 ```
 mv ~/.kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
 rmdir ~/.kelso/volumes/bulk
 ln -s /mnt/nas/kelso-bulk ~/.kelso/volumes/bulk
 ```
 
-**On a share that may not be mounted, link to a directory *inside* the share,
-never to the mount point itself.** `/mnt/nas/kelso-bulk` only exists while the
-share is mounted, so when it is not, the link dangles and kelso refuses to
-install or start anything with a `bulk` volume. `/mnt/nas` exists either way:
-an unmounted share would leave an empty local directory there, and apps would
-start on it with empty volumes.
+**Note: On a share that may not be mounted, link to a directory *inside* the share,
+never to the mount point itself.** Kelso checks for dangling links and this is its
+only signal that the volume has not been mounted yet.
 
-`kelso doctor` shows where each kind resolves, and reports a link to nothing.
+If kelso finds dangling links to volume roots, it will refuse to start apps
+rather than re-populate with empty folders.
 
 ## Why kelso?
 
