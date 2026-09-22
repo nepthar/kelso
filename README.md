@@ -2,14 +2,14 @@
 
 **Your apps, your hardware. No rack required.**
 
-Immich, Jellyfin, Mealie and more, installed in one click. Apps say what they need; Kelso provides it.
+Immich, Jellyfin, Mealie and more can be installed in one (okay, maybe two) clicks. Apps describe what resources and connections they need and Kelso turns that into a functioning container stack.
 
 Kelso is for folks who want to spend their time *using* their apps instead of *sys-administering* them. Point it at a machine you already have, tell it once where data should live, and every app you install gets wired in automatically. Apps are easy to distribute, inspect, snapshot, and restore.
 
 An app describes *what* it needs rather than *how* it is wired up. It says it "needs a volume to store user data and a master password", rather than "mount /mnt/zxy at this point and read secrets from this .env file".
 
 ## How does it work? 
-Kelso runs apps. Each app is packaged as a kelso app "bundle" that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
+Kelso provides the missing link between app containers and the "infrastructure as code" required to distributed and run it. Each app is packaged as a kelso app "bundle" that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
 
 unifi-network-application.klso/manifest.toml:
 ```toml
