@@ -71,7 +71,8 @@ def _head(title):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)} · kelso</title>
 <script>if (localStorage.getItem("kelso-nav") === "collapsed") document.documentElement.classList.add("nav-collapsed");
-if (localStorage.getItem("kelso-theme") === "mojave") document.documentElement.dataset.theme = "mojave";</script>
+var t = localStorage.getItem("kelso-theme");
+if (t === "mojave" || t === "mojave-day") document.documentElement.dataset.theme = t;</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -101,9 +102,8 @@ def page(path, title, body, version="", actions=""):
   <div class="brand"><span class="name">Kelso</span><span class="mark" aria-hidden="true">K</span>{sub}</div>
   {links}
   <div class="nav-foot">
-  <button type="button" class="nav-theme" title="Switch theme">
-    <span class="label rally">rally</span><span class="mark rally" aria-hidden="true">R</span>
-    <span class="label mojave">mojave</span><span class="mark mojave" aria-hidden="true">M</span>
+  <button type="button" class="nav-theme" title="rally">
+    <span class="label">theme</span><span class="mark" aria-hidden="true">T</span>
   </button>
   <form class="nav-out" method="post" action="/logout">
     <button type="submit" title="Sign out">
@@ -138,14 +138,23 @@ def page(path, title, body, version="", actions=""):
     sync();
   }});
   var themeBtn = document.querySelector(".nav-theme");
+  var themes = ["", "mojave", "mojave-day"];
+  var themeNames = {{ "": "rally", mojave: "mojave night", "mojave-day": "mojave day" }};
+  function syncTheme() {{
+    if (themeBtn) themeBtn.title = themeNames[root.dataset.theme || ""] || "rally";
+  }}
+  syncTheme();
   if (themeBtn) themeBtn.addEventListener("click", function () {{
-    if (root.dataset.theme === "mojave") {{
+    var i = themes.indexOf(root.dataset.theme || "");
+    var next = themes[(i + 1) % themes.length];
+    if (next) {{
+      root.dataset.theme = next;
+      localStorage.setItem("kelso-theme", next);
+    }} else {{
       delete root.dataset.theme;
       localStorage.removeItem("kelso-theme");
-    }} else {{
-      root.dataset.theme = "mojave";
-      localStorage.setItem("kelso-theme", "mojave");
     }}
+    syncTheme();
   }});
   document.querySelectorAll(".cfg-edit, .cfg-form").forEach(function (form) {{
     var controls = form.querySelectorAll("input:not([type=hidden]), select");

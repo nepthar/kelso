@@ -24,6 +24,13 @@ _CHART_JS = """
     }
     var xs = points.map(function (p) { return p.t; });
     var ys = points.map(function (p) { return p.v; });
+    var css = getComputedStyle(document.documentElement);
+    function token(name) { return css.getPropertyValue(name).trim(); }
+    function fade(hex, alpha) {
+      var n = parseInt(hex.slice(1), 16);
+      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + alpha + ")";
+    }
+    var coral = token("--coral");
     var plot = new uPlot({
       width: mount.clientWidth || 400,
       height: 220,
@@ -35,16 +42,16 @@ _CHART_JS = """
       },
       axes: [
         {
-          stroke: "#bfb5a8",
+          stroke: token("--dim"),
           font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: "#232020", width: 1 },
-          ticks: { stroke: "#2e2925" }
+          grid: { stroke: token("--hair"), width: 1 },
+          ticks: { stroke: token("--line") }
         },
         {
-          stroke: "#bfb5a8",
+          stroke: token("--dim"),
           font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: "#232020", width: 1 },
-          ticks: { stroke: "#2e2925" },
+          grid: { stroke: token("--hair"), width: 1 },
+          ticks: { stroke: token("--line") },
           values: function (u, splits) {
             return splits.map(function (v) { return Math.round(v * 100) + "%"; });
           }
@@ -53,10 +60,10 @@ _CHART_JS = """
       series: [
         {},
         {
-          stroke: "#fc795f",
+          stroke: coral,
           width: 2,
-          fill: "rgba(252, 121, 95, 0.10)",
-          points: { show: true, size: 5, fill: "#fc795f" }
+          fill: fade(coral, 0.1),
+          points: { show: true, size: 5, fill: coral }
         }
       ]
     }, [xs, ys], mount);

@@ -35,18 +35,35 @@
 }
 html[data-theme="mojave"] {
   --void: #121726;
-  --bg: #1c2336;
+  --bg: #191f32;
   --panel: #2b3450;
   --line: #4a5270;
   --hair: #2b3450;
   --fg: #e8dcc4;
   --dim: #d8cbb0;
-  --muted: #6b7394;
+  --muted: #7a84a6;
   --rosewood: #e05a4f;
   --coral: #f08a4b;
   --gold: #e8b04a;
   --ok: #86c95a;
   --ink: #121726;
+  --off: #4a5270;
+}
+html[data-theme="mojave-day"] {
+  color-scheme: light;
+  --void: #f5eee0;
+  --bg: #ebe2d0;
+  --panel: #d9e2f2;
+  --line: #d8cbb0;
+  --hair: #d8cbb0;
+  --fg: #1f2638;
+  --dim: #4a5270;
+  --muted: #61667e;
+  --rosewood: #b3372d;
+  --coral: #b9501c;
+  --gold: #8a5d08;
+  --ok: #2f7a22;
+  --ink: #fbf7ef;
   --off: #4a5270;
 }
 html { color-scheme: dark; height: 100%; background: var(--void); }
@@ -119,10 +136,6 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 }
 .nav-out button:hover, .nav-theme:hover { color: var(--fg); border-left-color: var(--line); }
 .nav-out .mark, .nav-theme .mark { display: none; }
-.nav-theme .mojave { display: none; }
-html[data-theme="mojave"] .nav-theme .rally { display: none; }
-html[data-theme="mojave"] .nav-theme .mojave { display: revert; }
-html[data-theme="mojave"] .nav-theme .mark.mojave { display: none; }
 /* `.nav-foot` holds the auto margin that pushes the foot and the toggle down;
    two auto margins in one column would split the slack between them instead. */
 .nav-toggle {
@@ -140,10 +153,7 @@ html.nav-collapsed nav a { padding: 5px 0 5px 8px; }
 html.nav-collapsed nav a .mark { display: inline; }
 html.nav-collapsed .nav-out button, html.nav-collapsed .nav-theme { padding: 5px 0 5px 8px; }
 html.nav-collapsed .nav-out .mark,
-html.nav-collapsed .nav-theme .mark.rally { display: inline; }
-html.nav-collapsed[data-theme="mojave"] .nav-theme .label,
-html.nav-collapsed[data-theme="mojave"] .nav-theme .mark.rally { display: none; }
-html.nav-collapsed[data-theme="mojave"] .nav-theme .mark.mojave { display: inline; }
+html.nav-collapsed .nav-theme .mark { display: inline; }
 
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 28px 32px 48px; min-width: 0; overflow: auto; }
