@@ -1,0 +1,46 @@
+{#- The app frame: nav, the page head, and the two modals every page shares.
+
+  A page fills `content`, and optionally `actions` (verbs beside the title),
+  `head` (stylesheets) and `scripts`. Override `refresh` with nothing on a
+  page whose Refresh would be one more thing beside the title than it needs.
+-#}
+{% extends "base.html" %}
+{% from "macros.html" import notice_banner %}
+{% block body %}
+<div class="app">
+<nav>
+  <div class="brand"><span class="name">Kelso</span><span class="mark" aria-hidden="true">K</span>
+    {%- if version %}<span class="ver">kelso {{ version }}</span>{% endif %}</div>
+  {% for item in nav %}
+  <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
+  {% endfor %}
+  <div class="nav-foot">
+  <button type="button" class="nav-theme" title="theme">
+    <span class="label">theme</span><span class="mark" aria-hidden="true">{{ mdi("palette-outline") }}</span>
+  </button>
+  <form class="nav-out" method="post" action="/logout">
+    <button type="submit" title="Sign out">
+      <span class="label">sign out</span><span class="mark" aria-hidden="true">⏻</span>
+    </button>
+  </form>
+  </div>
+  <button type="button" class="nav-toggle" aria-label="Collapse sidebar">‹</button>
+</nav>
+<main>
+  <div class="head"><h1>{{ title }}</h1>
+    {%- block refresh %}<a href="{{ path|urlencode }}">Refresh</a>{% endblock %}
+    {%- block actions %}{% endblock %}</div>
+  {% if daemon_api is not none and daemon_api != NEEDS_API %}
+  <div class="error"><h2>Version mismatch</h2><p>This page was built for kelso API {{ NEEDS_API }}, but kelsod speaks {{ daemon_api }}. Buttons and status may be wrong until the two match.</p>
+    <p>Reinstall this app and start it again:<br><code>kelso install kelso-ui</code><br><code>kelso start kelso-ui</code></p></div>
+  {% endif %}
+  {{ notice_banner(ok, err) }}
+  {% block content %}{% endblock %}
+</main>
+</div>
+{% include "modals.html" %}
+<script src="{{ asset('js/shell.js') }}"></script>
+<script src="{{ asset('js/confirm.js') }}"></script>
+<script src="{{ asset('js/jobs.js') }}"></script>
+{% block scripts %}{% endblock %}
+{% endblock %}

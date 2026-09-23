@@ -1,0 +1,10 @@
+{#- A page with no nav: the frame, the rule under the wordmark, and one thing. -#}
+{% extends "base.html" %}
+{% block body %}
+<div class="app solo">
+<div class="solo-box">
+  <div class="head"><h1>Kelso</h1><p class="head-sub">{{ title|lower }}</p></div>
+  {% block content %}{% endblock %}
+</div>
+</div>
+{% endblock %}

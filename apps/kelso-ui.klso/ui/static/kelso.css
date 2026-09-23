@@ -21,7 +21,6 @@
   --gold: #fdd305;
   --ok: #8aa85e;
 
-  --accent: var(--coral);
   --ink: #17110e;     /* dark type on a warm fill */
   --bad: var(--rosewood);
   --warn: var(--gold);
@@ -32,6 +31,39 @@
   --chamfer: 54px;    /* the cut corner the ribbon runs through */
   --ribbon: 30px;
   --ribbon-top: 45px;
+}
+html[data-theme="mojave"] {
+  --void: #121726;
+  --bg: #191f32;
+  --panel: #2b3450;
+  --line: #4a5270;
+  --hair: #2b3450;
+  --fg: #e8dcc4;
+  --dim: #d8cbb0;
+  --muted: #7a84a6;
+  --rosewood: #e05a4f;
+  --coral: #f08a4b;
+  --gold: #e8b04a;
+  --ok: #86c95a;
+  --ink: #121726;
+  --off: #4a5270;
+}
+html[data-theme="mojave-day"] {
+  color-scheme: light;
+  --void: #f5eee0;
+  --bg: #ebe2d0;
+  --panel: #f3ead8;
+  --line: #d8cbb0;
+  --hair: #d8cbb0;
+  --fg: #1f2638;
+  --dim: #4a5270;
+  --muted: #61667e;
+  --rosewood: #b3372d;
+  --coral: #b9501c;
+  --gold: #8a5d08;
+  --ok: #2f7a22;
+  --ink: #fbf7ef;
+  --off: #4a5270;
 }
 html { color-scheme: dark; height: 100%; background: var(--void); }
 * { box-sizing: border-box; }
@@ -82,29 +114,31 @@ nav {
   margin-top: 1px;
 }
 /* The ribbon again, flat: the mark and the corner are the same object. */
-.brand .mark, nav a .mark { display: none; }
+.brand .mark { display: none; }
 /* Active is a coral edge and coral type -- not a filled pill. The 2px inset
    border keeps every item on the same baseline grid whether lit or not. */
 nav a {
-  display: block; padding: 5px 10px; margin-bottom: 1px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; margin-bottom: 1px;
   border-left: 2px solid transparent;
   color: var(--dim); text-decoration: none; text-transform: lowercase;
   font-size: 14px;
 }
+nav a .mdi { width: 18px; height: 18px; fill: currentColor; flex: none; }
 nav a:hover { color: var(--fg); border-left-color: var(--line); }
 nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight: 500; }
-.nav-out { margin-top: auto; }
-.nav-out button {
+.nav-foot { margin-top: auto; }
+.nav-out button, .nav-theme {
   display: block; width: 100%; text-align: left;
   padding: 5px 10px; margin-bottom: 1px;
   background: none; border: 0; border-left: 2px solid transparent;
   color: var(--muted); text-transform: lowercase; font: inherit; font-size: 14px;
   cursor: pointer;
 }
-.nav-out button:hover { color: var(--fg); border-left-color: var(--line); }
-.nav-out .mark { display: none; }
-/* `.nav-out` above holds the auto margin that pushes both to the foot; two
-   auto margins in one column would split the slack between them instead. */
+.nav-out button:hover, .nav-theme:hover { color: var(--fg); border-left-color: var(--line); }
+.nav-out .mark, .nav-theme .mark { display: none; }
+/* `.nav-foot` holds the auto margin that pushes the foot and the toggle down;
+   two auto margins in one column would split the slack between them instead. */
 .nav-toggle {
   background: none; color: var(--muted); border: 0; border-radius: var(--r);
   padding: 6px; margin-top: 4px; cursor: pointer; font: inherit; width: 100%;
@@ -113,12 +147,17 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 html.nav-collapsed nav { width: 52px; flex-basis: 52px; padding: calc(var(--chamfer) + 4px) 8px 16px; }
 html.nav-collapsed .brand { padding: 0 0 24px; }
 html.nav-collapsed .brand .name, html.nav-collapsed .brand .ver,
-html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label { display: none; }
+html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
+html.nav-collapsed .nav-theme .label { display: none; }
 html.nav-collapsed .brand .mark { display: block; font-weight: 600; font-size: 17px; }
-html.nav-collapsed nav a { padding: 5px 0 5px 8px; }
-html.nav-collapsed nav a .mark { display: inline; }
+html.nav-collapsed nav a { padding: 5px 0; justify-content: center; }
 html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
 html.nav-collapsed .nav-out .mark { display: inline; }
+html.nav-collapsed .nav-theme {
+  display: flex; justify-content: center; padding: 5px 0;
+}
+html.nav-collapsed .nav-theme .mark { display: flex; }
+.nav-theme .mdi { width: 18px; height: 18px; fill: currentColor; }
 
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 28px 32px 48px; min-width: 0; overflow: auto; }
@@ -165,8 +204,6 @@ h2 .act {
   letter-spacing: 0; text-transform: none;
 }
 h2 .act button { padding: 2px 9px; font-size: 12px; }
-h2 .act a { color: var(--muted); text-decoration: none; }
-h2 .act a:hover { color: var(--coral); }
 h3 {
   font-size: 11px; letter-spacing: .08em; text-transform: lowercase;
   color: var(--muted); margin: 20px 0 8px; font-weight: 600;
@@ -195,17 +232,19 @@ th {
   text-align: left; font-size: 11px; font-weight: 400; color: var(--muted);
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   text-transform: lowercase; letter-spacing: 0; font-size: 11.5px;
-  padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line);
+  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line);
   white-space: nowrap; vertical-align: middle;
 }
 td {
-  padding: 9px 14px 9px 0; border-bottom: 1px solid var(--hair);
+  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--hair);
   white-space: nowrap; vertical-align: middle;
 }
 th:first-child, td:first-child { padding-left: 2px; }
 tr:last-child td { border-bottom: none; }
 td.name { font-weight: 500; color: var(--fg); }
-th.act, td.act { width: 1%; text-align: right; padding-right: 2px; }
+th.act, td.act { width: 1%; text-align: right; padding: 2px 2px 2px 0; }
+td.act button.icon { padding: 2px 4px; }
+td.act button + button { margin-left: 8px; }
 .sub {
   display: block; font-size: 11.5px; color: var(--muted); font-weight: 400;
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
@@ -280,9 +319,6 @@ button.link:hover:not(:disabled) { color: var(--bad); border: 0; }
   border-color: color-mix(in srgb, var(--coral) 86%, white); color: var(--ink);
 }
 .cfg-save { visibility: hidden; }
-.cfg-edit.is-dirty .cfg-save { visibility: visible; }
-.cfg-edit { display: flex; align-items: center; gap: 10px; }
-.cfg-edit input { width: 16em; max-width: 100%; }
 /* A whole config request in one form: one Save for all of it, once anything moved. */
 .cfg-form.is-dirty .cfg-save { visibility: visible; }
 .cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
@@ -305,11 +341,6 @@ button.toggle[aria-pressed="true"] {
 }
 .head .head-actions a.btn:hover { color: var(--fg); border-color: var(--dim); }
 .head .head-actions a.btn.icon { padding: 5px 7px; line-height: 0; }
-.actions form { display: inline; }
-.actions a.link, .fetchbar a.link {
-  color: var(--muted); font-size: 13px; text-decoration: none;
-}
-.actions a.link:hover, .fetchbar a.link:hover { color: var(--coral); }
 
 /* --- rows and wells ------------------------------------------------------ */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -317,13 +348,6 @@ button.toggle[aria-pressed="true"] {
 .row[hidden] { display: none; }
 .row .grow { flex: 1; min-width: 200px; }
 .row.between { justify-content: space-between; width: 100%; }
-.fetchbar {
-  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-  border: 1px solid var(--line); border-radius: var(--r);
-  background: var(--panel); padding: 14px; margin-bottom: 20px;
-}
-.fetchbar input[name=target] { flex: 1 1 28rem; min-width: 16rem; }
-.fetchbar .hint { flex-basis: 100%; color: var(--muted); font-size: 12px; margin: 0; }
 .apphead { margin-bottom: 10px; }
 .apphead h2 {
   margin: 0; font-size: 19px; font-weight: 600; text-transform: none;
@@ -346,7 +370,7 @@ code {
   background: var(--panel); border: 1px solid var(--line);
   padding: 0 5px; border-radius: var(--r); color: var(--dim);
 }
-.empty, .note { padding: 48px 0; color: var(--muted); text-align: center; font-size: 13px; }
+.empty { padding: 48px 0; color: var(--muted); text-align: center; font-size: 13px; }
 
 /* --- notices -------------------------------------------------------------
    A colour-bearing left rule rather than a coloured box. */
@@ -453,12 +477,11 @@ details.reveal > summary:hover { color: var(--coral); }
 .app-card-head > .actions {
   margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line);
 }
-.app-card .conflict, .app-card .stale {
+.app-card .stale {
   margin: 10px 0 0; padding: 8px 12px; font-size: 12.5px;
   color: var(--dim); background: var(--panel);
-  border-left: 2px solid var(--bad); border-radius: var(--r);
+  border-left: 2px solid var(--warn); border-radius: var(--r);
 }
-.app-card .stale { border-left-color: var(--warn); }
 /* Free-form docker options the manifest passes through. Louder than `.stale`:
    a tinted ground as well as a rule, because this is the one thing on the card
    the operator is being asked to agree to. */
@@ -475,16 +498,6 @@ details.reveal > summary:hover { color: var(--coral); }
 .app-card .passthru ul { margin: 0; padding-left: 16px; }
 .app-card .passthru li { margin: 3px 0; }
 .app-card .passthru li .mono { color: var(--fg); font-size: 12px; }
-.app-card .update {
-  margin-top: 12px; padding-top: 12px;
-  border-top: 1px solid var(--line); font-size: 12.5px;
-}
-.app-card .update p { margin: 0 0 4px; }
-.app-card .update p:last-child { margin-bottom: 0; }
-.app-card-diff span { display: block; }
-.app-card-diff .diff-add { color: var(--ok); }
-.app-card-diff .diff-del { color: var(--coral); }
-.app-card-diff .diff-hunk { color: var(--muted); }
 .app-card-manifest {
   flex: 1 1 auto; min-width: 0; min-height: 16rem; overflow: auto;
   margin: 0; padding: 4px 0 0;
@@ -521,7 +534,7 @@ details.reveal > summary:hover { color: var(--coral); }
 .charts > .card { flex: 1; min-width: 0; }
 .charts h2 { margin: 0 0 10px; display: block; }
 .charts h2::after { display: none; }
-.chart { height: 220px; }
+.chart { height: 220px; background: var(--void); }
 .chart .muted { margin: 0; padding: 48px 12px 0; text-align: center; font-size: 13px; }
 .uplot { font-family: inherit; }
 

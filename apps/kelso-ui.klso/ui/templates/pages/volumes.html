@@ -1,0 +1,81 @@
+{% extends "frame.html" %}
+{% from "macros.html" import pill, sub, icon_button %}
+
+{% block content %}
+<h2>Host volumes</h2>
+<p class="lede">Named volumes on this machine that apps may bind to</p>
+<div class="card">
+{% if not host_volumes %}
+<p class="empty">No host volumes declared yet.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>Name</th><th>Path</th><th>Flags</th><th>Size</th><th class="act"></th>
+</tr></thead><tbody>
+{% for v in host_volumes %}
+{% set flags = [] %}
+{% if v.readonly %}{% do flags.append('read-only') %}{% endif %}
+{% if v.require_mount %}{% do flags.append('require mount') %}{% endif %}
+<tr>
+  <td class="name">{{ v.tag }}</td>
+  <td class="muted path">{{ v.path }}{% if not v.exists %}{{ sub('path is missing') }}{% endif %}</td>
+  <td class="muted">{{ flags|join(', ') or '—' }}</td>
+  <td class="muted">{{ v.get('bytes')|size }}</td>
+  <td class="act"><form method="post" action="/volumes" data-confirm="Are you sure you want to delete the host volume {{ v.tag }}? Apps bound to it will fail to start until they are bound somewhere else. Nothing under {{ v.path }} is touched.">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="tag" value="{{ v.tag }}">
+    {{- icon_button('delete', 'delete-outline', submit=true, danger=true) -}}
+  </form></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+<div class="card entry">
+  <form method="post" action="/volumes" class="row">
+    <input type="hidden" name="action" value="create">
+    <input name="tag" placeholder="name (e.g. media)" required>
+    <input name="path" placeholder="/mnt/media" required class="grow">
+    <label><input type="checkbox" name="readonly"> read-only</label>
+    <label><input type="checkbox" name="require_mount"> require mount</label>
+    {{ icon_button('add', 'plus-box-outline', submit=true) }}
+  </form>
+</div>
+
+<h2>App volumes</h2>
+<p class="lede">Kelso-managed application storage. Sizes are refreshed hourly.</p>
+<div class="card">
+{% if not volumes %}
+<p class="empty">No app volumes on disk yet.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>Volume</th><th>App</th><th>Kind</th><th>Use</th><th>Size</th>
+</tr></thead><tbody>
+{% for v in volumes %}
+<tr>
+  <td class="name">{{ v.name }}{% if not v.declared %}{{ sub('not in the manifest') }}{% endif %}</td>
+  <td class="muted">{{ v.app_id }}</td>
+  <td class="muted">{{ v.kind }}</td>
+  <td>{{ pill('in use', 'running') if v.in_use else pill('idle') }}</td>
+  <td class="muted">{{ v.get('bytes')|size }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<h2>Kelso</h2>
+<p class="lede">Kelso internal storage</p>
+<div class="card">
+{% if not kelso_dirs %}
+<p class="empty">Kelso reported no directories.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>Directory</th><th>Description</th><th>Size</th>
+</tr></thead><tbody>
+{% for d in kelso_dirs %}
+<tr><td class="name">{{ d.get('name') }}</td><td class="muted wrap">{{ d.get('description') or '' }}</td><td class="muted">{{ d.get('bytes')|size }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+{% endblock %}

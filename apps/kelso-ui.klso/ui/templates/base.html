@@ -1,0 +1,12 @@
+{#- The document around every page. `frame.html` and `solo.html` fill `body`. -#}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · kelso</title>
+<script src="{{ asset('js/boot.js') }}"></script>
+<link rel="stylesheet" href="{{ asset('kelso.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+</body></html>

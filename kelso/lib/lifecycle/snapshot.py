@@ -62,6 +62,18 @@ def snapshot_archive(root: Path, app: AppID, name: str) -> Path:
   return root / app / f"{name}{SNAPSHOT_TAR_SUFFIX}"
 
 
+def delete_snapshot(app: AppID, name: str, ctx: KelsoCtx) -> None:
+  """Remove one snapshot archive. Raises ValueError if it is not there."""
+  name = name.removesuffix(SNAPSHOT_TAR_SUFFIX)
+  directory = ctx.config.snapshot_root / app
+  archive = snapshot_archive(ctx.config.snapshot_root, app, name)
+  if archive.parent != directory or not archive.is_file():
+    raise ValueError(f"No snapshot {name} for {app}")
+  archive.unlink()
+  if directory.is_dir() and not any(directory.iterdir()):
+    directory.rmdir()
+
+
 def _tar_create(folder: Path, archive: Path) -> None:
   """Archive `folder` into `archive`, with the *host* owning the archive file."""
   folder = folder.resolve()

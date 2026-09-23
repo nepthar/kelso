@@ -1,0 +1,18 @@
+{#- The two dialogs every framed page shares. jobs.js drives the first: any
+  `.job-open` button fills it from its data attributes. confirm.js drives the
+  second: any form with `data-confirm` asks it before submitting. -#}
+<div id="job-shade" class="shade" hidden>
+<div class="job-modal" role="dialog" aria-modal="true" aria-labelledby="job-title">
+  <div class="row between"><h2 id="job-title"></h2><button type="button" id="job-dismiss" hidden>Close</button></div>
+  <p class="muted" id="job-desc"></p>
+  <div class="job-choices" id="job-choices" hidden></div>
+  <div class="row job-fields" id="job-fields"></div>
+  <div class="row job-bar" id="job-bar"><button type="button" id="job-go">ok</button><button type="button" id="job-close">cancel</button></div>
+  <pre id="job-out" class="job-out" hidden></pre>
+</div></div>
+<div id="ask-shade" class="shade" hidden>
+<div class="job-modal" role="dialog" aria-modal="true" aria-labelledby="ask-title">
+  <h2 id="ask-title">Are you sure?</h2>
+  <p class="muted" id="ask-text"></p>
+  <div class="row job-bar"><button type="button" id="ask-go">Yes, continue</button><button type="button" id="ask-close">Cancel</button></div>
+</div></div>

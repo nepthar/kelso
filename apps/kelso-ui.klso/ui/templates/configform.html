@@ -1,0 +1,49 @@
+{#- A kelsod ConfigRequest as one form. Submitting posts `set.<name>` for each
+  field to `action`; `web.submitted_values` reads them back. js/configform.js
+  keeps Save hidden until something has changed. -#}
+
+{% macro _control(f) -%}
+{% if f.get('choices') is not none %}
+  {#- The blank option submits nothing, which leaves what is on file alone. -#}
+  <select name="set.{{ f.name }}"{% if not f.choices %} disabled{% endif %}>
+    <option value="">{{ 'choose one' if f.choices else 'none defined yet' }}</option>
+    {%- for c in f.choices %}<option value="{{ c }}"{% if c == f.get('value') %} selected{% endif %}>{{ c }}</option>{% endfor -%}
+  </select>
+{%- elif f.secret %}
+  <input type="password" name="set.{{ f.name }}" placeholder="{{ 'set — type to replace' if f.secret_set else 'not set' }}" autocomplete="new-password">
+{%- else %}
+  <input name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" placeholder="{{ f.default ~ ' (default)' if f.get('default') is not none else '' }}">
+{%- endif %}
+{%- endmacro %}
+
+{% macro _table(fields, missing) -%}
+<div class="scroll"><table class="kv"><tbody>
+{% for f in fields %}
+<tr><td class="key">{{ f.name }}
+  {%- if f.secret %}<span class="sub">secret</span>{% endif %}
+  {%- if f.name in missing %}<span class="sub warnish">required</span>{% endif %}</td>
+  <td class="field">{{ _control(f) }}</td>
+  <td class="muted wrap">{{ f.get('desc') or '' }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{%- endmacro %}
+
+{% macro config_form(request, action, hidden={}) -%}
+{% set fields = request.get('fields') or [] %}
+{% if not fields %}
+<p class="empty">Nothing to configure.</p>
+{% else %}
+{% set missing = request.get('missing') or [] %}
+{#- Advanced fields fold away, unless one of them is what is missing. -#}
+{% set basic = [] %}{% set advanced = [] %}
+{% for f in fields %}{% do (basic if not f.get('advanced') or f.name in missing else advanced).append(f) %}{% endfor %}
+<form method="post" action="{{ action }}" class="cfg-form">
+  {% for k, v in hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  {% if basic %}{{ _table(basic, missing) }}{% endif %}
+  {% if advanced %}
+  <details class="reveal"><summary>Show advanced configuration options</summary>{{ _table(advanced, missing) }}</details>
+  {% endif %}
+  <div class="cfg-actions"><button type="submit" class="cfg-save" disabled>Save</button></div>
+</form>
+{% endif %}
+{%- endmacro %}

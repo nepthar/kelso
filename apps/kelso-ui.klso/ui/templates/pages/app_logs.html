@@ -1,0 +1,16 @@
+{% extends "frame.html" %}
+{% set here = '/apps/' ~ app_id|urlencode %}
+
+{% block refresh %}{% endblock %}
+{% block actions %}<span class="head-actions"><a class="btn" href="{{ here }}">Back to app</a></span>{% endblock %}
+
+{% block content %}
+<div class="row between">
+  <p class="lede">The last {{ logs.tail }} lines each container printed.</p>
+  <span class="row"><span class="muted" id="logs-stamp">live</span><button type="button" id="logs-auto" class="toggle" aria-pressed="true">Auto-refresh</button></span>
+</div>
+{#- logs.js polls data-src and follows the tail while the reader is at it. -#}
+<pre id="logs-out" class="job-out logs-out" data-src="{{ here }}/logs.json">{{ logs.text }}</pre>
+{% endblock %}
+
+{% block scripts %}<script src="{{ asset('js/logs.js') }}"></script>{% endblock %}

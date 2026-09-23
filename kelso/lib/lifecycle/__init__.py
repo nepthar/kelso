@@ -37,7 +37,7 @@ from kelso.lib.lifecycle.run import (
   start,
   stop,
 )
-from kelso.lib.lifecycle.snapshot import snapshot
+from kelso.lib.lifecycle.snapshot import delete_snapshot, snapshot
 from kelso.lib.lifecycle.stage import (
   StageSuccess,
   StagingTarget,
@@ -63,6 +63,7 @@ __all__ = [
   "apply_config_sets",
   "assign_route",
   "bind",
+  "delete_snapshot",
   "dev",
   "dev_plan",
   "link_host_volumes",

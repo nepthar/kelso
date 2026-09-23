@@ -578,6 +578,57 @@ def test_restore_unknown_app_is_refused(kelso_env, client):
   assert "No snapshots found" in response.json()["error"]
 
 
+def test_snapshot_delete_removes_one_archive(kelso_env, client, jobs):
+  snap = kelso_env.root / "snapshots" / "ports-demo"
+  snap.mkdir(parents=True)
+  keep = snap / "2026-01-01_00-00Z_keep.tar.gz"
+  drop = snap / "2026-01-02_00-00Z_drop.tar.gz"
+  keep.write_bytes(b"x")
+  drop.write_bytes(b"y")
+  job = submit(
+    client,
+    jobs,
+    "snapshot-delete",
+    {"app": "ports-demo", "snapshot": "2026-01-02_00-00Z_drop"},
+  )
+  assert job["state"] == "done", job["error"]
+  assert "Deleted snapshot" in read_log(job)
+  assert keep.is_file()
+  assert not drop.exists()
+  names = [row["name"] for row in client.get("/snapshots").json()["snapshots"]]
+  assert names == ["2026-01-01_00-00Z_keep"]
+
+
+def test_snapshot_delete_removes_an_empty_app_directory(kelso_env, client, jobs):
+  snap = kelso_env.root / "snapshots" / "ports-demo"
+  snap.mkdir(parents=True)
+  (snap / "2026-01-01_00-00Z.tar.gz").write_bytes(b"x")
+  job = submit(
+    client,
+    jobs,
+    "snapshot-delete",
+    {"app": "ports-demo", "snapshot": "2026-01-01_00-00Z"},
+  )
+  assert job["state"] == "done", job["error"]
+  assert not snap.exists()
+
+
+def test_snapshot_delete_unknown_snapshot_is_refused(kelso_env, client):
+  snap = kelso_env.root / "snapshots" / "ports-demo"
+  snap.mkdir(parents=True)
+  (snap / "2026-01-01_00-00Z_real.tar.gz").write_bytes(b"x")
+  response = client.post(
+    "/jobs",
+    json={
+      "verb": "snapshot-delete",
+      "args": {"app": "ports-demo", "snapshot": "nope"},
+    },
+  )
+  assert response.status_code == 400
+  assert "No snapshot nope" in response.json()["error"]
+  assert (snap / "2026-01-01_00-00Z_real.tar.gz").is_file()
+
+
 @pytest.mark.parametrize(
   ("body", "expected"),
   [

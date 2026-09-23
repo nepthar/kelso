@@ -8,22 +8,23 @@ certificate if there isn't one, then serves https with uvicorn. The venv
 survives container recreate; uv rebuilds it if the image Python no longer
 matches.
 
-| File | What it is |
+| Path | What it is |
 |---|---|
 | `start.sh` | Container entrypoint: `uv sync`, certificate, then uvicorn |
-| `server.py` | FastAPI app: routes, GET/POST handlers |
-| `pyproject.toml` | fastapi, uvicorn, python-multipart, cryptography |
-| `uv.lock` | Frozen resolve for `uv sync --frozen` |
+| `server.py` | Assembles the app: front door, feature routers, static files |
+| `frontdoor.py` | Rate limits, the origin check, the session gate, security headers |
+| `web.py` | Rendering: the Jinja environment, `Page`, redirects, form fields |
+| `pages/` | One router per feature: its pages, form posts and JSON |
+| `templates/` | All markup. `frame.html` is the chrome, `macros.html` the components |
+| `static/kelso.css` | Every style, and the theme tokens |
+| `static/js/` | One script per behaviour, loaded by the pages that need it |
+| `static/vendor/` | Third-party browser code, pinned and served from here |
+| `icons.py` | The Material Design icon paths the templates draw |
 | `api.py` | Client for kelsod (unix socket or TCP) |
 | `auth.py` | The password, the signed session cookie |
 | `tls.py` | The self-signed certificate, written once |
-| `layout.py` | Page chrome: CSS, JS, nav, shared fragments |
-| `dashboard.py` | Homepage: host CPU and memory charts |
-| `static/` | Vendored browser assets, served at `/static` |
-| `catalog.py` | Catalog listing, app cards, fetch, updates |
-| `installed.py` | Installed-apps list and the app detail page |
-| `volumes.py` | Host volumes and kelso-managed storage |
-| `activity.py` | Unattended-run history and per-run output |
+| `pyproject.toml` / `uv.lock` | Dependencies, frozen for `uv sync --frozen` |
+| `../tests/` | pytest against a fake kelsod; not shipped in the container |
 
 ## Setup
 
@@ -101,6 +102,21 @@ this app is exactly as privileged as `kelsod` is. It is the one app that
 should be bound to it, which is why it serves TLS itself rather than trusting
 whatever is in front of it — the password is never on the wire in the clear,
 even between a reverse proxy and this container.
+
+Everything a page needs comes from this server, since kelso may run on a
+network with no internet at all. The one exception is IBM Plex from Google
+Fonts, which is optional: it is requested from script so a page never waits on
+it, and without it the UI draws in the system faces. The
+Content-Security-Policy says as much: scripts only from `/static`, never
+inline, and the page cannot be framed. A script that got into a page some other
+way would not run.
+
+The session cookie is `SameSite=Lax`, which stops other *sites* from sending
+it, but kelso publishes every app on a subdomain beside this one and sibling
+subdomains count as the same site. So every request that changes something is
+also checked against its `Origin` header (or `Referer`), and refused with a 403
+unless it names this server. A proxy that rewrites `Host` is fine as long as it
+passes `X-Forwarded-Host`.
 
 The certificate is self-signed and written into the `tls` data volume on first
 start, so a browser warns once and the fingerprint holds across restarts. The

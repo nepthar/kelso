@@ -1,0 +1,30 @@
+{% extends "frame.html" %}
+{% from "macros.html" import pill, when, log_button %}
+
+{% block content %}
+<p class="lede">Recent app-related activities and output</p>
+<div class="card">
+{% if not runs %}
+<p class="empty">Nothing recorded yet. Runs land here as kelsod executes jobs.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>When</th><th>Verb</th><th>App</th><th>Status</th><th>Took</th><th>Output</th>
+</tr></thead><tbody>
+{% for run in runs %}
+{% set app = run.app_id or 'kelso' %}
+<tr>
+  <td class="muted">{{ when(run.ts) }}</td>
+  <td class="name">{{ run.verb }}</td>
+  <td>{{ app }}</td>
+  <td>{{ pill(run.status, 'running' if run.status == 'ok' else 'bad') }}</td>
+  <td class="muted">{{ '%.1fs'|format(run.duration_ms / 1000) if run.duration_ms is not none else '—' }}</td>
+  <td>
+    {%- if run.available %}{{ log_button('view', run.log, run.status, title=run.verb ~ ' ' ~ app) }}
+    {%- else %}<span class="muted">pruned</span>{% endif -%}
+  </td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+{% endblock %}
