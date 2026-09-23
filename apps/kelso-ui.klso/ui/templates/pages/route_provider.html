@@ -1,0 +1,10 @@
+{% extends "frame.html" %}
+{% from "configform.html" import config_form %}
+
+{% block content %}
+<p class="lede">{{ config.title }}</p>
+<p class="muted">{{ config.get('note') or '' }}</p>
+<div class="card">{{ config_form(config, '/routes/' ~ tag|urlencode, {'kind': kind} if kind else {}) }}</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script>{% endblock %}

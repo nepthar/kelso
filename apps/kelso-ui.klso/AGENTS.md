@@ -1,8 +1,37 @@
 # Kelso UI
 
 Server-rendered HTML over the kelsod admin socket. No client framework, no
-build step. `ui/layout.py` owns the page chrome; the other modules emit
-fragments into it. Read the root `AGENTS.md` first — everything there applies.
+build step. Read the root `AGENTS.md` first — everything there applies.
+
+## Where things go
+
+**No HTML in Python.** Markup lives in `ui/templates/`, which Jinja
+autoescapes; Python gathers data and names a template. A page is a router in
+`ui/pages/<feature>.py` whose GET handlers take `page: PageDep` and return
+`page.render("pages/<name>.html", title, **data)`, and whose POST handlers
+return `see(path, ok=..., err=...)`. An `ApiError` needs no handling in a GET:
+it renders as the error page inside the frame. Set `page.title` before the
+first `api()` call if the nav label is the wrong name for that error page.
+
+**Components are macros.** `templates/macros.html` holds `job_button`,
+`icon_button`, `pill` and the rest; `templates/configform.html` holds the
+config form. Reach for one before writing the markup again, and add one when
+a second page needs the same thing.
+
+**No inline script.** The Content-Security-Policy refuses it. Behaviour goes in
+`ui/static/js/<name>.js`, one file per behaviour, hooked to elements by class
+or `data-*` attribute, and a page loads it from its `scripts` block with
+`asset('js/<name>.js')`. Third-party code is vendored under `static/vendor/`
+at a pinned version, never loaded from a CDN: kelso-ui must work on a host
+with no internet access. Fonts are the exception -- nice to have, never
+needed -- so every font stack ends in system faces and `boot.js` requests
+Plex without the page waiting on it. Data a script needs goes in a
+`<script type="application/json">` block, which the policy allows.
+
+**Tests** are in `../tests`, against a fake kelsod: `cd ui && uv run pytest`.
+They plant hostile strings in every fixture field, so a missing escape
+fails a test. A new page goes in `PAGES` in `test_pages.py`, and a new
+kelsod endpoint gets a fixture in `fakekelsod.py`.
 
 ## The visual language
 
@@ -13,7 +42,7 @@ makes it look assembled. When a screen needs something the language doesn't
 have, say so and we'll add it to the language — don't add it locally.
 
 **Every style lives in `static/kelso.css`.** No per-page `<style>` blocks, no
-inline `style=` attributes, no color or size literals in page modules. Pages
+inline `style=` attributes, no color or size literals in templates. Pages
 emit semantic class names; if the class doesn't exist yet, add it to the
 stylesheet.
 
@@ -62,8 +91,8 @@ to do — Run, Save, Install — and that control is filled coral with `--ink`. 
 page that shows you an app has no such thing, so nothing on it is filled;
 filling its lifecycle verb tells the reader the page wants them to stop the
 app, which it doesn't. Every other control is a hairline button with `--dim`
-type that brightens on hover, and destructive ones take `danger=True` on
-`job_button` / `icon_button` for a rosewood hover.
+type that brightens on hover, and destructive ones take `danger=true` on
+the `job_button` / `icon_button` macros for a rosewood hover.
 
 **Mono is structural, not stylistic.** Identifiers, versions, sizes, paths,
 ports, counts, durations and timestamps are IBM Plex Mono, so columns of them
@@ -109,6 +138,6 @@ without typing a password. Without it, `ADMIN_PASSWORD` is required —
 Plain http is fine here: the session cookie only asks to be `Secure` when the
 request that minted it arrived over TLS, which in the container it does.
 
-Then look at every page you touched — `/`, `/apps`, `/apps/<id>`, `/volumes`,
-`/catalog`, `/logs`, `/snapshots`, `/login` — plus the collapsed nav and one
-modal. Layout regressions here are invisible in a diff and obvious on screen.
+Run the tests, then look at every page you touched — `/`, `/apps/<id>`,
+`/apps/<id>/logs`, `/volumes`, `/catalog`, `/routes`, `/snapshots`,
+`/activity`, `/login` — plus the collapsed nav and one modal. Layout regressions here are invisible in a diff and obvious on screen.

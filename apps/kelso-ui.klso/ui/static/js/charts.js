@@ -1,13 +1,5 @@
-"""The dashboard: host CPU and memory, and every installed app."""
-
-import json
-
-from api import api, where
-from installed import apps_table
-from layout import esc
-
-_CHART_JS = """
-<script>
+// The dashboard's host CPU and memory charts, drawn with uPlot from the
+// #host-metrics data block, in the current theme's tokens.
 (function () {
   var el = document.getElementById("host-metrics");
   if (!el || typeof uPlot === "undefined") return;
@@ -72,34 +64,3 @@ _CHART_JS = """
     }).observe(mount);
   }
 })();
-</script>
-"""
-
-
-def page(version):
-  body = api("/metrics?prefix=host_&hours=1")
-  metrics = body.get("metrics") or {}
-  payload = json.dumps(
-    {
-      "since": body["since"],
-      "until": body["until"],
-      "cpu": metrics.get("host_cpu_used_ratio") or [],
-      "mem": metrics.get("host_mem_used_ratio") or [],
-    }
-  )
-  return (
-    '<link rel="stylesheet" href="/static/uplot-1.6.32/uPlot.min.css">'
-    f'<p class="lede">Connected to kelso {esc(version)} over '
-    f"<code>{esc(where())}</code>.</p>"
-    '<div class="charts">'
-    '<div class="card pad"><h2>Host CPU</h2>'
-    '<div class="chart" id="chart-cpu"></div></div>'
-    '<div class="card pad"><h2>Host memory</h2>'
-    '<div class="chart" id="chart-mem"></div></div>'
-    "</div>"
-    + "<h2>Installed apps</h2>"
-    + apps_table(api("/apps").get("apps", []))
-    + f'<script type="application/json" id="host-metrics">{payload}</script>'
-    + '<script src="/static/uplot-1.6.32/uPlot.iife.min.js"></script>'
-    + _CHART_JS
-  )

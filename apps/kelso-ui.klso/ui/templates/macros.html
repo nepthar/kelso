@@ -1,0 +1,73 @@
+{#- The components pages draw with. Pages hand these data; the markup and the
+  class names the stylesheet expects live here and nowhere else.
+
+  Macros that sit inline (buttons, pills) strip their own whitespace, because
+  a stray space between two inline buttons is a visible gap.
+-#}
+
+{% macro notice_banner(ok=none, err=none) -%}
+{% if err %}<div class="error"><p>{{ err }}</p></div>
+{% elif ok %}<div class="notice">{{ ok }}</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro error_card(message) -%}
+<div class="error"><h2>Cannot reach kelsod</h2><p>{{ message }}</p>
+  <p class="muted">The socket is bound with <code>kelso config kelso-ui --bind conn=&lt;host_volume&gt;</code>.</p></div>
+{%- endmacro %}
+
+{% macro empty(text) -%}
+<p class="empty">{{ text }}</p>
+{%- endmacro %}
+
+{#- A square status marker and its word. `dot`: running, exited, bad or none. -#}
+{% macro pill(text, dot="") -%}
+<span class="pill"><span class="{{ 'dot ' ~ dot if dot else 'dot' }}"></span>{{ text }}</span>
+{%- endmacro %}
+
+{% macro sub(text, cls="") -%}
+<span class="{{ 'sub ' ~ cls if cls else 'sub' }}">{{ text }}</span>
+{%- endmacro %}
+
+{#- A timestamp shipped as UTC; shell.js rewrites it in the viewer's zone. -#}
+{% macro when(ts) -%}
+<time datetime="{{ ts }}">{{ ts }}</time>
+{%- endmacro %}
+
+{% macro kv_table(pairs) -%}
+<div class="scroll"><table class="kv"><tbody>
+{% for k, v in pairs %}
+<tr><td class="key">{{ k }}</td><td class="muted path">{{ v }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{%- endmacro %}
+
+{% macro icon_button(label, icon, submit=false, danger=false) -%}
+<button type="{{ 'submit' if submit else 'button' }}" class="{{ 'icon danger' if danger else 'icon' }}" title="{{ label }}" aria-label="{{ label }}">{{ mdi(icon) }}</button>
+{%- endmacro %}
+
+{#- A button that opens the job modal (see modals.html and js/jobs.js).
+
+  `verb` and `args` are the job; `fields` are inputs the operator fills in,
+  merged into args. `choices` offers several verbs behind one button, each with
+  its own label, desc, verb and args; the operator picks before Run is live.
+  `icon` is an MDI name, and then `label` is the tooltip rather than the text.
+  `done` is where to land once the job has run; the default is a reload.
+  The JSON attributes are single-quoted: `tojson` escapes ' but not ".
+-#}
+{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false) -%}
+<button type="button" class="job-open{{ ' icon' if icon }}{{ ' danger' if danger }}"
+  {%- if not enabled %} disabled{% endif %}
+  {%- if icon %} title="{{ label }}" aria-label="{{ label }}"{% endif %}
+  data-verb="{{ verb }}" data-title="{{ title }}" data-desc="{{ desc }}"
+  data-args='{{ (args or {})|tojson }}' data-fields='{{ fields|tojson }}' data-choices='{{ choices|tojson }}'
+  {%- if done %} data-done="{{ done }}"{% endif %}
+  {%- if autorun %} data-autorun="1"{% endif %}>
+  {{- mdi(icon) if icon else label -}}
+</button>
+{%- endmacro %}
+
+{#- Opens a finished run's log in the job modal, read-only. -#}
+{% macro log_button(label, log, status, title, cls="link") -%}
+<button type="button" class="job-open {{ cls }}" data-title="{{ title }}" data-log="{{ log }}" data-status="{{ status }}">{{ label }}</button>
+{%- endmacro %}

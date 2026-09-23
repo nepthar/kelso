@@ -1,0 +1,139 @@
+{% extends "frame.html" %}
+{% from "macros.html" import job_button, when %}
+
+{% block actions %}
+<span class="head-actions">{{ job_button('+ Add Repo', 'repo-add', title='Add a repo', done='/catalog',
+    desc='Kelso mirrors the folder and every app in it becomes part of your catalog. Nothing is installed or started.',
+    fields=[{'name': 'url', 'placeholder': 'github://user/repo/branch/folder'},
+            {'name': 'name', 'placeholder': 'name (optional)'}]) }}</span>
+{% endblock %}
+
+{#- Update and remove, beside a repo's heading. Only a subscribed repo has them. -#}
+{% macro repo_actions(repo) -%}
+{% if repo.get('removable') %}
+{% set name = repo.get('name') or '' %}
+{% set bound = repo.get('bound_apps') or [] %}
+<span class="act">
+  {%- if repo.get('url') %}{{ job_button('Update', 'repo-update', title='Update ' ~ name, args={'name': name}, autorun=true, done='/catalog',
+      desc='Re-reads ' ~ repo.url ~ ' and replaces the local copy with what it holds now. Installed apps keep running until you re-install them.') }}{% endif -%}
+  {{- job_button('Remove', 'repo-remove', title='Remove ' ~ name, args={'name': name}, danger=true, done='/catalog',
+      desc='Drops ' ~ name ~ ' from the catalog and deletes its mirrored copy.'
+        ~ (' ' ~ bound|length ~ ' installed app(s) came from it (' ~ bound|join(', ') ~ '); they keep running, but kelso will stop seeing updates for them.' if bound else '')) -}}
+</span>
+{%- endif %}
+{%- endmacro %}
+
+{% macro status_pill(app) -%}
+{% if app.get('state') == 'available' %}<span class="pill"><span class="dot"></span>not installed</span>
+{%- elif app.get('state') == 'uninstalled' %}<span class="pill"><span class="dot exited"></span>uninstalled</span>
+{%- elif app.configured == 'missing' %}<span class="pill"><span class="dot exited"></span>needs config</span>
+{%- else %}<span class="pill"><span class="dot running"></span>ready</span>{% endif %}
+{%- endmacro %}
+
+{#- Free-form docker options, as one line of prose for the confirmation. -#}
+{% macro warning_desc(app) -%}
+{% if app.get('warnings') %} Warning: this application sets free-form docker options on {{ app.warnings|map(attribute='run_unit')|join(', ') }} that are not guaranteed to be safe. Review them before continuing.{% endif %}
+{%- endmacro %}
+
+{#- One bundle, full width: what it is on the left, its manifest on the right. -#}
+{% macro card(app, hidden) -%}
+{% set app_id = app.get('app_id') or '' %}
+{% set readable = app.get('configured') is not none %}
+<article class="app-card" id="{{ app.card_id }}"{% if hidden %} hidden{% endif %}>
+<div class="app-card-head">
+<div class="app-card-intro">
+  <div class="row between"><h2>{{ app.get('display_name') or app.get('app_id') }}</h2>
+    {%- if app.get('version') %}<span class="muted">v{{ app.version }}</span>{% endif %}
+    {%- if app.get('version') and readable %} {% endif %}
+    {%- if readable %}{{ status_pill(app) }}{% endif %}</div>
+  {% if readable %}
+  <p class="lede">{{ app.get('description') or '' }}</p>
+  <p class="muted mono">{{ app.get('app_id') }} · {{ app.get('repo') or 'main' }}</p>
+  {% else %}
+  <p class="lede">This app's manifest could not be read.</p>
+  {% endif %}
+  {% set others = app.contested|reject('equalto', app.get('repo'))|list %}
+  {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Installing from here binds it to {{ app.get('repo') }}.</p>{% endif %}
+  {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was installed. Reload to pick up the new one.</p>{% endif %}
+  {#- Kelso cannot say what an arbitrary compose key does, so it says that it
+    does not know and shows exactly what was asked for. -#}
+  {% for w in app.get('warnings') or [] %}
+  <div class="passthru"><b>Warning</b><p>{{ w.get('message') }}:</p><ul>{% for o in w.get('options') or [] %}<li><span class="mono">{{ o }}</span></li>{% endfor %}</ul></div>
+  {% endfor %}
+</div>
+{#- Install from this repo, or reload an app already installed from it: install
+  re-stages and leaves the running containers on the old copy, reload puts the
+  new manifest in front of them. Opening this card chose the repo, so it is
+  always named. -#}
+{% if readable %}
+{% set repo = app.get('repo') or '' %}
+{% set target = app_id ~ '@' ~ repo if repo else app_id %}
+<div class="row actions">
+{% if app.get('state') == 'installed' %}
+  {{ job_button('Reload', 'reload', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+      desc='Rebuilds ' ~ app_id ~ ' from ' ~ repo ~ ', restarting it if it is running. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
+{% else %}
+  {{ job_button('Install', 'install', title='Install ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+      desc='Installs ' ~ app_id ~ ' from ' ~ repo ~ ' so it can be started. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
+{% endif %}
+</div>
+{% endif %}
+</div>
+<pre class="app-card-manifest"><code class="language-toml">{{ app.get('manifest') or '' }}</code></pre>
+</article>
+{%- endmacro %}
+
+{% block content %}
+<p class="lede">Application repositories</p>
+{% if contested %}
+<div class="notice contested"><b>Some app ids are in more than one repo.</b><ul>
+{% for app_id, repos in contested|dictsort(true) %}
+<li><span class="mono">{{ app_id }}</span> is in {{ repos|join(', ') }} — install it as <span class="mono">{{ app_id }}@&lt;repo&gt;</span></li>
+{% endfor %}
+</ul></div>
+{% endif %}
+
+{% if not catalogs %}
+<div class="card"><p class="empty">No repos configured.</p></div>
+{% else %}
+{% for catalog in catalogs %}
+{% set repo = repos.get(catalog.name) or {} %}
+<h2>{{ catalog.name }}{{ repo_actions(repo) }}</h2>
+<p class="lede repo-meta"><span class="mono">{{ repo.get('location') }}</span>
+  {%- if repo.get('sha') %} · <span class="mono">{{ repo.sha[:8] }}</span>{% endif %}
+  {%- if repo.get('updated_at') %} · {{ when(repo.updated_at) }}{% endif %}
+  {%- if not repo.get('exists') %} · <span class="warnish">not mirrored yet</span>{% endif %}</p>
+{% if not catalog.get('apps') %}
+<div class="card"><p class="empty">No apps here.</p></div>
+{% else %}
+<div class="card scroll"><table><thead><tr>
+  <th>Name</th><th>App ID</th><th>Version</th><th>Description</th>
+</tr></thead><tbody>
+{% for app in catalog.apps %}
+<tr class="catalog-row" data-card="{{ app.card_id }}">
+  <td class="name">{{ app.get('display_name') or app.get('app_id') }}{% if app.get('app_id') in contested %} <span class="dot exited" title="in more than one repo"></span>{% endif %}</td>
+  <td class="muted">{{ app.get('app_id') or '' }}</td>
+  <td class="muted">{{ app.get('version') or '—' }}</td>
+  <td class="wrap">{{ app.get('description') or '' }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endfor %}
+
+{#- Every card up front, hidden; catalog.js shows the one whose row was
+  clicked. `?app=` opens one from a link, and closing it goes back to the list. -#}
+<div id="catalog-shade" class="shade"{% if open_app %} data-close="/catalog"{% else %} hidden{% endif %}>
+{% for catalog in catalogs %}
+{% for app in catalog.get('apps') or [] %}
+{{ card(app, hidden=not (open_app and app.get('app_id') == open_app)) }}
+{% endfor %}
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ asset('vendor/highlight-11.11.1/highlight.min.js') }}"></script>
+<script src="{{ asset('js/catalog.js') }}"></script>
+{% endblock %}

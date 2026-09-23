@@ -1,0 +1,34 @@
+{% extends "frame.html" %}
+{% from "macros.html" import job_button, when %}
+
+{% block content %}
+<p class="lede">Application snapshots</p>
+<div class="card">
+{% if not snapshots %}
+<p class="empty">No snapshots yet. Take one from an app's page.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>App</th><th>When</th><th>Tag</th><th>Size</th><th class="act"></th>
+</tr></thead><tbody>
+{% for snap in snapshots %}
+<tr>
+  <td class="name">{{ snap.app_id }}</td>
+  <td class="muted">{{ when(snap.taken_at) if snap.get('taken_at') else snap.name }}</td>
+  <td class="muted">{{ snap.get('tag') or '' }}</td>
+  <td class="muted">{{ snap.get('bytes')|size }}</td>
+  <td class="act">
+    {{- job_button('restore', 'restore', icon='camera-retake-outline',
+        title='Restore ' ~ snap.app_id,
+        desc='Replaces ' ~ snap.app_id ~ "'s run state, configuration and data volumes with " ~ snap.name ~ '. A pre-restore snapshot is taken first when there is something to overwrite.',
+        args={'app': snap.app_id, 'snapshot': snap.name}) -}}
+    {{- job_button('delete', 'snapshot-delete', icon='delete-outline', danger=true,
+        title='Delete ' ~ snap.name,
+        desc='Removes the snapshot archive ' ~ snap.name ~ ' of ' ~ snap.app_id ~ '. The installation is left as it is.',
+        args={'app': snap.app_id, 'snapshot': snap.name}) -}}
+  </td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+{% endblock %}

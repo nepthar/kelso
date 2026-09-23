@@ -1,0 +1,12 @@
+{#- The password prompt. One field, and the one control you came for. -#}
+{% extends "solo.html" %}
+{% block content %}
+{% if error %}<div class="error"><p>{{ error }}</p></div>{% endif %}
+<form method="post" action="/login">
+  <input type="hidden" name="next" value="{{ next_to }}">
+  <label for="pw">Admin password</label>
+  <input id="pw" type="password" name="password" placeholder="password or token" autocomplete="current-password" autofocus required>
+  <button type="submit" class="signin-go">Sign in</button>
+</form>
+<p class="solo-hint">Set or reset it with <code>kelso config kelso-ui --set admin_pass=&lt;password&gt;</code></p>
+{% endblock %}

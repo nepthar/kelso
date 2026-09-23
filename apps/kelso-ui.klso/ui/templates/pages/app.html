@@ -1,0 +1,143 @@
+{% extends "frame.html" %}
+{% from "macros.html" import pill, sub, kv_table, job_button, empty %}
+{% from "configform.html" import config_form %}
+{% set app_id = app.app_id %}
+{% set name = app.get('display_name') or app_id %}
+{% set here = '/apps/' ~ app_id|urlencode %}
+{% set installed = app.get('state') == 'installed' %}
+
+{% block refresh %}{% endblock %}
+
+{#- Logs, then start or stop, reload, snapshot, remove. Each verb opens the job
+  modal. Only one of start/stop can apply, so only that one is drawn. -#}
+{% block actions %}
+<span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a><div class="row actions">
+{% if app.status == 'running' %}
+  {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
+      desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
+{% else %}
+  {{ job_button('Start', 'start', icon='play', title='Start ' ~ name, args={'app': app_id},
+      desc='Starts ' ~ app_id ~ ', installing it first if it is not installed yet.') }}
+{% endif %}
+  {{ job_button('Reload', 'reload', icon='reload', title='Reload ' ~ name, args={'app': app_id},
+      desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its installation from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
+  {{ job_button('Snapshot', 'snapshot', icon='camera-plus-outline', title='Snapshot ' ~ name, args={'app': app_id},
+      desc='Copies ' ~ app_id ~ "'s volumes and run state into an archive under snapshots/. The app is stopped for the copy and started again after.",
+      fields=[{'name': 'label', 'placeholder': 'label (optional)'}], enabled=installed) }}
+  {#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
+  {{ job_button('Remove', icon='delete-outline', title='Remove ' ~ name, danger=true,
+      desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and take a Snapshot.',
+      choices=[
+        {'label': 'Uninstall', 'verb': 'uninstall', 'args': {'app': app_id},
+         'desc': 'Removes the installation. Data, configuration, secrets and its address are kept, so reinstalling picks up where it left off.'},
+        {'label': 'Reset', 'verb': 'reset', 'args': {'app': app_id},
+         'desc': 'Deletes the data volumes and installs the app again from the bundle. Configuration and address are kept.'},
+        {'label': 'Uninstall and purge', 'verb': 'uninstall', 'args': {'app': app_id, 'purge': '1'},
+         'desc': 'Removes everything kelso holds: the installation, the data volumes, the configuration and secrets, and its address. The catalog copy survives.'},
+      ]) }}
+</div></span>
+{% endblock %}
+
+{% block content %}
+<div class="apphead">{% include "pages/_app_status.html" %}
+  <p class="lede">{{ app.get('description') or '' }}</p>
+  <p class="muted mono">{{ app_id }}</p></div>
+
+{#- The repo's manifest has moved on from the copy this app was installed
+  from: the same drift the Repos page marks, said where it can be acted on. -#}
+{% if app.get('manifest_stale') %}
+<div class="notice"><b>Manifest differs, reload to pick up the latest changes.</b>
+  {{- sub('The manifest in the repo has changed since this app was installed. What is installed keeps running until you reload.') }}</div>
+{% endif %}
+{% if app.get('config_pending') %}
+<div class="notice"><b>Reload to apply pending configuration changes.</b>
+  {{- sub('Settings and route assignments were changed after this app was started, so what is running does not have them yet.') }}</div>
+{% endif %}
+{% if app.get('issues') %}
+<div class="error"><h2>Not ready to start</h2><ul>
+{% for i in app.issues %}<li>{{ i.problem }}{% if i.get('fix') %}{{ sub(i.fix) }}{% endif %}</li>{% endfor %}
+</ul></div>
+{% endif %}
+
+<h2>Manifest</h2>
+{% set skip = ['display_name', 'description', 'app_id'] %}
+{% set pairs = (app.get('metadata') or {})|dictsort(true)|rejectattr(0, 'in', skip)|list %}
+<div class="card">{{ kv_table(pairs) if pairs else empty('No extra metadata.') }}</div>
+
+<h2>Configuration</h2>
+<div class="card">{{ config_form(config, here, {'action': 'config'}) }}</div>
+
+<h2>Volumes</h2>
+<div class="card">
+{% if not app.get('volumes') %}{{ empty('This app declares no volumes.') }}{% else %}
+<div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Where</th><th>Size</th></tr></thead><tbody>
+{% for v in app.volumes %}
+<tr><td class="key">{{ v.name }}</td>
+  <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+  <td class="path"><span class="muted">{{ 'not bound' if v.kind == 'host' and not v.get('bind') else v.path or '—' }}</span></td>
+  <td class="muted">{{ v.bytes|size }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<h2>Routes</h2>
+<div class="card">
+{% if not app.get('routes') %}{{ empty('This app publishes no routes.') }}{% else %}
+<div class="scroll"><table><thead><tr><th>Route</th><th>Port</th><th>URL</th><th>Provider</th></tr></thead><tbody>
+{% for r in app.routes %}
+{% set url = r.get('published_url') or r.get('url') %}
+<tr><td class="key">{{ r.name }}</td>
+  <td class="muted">{{ r.unit }}:{{ r.container_port }} &rarr; {{ r.host_port or 'unallocated' }}</td>
+  <td class="path muted">{% if url %}<a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a>{% else %}—{% endif %}</td>
+  <td class="muted">{{ r.get('provider') or '—' }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<h2>Commands</h2>
+<div class="card">
+{% if not app.get('commands') %}{{ empty('This app declares no commands.') }}{% else %}
+<div class="scroll"><table><thead><tr><th>Command</th><th>Description</th><th>Unit</th><th class="act"></th></tr></thead><tbody>
+{% for c in app.commands %}
+<tr><td class="key">{{ c.name }}</td>
+  <td class="muted wrap">{{ c.get('desc') or '' }}</td>
+  <td class="muted">{{ c.unit }}</td>
+  <td class="act">{{ job_button('Run', 'cmd', title=app_id ~ ': ' ~ c.name,
+      desc=c.get('desc') or "Runs the '" ~ c.name ~ "' command declared in this app's manifest.",
+      args={'app': app_id, 'command': c.name},
+      fields=[{'name': 'args', 'placeholder': 'extra arguments (optional)'}], enabled=installed) }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<h2>Run units</h2>
+{% for unit in app.get('units', []) %}
+{% set state = unit.get('state') %}
+<div class="card pad">
+  <div class="row between"><b>{{ unit.name }}</b>{{ pill(state or 'not created', 'running' if state == 'running' else ('exited' if state else '')) }}</div>
+  <div class="muted mono">{{ unit.image }}</div>
+  {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
+  <h3>Volumes</h3>
+  {% if not unit.get('volumes') %}{{ empty('No volumes mounted.') }}{% else %}
+  <div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Mounted at</th><th>Desc</th></tr></thead><tbody>
+  {% for v in unit.volumes %}
+  <tr><td class="key">{{ v.name }}</td>
+    <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+    <td class="muted path">{{ v.path }}</td>
+    <td class="muted wrap">{{ v.get('desc') or '' }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% endif %}
+  {% if unit.get('environment') %}
+  <details class="reveal"><summary>Environment</summary>{{ kv_table(unit.environment|dictsort(true)) }}</details>
+  {% endif %}
+</div>
+{% else %}
+{{ empty('No run units.') }}
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script>{% endblock %}

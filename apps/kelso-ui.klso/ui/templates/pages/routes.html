@@ -1,0 +1,26 @@
+{% extends "frame.html" %}
+{% from "macros.html" import icon_button %}
+
+{% block content %}
+<h2>Route providers</h2>
+<p class="lede">Where app routes are published, one per domain</p>
+<div class="card">
+{% if not providers %}
+<p class="empty">No route providers configured yet.</p>
+{% else %}
+<div class="scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Domain</th></tr></thead><tbody>
+{% for p in providers %}
+<tr><td class="name"><a href="/routes/{{ p.tag|urlencode }}">{{ p.tag }}</a></td><td class="muted">{{ p.kind }}</td><td class="muted">{{ p.domain }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+<div class="card entry">
+  {#- A GET form: /routes/new turns the tag into a path and the kind into a query. -#}
+  <form method="get" action="/routes/new" class="row">
+    <input name="tag" placeholder="name (e.g. web)" required>
+    <select name="kind" required>{% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+    {{ icon_button('add', 'plus-box-outline', submit=true) }}
+  </form>
+</div>
+{% endblock %}

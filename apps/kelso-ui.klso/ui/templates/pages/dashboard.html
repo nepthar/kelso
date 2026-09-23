@@ -1,0 +1,43 @@
+{% extends "frame.html" %}
+{% from "macros.html" import pill, sub %}
+{% block head %}<link rel="stylesheet" href="{{ asset('vendor/uplot-1.6.32/uPlot.min.css') }}">{% endblock %}
+
+{% block content %}
+<p class="lede">Connected to kelso {{ version }} over <code>{{ where }}</code>.</p>
+<div class="charts">
+  <div class="card pad"><h2>Host CPU</h2><div class="chart" id="chart-cpu"></div></div>
+  <div class="card pad"><h2>Host memory</h2><div class="chart" id="chart-mem"></div></div>
+</div>
+
+<h2>Installed apps</h2>
+{% if not apps %}
+<div class="card"><p class="empty">No apps installed yet. Pick one from <a href="/catalog">Repos</a>.</p></div>
+{% else %}
+<div class="card scroll"><table><thead><tr>
+  <th>App</th><th>Status</th><th>Config</th><th>Version</th><th>Volumes</th><th>Last action</th>
+</tr></thead><tbody>
+{% for app in apps %}
+<tr>
+  <td class="name"><a href="/apps/{{ app.app_id|urlencode }}">{{ app.get('display_name') or app.app_id }}</a>{{ sub(app.app_id) }}</td>
+  <td>{% include "pages/_app_status.html" %}</td>
+  <td>
+    {%- if app.get('configured') is none %}<span class="muted">—</span>
+    {%- elif app.configured == 'ready' %}{{ pill('ready', 'running') }}
+    {%- else %}{{ pill('needs config', 'bad') }}{% endif -%}
+  </td>
+  <td class="muted">{{ app.get('version') or '—' }}</td>
+  <td class="muted">{{ app.get('volume_count', 0) }}</td>
+  <td class="muted">{{ app.get('last_action') or '—' }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+{#- Read by charts.js. A data block, not a script: CSP has nothing to object to. -#}
+<script type="application/json" id="host-metrics">{{ metrics|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ asset('vendor/uplot-1.6.32/uPlot.iife.min.js') }}"></script>
+<script src="{{ asset('js/charts.js') }}"></script>
+{% endblock %}

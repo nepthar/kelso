@@ -21,7 +21,6 @@
   --gold: #fdd305;
   --ok: #8aa85e;
 
-  --accent: var(--coral);
   --ink: #17110e;     /* dark type on a warm fill */
   --bad: var(--rosewood);
   --warn: var(--gold);
@@ -205,8 +204,6 @@ h2 .act {
   letter-spacing: 0; text-transform: none;
 }
 h2 .act button { padding: 2px 9px; font-size: 12px; }
-h2 .act a { color: var(--muted); text-decoration: none; }
-h2 .act a:hover { color: var(--coral); }
 h3 {
   font-size: 11px; letter-spacing: .08em; text-transform: lowercase;
   color: var(--muted); margin: 20px 0 8px; font-weight: 600;
@@ -322,9 +319,6 @@ button.link:hover:not(:disabled) { color: var(--bad); border: 0; }
   border-color: color-mix(in srgb, var(--coral) 86%, white); color: var(--ink);
 }
 .cfg-save { visibility: hidden; }
-.cfg-edit.is-dirty .cfg-save { visibility: visible; }
-.cfg-edit { display: flex; align-items: center; gap: 10px; }
-.cfg-edit input { width: 16em; max-width: 100%; }
 /* A whole config request in one form: one Save for all of it, once anything moved. */
 .cfg-form.is-dirty .cfg-save { visibility: visible; }
 .cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
@@ -347,11 +341,6 @@ button.toggle[aria-pressed="true"] {
 }
 .head .head-actions a.btn:hover { color: var(--fg); border-color: var(--dim); }
 .head .head-actions a.btn.icon { padding: 5px 7px; line-height: 0; }
-.actions form { display: inline; }
-.actions a.link, .fetchbar a.link {
-  color: var(--muted); font-size: 13px; text-decoration: none;
-}
-.actions a.link:hover, .fetchbar a.link:hover { color: var(--coral); }
 
 /* --- rows and wells ------------------------------------------------------ */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -359,13 +348,6 @@ button.toggle[aria-pressed="true"] {
 .row[hidden] { display: none; }
 .row .grow { flex: 1; min-width: 200px; }
 .row.between { justify-content: space-between; width: 100%; }
-.fetchbar {
-  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-  border: 1px solid var(--line); border-radius: var(--r);
-  background: var(--panel); padding: 14px; margin-bottom: 20px;
-}
-.fetchbar input[name=target] { flex: 1 1 28rem; min-width: 16rem; }
-.fetchbar .hint { flex-basis: 100%; color: var(--muted); font-size: 12px; margin: 0; }
 .apphead { margin-bottom: 10px; }
 .apphead h2 {
   margin: 0; font-size: 19px; font-weight: 600; text-transform: none;
@@ -388,7 +370,7 @@ code {
   background: var(--panel); border: 1px solid var(--line);
   padding: 0 5px; border-radius: var(--r); color: var(--dim);
 }
-.empty, .note { padding: 48px 0; color: var(--muted); text-align: center; font-size: 13px; }
+.empty { padding: 48px 0; color: var(--muted); text-align: center; font-size: 13px; }
 
 /* --- notices -------------------------------------------------------------
    A colour-bearing left rule rather than a coloured box. */
@@ -495,12 +477,11 @@ details.reveal > summary:hover { color: var(--coral); }
 .app-card-head > .actions {
   margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line);
 }
-.app-card .conflict, .app-card .stale {
+.app-card .stale {
   margin: 10px 0 0; padding: 8px 12px; font-size: 12.5px;
   color: var(--dim); background: var(--panel);
-  border-left: 2px solid var(--bad); border-radius: var(--r);
+  border-left: 2px solid var(--warn); border-radius: var(--r);
 }
-.app-card .stale { border-left-color: var(--warn); }
 /* Free-form docker options the manifest passes through. Louder than `.stale`:
    a tinted ground as well as a rule, because this is the one thing on the card
    the operator is being asked to agree to. */
@@ -517,16 +498,6 @@ details.reveal > summary:hover { color: var(--coral); }
 .app-card .passthru ul { margin: 0; padding-left: 16px; }
 .app-card .passthru li { margin: 3px 0; }
 .app-card .passthru li .mono { color: var(--fg); font-size: 12px; }
-.app-card .update {
-  margin-top: 12px; padding-top: 12px;
-  border-top: 1px solid var(--line); font-size: 12.5px;
-}
-.app-card .update p { margin: 0 0 4px; }
-.app-card .update p:last-child { margin-bottom: 0; }
-.app-card-diff span { display: block; }
-.app-card-diff .diff-add { color: var(--ok); }
-.app-card-diff .diff-del { color: var(--coral); }
-.app-card-diff .diff-hunk { color: var(--muted); }
 .app-card-manifest {
   flex: 1 1 auto; min-width: 0; min-height: 16rem; overflow: auto;
   margin: 0; padding: 4px 0 0;
