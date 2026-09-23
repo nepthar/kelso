@@ -4,7 +4,7 @@
 uv run pytest
 ```
 
-Around 560 tests in ~65s. If the per-test cost starts climbing, something
+Around 640 tests in ~15s. If the per-test cost starts climbing, something
 below has been violated.
 
 ## How it works
@@ -28,7 +28,23 @@ Two consequences worth knowing:
 `docker` with a guard that both refuses and *records* the call — recording
 matters because kelso calls docker with `check=False` in places, which would
 turn a refusal into an empty result that looks like "nothing is running".
-`kelso_env` installs a working fake ahead of the guard on `PATH`.
+`kelso_env` installs a working fake ahead of the guard.
+
+**Docker is a function call, not a process.** Both the fake and the guard live
+in `tests/fakedocker.py`, and `use_fake_docker` swaps them in for the
+`subprocess` module in the only two places kelso starts docker
+(`kelso/lib/docker.py` and `kelso/lib/lifecycle/rootfs.py`). Everything kelso
+does around the process — arguments, streaming into a sink, error tails, JSON
+parsing — still runs; only the process start is skipped. A Python interpreter
+per docker call used to be ~45s of the suite. The fake appends every call to
+`kelso_env.docker_log` and keeps containers in `kelso_env.docker_state`, so
+assert on those. Two things still run for real: `bin/docker` (the same fake,
+as an executable) for kelso started by `run_subprocess`, and
+`test_a_streamed_failure_hands_the_error_a_tail`, the one test that streams
+from an actual child. If kelso starts docker from a new module, patch it in
+`use_fake_docker` too. Nothing fails if you forget -- under `kelso_env` the
+call reaches `bin/docker` and works -- it is just an interpreter per call
+again, and the suite gets slow.
 
 `KELSO_LOCK_TIMEOUT` overrides the 5s lock acquire timeout; the suite sets it
 to 0.25s.

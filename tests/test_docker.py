@@ -75,22 +75,35 @@ def test_streamed_output_goes_to_the_sink_not_stdout(kelso_env, capsys):
   assert capsys.readouterr().out == ""
 
 
-def test_a_streamed_failure_hands_the_error_a_tail(kelso_env):
+def test_a_streamed_failure_hands_the_error_a_tail(kelso_env, monkeypatch):
   """With a sink set, `see the docker output above` points at nothing, so the
-  error carries the captured tail instead."""
+  error carries the captured tail instead.
+
+  The one test in the suite where docker is a real child process: everywhere
+  else `use_fake_docker` answers in-process. This keeps kelso's own streaming
+  -- the pipe read in chunks into the sink, and the exit code after -- honest
+  against a process that actually writes and exits.
+  """
   import io
 
+  import kelso.lib.docker
   from kelso.lib.docker import DockerError, docker_run_command, sink_output
 
+  monkeypatch.setattr(kelso.lib.docker, "subprocess", subprocess)
   bin_dir = kelso_env.root / "bin"
   (bin_dir / "docker").write_text(
-    "#!/usr/bin/env python3\nimport sys\nprint('boom: something broke')\nsys.exit(1)\n"
+    "#!/bin/sh\necho 'starting up'\necho 'boom: something broke' >&2\nexit 1\n"
   )
   (bin_dir / "docker").chmod(0o755)
 
-  with sink_output(io.StringIO()) as _, pytest.raises(DockerError) as excinfo:
+  sink = io.StringIO()
+  with sink_output(sink), pytest.raises(DockerError) as excinfo:
     docker_run_command(["compose", "up"], json_output=False, check=True)
+  # Both streams, merged, reached the sink as they were written...
+  assert sink.getvalue() == "starting up\nboom: something broke\n"
+  # ...and the failure carries them, since no terminal saw them.
   assert "boom: something broke" in str(excinfo.value)
+  assert excinfo.value.returncode == 1
 
 
 @pytest.mark.docker
