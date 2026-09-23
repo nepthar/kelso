@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+import kelso.lib.docker
+import kelso.lib.lifecycle.rootfs
 from kelso.cli.main import run as cli_run
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import scan_bundles
@@ -18,6 +20,8 @@ from kelso.lib.config import VAR_DIRS
 from kelso.lib.logtab import LogTab
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import JsonLogtabStore
+
+from .fakedocker import FakeDocker, FakeSubprocess, GuardDocker
 
 # The contention tests wait this out in full; 5s each is more than the rest of
 # the suite costs. Anything that asserts on the wait should read it from here.
@@ -54,88 +58,13 @@ path = "external-data"
 path = "other-data"
 """
 
-FAKE_DOCKER = """#!/usr/bin/env python3
-import json
-import os
-import subprocess
+# `bin/docker` for tests that start kelso as a real child process, where the
+# in-process fake cannot reach. Same behaviour: it is tests/fakedocker.py.
+FAKE_DOCKER = f"""#!{sys.executable}
 import sys
-from pathlib import Path
-
-args = sys.argv[1:]
-state = Path(os.environ["FAKE_DOCKER_STATE"])
-log = Path(os.environ["FAKE_DOCKER_LOG"])
-
-# Where the `app` volume links pointed at the moment of the call. `kelso dev`
-# swaps them for the duration of one docker command and puts them back, so
-# this is the only way a test can observe the swap from outside.
-app_volumes = Path.cwd() / "volumes" / "app"
-app_links = (
-    {p.name: os.readlink(p) for p in sorted(app_volumes.iterdir())}
-    if app_volumes.is_dir()
-    else {}
-)
-
-with log.open("a") as f:
-    f.write(json.dumps(
-        {"args": args, "cwd": os.getcwd(), "app_links": app_links}
-    ) + "\\n")
-
-containers = json.loads(state.read_text()) if state.exists() else []
-if args[:3] == ["compose", "up", "-d"]:
-    app_id = Path.cwd().name
-    containers = [c for c in containers if c["app_id"] != app_id]
-    containers.append({
-        "app_id": app_id,
-        "run_unit": "main",
-        "id": "fake-container",
-        "state": "running",
-    })
-    state.write_text(json.dumps(containers))
-elif args[:2] == ["compose", "down"]:
-    app_id = Path.cwd().name
-    containers = [c for c in containers if c["app_id"] != app_id]
-    if containers:
-        state.write_text(json.dumps(containers))
-    else:
-        state.unlink(missing_ok=True)
-elif args[:2] == ["compose", "logs"]:
-    app_id = Path.cwd().name
-    for container in containers:
-        if container["app_id"] != app_id:
-            continue
-        unit = container["run_unit"]
-        print(f"{unit}-1  | hello from {unit}")
-elif args[0] == "run":
-    # `docker run --rm -v HOST:HOST ... IMAGE sh -c SCRIPT`, kelso's stand-in
-    # for sudo (kelso/lib/lifecycle/rootfs.py). Every bind maps a host path to
-    # itself, so running the script right here is faithful to what the
-    # container would do -- the only thing the real one adds is root, which a
-    # test has no way to want. stdout is inherited, so the caller still gets
-    # the tar stream it redirects into the archive.
-    if args[-3:-1] != ["sh", "-c"]:
-        sys.exit("fake docker: unexpected `docker run` shape: " + " ".join(args))
-    sys.exit(subprocess.run(["sh", "-c", args[-1]]).returncode)
-elif args[:2] == ["ps", "-a"]:
-    for container in containers:
-        print(json.dumps({
-            "ID": container["id"],
-            "Names": f"{container['app_id']}-{container['run_unit']}-1",
-            "State": container["state"],
-            "Labels": (
-                f"kelso.app_id={container['app_id']},"
-                f"kelso.run_unit={container['run_unit']}"
-            ),
-        }))
-elif args[0] == "stats":
-    for container in containers:
-        if container.get("state") != "running":
-            continue
-        print(json.dumps({
-            "ID": container["id"],
-            "Name": f"{container['app_id']}-{container['run_unit']}-1",
-            "CPUPerc": container.get("cpu_perc", "0.00%"),
-            "MemPerc": container.get("mem_perc", "0.00%"),
-        }))
+sys.path.insert(0, {str(Path(__file__).parent)!r})
+from fakedocker import main
+main()
 """
 
 
@@ -268,11 +197,8 @@ class KelsoEnv:
     self.docker_state.write_text(json.dumps(containers))
 
 
-# Records the attempt before refusing it. Exiting non-zero is not enough on its
-# own: kelso calls docker with check=False in places (see
-# `load_kelso_run_unit_status`), which turns a refusal into an empty result
-# that looks exactly like "no containers are running". The log is what makes an
-# accidental call visible no matter how the caller handles the failure.
+# The executable twin of `GuardDocker`, first on PATH, for anything that runs
+# `docker` without going through the modules `use_fake_docker` patches.
 DOCKER_GUARD = """#!/usr/bin/env python3
 import os
 import sys
@@ -288,6 +214,19 @@ sys.exit(
     + invocation
 )
 """
+
+
+def use_fake_docker(monkeypatch: pytest.MonkeyPatch, docker) -> None:
+  """Route kelso's docker calls to `docker` in-process instead of a child.
+
+  These two modules are the only places kelso starts docker, and a function
+  call costs nothing where an interpreter per call cost most of the suite's
+  time. What is skipped is the process itself; the one test that keeps a real
+  one is `test_a_streamed_failure_hands_the_error_a_tail` in test_docker.py.
+  """
+  fake = FakeSubprocess(docker)
+  monkeypatch.setattr(kelso.lib.docker, "subprocess", fake)
+  monkeypatch.setattr(kelso.lib.lifecycle.rootfs, "subprocess", fake)
 
 
 @pytest.fixture(autouse=True)
@@ -319,6 +258,7 @@ def block_real_docker(
 
   monkeypatch.setenv("DOCKER_GUARD_LOG", str(log))
   monkeypatch.setenv("PATH", f"{guard_dir}{os.pathsep}{os.environ['PATH']}")
+  use_fake_docker(monkeypatch, GuardDocker(log))
 
   yield log
 
@@ -382,7 +322,9 @@ def kelso_env(
     docker_log=root / "docker.log",
   )
 
-  # Prepending puts the working fake ahead of the `block_real_docker` guard.
+  # Both replace the `block_real_docker` guard: in-process for kelso run in
+  # this process, and first on PATH for kelso run as a child.
+  use_fake_docker(monkeypatch, FakeDocker(env.docker_state, env.docker_log))
   monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
   monkeypatch.setenv("FAKE_DOCKER_STATE", str(env.docker_state))
   monkeypatch.setenv("FAKE_DOCKER_LOG", str(env.docker_log))
