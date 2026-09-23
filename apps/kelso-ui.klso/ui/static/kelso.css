@@ -53,7 +53,7 @@ html[data-theme="mojave-day"] {
   color-scheme: light;
   --void: #f5eee0;
   --bg: #ebe2d0;
-  --panel: #d9e2f2;
+  --panel: #f3ead8;
   --line: #d8cbb0;
   --hair: #d8cbb0;
   --fg: #1f2638;
@@ -115,15 +115,17 @@ nav {
   margin-top: 1px;
 }
 /* The ribbon again, flat: the mark and the corner are the same object. */
-.brand .mark, nav a .mark { display: none; }
+.brand .mark { display: none; }
 /* Active is a coral edge and coral type -- not a filled pill. The 2px inset
    border keeps every item on the same baseline grid whether lit or not. */
 nav a {
-  display: block; padding: 5px 10px; margin-bottom: 1px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; margin-bottom: 1px;
   border-left: 2px solid transparent;
   color: var(--dim); text-decoration: none; text-transform: lowercase;
   font-size: 14px;
 }
+nav a .mdi { width: 18px; height: 18px; fill: currentColor; flex: none; }
 nav a:hover { color: var(--fg); border-left-color: var(--line); }
 nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight: 500; }
 .nav-foot { margin-top: auto; }
@@ -149,11 +151,14 @@ html.nav-collapsed .brand .name, html.nav-collapsed .brand .ver,
 html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
 html.nav-collapsed .nav-theme .label { display: none; }
 html.nav-collapsed .brand .mark { display: block; font-weight: 600; font-size: 17px; }
-html.nav-collapsed nav a { padding: 5px 0 5px 8px; }
-html.nav-collapsed nav a .mark { display: inline; }
-html.nav-collapsed .nav-out button, html.nav-collapsed .nav-theme { padding: 5px 0 5px 8px; }
-html.nav-collapsed .nav-out .mark,
-html.nav-collapsed .nav-theme .mark { display: inline; }
+html.nav-collapsed nav a { padding: 5px 0; justify-content: center; }
+html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
+html.nav-collapsed .nav-out .mark { display: inline; }
+html.nav-collapsed .nav-theme {
+  display: flex; justify-content: center; padding: 5px 0;
+}
+html.nav-collapsed .nav-theme .mark { display: flex; }
+.nav-theme .mdi { width: 18px; height: 18px; fill: currentColor; }
 
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 28px 32px 48px; min-width: 0; overflow: auto; }
@@ -230,17 +235,18 @@ th {
   text-align: left; font-size: 11px; font-weight: 400; color: var(--muted);
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   text-transform: lowercase; letter-spacing: 0; font-size: 11.5px;
-  padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line);
+  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line);
   white-space: nowrap; vertical-align: middle;
 }
 td {
-  padding: 9px 14px 9px 0; border-bottom: 1px solid var(--hair);
+  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--hair);
   white-space: nowrap; vertical-align: middle;
 }
 th:first-child, td:first-child { padding-left: 2px; }
 tr:last-child td { border-bottom: none; }
 td.name { font-weight: 500; color: var(--fg); }
-th.act, td.act { width: 1%; text-align: right; padding-right: 2px; }
+th.act, td.act { width: 1%; text-align: right; padding: 2px 2px 2px 0; }
+td.act button.icon { padding: 2px 4px; }
 td.act button + button { margin-left: 8px; }
 .sub {
   display: block; font-size: 11.5px; color: var(--muted); font-weight: 400;
@@ -557,7 +563,7 @@ details.reveal > summary:hover { color: var(--coral); }
 .charts > .card { flex: 1; min-width: 0; }
 .charts h2 { margin: 0 0 10px; display: block; }
 .charts h2::after { display: none; }
-.chart { height: 220px; }
+.chart { height: 220px; background: var(--void); }
 .chart .muted { margin: 0; padding: 48px 12px 0; text-align: center; font-size: 13px; }
 .uplot { font-family: inherit; }
 

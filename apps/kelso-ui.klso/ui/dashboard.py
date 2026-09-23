@@ -44,13 +44,13 @@ _CHART_JS = """
         {
           stroke: token("--dim"),
           font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: token("--hair"), width: 1 },
+          grid: { stroke: token("--muted"), width: 1 },
           ticks: { stroke: token("--line") }
         },
         {
           stroke: token("--dim"),
           font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: token("--hair"), width: 1 },
+          grid: { stroke: token("--muted"), width: 1 },
           ticks: { stroke: token("--line") },
           values: function (u, splits) {
             return splits.map(function (v) { return Math.round(v * 100) + "%"; });

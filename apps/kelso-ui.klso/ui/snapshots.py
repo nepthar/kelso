@@ -33,7 +33,7 @@ def _rows(snapshots):
           f"when there is something to overwrite."
         ),
         args={"app": snap["app_id"], "snapshot": snap["name"]},
-        icon="database-import",
+        icon="camera-retake-outline",
       )
       + job_button(
         "delete",

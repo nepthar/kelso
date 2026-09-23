@@ -9,12 +9,12 @@ from hashlib import blake2s
 from pathlib import Path
 
 NAV = (
-  ("/", "Dashboard"),
-  ("/snapshots", "Snapshots"),
-  ("/volumes", "Volumes"),
-  ("/routes", "Routes"),
-  ("/catalog", "Repos"),
-  ("/activity", "Activity"),
+  ("/", "Dashboard", "home-outline"),
+  ("/catalog", "Repos", "book-multiple-outline"),
+  ("/volumes", "Volumes", "database-outline"),
+  ("/snapshots", "Snapshots", "camera-outline"),
+  ("/routes", "Routes", "network-outline"),
+  ("/activity", "Activity", "file-document-multiple-outline"),
 )
 
 # The stylesheet lives in static/kelso.css, served like any other asset.
@@ -58,7 +58,7 @@ def nav_active(path):
   """
   if path.startswith("/apps"):
     return "/"
-  for href, _ in NAV:
+  for href, _, _ in NAV:
     if path == href or (href != "/" and path.startswith(href + "/")):
       return href
   return None
@@ -85,9 +85,8 @@ def page(path, title, body, version="", actions=""):
   links = "".join(
     f'<a href="{href}" title="{esc(label)}"'
     f"{' class="active"' if href == active else ''}>"
-    f'<span class="label">{esc(label)}</span>'
-    f'<span class="mark" aria-hidden="true">{esc(label[0])}</span></a>'
-    for href, label in NAV
+    f'{mdi(icon)}<span class="label">{esc(label)}</span></a>'
+    for href, label, icon in NAV
   )
   sub = f'<span class="ver">kelso {esc(version)}</span>' if version else ""
   extra = actions
@@ -103,7 +102,7 @@ def page(path, title, body, version="", actions=""):
   {links}
   <div class="nav-foot">
   <button type="button" class="nav-theme" title="rally">
-    <span class="label">theme</span><span class="mark" aria-hidden="true">T</span>
+    <span class="label">theme</span><span class="mark" aria-hidden="true">{mdi("palette-outline")}</span>
   </button>
   <form class="nav-out" method="post" action="/logout">
     <button type="submit" title="Sign out">
@@ -239,6 +238,64 @@ def page(path, title, body, version="", actions=""):
 
 
 MDI = {
+  "home-outline": (
+    "M12 5.69L17 10.19V18H15V12H9V18H7V10.19L12 5.69M12 3L2 "
+    "12H5V20H11V14H13V20H19V12H22"
+  ),
+  "book-multiple-outline": (
+    "M19 2A2 2 0 0 1 21 4V16A2 2 0 0 1 19 18H9A2 2 0 0 1 7 16V4A2 2 0 0 1 9 2H19M19 "
+    "4H16V10L13.5 7.75L11 10V4H9V16H19M3 20A2 2 0 0 0 5 22H17V20H5V6H3Z"
+  ),
+  "database-outline": (
+    "M12 3C7.58 3 4 4.79 4 7V17C4 19.21 7.59 21 12 21S20 19.21 20 17V7C20 4.79 "
+    "16.42 3 12 3M18 17C18 17.5 15.87 19 12 19S6 17.5 6 17V14.77C7.61 15.55 9.72 "
+    "16 12 16S16.39 15.55 18 14.77V17M18 12.45C16.7 13.4 14.42 14 12 14C9.58 14 "
+    "7.3 13.4 6 12.45V9.64C7.47 10.47 9.61 11 12 11C14.39 11 16.53 10.47 18 "
+    "9.64V12.45M12 9C8.13 9 6 7.5 6 7S8.13 5 12 5C15.87 5 18 6.5 18 7S15.87 9 12 9Z"
+  ),
+  "camera-outline": (
+    "M20,4H16.83L15,2H9L7.17,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 "
+    "22,18V6A2,2 0 0,0 20,4M20,18H4V6H8.05L9.88,4H14.12L15.95,6H20V18M12,7A5,5 0 "
+    "0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,15A3,3 0 0,1 "
+    "9,12A3,3 0 0,1 12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15Z"
+  ),
+  "network-outline": (
+    "M15,20A1,1 0 0,0 14,19H13V17H17A2,2 0 0,0 19,15V5A2,2 0 0,0 17,3H7A2,2 0 "
+    "0,0 5,5V15A2,2 0 0,0 7,17H11V19H10A1,1 0 0,0 9,20H2V22H9A1,1 0 0,0 "
+    "10,23H14A1,1 0 0,0 15,22H22V20H15M7,15V5H17V15H7Z"
+  ),
+  "file-document-multiple-outline": (
+    "M16 0H8C6.9 0 6 .9 6 2V18C6 19.1 6.9 20 8 20H20C21.1 20 22 19.1 22 18V6L16 "
+    "0M20 18H8V2H15V7H20V18M4 4V22H20V24H4C2.9 24 2 23.1 2 22V4H4M10 10V12H18V10H10"
+    "M10 14V16H15V14H10Z"
+  ),
+  "camera-plus-outline": (
+    "M21 6H17.8L16 4H10V6H15.1L17 8H21V20H5V11H3V20C3 21.1 3.9 22 5 22H21C22.1 "
+    "22 23 21.1 23 20V8C23 6.9 22.1 6 21 6M8 14C8 18.45 13.39 20.69 16.54 "
+    "17.54C19.69 14.39 17.45 9 13 9C10.24 9 8 11.24 8 14M13 11C14.64 11.05 15.95 "
+    "12.36 16 14C15.95 15.64 14.64 16.95 13 17C11.36 16.95 10.05 15.64 10 "
+    "14C10.05 12.36 11.36 11.05 13 11M5 6H8V4H5V1H3V4H0V6H3V9H5"
+  ),
+  "camera-retake-outline": (
+    "M20,5H16.83L15,3H9L7.17,5H4A2,2 0 0,0 2,7V19A2,2 0 0,0 4,21H20A2,2 0 0,0 "
+    "22,19V7A2,2 0 0,0 20,5M20,19H4V7H8.05L9.88,5H14.12L16,7H20V19M12,18C10.92,18 "
+    "9.86,17.65 9,17L10.44,15.56C10.91,15.85 11.45,16 12,16A3,3 0 0,0 15,13A3,3 0 "
+    "0,0 12,10C10.74,10 9.6,10.8 9.18,12H11L8,15L5,12H7.1C7.65,9.29 10.29,7.55 "
+    "13,8.1C15.7,8.65 17.45,11.29 16.9,14C16.42,16.33 14.38,18 12,18Z"
+  ),
+  "palette-outline": (
+    "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 "
+    "16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,"
+    "18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 "
+    "0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 "
+    "11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 "
+    "16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 "
+    "5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,"
+    "9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 "
+    "15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 "
+    "19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 "
+    "16.7,10 17.5,10Z"
+  ),
   "play": "M8,5.14V19.14L19,12.14L8,5.14Z",
   "stop": "M18,18H6V6H18V18Z",
   "refresh": (
@@ -253,14 +310,6 @@ MDI = {
     "14.26,15.85 15.25,15.63L16.38,14.5H13.5V12.92C13,12.97 12.5,13 12,13C7.58,13 "
     "4,11.21 4,9M4,14V17C4,19.21 7.58,21 12,21C14.94,21 17.5,20.2 18.9,19L17,17.1"
     "C15.61,17.66 13.9,18 12,18C7.58,18 4,16.21 4,14Z"
-  ),
-  "database-import": (
-    "M12,3C8.59,3 5.69,4.07 4.54,5.57L9.79,10.82C10.5,10.93 11.22,11 12,11C16.42,"
-    "11 20,9.21 20,7C20,4.79 16.42,3 12,3M3.92,7.08L2.5,8.5L5,11H0V13H5L2.5,15.5"
-    "L3.92,16.92L8.84,12M20,9C20,11.21 16.42,13 12,13C11.34,13 10.7,12.95 10.09,"
-    "12.87L7.62,15.34C8.88,15.75 10.38,16 12,16C16.42,16 20,14.21 20,12M20,14C20,"
-    "16.21 16.42,18 12,18C9.72,18 7.67,17.5 6.21,16.75L4.53,18.43C5.68,19.93 8.59,"
-    "21 12,21C16.42,21 20,19.21 20,17"
   ),
   "delete-outline": (
     "M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3"
@@ -279,12 +328,6 @@ MDI = {
     "M2 12C2 16.97 6.03 21 11 21C13.39 21 15.68 20.06 17.4 18.4L15.9 16.9C14.63 18."
     "25 12.86 19 11 19C4.76 19 1.64 11.46 6.05 7.05C10.46 2.64 18 5.77 18 12H15L19 "
     "16H19.1L23 12H20C20 7.03 15.97 3 11 3C6.03 3 2 7.03 2 12Z"
-  ),
-  "camera-plus": (
-    "M3 4V1H5V4H8V6H5V9H3V6H0V4M6 10V7H9V4H16L17.8 6H21C22.1 6 23 6.9 23 8V20C23 21"
-    ".1 22.1 22 21 22H5C3.9 22 3 21.1 3 20V10M13 19C17.45 19 19.69 13.62 16.54 10.4"
-    "6C13.39 7.31 8 9.55 8 14C8 16.76 10.24 19 13 19M9.8 14C9.8 16.85 13.25 18.28 1"
-    "5.26 16.26C17.28 14.25 15.85 10.8 13 10.8C11.24 10.8 9.8 12.24 9.8 14Z"
   ),
 }
 

@@ -114,7 +114,7 @@ def lifecycle_bar(app):
     job_button(
       "Snapshot",
       "snapshot",
-      icon="camera-plus",
+      icon="camera-plus-outline",
       title=f"Snapshot {name}",
       desc=(
         f"Copies {app_id}'s volumes and run state into an archive under "
