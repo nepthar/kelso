@@ -33,6 +33,22 @@
   --ribbon: 30px;
   --ribbon-top: 45px;
 }
+html[data-theme="mojave"] {
+  --void: #121726;
+  --bg: #1c2336;
+  --panel: #2b3450;
+  --line: #4a5270;
+  --hair: #2b3450;
+  --fg: #e8dcc4;
+  --dim: #d8cbb0;
+  --muted: #6b7394;
+  --rosewood: #e05a4f;
+  --coral: #f08a4b;
+  --gold: #e8b04a;
+  --ok: #86c95a;
+  --ink: #121726;
+  --off: #4a5270;
+}
 html { color-scheme: dark; height: 100%; background: var(--void); }
 * { box-sizing: border-box; }
 body {
@@ -93,18 +109,22 @@ nav a {
 }
 nav a:hover { color: var(--fg); border-left-color: var(--line); }
 nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight: 500; }
-.nav-out { margin-top: auto; }
-.nav-out button {
+.nav-foot { margin-top: auto; }
+.nav-out button, .nav-theme {
   display: block; width: 100%; text-align: left;
   padding: 5px 10px; margin-bottom: 1px;
   background: none; border: 0; border-left: 2px solid transparent;
   color: var(--muted); text-transform: lowercase; font: inherit; font-size: 14px;
   cursor: pointer;
 }
-.nav-out button:hover { color: var(--fg); border-left-color: var(--line); }
-.nav-out .mark { display: none; }
-/* `.nav-out` above holds the auto margin that pushes both to the foot; two
-   auto margins in one column would split the slack between them instead. */
+.nav-out button:hover, .nav-theme:hover { color: var(--fg); border-left-color: var(--line); }
+.nav-out .mark, .nav-theme .mark { display: none; }
+.nav-theme .mojave { display: none; }
+html[data-theme="mojave"] .nav-theme .rally { display: none; }
+html[data-theme="mojave"] .nav-theme .mojave { display: revert; }
+html[data-theme="mojave"] .nav-theme .mark.mojave { display: none; }
+/* `.nav-foot` holds the auto margin that pushes the foot and the toggle down;
+   two auto margins in one column would split the slack between them instead. */
 .nav-toggle {
   background: none; color: var(--muted); border: 0; border-radius: var(--r);
   padding: 6px; margin-top: 4px; cursor: pointer; font: inherit; width: 100%;
@@ -113,12 +133,17 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 html.nav-collapsed nav { width: 52px; flex-basis: 52px; padding: calc(var(--chamfer) + 4px) 8px 16px; }
 html.nav-collapsed .brand { padding: 0 0 24px; }
 html.nav-collapsed .brand .name, html.nav-collapsed .brand .ver,
-html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label { display: none; }
+html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
+html.nav-collapsed .nav-theme .label { display: none; }
 html.nav-collapsed .brand .mark { display: block; font-weight: 600; font-size: 17px; }
 html.nav-collapsed nav a { padding: 5px 0 5px 8px; }
 html.nav-collapsed nav a .mark { display: inline; }
-html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
-html.nav-collapsed .nav-out .mark { display: inline; }
+html.nav-collapsed .nav-out button, html.nav-collapsed .nav-theme { padding: 5px 0 5px 8px; }
+html.nav-collapsed .nav-out .mark,
+html.nav-collapsed .nav-theme .mark.rally { display: inline; }
+html.nav-collapsed[data-theme="mojave"] .nav-theme .label,
+html.nav-collapsed[data-theme="mojave"] .nav-theme .mark.rally { display: none; }
+html.nav-collapsed[data-theme="mojave"] .nav-theme .mark.mojave { display: inline; }
 
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 28px 32px 48px; min-width: 0; overflow: auto; }

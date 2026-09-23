@@ -18,7 +18,8 @@ emit semantic class names; if the class doesn't exist yet, add it to the
 stylesheet.
 
 **Build with the tokens, never past them.** If you type a hex value, a radius,
-or a font stack anywhere outside `:root`, you have gone around the design.
+or a font stack anywhere outside `:root` or a `html[data-theme]` block, you
+have gone around the design. A theme only overrides these tokens.
 
 | Token | Job |
 |---|---|
