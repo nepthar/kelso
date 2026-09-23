@@ -1,4 +1,4 @@
-"""The Snapshots page: every archive, and a restore button on each row."""
+"""The Snapshots page: every archive, with restore and delete on each row."""
 
 from api import api
 from layout import esc, fmt_size, job_button, job_modal
@@ -34,6 +34,18 @@ def _rows(snapshots):
         ),
         args={"app": snap["app_id"], "snapshot": snap["name"]},
         icon="database-import",
+      )
+      + job_button(
+        "delete",
+        "snapshot-delete",
+        title=f"Delete {snap['name']}",
+        desc=(
+          f"Removes the snapshot archive {snap['name']} of {snap['app_id']}. "
+          f"The installation is left as it is."
+        ),
+        args={"app": snap["app_id"], "snapshot": snap["name"]},
+        icon="delete-outline",
+        danger=True,
       )
       + "</td>"
       "</tr>"

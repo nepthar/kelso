@@ -4,7 +4,6 @@ from api import ApiError, api
 from layout import error_card, esc, job_button, job_modal
 
 TITLE = "Repos"
-SUBTITLE = "Application repositories"
 
 
 def catalog_app_entry(catalogs, app_id):
@@ -307,6 +306,7 @@ def page(version, notice="", *, app=""):
   return (
     TITLE,
     notice
+    + '<p class="lede">Application repositories</p>'
     + contested_note(contested)
     + catalog_tables(catalogs, repos, contested, open_app=open_app)
     + job_modal(),

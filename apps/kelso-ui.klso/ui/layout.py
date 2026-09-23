@@ -78,7 +78,7 @@ def _head(title):
 <body>"""
 
 
-def page(path, title, body, version="", actions="", subtitle=""):
+def page(path, title, body, version="", actions=""):
   active = nav_active(path)
   links = "".join(
     f'<a href="{href}" title="{esc(label)}"'
@@ -94,7 +94,6 @@ def page(path, title, body, version="", actions="", subtitle=""):
     if path.startswith("/apps/") and path != "/apps"
     else f'<a href="{esc(path)}">Refresh</a>'
   )
-  lede = f'<p class="head-sub">{esc(subtitle)}</p>' if subtitle else ""
   return f"""{_head(title)}
 <div class="app">
 <nav>
@@ -108,7 +107,7 @@ def page(path, title, body, version="", actions="", subtitle=""):
   <button type="button" class="nav-toggle" aria-label="Collapse sidebar">‹</button>
 </nav>
 <main>
-  <div class="head"><h1>{esc(title)}</h1>{lede}{refresh}{extra}</div>
+  <div class="head"><h1>{esc(title)}</h1>{refresh}{extra}</div>
   {body}
 </main>
 </div>
@@ -236,10 +235,6 @@ MDI = {
     "12.87L7.62,15.34C8.88,15.75 10.38,16 12,16C16.42,16 20,14.21 20,12M20,14C20,"
     "16.21 16.42,18 12,18C9.72,18 7.67,17.5 6.21,16.75L4.53,18.43C5.68,19.93 8.59,"
     "21 12,21C16.42,21 20,19.21 20,17"
-  ),
-  "trash-can": (
-    "M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M9,8H11V17H9"
-    "V8M13,8H15V17H13V8Z"
   ),
   "delete-outline": (
     "M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3"

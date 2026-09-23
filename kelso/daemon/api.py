@@ -54,7 +54,8 @@ from kelso.lib.spec import AppSpec
 #     the flat `<name>_bytes` keys.
 # 17: the `restart` job verb is now `reload`.
 # 18: GET /apps/{id}/logs (container logs, tail only).
-API_VERSION = 18
+# 19: snapshot-delete is a job verb.
+API_VERSION = 19
 
 CtxFactory = Callable[[], KelsoCtx]
 

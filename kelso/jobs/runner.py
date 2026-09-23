@@ -22,7 +22,7 @@ from kelso.jobs.reload import ReloadJob
 from kelso.jobs.remove import ResetJob, UninstallJob
 from kelso.jobs.repo import RepoAddJob, RepoRemoveJob, RepoUpdateJob
 from kelso.jobs.restore import RestoreJob
-from kelso.jobs.snapshot import SnapshotJob
+from kelso.jobs.snapshot import DeleteSnapshotJob, SnapshotJob
 from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
 from kelso.lib.kelso import KelsoCtx
@@ -44,6 +44,7 @@ JOBS: dict[str, type[Job]] = {
   "reload": ReloadJob,
   "install": InstallJob,
   "snapshot": SnapshotJob,
+  "snapshot-delete": DeleteSnapshotJob,
   "restore": RestoreJob,
   "cmd": CmdJob,
   "uninstall": UninstallJob,

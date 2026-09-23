@@ -56,8 +56,7 @@ def _rows(runs):
 def list_page():
   runs = api("/activity?limit=100")["activity"]
   return (
-    "<h2>Activity</h2>"
-    + '<p class="lede">Recent app-related activities and output</p>'
+    '<p class="lede">Recent app-related activities and output</p>'
     + f'<div class="card">{_rows(runs)}</div>'
     + job_modal()
   )

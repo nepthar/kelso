@@ -29,15 +29,13 @@ NO_STORE = {"Cache-Control": "no-store"}
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
 # installed without the other and fields this UI reads may be missing.
-NEEDS_API = 18
+NEEDS_API = 19
 _daemon_api = None
 
 
-def html(path, title, body, version="", status_code=200, actions="", subtitle=""):
+def html(path, title, body, version="", status_code=200, actions=""):
   return HTMLResponse(
-    page(
-      path, title, _skew_notice() + body, version, actions=actions, subtitle=subtitle
-    ),
+    page(path, title, _skew_notice() + body, version, actions=actions),
     status_code=status_code,
     headers=NO_STORE,
   )
@@ -348,9 +346,7 @@ def catalog_get(app: str = "", ok: str | None = None, err: str | None = None):
   if unreachable:
     return unreachable
   title, body, version, actions = catalog.page(version, banner(ok, err), app=app)
-  return html(
-    "/catalog", title, body, version, actions=actions, subtitle=catalog.SUBTITLE
-  )
+  return html("/catalog", title, body, version, actions=actions)
 
 
 @app.get("/activity")
