@@ -1,0 +1,31 @@
+/* mojave night -- desert dusk: navy ground, sand type, warm signals. */
+[data-theme="mojave"] {
+  color-scheme: dark;
+
+  --void: #121726;
+  --bg: #191f32;
+  --panel: #2b3450;
+  --line: #4a5270;
+  --hair: #2b3450;
+
+  --fg: #e8dcc4;
+  --dim: #d8cbb0;
+  --muted: #7c86a8;
+
+  --rosewood: #e05a4f;
+  --coral: #f08a4b;
+  --gold: #e8b04a;
+  --ok: #86c95a;
+
+  --ink: #121726;
+  --off: #4a5270;
+
+  --ansi-0: #2b3450;  --ansi-8: #7c86a8;
+  --ansi-1: #e05a4f;  --ansi-9: #f07a70;
+  --ansi-2: #86c95a;  --ansi-10: #a3dc7d;
+  --ansi-3: #e8b04a;  --ansi-11: #f5c86e;
+  --ansi-4: #6d9ce8;  --ansi-12: #93b8f2;
+  --ansi-5: #c58ad8;  --ansi-13: #d9a8e8;
+  --ansi-6: #5cc4c0;  --ansi-14: #85d8d4;
+  --ansi-7: #d8cbb0;  --ansi-15: #e8dcc4;
+}

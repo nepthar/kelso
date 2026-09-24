@@ -16,6 +16,7 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from icons import mdi
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from themes import THEMES
 
 HERE = Path(__file__).parent
 STATIC = HERE / "static"
@@ -94,7 +95,9 @@ templates = Environment(
   lstrip_blocks=True,
   extensions=["jinja2.ext.do"],
 )
-templates.globals.update(asset=asset, mdi=mdi, nav=NAV, NEEDS_API=NEEDS_API)
+templates.globals.update(
+  asset=asset, mdi=mdi, nav=NAV, themes=THEMES, NEEDS_API=NEEDS_API
+)
 templates.filters["size"] = fmt_size
 
 

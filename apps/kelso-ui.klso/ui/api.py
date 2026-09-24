@@ -1,5 +1,3 @@
-"""Talk to kelsod. The only I/O this app does besides serving pages."""
-
 import errno
 import http.client
 import json

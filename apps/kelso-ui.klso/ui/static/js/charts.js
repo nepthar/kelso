@@ -1,66 +1,72 @@
 // The dashboard's host CPU and memory charts, drawn with uPlot from the
-// #host-metrics data block, in the current theme's tokens.
+// #host-metrics data block in the current theme's tokens -- and drawn again
+// when the theme changes, since a canvas does not follow CSS.
 (function () {
   var el = document.getElementById("host-metrics");
   if (!el || typeof uPlot === "undefined") return;
   var payload = JSON.parse(el.textContent);
-  draw("chart-cpu", payload.cpu, payload.since, payload.until);
-  draw("chart-mem", payload.mem, payload.since, payload.until);
+  var charts = [
+    { id: "chart-cpu", points: payload.cpu },
+    { id: "chart-mem", points: payload.mem }
+  ];
+  var MONO = '11px "IBM Plex Mono", ui-monospace, monospace';
 
-  function draw(id, points, since, until) {
-    var mount = document.getElementById(id);
+  function axis(extra) {
+    var base = {
+      stroke: kelso.token("--dim"),
+      font: MONO,
+      grid: { stroke: kelso.token("--muted"), width: 1 },
+      ticks: { stroke: kelso.token("--line") }
+    };
+    for (var k in extra) base[k] = extra[k];
+    return base;
+  }
+
+  function draw(chart) {
+    var mount = document.getElementById(chart.id);
     if (!mount) return;
-    if (!points.length) {
+    if (!chart.points.length) {
       mount.innerHTML = '<p class="muted">No samples in the last hour.</p>';
       return;
     }
-    var xs = points.map(function (p) { return p.t; });
-    var ys = points.map(function (p) { return p.v; });
-    var css = getComputedStyle(document.documentElement);
-    function token(name) { return css.getPropertyValue(name).trim(); }
-    function fade(hex, alpha) {
-      var n = parseInt(hex.slice(1), 16);
-      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + alpha + ")";
-    }
-    var coral = token("--coral");
-    var plot = new uPlot({
+    if (chart.plot) chart.plot.destroy();
+    var coral = kelso.token("--coral");
+    chart.plot = new uPlot({
       width: mount.clientWidth || 400,
       height: 220,
       cursor: { focus: { prox: 24 } },
       legend: { show: false },
       scales: {
-        x: { time: true, auto: false, range: [since, until] },
+        x: { time: true, auto: false, range: [payload.since, payload.until] },
         y: { auto: false, range: [0, 1] }
       },
       axes: [
-        {
-          stroke: token("--dim"),
-          font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: token("--muted"), width: 1 },
-          ticks: { stroke: token("--line") }
-        },
-        {
-          stroke: token("--dim"),
-          font: '11px "IBM Plex Mono", ui-monospace, monospace',
-          grid: { stroke: token("--muted"), width: 1 },
-          ticks: { stroke: token("--line") },
+        axis({}),
+        axis({
           values: function (u, splits) {
             return splits.map(function (v) { return Math.round(v * 100) + "%"; });
           }
-        }
+        })
       ],
       series: [
         {},
         {
           stroke: coral,
           width: 2,
-          fill: fade(coral, 0.1),
+          fill: kelso.rgba("--coral", 0.1),
           points: { show: true, size: 5, fill: coral }
         }
       ]
-    }, [xs, ys], mount);
-    new ResizeObserver(function () {
-      plot.setSize({ width: mount.clientWidth || 400, height: 220 });
-    }).observe(mount);
+    }, [chart.points.map(function (p) { return p.t; }),
+        chart.points.map(function (p) { return p.v; })], mount);
+    if (!chart.observer) {
+      chart.observer = new ResizeObserver(function () {
+        if (chart.plot) chart.plot.setSize({ width: mount.clientWidth || 400, height: 220 });
+      });
+      chart.observer.observe(mount);
+    }
   }
+
+  charts.forEach(draw);
+  document.addEventListener("kelso:themechange", function () { charts.forEach(draw); });
 })();

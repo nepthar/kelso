@@ -1,30 +1,21 @@
 /* ---------------------------------------------------------------------------
-   Tokens. Two surfaces, three text weights, one radius, one spacing scale.
-   The ground is neutral-warm rather than navy so the signal colours (which are
-   all warm) sit on it instead of fighting a blue cast.
+   Tokens. The colours are a theme's: static/themes/<id>.css, one file each,
+   registered in themes.py. Nothing in this file is a colour literal -- a hex
+   value here would be one theme's colour leaking into all of them.
+
+   What is here is geometry, and the tokens derived from a theme's so that no
+   theme has to repeat them.
    --------------------------------------------------------------------------- */
 :root {
-  --void: #100f0e;    /* the gutter the ribbon runs through */
-  --bg: #171614;      /* the app ground */
-  --panel: #1f1c19;   /* raised: wells, inputs, modals */
-  --line: #2e2925;    /* hairline that separates */
-  --hair: #232020;    /* hairline that is barely there (table rows) */
-
-  /* Three text weights, each with exactly one job. Never pure white. */
-  --fg: #ece5dc;      /* content */
-  --dim: #bfb5a8;     /* labels, secondary */
-  --muted: #9a9082;   /* metadata, disabled */
-
-  /* The ribbon, reused as meaning. Nothing in the UI is coloured off-palette. */
-  --rosewood: #c72057;
-  --coral: #fc795f;
-  --gold: #fdd305;
-  --ok: #8aa85e;
-
-  --ink: #17110e;     /* dark type on a warm fill */
   --bad: var(--rosewood);
   --warn: var(--gold);
-  --off: #4a433d;
+
+  /* The terminal draws on the gutter's black-most surface, in content type,
+     with the one accent as its cursor. Its sixteen colours are the theme's. */
+  --term-bg: var(--void);
+  --term-fg: var(--fg);
+  --term-cursor: var(--coral);
+  --term-selection: color-mix(in srgb, var(--coral) 30%, transparent);
 
   --r: 2px;           /* one radius, near-square */
   --gutter: 20px;     /* what you see of the ribbon */
@@ -32,40 +23,7 @@
   --ribbon: 30px;
   --ribbon-top: 45px;
 }
-html[data-theme="mojave"] {
-  --void: #121726;
-  --bg: #191f32;
-  --panel: #2b3450;
-  --line: #4a5270;
-  --hair: #2b3450;
-  --fg: #e8dcc4;
-  --dim: #d8cbb0;
-  --muted: #7a84a6;
-  --rosewood: #e05a4f;
-  --coral: #f08a4b;
-  --gold: #e8b04a;
-  --ok: #86c95a;
-  --ink: #121726;
-  --off: #4a5270;
-}
-html[data-theme="mojave-day"] {
-  color-scheme: light;
-  --void: #f5eee0;
-  --bg: #ebe2d0;
-  --panel: #f3ead8;
-  --line: #d8cbb0;
-  --hair: #d8cbb0;
-  --fg: #1f2638;
-  --dim: #4a5270;
-  --muted: #61667e;
-  --rosewood: #b3372d;
-  --coral: #b9501c;
-  --gold: #8a5d08;
-  --ok: #2f7a22;
-  --ink: #fbf7ef;
-  --off: #4a5270;
-}
-html { color-scheme: dark; height: 100%; background: var(--void); }
+html { height: 100%; background: var(--void); }
 * { box-sizing: border-box; }
 body {
   margin: 0; padding: var(--gutter); display: flex; height: 100%; overflow: hidden;
@@ -158,6 +116,37 @@ html.nav-collapsed .nav-theme {
 }
 html.nav-collapsed .nav-theme .mark { display: flex; }
 .nav-theme .mdi { width: 18px; height: 18px; fill: currentColor; }
+
+/* The theme menu: a raised list beside the nav, opened from the theme button.
+   Items read like nav links -- lowercase, with a coral edge on the current one. */
+.theme-menu {
+  position: fixed; z-index: 30; min-width: 12rem; padding: 4px 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+}
+.theme-menu[hidden] { display: none; }
+.theme-menu button {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 6px 12px; text-align: left; text-transform: lowercase;
+  background: none; border: 0; border-left: 2px solid transparent; border-radius: 0;
+  color: var(--dim);
+}
+.theme-menu button:hover:not(:disabled) {
+  color: var(--fg); border-color: transparent; border-left-color: var(--line);
+}
+.theme-menu button[aria-checked="true"],
+.theme-menu button[aria-checked="true"]:hover:not(:disabled) {
+  color: var(--coral); border-left-color: var(--coral);
+}
+/* A theme's ribbon on its own ground, in that theme's tokens: theme files
+   select [data-theme] rather than html, so the attribute scopes them here. */
+.theme-swatch {
+  display: inline-flex; gap: 2px; padding: 3px; flex: none;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r);
+}
+.theme-swatch i { width: 6px; height: 12px; }
+.theme-swatch i:nth-child(1) { background: var(--rosewood); }
+.theme-swatch i:nth-child(2) { background: var(--coral); }
+.theme-swatch i:nth-child(3) { background: var(--gold); }
 
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 28px 32px 48px; min-width: 0; overflow: auto; }
@@ -280,8 +269,8 @@ td.muted.wrap { color: var(--muted); font-size: 13px; }
 
 /* --- controls ------------------------------------------------------------
    Default is quiet: a hairline and dim type. Fill is reserved for the one
-   action on a page that commits something, and it is warm with dark ink --
-   not white-on-blue. */
+   action on a page that commits something: coral, with the theme's --ink
+   type on it. */
 input[type=text], input[type=password], input:not([type]), select {
   background: var(--void); color: var(--fg); border: 1px solid var(--line);
   border-radius: var(--r); padding: 6px 9px; font: inherit; font-size: 13px;

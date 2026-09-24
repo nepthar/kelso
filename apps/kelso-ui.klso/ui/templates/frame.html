@@ -15,9 +15,17 @@
   <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
   {% endfor %}
   <div class="nav-foot">
-  <button type="button" class="nav-theme" title="theme">
+  {#- The theme menu. shell.js opens it beside the nav; each item previews its
+    theme by carrying that theme's data-theme, which scopes its tokens. -#}
+  <button type="button" class="nav-theme" title="theme" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-menu">
     <span class="label">theme</span><span class="mark" aria-hidden="true">{{ mdi("palette-outline") }}</span>
   </button>
+  <div class="theme-menu" id="theme-menu" role="menu" aria-label="Theme" hidden>
+    {% for theme in themes %}
+    <button type="button" role="menuitemradio" aria-checked="false" data-theme-id="{{ theme.id }}">
+      <span class="theme-swatch" data-theme="{{ theme.id }}" aria-hidden="true"><i></i><i></i><i></i></span>{{ theme.name }}</button>
+    {% endfor %}
+  </div>
   <form class="nav-out" method="post" action="/logout">
     <button type="submit" title="Sign out">
       <span class="label">sign out</span><span class="mark" aria-hidden="true">⏻</span>

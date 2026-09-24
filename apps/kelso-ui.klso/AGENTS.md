@@ -46,9 +46,20 @@ inline `style=` attributes, no color or size literals in templates. Pages
 emit semantic class names; if the class doesn't exist yet, add it to the
 stylesheet.
 
+**Adding a theme** is one file and one line. Copy
+`ui/static/themes/rally.css` to `ui/static/themes/<id>.css`, change its
+selector to `[data-theme="<id>"]` and its values, and add
+`Theme("<id>", "<name>")` to `THEMES` in `ui/themes.py`. The head links, the
+ids `boot.js` accepts and the nav's theme menu all come from that list. Then
+`uv run pytest tests/test_themes.py`: a theme must set every token in `TOKENS`
+and nothing else, as `#rrggbb`, and clear the contrast floors -- 4.5:1 for
+`--dim`, `--muted` and the terminal's colours, 3:1 for the accents -- or it
+fails. Anything drawn outside CSS (a chart, a terminal) reads colours through
+`kelso.token()` / `kelso.rgba()` and redraws on the `kelso:themechange` event.
+
 **Build with the tokens, never past them.** If you type a hex value, a radius,
-or a font stack anywhere outside `:root` or a `html[data-theme]` block, you
-have gone around the design. A theme only overrides these tokens.
+or a font stack anywhere outside a theme file or the `:root` block of
+`kelso.css`, you have gone around the design. A theme only sets these tokens.
 
 | Token | Job |
 |---|---|
@@ -56,10 +67,11 @@ have gone around the design. A theme only overrides these tokens.
 | `--bg` | The ground everything sits on. |
 | `--panel` | Raised: wells, modals, notices. Reach for it only when something must lift off the ground. |
 | `--line` / `--hair` | A hairline that separates / one that barely does (table rows). |
-| `--fg` / `--dim` / `--muted` | Content / labels and secondary data / metadata and disabled. Three weights, one job each, at roughly 14:1, 9:1 and 5.5:1 against `--bg`. Recessive is a step down this ladder, never a step below it — `--muted` is the floor, and it still has to be legible in a bright room. |
+| `--fg` / `--dim` / `--muted` | Content / labels and secondary data / metadata and disabled. Three weights, one job each, at roughly 14:1, 9:1 and 5.5:1 against `--bg`. Recessive is a step down this ladder, never a step below it — `--muted` is the floor, and it still has to be legible in a bright room. The top of the ladder is not the maximum either: no theme uses full contrast, `#000` on `#fff` or the reverse. Ground and type are both tinted. |
 | `--coral` | The one accent. Actionable, active, focused. |
 | `--gold` `--rosewood` `--ok` | Attention / destructive and failed / healthy. |
-| `--ink` | Type on a warm fill. Dark type on coral, never white. |
+| `--ink` | Type on a coral fill. Whichever of dark or light reads against this theme's coral — dark on rally's bright coral, light on mojave day's rust — at 4.5:1 or better. |
+| `--ansi-0` … `--ansi-15` | The terminal's sixteen colours, drawn on `--void`. Set per theme; everything else about the terminal (`--term-bg`, `--term-fg`, `--term-cursor`, `--term-selection`) is derived in `kelso.css`. |
 | `--r` | The radius. There is one. |
 
 **Hierarchy comes from type and space before it comes from boxes.** A new

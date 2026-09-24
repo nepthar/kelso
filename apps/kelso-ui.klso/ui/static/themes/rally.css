@@ -1,0 +1,33 @@
+/* rally -- toyota racing division theme */
+:where(:root), [data-theme="rally"] {
+  color-scheme: dark;
+
+  --void: #100f0e;    /* the gutter the ribbon runs through */
+  --bg: #171614;      /* the app ground */
+  --panel: #1f1c19;   /* raised: wells, inputs, modals */
+  --line: #2e2925;    /* hairline that separates */
+  --hair: #232020;    /* hairline that is barely there (table rows) */
+
+  /* Three text weights, each with exactly one job. Never pure white. */
+  --fg: #ece5dc;      /* content */
+  --dim: #bfb5a8;     /* labels, secondary */
+  --muted: #9a9082;   /* metadata, disabled */
+
+  /* The ribbon, reused as meaning. Nothing in the UI is coloured off-palette. */
+  --rosewood: #c72057;
+  --coral: #fc795f;
+  --gold: #fdd305;
+  --ok: #8aa85e;
+
+  --ink: #17110e;     /* dark type on a warm fill */
+  --off: #4a433d;
+
+  --ansi-0: #2e2925;  --ansi-8: #7a7064;
+  --ansi-1: #e35d6a;  --ansi-9: #f07c86;
+  --ansi-2: #8aa85e;  --ansi-10: #a8c47a;
+  --ansi-3: #e0b83a;  --ansi-11: #fdd305;
+  --ansi-4: #6f9bd1;  --ansi-12: #93b6e0;
+  --ansi-5: #c07ab8;  --ansi-13: #d89ad0;
+  --ansi-6: #5fb3a8;  --ansi-14: #83cbc1;
+  --ansi-7: #bfb5a8;  --ansi-15: #ece5dc;
+}

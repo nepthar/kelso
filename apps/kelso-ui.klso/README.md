@@ -16,7 +16,9 @@ matches.
 | `web.py` | Rendering: the Jinja environment, `Page`, redirects, form fields |
 | `pages/` | One router per feature: its pages, form posts and JSON |
 | `templates/` | All markup. `frame.html` is the chrome, `macros.html` the components |
-| `static/kelso.css` | Every style, and the theme tokens |
+| `static/kelso.css` | Every style; no colours of its own |
+| `static/themes/` | One file per theme: its colour tokens and nothing else |
+| `themes.py` | The theme registry, and the tokens every theme must set |
 | `static/js/` | One script per behaviour, loaded by the pages that need it |
 | `static/vendor/` | Third-party browser code, pinned and served from here |
 | `icons.py` | The Material Design icon paths the templates draw |

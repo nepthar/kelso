@@ -1,5 +1,5 @@
-// The frame every page shares: the nav toggle, the theme button, and
-// timestamps rewritten into the viewer's own zone.
+// The frame every page shares: the nav toggle, the theme menu and the
+// helpers that follow the theme, and timestamps in the viewer's own zone.
 (function () {
   var root = document.documentElement;
 
@@ -24,21 +24,84 @@
     });
   }
 
-  var themeBtn = document.querySelector(".nav-theme");
-  var themes = window.kelso.themes;
-  function current() {
-    var id = root.dataset.theme || "";
-    for (var i = 0; i < themes.length; i++) if (themes[i].id === id) return i;
-    return 0;
+  // --- theme -------------------------------------------------------------
+  // What other scripts use to follow the theme: the current value of a token,
+  // the same colour at some opacity, and an event when the theme changes.
+  // Anything drawn in token colours outside CSS -- a chart, a terminal --
+  // reads through these and redraws on `kelso:themechange`.
+  function token(name) {
+    return getComputedStyle(root).getPropertyValue(name).trim();
   }
-  if (themeBtn) {
-    themeBtn.title = themes[current()].name;
-    themeBtn.addEventListener("click", function () {
-      var next = themes[(current() + 1) % themes.length];
-      if (next.id) root.dataset.theme = next.id;
-      else delete root.dataset.theme;
-      store("kelso-theme", next.id);
-      themeBtn.title = next.name;
+  function rgba(name, alpha) {
+    // Resolve through the browser rather than parsing hex, so a theme may
+    // write its colours any way CSS allows.
+    var probe = document.createElement("span");
+    probe.style.color = token(name);
+    document.body.appendChild(probe);
+    var parts = getComputedStyle(probe).color.match(/[\d.]+/g);
+    probe.remove();
+    if (!parts || parts.length < 3) return token(name);
+    return "rgba(" + parts[0] + "," + parts[1] + "," + parts[2] + "," + alpha + ")";
+  }
+  function setTheme(id) {
+    if (window.kelso.themes.indexOf(id) < 0 || id === root.dataset.theme) return;
+    root.dataset.theme = id;
+    store("kelso-theme", id === window.kelso.themes[0] ? "" : id);
+    syncMenu();
+    document.dispatchEvent(new CustomEvent("kelso:themechange", { detail: { theme: id } }));
+  }
+  window.kelso.token = token;
+  window.kelso.rgba = rgba;
+  window.kelso.setTheme = setTheme;
+
+  var themeBtn = document.querySelector(".nav-theme");
+  var menu = document.getElementById("theme-menu");
+  var items = menu ? menu.querySelectorAll("[data-theme-id]") : [];
+  function syncMenu() {
+    var current = root.dataset.theme;
+    items.forEach(function (item) {
+      var on = item.getAttribute("data-theme-id") === current;
+      item.setAttribute("aria-checked", String(on));
+      if (on && themeBtn) themeBtn.title = "theme: " + item.textContent.trim();
+    });
+  }
+  function openMenu(open) {
+    menu.hidden = !open;
+    themeBtn.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    // Beside the nav, bottom-aligned with the button. Fixed rather than
+    // inside the nav, whose overflow would clip it. Runtime geometry is the
+    // one thing set as a style from script; everything else is in kelso.css.
+    var nav = themeBtn.closest("nav").getBoundingClientRect();
+    var btn = themeBtn.getBoundingClientRect();
+    menu.style.left = (nav.right + 8) + "px";
+    menu.style.bottom = Math.max(8, window.innerHeight - btn.bottom) + "px";
+    var checked = menu.querySelector('[aria-checked="true"]') || items[0];
+    if (checked) checked.focus();
+  }
+  if (themeBtn && menu) {
+    syncMenu();
+    themeBtn.addEventListener("click", function () { openMenu(menu.hidden); });
+    items.forEach(function (item) {
+      item.addEventListener("click", function () {
+        setTheme(item.getAttribute("data-theme-id"));
+        openMenu(false);
+        themeBtn.focus();
+      });
+    });
+    menu.addEventListener("keydown", function (event) {
+      var list = Array.prototype.slice.call(items);
+      var at = list.indexOf(document.activeElement);
+      if (event.key === "Escape") { openMenu(false); themeBtn.focus(); }
+      else if (event.key === "ArrowDown") { list[(at + 1) % list.length].focus(); }
+      else if (event.key === "ArrowUp") { list[(at - 1 + list.length) % list.length].focus(); }
+      else return;
+      event.preventDefault();
+    });
+    document.addEventListener("click", function (event) {
+      if (!menu.hidden && !menu.contains(event.target) && !themeBtn.contains(event.target)) {
+        openMenu(false);
+      }
     });
   }
 

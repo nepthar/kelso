@@ -1,15 +1,10 @@
-"""One password, one signed cookie. The whole of this app's authentication.
-
-There are no accounts and no session store. The password is kelso config
-(`admin_pass`), and the cookie is signed with a key derived from it, so
-resetting the password invalidates every session issued under the old one.
-"""
-
 import hashlib
 import hmac
 import os
 import sys
 import time
+
+# Kelso is a single-user application, there is only one admin password
 
 COOKIE = "kelso_session"
 SESSION_SECONDS = 7 * 24 * 3600

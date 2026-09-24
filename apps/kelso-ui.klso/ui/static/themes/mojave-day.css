@@ -1,0 +1,32 @@
+/* mojave day -- the same desert at noon: sand ground, navy type. The one light
+   theme, so its "white" terminal colours are greys that read on sand. */
+[data-theme="mojave-day"] {
+  color-scheme: light;
+
+  --void: #f5eee0;
+  --bg: #ebe2d0;
+  --panel: #f3ead8;
+  --line: #d8cbb0;
+  --hair: #d8cbb0;
+
+  --fg: #1f2638;
+  --dim: #4a5270;
+  --muted: #5f647c;
+
+  --rosewood: #b3372d;
+  --coral: #b9501c;
+  --gold: #8a5d08;
+  --ok: #2f7a22;
+
+  --ink: #fbf7ef;
+  --off: #4a5270;
+
+  --ansi-0: #1f2638;  --ansi-8: #4a5270;
+  --ansi-1: #b3372d;  --ansi-9: #9e2f26;
+  --ansi-2: #2f7a22;  --ansi-10: #28691d;
+  --ansi-3: #8a5d08;  --ansi-11: #734d06;
+  --ansi-4: #2f5fa8;  --ansi-12: #284f8c;
+  --ansi-5: #8a3f8f;  --ansi-13: #743578;
+  --ansi-6: #1d7573;  --ansi-14: #1a6563;
+  --ansi-7: #5f647c;  --ansi-15: #1f2638;
+}

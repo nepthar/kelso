@@ -3,6 +3,13 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} · kelso</title>
+{#- Every theme is linked: each is a few hundred bytes of tokens, and having
+  them all here lets the menu preview any of them and switch without a load. -#}
+{% for theme in themes %}
+<link rel="stylesheet" href="{{ asset('themes/' ~ theme.id ~ '.css') }}">
+{% endfor %}
+{#- Read by boot.js, which runs next, to pick up the saved theme before paint. -#}
+<script type="application/json" id="kelso-themes">{{ themes|map(attribute='id')|list|tojson }}</script>
 <script src="{{ asset('js/boot.js') }}"></script>
 <link rel="stylesheet" href="{{ asset('kelso.css') }}">
 {% block head %}{% endblock %}
