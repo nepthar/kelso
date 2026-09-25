@@ -91,7 +91,7 @@ def start(
   return result
 
 
-def _compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
+def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
   """The config environment compose.yml interpolates `${__KELSO_CONFIG__*}` from."""
   try:
     spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
@@ -114,7 +114,7 @@ def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
     cwd=state.run_path,
     json_output=False,
     check=True,
-    env=_compose_env(app_id, ctx),
+    env=compose_env(app_id, ctx),
   )
 
 
@@ -136,7 +136,7 @@ def logs_text(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> str:
       cwd=state.run_path,
       json_output=False,
       check=False,
-      env=_compose_env(app_id, ctx),
+      env=compose_env(app_id, ctx),
     )
   return captured.getvalue()
 
@@ -165,7 +165,7 @@ def run_command(
 
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}
   argv = [*entry.argv, *args]
-  env = _compose_env(app_id, ctx)
+  env = compose_env(app_id, ctx)
 
   if entry.run_unit in running:
     return docker_run_command(
@@ -256,7 +256,7 @@ def stop(app_id: AppID, ctx: KelsoCtx) -> None:
       cwd=state.run_path,
       json_output=False,
       check=True,
-      env=_compose_env(app_id, ctx),
+      env=compose_env(app_id, ctx),
     )
     # Nothing is mounting them now, and leaving them behind is how a stopped
     # app keeps looking like it is still bound to somebody's data.
