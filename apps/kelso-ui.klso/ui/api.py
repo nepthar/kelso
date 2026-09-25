@@ -4,6 +4,9 @@ import json
 import os
 import socket
 
+from websockets.asyncio.client import connect as ws_connect
+from websockets.asyncio.client import unix_connect as ws_unix_connect
+
 SOCKET = os.environ.get("KELSO_SOCKET", "/kelso/conn/admin.sock")
 # host:port wins over the socket when set. Docker Desktop's bind mounts cannot
 # carry AF_UNIX, so a mac host serves this over TCP instead.
@@ -33,14 +36,26 @@ def where():
   return API if API else SOCKET
 
 
-def connect(timeout=10):
-  if not API:
-    return UnixHTTPConnection(SOCKET, timeout=timeout)
+def _tcp_address():
   address = API.split("://", 1)[-1].rstrip("/")
   host, _, port = address.rpartition(":")
   if not port.isdigit():
     raise ApiError(f"KELSO_API must be host:port, got {API!r}")
-  return http.client.HTTPConnection(host or "127.0.0.1", int(port), timeout=timeout)
+  return host or "127.0.0.1", int(port)
+
+
+def connect(timeout=10):
+  if not API:
+    return UnixHTTPConnection(SOCKET, timeout=timeout)
+  return http.client.HTTPConnection(*_tcp_address(), timeout=timeout)
+
+
+def open_socket(path):
+  """A websocket to kelsod at `path`, for `async with`."""
+  if not API:
+    return ws_unix_connect(SOCKET, f"ws://localhost{path}", compression=None)
+  host, port = _tcp_address()
+  return ws_connect(f"ws://{host}:{port}{path}", compression=None)
 
 
 def api(path, method="GET", payload=None, timeout=10):

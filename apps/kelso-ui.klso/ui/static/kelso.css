@@ -329,6 +329,9 @@ button.toggle[aria-pressed="true"] {
   background: transparent;
 }
 .head .head-actions a.btn:hover { color: var(--fg); border-color: var(--dim); }
+.head .head-actions a.btn[aria-current="true"] {
+  color: var(--coral); border-color: var(--coral); background: var(--panel);
+}
 .head .head-actions a.btn.icon { padding: 5px 7px; line-height: 0; }
 
 /* --- rows and wells ------------------------------------------------------ */
@@ -427,6 +430,18 @@ details.reveal > summary:hover { color: var(--coral); }
 .job-out.bad { border-left-color: var(--bad); }
 /* A page of nothing but logs, so it takes the height the modal's copy cannot. */
 .logs-out { max-height: none; height: calc(100vh - 260px); white-space: pre; }
+/* The terminal fills the same well. Padding sits on xterm's own element, which
+   the fit addon subtracts; on this box it would push the last row out. */
+.console {
+  height: calc(100vh - 260px); overflow: hidden;
+  background: var(--term-bg); border: 1px solid var(--line); border-radius: var(--r);
+  font: 13px "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+.console:focus-within { border-color: var(--coral); }
+.console .xterm { height: 100%; padding: 8px 12px; }
+/* xterm.css paints this #000 (as `.xterm .xterm-viewport`, and loads later); the
+   theme only reaches the element inside it. */
+.console .xterm .xterm-viewport { background: var(--term-bg); }
 
 .job-choices { display: flex; flex-direction: column; gap: 8px; }
 .job-choices[hidden] { display: none; }

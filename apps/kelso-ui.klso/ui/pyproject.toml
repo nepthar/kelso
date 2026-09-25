@@ -8,6 +8,7 @@ dependencies = [
   "jinja2>=3.1.4",
   "python-multipart>=0.0.9",
   "uvicorn>=0.34.0",
+  "websockets>=15.0",
 ]
 
 # `start.sh` syncs with --no-dev, so none of this reaches the container.

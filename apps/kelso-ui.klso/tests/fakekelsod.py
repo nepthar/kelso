@@ -12,6 +12,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
+from websockets.sync.server import serve
+
 EVIL = '<i data-evil="1">\'"&amp;</i>'
 
 
@@ -447,7 +449,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 19},
+  "/version": {"kelso": "0.1.0", "api": 20},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -479,7 +481,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 19
+    self.api = 20
     fake = self
 
     class Handler(BaseHTTPRequestHandler):
@@ -527,3 +529,38 @@ class FakeKelsod:
 
   def stop(self):
     self.server.shutdown()
+
+
+class FakeConsole:
+  """kelsod's console socket: echoes, and closes the way kelsod would.
+
+  Bytes come back as sent and text comes back as `ctl:<text>`; typing `exit`
+  ends it with "exited 0". Any app but kelso-ui is refused, as a stopped one is.
+  kelsod speaks websocket where FakeKelsod speaks plain HTTP, so this listens
+  on its own port and a test points the UI at it.
+  """
+
+  def __init__(self):
+    self.paths = []
+    fake = self
+
+    def handler(ws):
+      path = ws.request.path
+      fake.paths.append(path)
+      if not path.startswith("/apps/kelso-ui/console"):
+        ws.send(b"mealie is not running\r\n")
+        ws.close(4001, "mealie is not running")
+        return
+      for message in ws:
+        if message == b"exit\r":
+          ws.close(1000, "exited 0")
+          return
+        ws.send(message if isinstance(message, bytes) else b"ctl:" + message.encode())
+
+    self.server = serve(handler, "127.0.0.1", 0, compression=None)
+    self.address = f"127.0.0.1:{self.server.socket.getsockname()[1]}"
+    self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+  def start(self):
+    self.thread.start()
+    return self

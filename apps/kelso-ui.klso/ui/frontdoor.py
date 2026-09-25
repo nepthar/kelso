@@ -1,6 +1,10 @@
 """What every request passes before it reaches a page, in order: the rate
 limits, the origin check, the session. And the headers every response leaves
-with."""
+with.
+
+The middleware only sees HTTP. A websocket route must call `socket_refusal`
+before anything else.
+"""
 
 import time
 from urllib.parse import quote, urlsplit
@@ -20,24 +24,33 @@ RELOAD = "kelso reload kelso-ui"
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+
 # Everything a page needs comes from this server -- it may be on a network with
 # no internet at all. The one exception is the fonts, which are optional (see
 # js/boot.js). No inline script anywhere: a script that got into a page some
 # other way cannot run.
-CSP = "; ".join(
-  (
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' https://fonts.googleapis.com",
-    "font-src https://fonts.gstatic.com",
-    "img-src 'self' data:",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
+def _csp(style_src="'self' https://fonts.googleapis.com"):
+  return "; ".join(
+    (
+      "default-src 'self'",
+      "script-src 'self'",
+      f"style-src {style_src}",
+      "font-src https://fonts.gstatic.com",
+      "img-src 'self' data:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    )
   )
-)
+
+
+CSP = _csp()
+
+# xterm.js lays out and colours the terminal through <style> elements it
+# creates, which the strict policy blocks. Only the console page sends this.
+TERMINAL_CSP = _csp("'self' 'unsafe-inline' https://fonts.googleapis.com")
 
 SECURITY_HEADERS = {
   "Content-Security-Policy": CSP,
@@ -176,5 +189,17 @@ async def _admit(request, call_next):
 async def front_door(request, call_next):
   """Rate limit, origin, session. Everything reaches a page through here."""
   response = await _admit(request, call_next)
-  response.headers.update(SECURITY_HEADERS)
+  for name, value in SECURITY_HEADERS.items():
+    response.headers.setdefault(name, value)
   return response
+
+
+def socket_refusal(ws):
+  """Why this websocket may not open, or None. Origin is checked on every one."""
+  if not general.check():
+    return RATE_LIMITED
+  if not same_origin(ws.headers):
+    return "Refused a connection from another site."
+  if not auth.valid(ws.cookies.get(auth.COOKIE)):
+    return "Session expired. Reload and sign in."
+  return None

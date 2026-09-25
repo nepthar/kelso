@@ -26,7 +26,14 @@ at a pinned version, never loaded from a CDN: kelso-ui must work on a host
 with no internet access. Fonts are the exception -- nice to have, never
 needed -- so every font stack ends in system faces and `boot.js` requests
 Plex without the page waiting on it. Data a script needs goes in a
-`<script type="application/json">` block, which the policy allows.
+`<script type="application/json">` block, which the policy allows. The
+console page is the one exception on styles: xterm.js writes its layout into
+`<style>` elements, so that page alone sends `TERMINAL_CSP`, which allows
+inline styles and never inline script.
+
+**A websocket route calls `frontdoor.socket_refusal` first.** The front door
+is HTTP middleware and never sees a websocket, so the route has to ask for the
+rate limit, origin and session checks itself.
 
 **Tests** are in `../tests`, against a fake kelsod: `cd ui && uv run pytest`.
 They plant hostile strings in every fixture field, so a missing escape
@@ -151,5 +158,5 @@ Plain http is fine here: the session cookie only asks to be `Secure` when the
 request that minted it arrived over TLS, which in the container it does.
 
 Run the tests, then look at every page you touched — `/`, `/apps/<id>`,
-`/apps/<id>/logs`, `/volumes`, `/catalog`, `/routes`, `/snapshots`,
+`/apps/<id>/logs`, `/apps/<id>/console`, `/volumes`, `/catalog`, `/routes`, `/snapshots`,
 `/activity`, `/login` — plus the collapsed nav and one modal. Layout regressions here are invisible in a diff and obvious on screen.

@@ -8,10 +8,13 @@
 
 {% block refresh %}{% endblock %}
 
-{#- Logs, then start or stop, reload, snapshot, remove. Each verb opens the job
-  modal. Only one of start/stop can apply, so only that one is drawn. -#}
+{#- Logs and, while something runs, the console; then start or stop, reload,
+  snapshot, remove. Each verb opens the job modal. Only one of start/stop can
+  apply, so only that one is drawn. -#}
 {% block actions %}
-<span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a><div class="row actions">
+<span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a>
+{%- if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}<a class="btn icon" href="{{ here }}/console" title="Console" aria-label="Console">{{ mdi('console') }}</a>{% endif -%}
+<div class="row actions">
 {% if app.status == 'running' %}
   {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
       desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
