@@ -1,5 +1,7 @@
 import json
-from collections.abc import Mapping
+import re
+import shlex
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -137,9 +139,40 @@ class ComposeWarning:
 @dataclass(frozen=True)
 class AppCommand:
   name: str
-  argv: tuple[str, ...]
+  cmd: str | tuple[str, ...]
   run_unit: str
   desc: str
+
+  def argv(self, args: Sequence[str] = ()) -> list[str]:
+    """What `docker compose exec` runs for this command given the operator's `args`.
+
+    A string runs as `/bin/sh -c`, as docker runs one, with `args` quoted onto
+    its end. A list gets them as more argv.
+    """
+    if isinstance(self.cmd, str):
+      return ["/bin/sh", "-c", " ".join([self.cmd, *map(shlex.quote, args)])]
+    return [*self.cmd, *args]
+
+  def line(self) -> str:
+    """The command as someone would type it, ready to paste into a shell."""
+    if isinstance(self.cmd, str):
+      return self.cmd
+    return " ".join(shell_word(word) for word in self.cmd)
+
+
+_BARE = re.compile(r"[\w@%+=:,./-]+")
+
+
+def shell_word(word: str) -> str:
+  """`word` quoted the way a person would, for pasting into an interactive shell."""
+  if _BARE.fullmatch(word):
+    return word
+  if "'" not in word:
+    return f"'{word}'"
+  if not set(word) & set('"$`\\'):
+    # Interactive bash expands `!` even inside double quotes; step out for it.
+    return '"' + word.replace("!", '"\\!"') + '"'
+  return shlex.quote(word)
 
 
 @dataclass(frozen=True)
@@ -238,7 +271,7 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
   commands = {
     name: AppCommand(
       name=name,
-      argv=tuple(entry.argv()),
+      cmd=entry.cmd if isinstance(entry.cmd, str) else tuple(entry.cmd),
       run_unit=entry.run_unit,
       desc=entry.desc,
     )

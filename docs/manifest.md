@@ -163,7 +163,7 @@ reindex, a password reset.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cmd` | string or list | **required** | A string runs through `/bin/sh -c` and takes operator arguments; a list is argv. |
+| `cmd` | string or list | **required** | As docker runs one: a string runs as `/bin/sh -c "<string>"`, a list is the argv. Operator arguments are shell-split, then quoted onto the end of a string or appended to a list. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 

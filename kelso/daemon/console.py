@@ -17,6 +17,7 @@ import subprocess
 import termios
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from starlette.websockets import WebSocket
@@ -71,20 +72,29 @@ async def serve(ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx) -> None:
   _sessions += 1
   try:
     record = await asyncio.to_thread(ConsoleRecord, ctx, cmd, "web")
-    ending, ok = "disconnected", True
+    ending = _Ending()
     try:
       await ws.accept()
-      ending, ok = await _relay(
+      await _relay(
         ws,
         shell_argv(cmd),
         cwd=cmd.cwd,
         env=cmd.env,
         hangup=lambda pid: hang_up(cmd, pid),
+        ending=ending,
       )
     finally:
-      await asyncio.shield(asyncio.to_thread(record.close, ending, ok=ok))
+      await asyncio.shield(asyncio.to_thread(record.close, ending.text, ok=ending.ok))
   finally:
     _sessions -= 1
+
+
+@dataclass
+class _Ending:
+  """How a session ended. Set before closing: a cancelled handler loses returns."""
+
+  text: str = "disconnected"
+  ok: bool = True
 
 
 def _set_size(fd: int, cols: int, rows: int) -> None:
@@ -124,8 +134,9 @@ async def _relay(
   cwd: Path,
   env: dict[str, str],
   hangup: Callable[[int], None],
-) -> tuple[str, bool]:
-  """Relay `ws` to `argv` on a fresh PTY until one side ends; how it ended, and if ok.
+  ending: _Ending,
+) -> None:
+  """Relay `ws` to `argv` on a fresh PTY until one side ends, noting how in `ending`.
 
   `hangup` gets the pid `PID_MARKER` announced if the session is abandoned.
   """
@@ -205,14 +216,13 @@ async def _relay(
     await asyncio.gather(*tasks, return_exceptions=True)
     if out in done and out.exception() is None:
       code = await asyncio.to_thread(proc.wait)
-      await ws.close(EXITED, f"exited {code}")
-      return f"exited {code}", code == 0
-    if idle_task in done:
+      ending.text, ending.ok = f"exited {code}", code == 0
+      await ws.close(EXITED, ending.text)
+    elif idle_task in done:
       minutes = round(IDLE_SECONDS / 60)
+      ending.text = f"closed after {minutes} minutes idle"
       await ws.send_bytes(f"\r\n[closed after {minutes} minutes idle]\r\n".encode())
       await ws.close(IDLE, "idle")
-      return f"closed after {minutes} minutes idle", True
-    return "disconnected", True
   finally:
     for task in tasks:
       task.cancel()
