@@ -24,7 +24,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
 from kelso.lib.spec import AppCommand, AppSpec
 
-SHELL = "command -v bash >/dev/null && exec bash || exec sh"
+DEFAULT_SHELL = "/bin/sh"
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
 
@@ -38,7 +38,12 @@ class ConsoleCommand:
 
 
 def console_command(
-  app: str, unit: str, ctx: KelsoCtx, *, announce_pid: bool = False
+  app: str,
+  unit: str,
+  ctx: KelsoCtx,
+  *,
+  shell: str = DEFAULT_SHELL,
+  announce_pid: bool = False,
 ) -> ConsoleCommand:
   """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
   app_id = ctx.resolve_app(app)
@@ -55,7 +60,7 @@ def console_command(
       )
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
   spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
-  script = shell_script(unit, spec.commands)
+  script = shell_script(unit, spec.commands, shell)
   if announce_pid:
     script = "printf '\\033]697;kelso-pid=%s\\007' $$; " + script
   return ConsoleCommand(
@@ -67,16 +72,19 @@ def console_command(
   )
 
 
-def shell_script(unit: str, commands: Mapping[str, AppCommand]) -> str:
-  """What `sh -c` runs in `unit`: the commands that run there, listed, then the shell."""
+def shell_script(
+  unit: str, commands: Mapping[str, AppCommand], shell: str = DEFAULT_SHELL
+) -> str:
+  """What `sh -c` runs in `unit`: the commands that run there, listed, then `shell`."""
+  start = f"exec {shlex.quote(shell)}"
   here = sorted((name, c) for name, c in commands.items() if c.run_unit == unit)
   if not here:
-    return SHELL
+    return start
   width = max(len(name) for name, _ in here)
   lines = ["The manifest defines these commands:"]
   lines += [f"  {name.ljust(width)}  {c.line()}" for name, c in here]
   banner = " ".join(shlex.quote(line) for line in lines)
-  return f"printf '%s\\n' {banner}; {SHELL}"
+  return f"printf '%s\\n' {banner}; {start}"
 
 
 def hangup_args(cmd: ConsoleCommand, pid: int) -> list[str]:

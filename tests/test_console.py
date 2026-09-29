@@ -18,7 +18,7 @@ from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import SHELL, shell_script
+from kelso.lib.lifecycle.console import shell_script
 from kelso.lib.spec import AppCommand
 
 APP = "io.p2net.basic-features"
@@ -65,6 +65,14 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert (run["verb"], run["app_id"], run["status"]) == ("console", APP, "ok")
   body = client.get(f"/activity/{run['log']}").json()["text"]
   assert "via" in body and "cli" in body
+
+
+def test_shell_takes_another_shell(kelso_env, running):
+  assert (
+    kelso_env.run("shell", "basic-features", "--shell", "/bin/bash").returncode == 0
+  )
+  log = kelso_env.docker_log.read_text().splitlines()
+  assert json.loads(log[-1])["args"][-1].endswith("exec /bin/bash")
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):
@@ -193,4 +201,4 @@ def test_the_shell_opens_with_the_commands_for_its_unit(tmp_path):
     "  reindex  manage.py reindex\n"
   )
   assert "jobs" not in out
-  assert shell_script("worker", {}) == SHELL
+  assert shell_script("worker", {}) == "exec /bin/sh"
