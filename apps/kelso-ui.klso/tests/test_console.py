@@ -1,10 +1,13 @@
 """The console: its page, and the websocket relayed to kelsod behind the front door."""
 
 import json
+import re
 
 import api
 import pytest
+import server
 from fakekelsod import APP_DETAIL, FakeConsole
+from starlette.routing import WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 _console = FakeConsole().start()
@@ -50,17 +53,41 @@ def test_passes_a_refusal_on(client, kelsod):
   assert b"not running" in out
 
 
-def test_socket_needs_a_session(anon, kelsod):
-  with anon.websocket_connect(WS) as ws:
+def _socket_paths(routes):
+  for route in routes:
+    if isinstance(route, WebSocketRoute):
+      yield route.path
+    # FastAPI keeps an included router whole, behind a wrapper.
+    inner = getattr(route, "original_router", route)
+    yield from _socket_paths(getattr(inner, "routes", []))
+
+
+# Every websocket route, path parameters filled in. The front door middleware
+# sees only HTTP, so each socket has to refuse for itself, new ones included.
+SOCKETS = [
+  BASE + re.sub(r"{[^}]+}", "kelso-ui", path)
+  for path in _socket_paths(server.app.routes)
+]
+
+
+def test_every_socket_is_covered():
+  assert f"{BASE}/apps/kelso-ui/console/ws" in SOCKETS
+  assert f"{BASE}/host/console/ws" in SOCKETS
+
+
+@pytest.mark.parametrize("url", SOCKETS)
+def test_every_socket_needs_a_session(anon, kelsod, url):
+  with anon.websocket_connect(url) as ws:
     _, closed = drain(ws)
   assert closed.code == 4003
   assert "Session expired" in closed.reason
   assert kelsod.paths == []
 
 
-def test_socket_refuses_another_site(client, kelsod):
+@pytest.mark.parametrize("url", SOCKETS)
+def test_every_socket_refuses_another_site(client, kelsod, url):
   with client.websocket_connect(
-    WS, headers={"origin": "https://jellyfin.kelso.test"}
+    url, headers={"origin": "https://jellyfin.kelso.test"}
   ) as ws:
     _, closed = drain(ws)
   assert closed.code == 4003
@@ -94,3 +121,19 @@ def test_nothing_running_draws_no_terminal(client, fake):
   assert "Start it to open a console" in text
   assert 'id="console"' not in text
   assert "xterm.js" not in text
+
+
+def test_the_host_shell_is_relayed_too(client, kelsod):
+  with client.websocket_connect(f"{BASE}/host/console/ws") as ws:
+    ws.send_bytes(b"hi")
+    assert ws.receive_bytes() == b"hi"
+  assert kelsod.paths == ["/host/console"]
+
+
+def test_the_dashboard_names_the_host_and_offers_its_shell(client, fake):
+  text = client.get("/").text
+  assert "tycho " in text
+  assert 'href="/host/console"' in text
+  assert (
+    "unsafe-inline" in client.get("/host/console").headers["content-security-policy"]
+  )

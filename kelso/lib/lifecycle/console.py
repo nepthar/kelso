@@ -12,6 +12,8 @@ in the container. So a session kelsod abandons announces its shell's pid
 it from inside.
 """
 
+import os
+import pwd
 import re
 import shlex
 from dataclasses import dataclass
@@ -81,20 +83,20 @@ def hangup_args(cmd: ConsoleCommand, pid: int) -> list[str]:
   return ["compose", "exec", "-T", cmd.unit, *cmd.unit_shell, f"kill -HUP {pid}"]
 
 
+def host_shell() -> tuple[list[str], Path]:
+  """A login shell for the user kelso runs as, and the home it starts in."""
+  user = pwd.getpwuid(os.getuid())
+  return [user.pw_shell or "/bin/sh", "-l"], Path(user.pw_dir)
+
+
 class ConsoleRecord:
   """One session in the activity log, filed when it opens and closed by `close`."""
 
-  def __init__(self, ctx: KelsoCtx, cmd: ConsoleCommand, via: str) -> None:
+  def __init__(self, ctx: KelsoCtx, app_id: AppID | None, args: dict[str, str]):
     self.ctx = ctx
-    self.app_id = cmd.app_id
+    self.app_id = app_id
     self.started = datetime.now(UTC)
-    self.log = begin_run(
-      ctx,
-      "console",
-      {"unit": cmd.unit, "via": via},
-      app_id=cmd.app_id,
-      started=self.started,
-    )
+    self.log = begin_run(ctx, "console", args, app_id=app_id, started=self.started)
 
   def close(self, ending: str, *, ok: bool = True) -> None:
     with open(self.ctx.config.activity_root / self.log, "a", encoding="utf-8") as f:

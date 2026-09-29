@@ -1,4 +1,5 @@
-"""kelsod's end of a console: a PTY between a websocket and `docker compose exec`.
+"""kelsod's end of a console: a PTY between a websocket and a shell, either
+`docker compose exec` into an app's unit or a login shell on the host.
 
 In, binary frames are keystrokes and text frames are JSON control, only
 `{"resize": [cols, rows]}` so far. Out is binary terminal output. The close
@@ -8,12 +9,14 @@ the refusal also written to the terminal, since browsers drop long reasons.
 
 import asyncio
 import fcntl
+import ipaddress
 import json
 import logging
 import os
 import signal
 import struct
 import subprocess
+import sys
 import termios
 import time
 from collections.abc import Callable
@@ -29,6 +32,7 @@ from kelso.lib.lifecycle.console import (
   ConsoleCommand,
   ConsoleRecord,
   hangup_args,
+  host_shell,
 )
 
 logger = logging.getLogger("kelsod.console")
@@ -38,6 +42,19 @@ IDLE_SECONDS = 15 * 60
 EXITED = 1000
 IDLE = 4000
 REFUSED = 4001
+
+# Run by the new session leader: take the PTY on stdin as its controlling
+# terminal, then become the real program, so job control, window-size signals
+# and hangup work as in any terminal. preexec_fn would do it, but is not safe in
+# a threaded process.
+_CTTY = """\
+import fcntl, os, sys, termios
+fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+try:
+    os.execvp(sys.argv[1], sys.argv[1:])
+except OSError as e:
+    sys.exit(f"{sys.argv[1]}: {e.strerror}")
+"""
 
 
 def shell_argv(cmd: ConsoleCommand) -> list[str]:
@@ -53,6 +70,24 @@ def hang_up(cmd: ConsoleCommand, pid: int) -> None:
     logger.warning("could not hang up shell %d in %s (%d)", pid, cmd.app_id, code)
 
 
+def network_refusal(ws: WebSocket) -> str | None:
+  """Why a console may not open on this connection, or None.
+
+  Only the admin socket and loopback stand in front of an API with no
+  authentication, and a console is a shell. So one that arrived over the
+  network is refused, whatever `kelsod --host` was told.
+  """
+  server = ws.scope.get("server")
+  if server and server[1] is None:
+    return None  # The admin socket: uvicorn gives its path and no port.
+  try:
+    if server and ipaddress.ip_address(server[0]).is_loopback:
+      return None
+  except ValueError:
+    pass
+  return "Consoles open only over kelsod's admin socket or loopback."
+
+
 async def refuse(ws: WebSocket, message: str) -> None:
   await ws.accept()
   await ws.send_bytes(message.replace("\n", "\r\n").encode() + b"\r\n")
@@ -61,19 +96,42 @@ async def refuse(ws: WebSocket, message: str) -> None:
 
 
 async def serve(ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx) -> None:
-  """Run one session for `cmd` on `ws`, filed in the activity log."""
-  record = await asyncio.to_thread(ConsoleRecord, ctx, cmd, "web")
+  """A shell in an app's unit, filed in the activity log."""
+  args = {"unit": cmd.unit, "via": "web"}
+  record = await asyncio.to_thread(ConsoleRecord, ctx, cmd.app_id, args)
+  await _session(
+    ws,
+    record,
+    shell_argv(cmd),
+    cwd=cmd.cwd,
+    env=cmd.env,
+    hangup=lambda pid: hang_up(cmd, pid),
+  )
+
+
+async def serve_host(ws: WebSocket, ctx: KelsoCtx) -> None:
+  """A login shell on the host as kelsod's own user, filed in the activity log."""
+  argv, home = host_shell()
+  args = {"shell": argv[0], "via": "web"}
+  record = await asyncio.to_thread(ConsoleRecord, ctx, None, args)
+  # Nothing else sets TERM here: docker does it for a container's shell.
+  env = {"TERM": "xterm-256color"}
+  await _session(ws, record, argv, cwd=home, env=env, hangup=None)
+
+
+async def _session(
+  ws: WebSocket,
+  record: ConsoleRecord,
+  argv: list[str],
+  *,
+  cwd: Path,
+  env: dict[str, str],
+  hangup: Callable[[int], None] | None,
+) -> None:
   ending = _Ending()
   try:
     await ws.accept()
-    await _relay(
-      ws,
-      shell_argv(cmd),
-      cwd=cmd.cwd,
-      env=cmd.env,
-      hangup=lambda pid: hang_up(cmd, pid),
-      ending=ending,
-    )
+    await _relay(ws, argv, cwd=cwd, env=env, hangup=hangup, ending=ending)
   finally:
     await asyncio.shield(asyncio.to_thread(record.close, ending.text, ok=ending.ok))
 
@@ -91,19 +149,26 @@ def _set_size(fd: int, cols: int, rows: int) -> None:
 
 
 def _end(
-  proc: subprocess.Popen, master: int, pid: int | None, hangup: Callable[[int], None]
+  proc: subprocess.Popen,
+  master: int,
+  pid: int | None,
+  hangup: Callable[[int], None] | None,
 ) -> None:
-  """Kill what still runs, here and in the container, then close the PTY."""
-  if proc.poll() is None:
-    os.killpg(proc.pid, signal.SIGHUP)
-    try:
-      proc.wait(5)
-    except subprocess.TimeoutExpired:
-      os.killpg(proc.pid, signal.SIGKILL)
-      proc.wait()
-    if pid is not None:
-      hangup(pid)
+  """Hang up the terminal, reap what ran on it, and end the container side too."""
+  running = proc.poll() is None
+  # Closing our end is the terminal hanging up: the kernel sends the session
+  # SIGHUP. It goes first because a shell exiting from a terminal waits for its
+  # output to drain, which nothing would read.
   os.close(master)
+  if not running:
+    return
+  try:
+    proc.wait(5)
+  except subprocess.TimeoutExpired:
+    os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
+  if pid is not None and hangup is not None:
+    hangup(pid)
 
 
 async def _ready(add, remove, fd: int) -> None:
@@ -122,7 +187,7 @@ async def _relay(
   *,
   cwd: Path,
   env: dict[str, str],
-  hangup: Callable[[int], None],
+  hangup: Callable[[int], None] | None,
   ending: _Ending,
 ) -> None:
   """Relay `ws` to `argv` on a fresh PTY until one side ends, noting how in `ending`.
@@ -132,10 +197,8 @@ async def _relay(
   loop = asyncio.get_running_loop()
   master, slave = os.openpty()
   _set_size(master, 80, 24)
-  # No controlling terminal: a resize must signal the group itself, and closing
-  # the session must kill it.
   proc = subprocess.Popen(
-    argv,
+    [sys.executable, "-c", _CTTY, *argv],
     cwd=cwd,
     env={**os.environ, **env},
     stdin=slave,
@@ -187,9 +250,8 @@ async def _relay(
       elif message.get("text"):
         size = json.loads(message["text"]).get("resize")
         if size:
+          # The kernel tells the terminal's foreground job, as for any terminal.
           _set_size(master, int(size[0]), int(size[1]))
-          # The group: `docker compose` is a plugin the docker CLI runs as a child.
-          os.killpg(proc.pid, signal.SIGWINCH)
 
   async def idle() -> None:
     while (left := last + IDLE_SECONDS - time.monotonic()) > 0:

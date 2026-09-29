@@ -449,7 +449,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 20},
+  "/version": {"kelso": "0.1.0", "api": 21, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -481,7 +481,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 20
+    self.api = 21
     fake = self
 
     class Handler(BaseHTTPRequestHandler):
@@ -501,7 +501,7 @@ class FakeKelsod:
           return self._send(500, {"error": fake.fail})
         path = unquote(self.path)
         if path == "/version":
-          return self._send(200, {"kelso": "0.1.0", "api": fake.api})
+          return self._send(200, {**GET["/version"], "api": fake.api})
         if path in GET:
           return self._send(200, GET[path])
         return self._send(404, {"error": f"no fixture for {path}"})
@@ -547,7 +547,7 @@ class FakeConsole:
     def handler(ws):
       path = ws.request.path
       fake.paths.append(path)
-      if not path.startswith("/apps/kelso-ui/console"):
+      if not path.startswith(("/apps/kelso-ui/console", "/host/console")):
         ws.send(b"mealie is not running\r\n")
         ws.close(4001, "mealie is not running")
         return

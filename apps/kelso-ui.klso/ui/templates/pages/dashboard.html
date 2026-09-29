@@ -3,7 +3,11 @@
 {% block head %}<link rel="stylesheet" href="{{ asset('vendor/uplot-1.6.32/uPlot.min.css') }}">{% endblock %}
 
 {% block content %}
-<p class="lede">Connected to kelso {{ version }} over <code>{{ where }}</code>.</p>
+<h2>kelso host</h2>
+<div class="row host-line">
+  <a class="btn icon" href="/host/console" title="Host shell" aria-label="Host shell">{{ mdi('console') }}</a>
+  <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
+</div>
 <div class="charts">
   <div class="card pad"><h2>Host CPU</h2><div class="chart" id="chart-cpu"></div></div>
   <div class="card pad"><h2>Host memory</h2><div class="chart" id="chart-mem"></div></div>

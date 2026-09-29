@@ -1,4 +1,5 @@
-"""A shell in an app's running container: the page, and the websocket it opens.
+"""Shells: in an app's running container, or on the host. The pages, and the
+websockets they open.
 
 The socket is relayed frame for frame to kelsod, which owns the PTY and the
 protocol (kelso/daemon/console.py); this side adds only the front door.
@@ -37,12 +38,28 @@ def console_page(page: PageDep, app_id: str, unit: str = ""):
 
 @router.websocket("/apps/{app_id}/console/ws")
 async def console_socket(ws: WebSocket, app_id: str, unit: str = "main"):
+  await _bridge(ws, f"/apps/{quote(app_id)}/console?{urlencode({'unit': unit})}")
+
+
+@router.get("/host/console")
+def host_console_page(page: PageDep):
+  response = page.render("pages/host_console.html", "Host shell")
+  response.headers["Content-Security-Policy"] = TERMINAL_CSP
+  return response
+
+
+@router.websocket("/host/console/ws")
+async def host_console_socket(ws: WebSocket):
+  await _bridge(ws, "/host/console")
+
+
+async def _bridge(ws, path):
+  """Admit `ws` through the front door, then relay it to kelsod's `path`."""
   refusal = socket_refusal(ws)
   await ws.accept()
   if refusal:
     await ws.close(REFUSED, refusal)
     return
-  path = f"/apps/{quote(app_id)}/console?{urlencode({'unit': unit})}"
   try:
     async with open_socket(path) as upstream:
       code, reason = await _relay(ws, upstream)

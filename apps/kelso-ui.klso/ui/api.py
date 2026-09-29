@@ -79,7 +79,7 @@ def api(path, method="GET", payload=None, timeout=10):
     if not API and e.errno == errno.EOPNOTSUPP:
       hint = (
         " This host's bind mounts cannot carry a unix socket (Docker Desktop "
-        "does not support it). Run `kelsod --port N --host 0.0.0.0` and set "
+        "does not support it). Run `kelsod --port N` and set "
         "`kelso config kelso-ui --set api_address=host.docker.internal:N`."
       )
     raise ApiError(f"Cannot reach kelsod at {where()}: {e}.{hint}") from e

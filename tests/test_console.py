@@ -6,7 +6,10 @@ relay and the process handling are real and only the container is not.
 
 import json
 import os
+import pwd
 import time
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,9 +20,13 @@ from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.console import host_shell
 
 APP = "io.p2net.basic-features"
-URL = f"/apps/{APP}/console"
+# Absolute: TestClient opens a relative websocket URL on `testserver`, which is
+# not loopback. This is kelso-ui arriving through Docker Desktop.
+LOOPBACK = "ws://127.0.0.1"
+URL = f"{LOOPBACK}/apps/{APP}/console"
 
 
 def ctx() -> KelsoCtx:
@@ -142,6 +149,24 @@ def test_console_refuses_a_unit_that_is_not_running(running, client):
   assert b"running units: main" in out
 
 
+def test_consoles_are_refused_over_the_network(client):
+  for path in (f"/apps/{APP}/console", "/host/console"):
+    with client.websocket_connect(f"ws://192.0.2.7{path}") as ws:
+      out, closed = drain(ws)
+    assert closed.code == console.REFUSED
+    assert b"admin socket or loopback" in out
+
+
+def test_consoles_open_on_the_admin_socket_and_loopback():
+  def arriving_at(server):
+    return SimpleNamespace(scope={"server": server})
+
+  assert console.network_refusal(arriving_at(("/k/var/conn/admin.sock", None))) is None
+  assert console.network_refusal(arriving_at(("127.0.0.1", 9000))) is None
+  assert console.network_refusal(arriving_at(("192.0.2.7", 9000)))
+  assert console.network_refusal(arriving_at(None))
+
+
 def test_console_closes_an_idle_session(running, client, monkeypatch):
   monkeypatch.setattr(console, "IDLE_SECONDS", 0.2)
   shell(monkeypatch, "exec sleep 30")
@@ -179,3 +204,50 @@ def test_leaving_hangs_up_the_shell_here_and_in_the_container(
   pid = int(args[-1].removeprefix("kill -HUP "))
   with pytest.raises(ProcessLookupError):
     os.kill(pid, 0)
+
+
+def test_the_host_shell_is_a_login_shell_in_home():
+  user = pwd.getpwuid(os.getuid())
+  assert host_shell() == ([user.pw_shell, "-l"], Path(user.pw_dir))
+
+
+def test_the_host_console_gets_a_real_terminal(
+  kelso_env, client, monkeypatch, tmp_path
+):
+  # /dev/tty only opens for a process whose controlling terminal this is. macOS
+  # hands a session leader its terminal by itself, so only Linux can fail this.
+  script = 'echo x > /dev/tty && echo has-ctty; echo "TERM=$TERM"; pwd -P'
+  monkeypatch.setattr(
+    console, "host_shell", lambda: (["/bin/sh", "-c", script], tmp_path)
+  )
+  with client.websocket_connect(f"{LOOPBACK}/host/console") as ws:
+    out, closed = drain(ws)
+
+  text = out.decode()
+  assert "has-ctty" in text
+  assert "TERM=xterm-256color" in text
+  assert str(tmp_path.resolve()) in text
+  assert closed.code == console.EXITED
+
+  run = client.get("/activity").json()["activity"][0]
+  assert (run["verb"], run["app_id"]) == ("console", None)
+
+
+def test_leaving_ends_a_shell_that_is_still_writing(running, client, monkeypatch):
+  # Exiting from a terminal waits for unread output to drain: kelsod has to let
+  # go of the terminal before it waits, or the two wait on each other.
+  shell(monkeypatch, "echo pid:$$; exec yes")
+  with client.websocket_connect(URL) as ws:
+    out = b""
+    while b"pid:" not in out or b"\n" not in out.split(b"pid:")[1]:
+      out += ws.receive_bytes()
+  pid = int(out.split(b"pid:")[1].split(b"\n")[0])
+
+  deadline = time.monotonic() + 10
+  while time.monotonic() < deadline:
+    try:
+      os.kill(pid, 0)
+    except ProcessLookupError:
+      return
+    time.sleep(0.1)
+  pytest.fail(f"shell {pid} is still there, stuck exiting")

@@ -6,6 +6,7 @@ non-async endpoint in a threadpool. Errors have one shape, `{"error": "..."}`.
 """
 
 import asyncio
+import socket
 from collections.abc import Callable
 from typing import Annotated
 
@@ -59,7 +60,8 @@ from kelso.lib.spec import AppSpec
 # 18: GET /apps/{id}/logs (container logs, tail only).
 # 19: snapshot-delete is a job verb.
 # 20: WS /apps/{id}/console (a shell in a running unit).
-API_VERSION = 20
+# 21: /version carries `hostname`; WS /host/console (a login shell on the host).
+API_VERSION = 21
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -148,7 +150,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.get("/", tags=["meta"])
   @app.get("/version", tags=["meta"])
   def get_version() -> dict:
-    return {"kelso": VERSION, "api": API_VERSION}
+    return {"kelso": VERSION, "api": API_VERSION, "hostname": socket.gethostname()}
 
   @app.get("/apps", tags=["apps"])
   def list_apps(ctx: Ctx) -> dict:
@@ -189,6 +191,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.websocket("/apps/{app_id}/console")
   async def app_console(websocket: WebSocket, app_id: str, unit: str = "main"):
     """A shell in one of the app's running units. See kelso/daemon/console.py."""
+    if refusal := console.network_refusal(websocket):
+      await console.refuse(websocket, refusal)
+      return
     try:
       ctx = await asyncio.to_thread(ctx_factory)
       cmd = await asyncio.to_thread(
@@ -198,6 +203,15 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       await console.refuse(websocket, str(e))
       return
     await console.serve(websocket, cmd, ctx)
+
+  @app.websocket("/host/console")
+  async def host_console(websocket: WebSocket):
+    """A login shell on the host, as kelsod's own user."""
+    if refusal := console.network_refusal(websocket):
+      await console.refuse(websocket, refusal)
+      return
+    ctx = await asyncio.to_thread(ctx_factory)
+    await console.serve_host(websocket, ctx)
 
   @app.get("/apps/{app_id}/config-request", tags=["config"])
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:

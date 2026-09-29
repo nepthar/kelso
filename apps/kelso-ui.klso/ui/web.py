@@ -26,7 +26,7 @@ NO_STORE = {"Cache-Control": "no-store"}
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
 # installed without the other and fields this UI reads may be missing.
-NEEDS_API = 20
+NEEDS_API = 21
 
 
 class NavItem(NamedTuple):
@@ -51,7 +51,7 @@ def nav_active(path):
   App detail pages have no nav entry of their own -- the list they belong to
   lives on the dashboard -- so they light Dashboard instead of nothing.
   """
-  if path.startswith("/apps"):
+  if path.startswith(("/apps", "/host")):
     return NAV[0]
   for item in NAV:
     if path == item.href or (item.href != "/" and path.startswith(item.href + "/")):
@@ -136,6 +136,7 @@ class Page:
     info = api("/version")
     context.setdefault("version", info.get("kelso", ""))
     context.setdefault("daemon_api", info.get("api"))
+    context.setdefault("hostname", info.get("hostname", ""))
     return render(self.request, template, title, **context)
 
 
