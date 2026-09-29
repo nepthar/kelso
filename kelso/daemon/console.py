@@ -9,6 +9,7 @@ the refusal also written to the terminal, since browsers drop long reasons.
 
 import asyncio
 import fcntl
+import ipaddress
 import json
 import logging
 import os
@@ -67,6 +68,24 @@ def hang_up(cmd: ConsoleCommand, pid: int) -> None:
   ).returncode
   if code:
     logger.warning("could not hang up shell %d in %s (%d)", pid, cmd.app_id, code)
+
+
+def network_refusal(ws: WebSocket) -> str | None:
+  """Why a console may not open on this connection, or None.
+
+  Only the admin socket and loopback stand in front of an API with no
+  authentication, and a console is a shell. So one that arrived over the
+  network is refused, whatever `kelsod --host` was told.
+  """
+  server = ws.scope.get("server")
+  if server and server[1] is None:
+    return None  # The admin socket: uvicorn gives its path and no port.
+  try:
+    if server and ipaddress.ip_address(server[0]).is_loopback:
+      return None
+  except ValueError:
+    pass
+  return "Consoles open only over kelsod's admin socket or loopback."
 
 
 async def refuse(ws: WebSocket, message: str) -> None:

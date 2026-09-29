@@ -9,6 +9,7 @@ import os
 import pwd
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +23,10 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import host_shell
 
 APP = "io.p2net.basic-features"
-URL = f"/apps/{APP}/console"
+# Absolute: TestClient opens a relative websocket URL on `testserver`, which is
+# not loopback. This is kelso-ui arriving through Docker Desktop.
+LOOPBACK = "ws://127.0.0.1"
+URL = f"{LOOPBACK}/apps/{APP}/console"
 
 
 def ctx() -> KelsoCtx:
@@ -145,6 +149,24 @@ def test_console_refuses_a_unit_that_is_not_running(running, client):
   assert b"running units: main" in out
 
 
+def test_consoles_are_refused_over_the_network(client):
+  for path in (f"/apps/{APP}/console", "/host/console"):
+    with client.websocket_connect(f"ws://192.0.2.7{path}") as ws:
+      out, closed = drain(ws)
+    assert closed.code == console.REFUSED
+    assert b"admin socket or loopback" in out
+
+
+def test_consoles_open_on_the_admin_socket_and_loopback():
+  def arriving_at(server):
+    return SimpleNamespace(scope={"server": server})
+
+  assert console.network_refusal(arriving_at(("/k/var/conn/admin.sock", None))) is None
+  assert console.network_refusal(arriving_at(("127.0.0.1", 9000))) is None
+  assert console.network_refusal(arriving_at(("192.0.2.7", 9000)))
+  assert console.network_refusal(arriving_at(None))
+
+
 def test_console_closes_an_idle_session(running, client, monkeypatch):
   monkeypatch.setattr(console, "IDLE_SECONDS", 0.2)
   shell(monkeypatch, "exec sleep 30")
@@ -198,7 +220,7 @@ def test_the_host_console_gets_a_real_terminal(
   monkeypatch.setattr(
     console, "host_shell", lambda: (["/bin/sh", "-c", script], tmp_path)
   )
-  with client.websocket_connect("/host/console") as ws:
+  with client.websocket_connect(f"{LOOPBACK}/host/console") as ws:
     out, closed = drain(ws)
 
   text = out.decode()

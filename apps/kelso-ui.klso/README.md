@@ -41,7 +41,8 @@ kelso start kelso-ui
 
 On a host whose bind mounts cannot carry a unix socket — Docker Desktop on
 macOS, where the socket is visible in the container and unusable — run
-`kelsod --port N --host 0.0.0.0` and point the app at it over TCP instead:
+`kelsod --port N` and point the app at it over TCP instead. Docker Desktop
+reaches the host's loopback, so kelsod stays off the network:
 
 ```
 kelso config kelso-ui --set api_address=host.docker.internal:N

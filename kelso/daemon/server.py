@@ -89,7 +89,8 @@ def _bind_tcp(host: str, port: int) -> socket.socket:
     logger.warning(
       "kelsod is listening on %s:%d, which is NOT loopback. The admin API "
       "has no authentication -- anything that can reach this port can run "
-      "kelso verbs. Use this only on a trusted network.",
+      "kelso verbs, though not open consoles. Use this only on a trusted "
+      "network.",
       host,
       port,
     )
@@ -160,9 +161,10 @@ def build_parser() -> argparse.ArgumentParser:
     default="127.0.0.1",
     metavar="ADDR",
     help=(
-      "Address for --port (default: 127.0.0.1). A container reaching the host "
-      "does not arrive on loopback, so serving one needs 0.0.0.0 -- and the "
-      "admin API has no authentication, so only on a trusted network"
+      "Address for --port (default: 127.0.0.1). Docker Desktop reaches the "
+      "host's loopback through host.docker.internal. Anything else is the "
+      "network, and the admin API has no authentication: only on a trusted "
+      "one, and consoles stay refused there"
     ),
   )
   return parser

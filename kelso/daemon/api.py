@@ -191,6 +191,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.websocket("/apps/{app_id}/console")
   async def app_console(websocket: WebSocket, app_id: str, unit: str = "main"):
     """A shell in one of the app's running units. See kelso/daemon/console.py."""
+    if refusal := console.network_refusal(websocket):
+      await console.refuse(websocket, refusal)
+      return
     try:
       ctx = await asyncio.to_thread(ctx_factory)
       cmd = await asyncio.to_thread(
@@ -204,6 +207,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.websocket("/host/console")
   async def host_console(websocket: WebSocket):
     """A login shell on the host, as kelsod's own user."""
+    if refusal := console.network_refusal(websocket):
+      await console.refuse(websocket, refusal)
+      return
     ctx = await asyncio.to_thread(ctx_factory)
     await console.serve_host(websocket, ctx)
 
