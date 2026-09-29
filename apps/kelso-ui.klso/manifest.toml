@@ -35,5 +35,5 @@ UV_PROJECT_ENVIRONMENT   = "/venv"
 UV_NO_MANAGED_PYTHON     = "1"
 
 [commands.test]
-cmd = ["/bin/sh", "-c", "echo 'Hello, world!'"]
+cmd = "echo 'Hello, world!'"
 desc = "Test running a command"

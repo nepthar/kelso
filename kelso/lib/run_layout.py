@@ -1,5 +1,6 @@
 import re
 import shlex
+import string
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from logging import getLogger
@@ -17,7 +18,6 @@ from kelso.lib.spec import (
   AppRunUnit,
   AppSpec,
   AppVolume,
-  shell_word,
 )
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
@@ -49,53 +49,55 @@ def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
   return mount
 
 
-def shell_rc(spec: AppSpec, unit_name: str) -> str:
-  """`/kelso/shell.sh` for one unit: `kelso <command>` and, when interactive, a banner.
+class _ShellRcTemplate(string.Template):
+  # `$` is the shell's, so placeholders are `@@name`.
+  delimiter = "@@"
 
-  Sourced by every command kelso runs in the unit and by its console, so a
-  command means the same thing however it is started.
-  """
-  shell = " ".join(shell_word(word) for word in spec.run_units[unit_name].shell)
-  here = sorted((n, c) for n, c in spec.commands.items() if c.run_unit == unit_name)
-  cases = []
-  for name, command in here:
-    if isinstance(command.cmd, str):
-      body = f'{shell} {shlex.quote(command.cmd + ' "$@"')} {name} "$@"'
-    else:
-      body = " ".join(shell_word(word) for word in command.cmd) + ' "$@"'
-    cases.append(f"    {name}) shift; {body} ;;")
+
+# `/kelso/shell.sh`. Sourced by every command kelso runs in a unit and by its
+# console, so a command means the same thing however it is started. bash
+# --rcfile reads it in place of its own startup files, hence the bashrc lines.
+SHELL_RC_TEMPLATE = _ShellRcTemplate("""\
+# Written by kelso for @@app, unit @@unit. Rewritten on install.
+kelso() {
+  case "$1" in
+@@cases
+    '') cat <<'KELSO_COMMANDS'
+@@listing
+KELSO_COMMANDS
+      ;;
+    *) echo "kelso: no command $1 in @@unit; run kelso to list them" >&2
+       return 127 ;;
+  esac
+}
+case $- in
+  *i*)
+    if [ -n "${BASH_VERSION:-}" ]; then
+      [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc
+      [ -f ~/.bashrc ] && . ~/.bashrc
+    fi
+    echo "Shell on @@app unit @@unit"
+    kelso ;;
+esac
+""")
+
+
+def shell_rc(spec: AppSpec, unit_name: str) -> str:
+  """`/kelso/shell.sh` for one unit: `kelso <command>` and, when interactive, a banner."""
+  shell = shlex.join(spec.run_units[unit_name].shell)
+  here = [(n, c) for n, c in sorted(spec.commands.items()) if c.run_unit == unit_name]
+  cases = [
+    f'    {name}) shift; {shell} {shlex.quote(c.cmd + ' "$@"')} {name} "$@" ;;'
+    for name, c in here
+  ]
   if here:
     width = max(len(name) for name, _ in here)
     listing = ["Commands, run as: kelso <name> [args]"]
-    listing += [f"  {name.ljust(width)}  {command.line()}" for name, command in here]
+    listing += [f"  {name.ljust(width)}  {c.cmd}" for name, c in here]
   else:
     listing = ["No commands are defined for this unit."]
-  banner = f"Shell on {spec.app} unit {unit_name}"
-  return "\n".join(
-    [
-      f"# Written by kelso for {spec.app}, unit {unit_name}. Rewritten on install.",
-      "kelso() {",
-      '  case "$1" in',
-      *cases,
-      "    '') printf '%s\\n' "
-      + " ".join(shell_word(line) for line in listing)
-      + " ;;",
-      f'    *) echo "kelso: no command $1 in {unit_name}; run kelso to list them" >&2',
-      "       return 127 ;;",
-      "  esac",
-      "}",
-      "case $- in",
-      "  *i*)",
-      "    # bash --rcfile reads this in place of its own startup files.",
-      '    if [ -n "${BASH_VERSION:-}" ]; then',
-      "      [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc",
-      "      [ -f ~/.bashrc ] && . ~/.bashrc",
-      "    fi",
-      f"    echo {shlex.quote(banner)}",
-      "    kelso ;;",
-      "esac",
-      "",
-    ]
+  return SHELL_RC_TEMPLATE.substitute(
+    app=spec.app, unit=unit_name, cases="\n".join(cases), listing="\n".join(listing)
   )
 
 

@@ -245,8 +245,8 @@ cmd = "echo pong"
 desc = "Print pong"
 
 [commands.argv]
-cmd = ["echo", "hello"]
-desc = "List-form command"
+cmd = "echo hello"
+desc = "Another command"
 """
   )
 

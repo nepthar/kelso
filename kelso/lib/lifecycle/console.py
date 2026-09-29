@@ -16,7 +16,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from kelso.lib.activity import ERROR, OK, begin_run, finish_run
 from kelso.lib.apps import AppID
@@ -80,7 +80,7 @@ def console_command(
 
 def interactive_script(program: str) -> str:
   """What the unit's shell runs to become `program`, with /kelso/shell.sh loaded."""
-  if PurePosixPath(program).name == "bash":
+  if Path(program).name == "bash":
     return f"exec {shlex.quote(program)} --rcfile {SHELL_RC} -i"
   return f"export ENV={SHELL_RC}; exec {shlex.quote(program)} -i"
 

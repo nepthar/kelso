@@ -1,6 +1,4 @@
 import json
-import re
-import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,30 +138,9 @@ class ComposeWarning:
 @dataclass(frozen=True)
 class AppCommand:
   name: str
-  cmd: str | tuple[str, ...]
+  cmd: str
   run_unit: str
   desc: str
-
-  def line(self) -> str:
-    """The command as someone would type it, ready to paste into a shell."""
-    if isinstance(self.cmd, str):
-      return self.cmd
-    return " ".join(shell_word(word) for word in self.cmd)
-
-
-_BARE = re.compile(r"[\w@%+=:,./-]+")
-
-
-def shell_word(word: str) -> str:
-  """`word` quoted the way a person would, for pasting into an interactive shell."""
-  if _BARE.fullmatch(word):
-    return word
-  if "'" not in word:
-    return f"'{word}'"
-  if not set(word) & set('"$`\\'):
-    # Interactive bash expands `!` even inside double quotes; step out for it.
-    return '"' + word.replace("!", '"\\!"') + '"'
-  return shlex.quote(word)
 
 
 @dataclass(frozen=True)
@@ -262,7 +239,7 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
   commands = {
     name: AppCommand(
       name=name,
-      cmd=entry.cmd if isinstance(entry.cmd, str) else tuple(entry.cmd),
+      cmd=entry.cmd,
       run_unit=entry.run_unit,
       desc=entry.desc,
     )

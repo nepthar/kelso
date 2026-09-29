@@ -224,7 +224,8 @@ class RunEntry(BaseModel):
 class CommandEntry(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
-  cmd: str | list[str]
+  # Run by the unit's `shell`, with operator arguments added as typed.
+  cmd: str
   run_unit: Identifier = "main"
   desc: str = ""
 

@@ -735,7 +735,7 @@ cmd = "printf '[%s]' \\"it's $0\\""
 desc = "A string command"
 
 [commands.listed]
-cmd = ["printf", "<%s>"]
+cmd = "printf '<%s>'"
 
 [commands.jobs]
 cmd = "true"

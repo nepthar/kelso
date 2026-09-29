@@ -169,7 +169,7 @@ however it is started. Typing `kelso` alone in a console lists them.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cmd` | string or list | **required** | As docker runs one: a string runs in the unit's `shell`, a list is the argv. Operator arguments are shell-split, then added to the end of either. |
+| `cmd` | string | **required** | Run by the unit's `shell`, with any operator arguments added to the end as they were typed. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 
@@ -179,7 +179,7 @@ cmd      = "mealie-cli backup create"
 desc     = "Write a backup into the data volume"
 
 [commands.psql]
-cmd      = ["psql", "-U", "postgres"]
+cmd      = "psql -U postgres"
 run_unit = "database"
 desc     = "Open a database shell"
 ```

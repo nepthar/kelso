@@ -1,7 +1,7 @@
 import os
 import shutil
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import yaml
 
@@ -226,7 +226,7 @@ def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
   for unit_name in spec.run_units:
     unit_dir = root / unit_name
     unit_dir.mkdir(parents=True)
-    (unit_dir / PurePosixPath(SHELL_RC).name).write_text(shell_rc(spec, unit_name))
+    (unit_dir / Path(SHELL_RC).name).write_text(shell_rc(spec, unit_name))
 
 
 # Lives in the app's config store, so `--purge` clears it and nothing else does.
