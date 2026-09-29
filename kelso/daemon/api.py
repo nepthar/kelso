@@ -5,16 +5,18 @@ Every handler is a plain `def`: `kelso.lib` blocks, and FastAPI runs a
 non-async endpoint in a threadpool. Errors have one shape, `{"error": "..."}`.
 """
 
+import asyncio
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from kelso import VERSION
+from kelso.daemon import console
 from kelso.jobs import JobRunner
 from kelso.lib import views
 from kelso.lib.apps import AppID
@@ -34,6 +36,7 @@ from kelso.lib.configflow.route_provider import (
   route_provider_config_request,
 )
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.console import console_command
 from kelso.lib.spec import AppSpec
 
 # Bumped when a response shape changes in a way a client would notice. The web
@@ -55,7 +58,8 @@ from kelso.lib.spec import AppSpec
 # 17: the `restart` job verb is now `reload`.
 # 18: GET /apps/{id}/logs (container logs, tail only).
 # 19: snapshot-delete is a job verb.
-API_VERSION = 19
+# 20: WS /apps/{id}/console (a shell in a running unit).
+API_VERSION = 20
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -181,6 +185,19 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       return views.app_logs_view(ctx.resolve_app(app_id), ctx, tail=tail)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
+
+  @app.websocket("/apps/{app_id}/console")
+  async def app_console(websocket: WebSocket, app_id: str, unit: str = "main"):
+    """A shell in one of the app's running units. See kelso/daemon/console.py."""
+    try:
+      ctx = await asyncio.to_thread(ctx_factory)
+      cmd = await asyncio.to_thread(
+        lambda: console_command(app_id, unit, ctx, announce_pid=True)
+      )
+    except (ValueError, RuntimeError) as e:
+      await console.refuse(websocket, str(e))
+      return
+    await console.serve(websocket, cmd, ctx)
 
   @app.get("/apps/{app_id}/config-request", tags=["config"])
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:

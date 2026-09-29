@@ -32,16 +32,25 @@
   function token(name) {
     return getComputedStyle(root).getPropertyValue(name).trim();
   }
-  function rgba(name, alpha) {
-    // Resolve through the browser rather than parsing hex, so a theme may
-    // write its colours any way CSS allows.
+  // A token as rgba(), resolved by the browser so a theme may write any CSS
+  // colour. Drawn to a pixel because computed style reports color-mix() as
+  // color(srgb ...), which neither uPlot nor xterm reads.
+  var pixel = null;
+  function color(name) {
     var probe = document.createElement("span");
     probe.style.color = token(name);
     document.body.appendChild(probe);
-    var parts = getComputedStyle(probe).color.match(/[\d.]+/g);
+    var computed = getComputedStyle(probe).color;
     probe.remove();
-    if (!parts || parts.length < 3) return token(name);
-    return "rgba(" + parts[0] + "," + parts[1] + "," + parts[2] + "," + alpha + ")";
+    pixel = pixel || document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    pixel.clearRect(0, 0, 1, 1);
+    pixel.fillStyle = computed;
+    pixel.fillRect(0, 0, 1, 1);
+    var d = pixel.getImageData(0, 0, 1, 1).data;
+    return "rgba(" + d[0] + "," + d[1] + "," + d[2] + "," + +(d[3] / 255).toFixed(3) + ")";
+  }
+  function rgba(name, alpha) {
+    return color(name).replace(/,[\d.]+\)$/, "," + alpha + ")");
   }
   function setTheme(id) {
     if (window.kelso.themes.indexOf(id) < 0 || id === root.dataset.theme) return;
@@ -51,6 +60,7 @@
     document.dispatchEvent(new CustomEvent("kelso:themechange", { detail: { theme: id } }));
   }
   window.kelso.token = token;
+  window.kelso.color = color;
   window.kelso.rgba = rgba;
   window.kelso.setTheme = setTheme;
 

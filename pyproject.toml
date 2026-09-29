@@ -27,6 +27,7 @@ dependencies = [
     "fastapi>=0.121.0",
     "schedule>=1.2",
     "uvicorn>=0.34.0",
+    "websockets>=15.0",
 ]
 
 [project.urls]

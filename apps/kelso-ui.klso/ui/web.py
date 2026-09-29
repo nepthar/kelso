@@ -26,7 +26,7 @@ NO_STORE = {"Cache-Control": "no-store"}
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
 # installed without the other and fields this UI reads may be missing.
-NEEDS_API = 19
+NEEDS_API = 20
 
 
 class NavItem(NamedTuple):

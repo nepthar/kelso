@@ -1,0 +1,31 @@
+{% extends "frame.html" %}
+{% from "macros.html" import empty %}
+{% set here = '/apps/' ~ app_id|urlencode %}
+
+{% block head %}<link rel="stylesheet" href="{{ asset('vendor/xterm-6.0.0/xterm.css') }}">{% endblock %}
+
+{% block refresh %}{% endblock %}
+{#- One link per running unit when there is a choice; the open one is current. -#}
+{% block actions %}<span class="head-actions"><a class="btn" href="{{ here }}">Back to app</a>
+{%- if running|length > 1 %}<span class="row actions">
+  {%- for name in running %}<a class="btn" href="{{ here }}/console?unit={{ name|urlencode }}"{% if name == unit %} aria-current="true"{% endif %}>{{ name }}</a>{% endfor -%}
+</span>{% endif %}</span>{% endblock %}
+
+{% block content %}
+{% if unit %}
+<div class="row between">
+  <p class="lede">A shell in the <span class="mono">{{ unit }}</span> container.</p>
+  <span class="row"><span class="muted" id="console-status">connecting</span><button type="button" id="console-reconnect" hidden>Reconnect</button></span>
+</div>
+{#- console.js opens data-src as a websocket and draws the terminal in here. -#}
+<div id="console" class="console" data-src="{{ here }}/console/ws?unit={{ unit|urlencode }}"></div>
+{% else %}
+{{ empty('Nothing in this app is running. Start it to open a console.') }}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}{% if unit %}
+<script src="{{ asset('vendor/xterm-6.0.0/xterm.js') }}"></script>
+<script src="{{ asset('vendor/xterm-addon-fit-0.11.0/addon-fit.js') }}"></script>
+<script src="{{ asset('js/console.js') }}"></script>
+{% endif %}{% endblock %}

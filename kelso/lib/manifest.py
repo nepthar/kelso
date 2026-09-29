@@ -223,12 +223,6 @@ class CommandEntry(BaseModel):
   run_unit: Identifier = "main"
   desc: str = ""
 
-  def argv(self) -> list[str]:
-    """Base argv for `docker compose exec`, ready for operator args to append."""
-    if isinstance(self.cmd, str):
-      return ["/bin/sh", "-c", f'{self.cmd} "$@"', "_"]
-    return list(self.cmd)
-
 
 class Manifest(BaseModel):
   """Parsed kelso TOML for a bundle or catalog service definition."""

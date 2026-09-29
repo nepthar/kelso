@@ -265,16 +265,7 @@ desc = "List-form command"
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
   ]
-  assert [
-    "compose",
-    "exec",
-    "main",
-    "/bin/sh",
-    "-c",
-    'echo pong "$@"',
-    "_",
-    "extra",
-  ] in calls
+  assert ["compose", "exec", "main", "/bin/sh", "-c", "echo pong extra"] in calls
 
   list_form = kelso_env.run("cmd", "cmd-demo", "argv", "world")
   assert list_form.returncode == 0, list_form.stderr
@@ -319,9 +310,7 @@ cmd = "echo pong"
     "main",
     "/bin/sh",
     "-c",
-    'echo pong "$@"',
-    "_",
-    "extra",
+    "echo pong extra",
   ] in calls
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0

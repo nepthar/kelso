@@ -71,6 +71,7 @@ to 0.25s.
 | `test_api.py` | kelsod's routes, its refusals, and jobs run to completion |
 | `test_jobs.py` | Job: parse first, then file a run log, then do the work |
 | `test_activity.py` | The activity log: kelso's own run output, on disk and indexed |
+| `test_console.py` | `kelso shell`, and kelsod's console PTY (a local `sh` stands in for the container) |
 | `test_metrics.py` | Volume-size and host-resource metric jobs |
 
 `test_spec.py` and `test_compose.py` share `spec_of` from `conftest.py`:

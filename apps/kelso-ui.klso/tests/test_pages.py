@@ -11,6 +11,8 @@ PAGES = [
   "/apps/kelso-ui",
   "/apps/mealie",
   "/apps/kelso-ui/logs",
+  "/apps/kelso-ui/console",
+  "/apps/mealie/console",
   "/catalog",
   "/catalog?app=kelso-ui",
   "/volumes",
