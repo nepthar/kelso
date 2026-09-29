@@ -756,7 +756,7 @@ def test_a_command_runs_in_its_units_shell_with_arguments_as_typed(tmp_path):
   assert out == "[it's show][it's][a b][$HOME][;][*]"
 
 
-def test_kelso_cmd_runs_what_the_run_button_would(tmp_path):
+def test_kelso_cmd_runs_a_command_with_arguments_as_typed(tmp_path):
   spec = spec_of(tmp_path, COMMANDS_MANIFEST)
   script = tmp_path / "kelso_cmd"
   script.write_text(kelso_cmd(spec, "main"))
@@ -765,7 +765,8 @@ def test_kelso_cmd_runs_what_the_run_button_would(tmp_path):
   def run(*args):
     return subprocess.run([script, *args], capture_output=True, text=True, timeout=10)
 
-  assert run("show", *TRICKY).stdout == "[it's show][it's][a b][$HOME][;][*]"
+  # $0 is the script here, where Run makes it the command's name.
+  assert run("show", *TRICKY).stdout == f"[it's {script}][it's][a b][$HOME][;][*]"
   assert run().stdout == (
     "demo (main) commands, run as: kelso_cmd <name> [args]\n"
     """  show  printf '[%s]' "it's $0"\n"""

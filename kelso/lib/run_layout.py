@@ -1,5 +1,4 @@
 import re
-import shlex
 import string
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -56,8 +55,8 @@ class _KelsoCmdTemplate(string.Template):
   delimiter = "@@"
 
 
-# `/kelso/bin/kelso_cmd`. Each case runs exactly what the Run button sends; see
-# `command_argv`.
+# `/kelso/bin/kelso_cmd`. Each case is the command as the manifest wrote it, run
+# by the unit's shell with the arguments added, as the Run button runs it.
 KELSO_CMD_TEMPLATE = _KelsoCmdTemplate("""\
 #!@@shell
 # Written by kelso for @@app, unit @@unit. Rewritten on install.
@@ -79,17 +78,13 @@ def unit_commands(spec: AppSpec, unit_name: str) -> list[AppCommand]:
 
 def kelso_cmd(spec: AppSpec, unit_name: str) -> str:
   """`/kelso/bin/kelso_cmd` for a unit with commands: runs one, or lists them."""
-  unit = spec.run_units[unit_name]
   commands = unit_commands(spec, unit_name)
   width = max(len(c.name) for c in commands)
-  cases = [
-    f'  {c.name}) shift; exec {shlex.join(command_argv(unit, c, []))} "$@" ;;'
-    for c in commands
-  ]
+  cases = [f'  {c.name}) shift; {c.cmd} "$@" ;;' for c in commands]
   listing = [f"{spec.app} ({unit_name}) commands, run as: kelso_cmd <name> [args]"]
   listing += [f"  {c.name.ljust(width)}  {c.cmd}" for c in commands]
   return KELSO_CMD_TEMPLATE.substitute(
-    shell=unit.shell[0],
+    shell=spec.run_units[unit_name].shell[0],
     app=spec.app,
     unit=unit_name,
     cases="\n".join(cases),
