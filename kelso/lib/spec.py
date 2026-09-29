@@ -1,7 +1,7 @@
 import json
 import re
 import shlex
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -106,6 +106,7 @@ class AppRunUnit:
   routes: Mapping[str, AppRoute]
   labels: Mapping[str, str]
   restart: str
+  shell: tuple[str, ...]
   compose_extra: Mapping[str, Any]
 
 
@@ -142,16 +143,6 @@ class AppCommand:
   cmd: str | tuple[str, ...]
   run_unit: str
   desc: str
-
-  def argv(self, args: Sequence[str] = ()) -> list[str]:
-    """What `docker compose exec` runs for this command given the operator's `args`.
-
-    A string runs as `/bin/sh -c`, as docker runs one, with `args` quoted onto
-    its end. A list gets them as more argv.
-    """
-    if isinstance(self.cmd, str):
-      return ["/bin/sh", "-c", " ".join([self.cmd, *map(shlex.quote, args)])]
-    return [*self.cmd, *args]
 
   def line(self) -> str:
     """The command as someone would type it, ready to paste into a shell."""
@@ -338,6 +329,7 @@ def _resolve_run_units(
         KELSO_RUN_UNIT_LABEL: run_unit_name,
       },
       restart=run_entry.restart,
+      shell=tuple(run_entry.shell),
       compose_extra=run_entry.compose,
     )
 

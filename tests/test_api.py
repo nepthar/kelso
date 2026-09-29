@@ -496,8 +496,8 @@ def test_cmd_verb_forwards_extra_arguments(kelso_env, client, jobs):
   ]
   execs = [call for call in calls if call[:3] == ["compose", "exec", "main"]]
   assert execs
-  # The box is split the way a shell would, then quoted back onto the string.
-  assert execs[-1][3:] == ["/bin/sh", "-c", "echo pong extra 'two words'"]
+  # The box is split the way a shell would; the words reach `kelso` as typed.
+  assert execs[-1][-3:] == ["ping", "extra", "two words"]
 
 
 def test_cmd_verb_requires_a_command_argument(kelso_env, client):

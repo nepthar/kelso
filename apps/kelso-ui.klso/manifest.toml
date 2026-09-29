@@ -21,11 +21,11 @@ conn = { kind = "host", desc = "The $kelso/var/conn directory holding admin.sock
 [run.main]
 image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
-volumes = { ui = "/app", venv = "/venv", tls = "/tls", conn = "/kelso/conn" }
+volumes = { ui = "/app", venv = "/venv", tls = "/tls", conn = "/run/kelso-admin" }
 routes  = { main = { port = "8080", scheme = "https" } }
 
 [run.main.env]
-KELSO_SOCKET            = "/kelso/conn/admin.sock"
+KELSO_SOCKET            = "/run/kelso-admin/admin.sock"
 KELSO_API               = "${api_address}"
 ADMIN_PASSWORD           = "${admin_pass}"
 TLS_DOMAIN               = "${klso.domain}"

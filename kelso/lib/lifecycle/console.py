@@ -3,7 +3,8 @@
 `console_command` resolves what to run and refuses what cannot be; `kelso
 shell` hands it the operator's own terminal and kelsod runs it on a PTY.
 `ConsoleRecord` puts each session in the activity log -- that it happened, not
-what was typed. The shell opens by listing the manifest's commands for its unit.
+what was typed. The shell loads the unit's /kelso/shell.sh, which defines
+`kelso <command>` and says what there is.
 
 docker has no way to end an exec: killing the client leaves its shell running
 in the container. So a session kelsod abandons announces its shell's pid
@@ -13,18 +14,17 @@ it from inside.
 
 import re
 import shlex
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from kelso.lib.activity import ERROR, OK, begin_run, finish_run
 from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
-from kelso.lib.spec import AppCommand, AppSpec
+from kelso.lib.run_layout import SHELL_RC
+from kelso.lib.spec import AppSpec
 
-DEFAULT_SHELL = "/bin/sh"
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
 
@@ -32,6 +32,7 @@ PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 class ConsoleCommand:
   app_id: AppID
   unit: str
+  unit_shell: tuple[str, ...]
   docker_args: list[str]
   cwd: Path
   env: dict[str, str]
@@ -42,10 +43,13 @@ def console_command(
   unit: str,
   ctx: KelsoCtx,
   *,
-  shell: str = DEFAULT_SHELL,
+  shell: str | None = None,
   announce_pid: bool = False,
 ) -> ConsoleCommand:
-  """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
+  """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running.
+
+  `shell` is the program to run interactively; the unit's own shell by default.
+  """
   app_id = ctx.resolve_app(app)
   state = ctx.run_state(app_id)
   if not state.compose_exists:
@@ -60,36 +64,30 @@ def console_command(
       )
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
   spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
-  script = shell_script(unit, spec.commands, shell)
+  unit_shell = spec.run_units[unit].shell
+  script = interactive_script(shell or unit_shell[0])
   if announce_pid:
     script = "printf '\\033]697;kelso-pid=%s\\007' $$; " + script
   return ConsoleCommand(
     app_id=app_id,
     unit=unit,
-    docker_args=["compose", "exec", unit, "/bin/sh", "-c", script],
+    unit_shell=unit_shell,
+    docker_args=["compose", "exec", unit, *unit_shell, script],
     cwd=state.run_path,
     env=compose_env(app_id, ctx),
   )
 
 
-def shell_script(
-  unit: str, commands: Mapping[str, AppCommand], shell: str = DEFAULT_SHELL
-) -> str:
-  """What `sh -c` runs in `unit`: the commands that run there, listed, then `shell`."""
-  start = f"exec {shlex.quote(shell)}"
-  here = sorted((name, c) for name, c in commands.items() if c.run_unit == unit)
-  if not here:
-    return start
-  width = max(len(name) for name, _ in here)
-  lines = ["The manifest defines these commands:"]
-  lines += [f"  {name.ljust(width)}  {c.line()}" for name, c in here]
-  banner = " ".join(shlex.quote(line) for line in lines)
-  return f"printf '%s\\n' {banner}; {start}"
+def interactive_script(program: str) -> str:
+  """What the unit's shell runs to become `program`, with /kelso/shell.sh loaded."""
+  if PurePosixPath(program).name == "bash":
+    return f"exec {shlex.quote(program)} --rcfile {SHELL_RC} -i"
+  return f"export ENV={SHELL_RC}; exec {shlex.quote(program)} -i"
 
 
 def hangup_args(cmd: ConsoleCommand, pid: int) -> list[str]:
   """Docker args that hang up the shell `PID_MARKER` named, and its foreground job."""
-  return ["compose", "exec", "-T", cmd.unit, "/bin/sh", "-c", f"kill -HUP {pid}"]
+  return ["compose", "exec", "-T", cmd.unit, *cmd.unit_shell, f"kill -HUP {pid}"]
 
 
 class ConsoleRecord:

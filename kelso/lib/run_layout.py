@@ -1,5 +1,6 @@
 import re
-from collections.abc import Mapping
+import shlex
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -16,8 +17,10 @@ from kelso.lib.spec import (
   AppRunUnit,
   AppSpec,
   AppVolume,
+  shell_word,
 )
 from kelso.lib.util import (
+  KELSO_GUEST_DIR,
   KLSO_KEY_PREFIX,
   PUBLIC_ROUTE_SCHEME,
   ROUTE_KEY_PREFIX,
@@ -28,6 +31,9 @@ logger = getLogger("kelso.run_layout")
 
 # The host clock, bind-mounted into every container. See `_host_mounts`.
 LOCALTIME_PATH = "/etc/localtime"
+
+# Defines `kelso <command>` for a unit's shell. Each unit sees its own at /kelso.
+SHELL_RC = f"{KELSO_GUEST_DIR}/shell.sh"
 
 
 def _project_name(app_id: str) -> str:
@@ -41,6 +47,61 @@ def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
     mount["read_only"] = True
   mount["bind"] = {"create_host_path": False}
   return mount
+
+
+def shell_rc(spec: AppSpec, unit_name: str) -> str:
+  """`/kelso/shell.sh` for one unit: `kelso <command>` and, when interactive, a banner.
+
+  Sourced by every command kelso runs in the unit and by its console, so a
+  command means the same thing however it is started.
+  """
+  shell = " ".join(shell_word(word) for word in spec.run_units[unit_name].shell)
+  here = sorted((n, c) for n, c in spec.commands.items() if c.run_unit == unit_name)
+  cases = []
+  for name, command in here:
+    if isinstance(command.cmd, str):
+      body = f'{shell} {shlex.quote(command.cmd + ' "$@"')} {name} "$@"'
+    else:
+      body = " ".join(shell_word(word) for word in command.cmd) + ' "$@"'
+    cases.append(f"    {name}) shift; {body} ;;")
+  if here:
+    width = max(len(name) for name, _ in here)
+    listing = ["Commands, run as: kelso <name> [args]"]
+    listing += [f"  {name.ljust(width)}  {command.line()}" for name, command in here]
+  else:
+    listing = ["No commands are defined for this unit."]
+  banner = f"Shell on {spec.app} unit {unit_name}"
+  return "\n".join(
+    [
+      f"# Written by kelso for {spec.app}, unit {unit_name}. Rewritten on install.",
+      "kelso() {",
+      '  case "$1" in',
+      *cases,
+      "    '') printf '%s\\n' "
+      + " ".join(shell_word(line) for line in listing)
+      + " ;;",
+      f'    *) echo "kelso: no command $1 in {unit_name}; run kelso to list them" >&2',
+      "       return 127 ;;",
+      "  esac",
+      "}",
+      "case $- in",
+      "  *i*)",
+      "    # bash --rcfile reads this in place of its own startup files.",
+      '    if [ -n "${BASH_VERSION:-}" ]; then',
+      "      [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc",
+      "      [ -f ~/.bashrc ] && . ~/.bashrc",
+      "    fi",
+      f"    echo {shlex.quote(banner)}",
+      "    kelso ;;",
+      "esac",
+      "",
+    ]
+  )
+
+
+def command_argv(unit: AppRunUnit, name: str, args: Sequence[str]) -> list[str]:
+  """What `docker compose exec` runs for a manifest command: the unit's `kelso`."""
+  return [*unit.shell, f'. {SHELL_RC} && kelso "$@"', "kelso", name, *args]
 
 
 def _env_kvpair(key: str, val: str) -> str:
@@ -451,6 +512,7 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     ]
     # Kelso's own mounts stay out of `${klso.volumes}`: that value tells an app
     # where the volumes it declared ended up.
+    mounts.append(_mount(f"./kelso/{run_name}", KELSO_GUEST_DIR, readonly=True))
     mounts.extend(data.host_mounts)
     if mounts:
       service["volumes"] = mounts

@@ -337,35 +337,11 @@ desc = "Rebuild the search index"
   reset = spec.commands["reset"]
   assert reset.run_unit == "main"
   assert reset.desc == "Reset the admin password"
-  assert reset.argv() == ["/bin/sh", "-c", "python manage.py reset"]
-  assert reset.argv(["alice", "a b"]) == [
-    "/bin/sh",
-    "-c",
-    "python manage.py reset alice 'a b'",
-  ]
+  assert reset.cmd == "python manage.py reset"
 
   reindex = spec.commands["reindex"]
   assert reindex.run_unit == "worker"
-  assert reindex.argv(["--all"]) == ["python", "manage.py", "reindex", "--all"]
-
-
-def test_a_string_command_gets_its_arguments_as_they_were_typed(tmp_path):
-  spec = spec_of(
-    tmp_path,
-    """\
-[app]
-version = "1"
-
-[run.main]
-image = "alpine"
-
-[commands.show]
-cmd = "printf '[%s]'"
-""",
-  )
-  argv = spec.commands["show"].argv(["it's", "a b", "$HOME", ";", "*"])
-  out = subprocess.run(argv, capture_output=True, text=True, check=True).stdout
-  assert out == "[it's][a b][$HOME][;][*]"
+  assert reindex.cmd == ("python", "manage.py", "reindex")
 
 
 def test_command_targeting_unknown_run_unit_is_rejected(tmp_path):

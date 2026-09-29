@@ -1,7 +1,7 @@
 import os
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -10,11 +10,13 @@ from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.kelso import KelsoCtx, StagedAppPaths, ambiguity_message
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.run_layout import (
+  SHELL_RC,
   AppRunData,
   AssignedRoute,
   load_run_data,
   make_compose_dict,
   resolved_subdomain,
+  shell_rc,
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
@@ -210,10 +212,21 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
     raise ValueError("\n".join(i.problem for i in run_data.stage_blockers))
 
   dropped = _rebuild_volume_links(spec, run_data)
+  _rebuild_kelso_dirs(spec, run_data.run_path)
   with open(ctx.staged_paths(spec.app).compose_path, "w") as f:
     yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
   return run_data, dropped
+
+
+def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
+  """`kelso/<unit>/`, what each unit sees at /kelso."""
+  root = run_path / "kelso"
+  shutil.rmtree(root, ignore_errors=True)
+  for unit_name in spec.run_units:
+    unit_dir = root / unit_name
+    unit_dir.mkdir(parents=True)
+    (unit_dir / PurePosixPath(SHELL_RC).name).write_text(shell_rc(spec, unit_name))
 
 
 # Lives in the app's config store, so `--purge` clears it and nothing else does.

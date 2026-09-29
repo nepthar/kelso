@@ -2,7 +2,7 @@ import argparse
 
 from kelso.lib.docker import docker_run_command
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import DEFAULT_SHELL, ConsoleRecord, console_command
+from kelso.lib.lifecycle.console import ConsoleRecord, console_command
 
 
 def register(subparsers) -> None:
@@ -15,9 +15,8 @@ def register(subparsers) -> None:
   )
   parser.add_argument(
     "--shell",
-    default=DEFAULT_SHELL,
     metavar="PATH",
-    help=f"Shell to run in the container (default: {DEFAULT_SHELL})",
+    help="Shell to run in the container (default: the unit's `shell`)",
   )
   # No lock: a session can last hours and must not shut out stop or reload.
   parser.set_defaults(func=run)

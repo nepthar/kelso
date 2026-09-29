@@ -1,5 +1,6 @@
 """Pydantic models for kelso TOML (bundle manifests and catalog service definitions)."""
 
+import posixpath
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from pydantic import (
 
 from kelso.lib.apps import AppID
 from kelso.lib.util import (
+  KELSO_GUEST_DIR,
   KLSO_KEY_PREFIX,
   KLSO_KEYS,
   ROUTE_KEY_PREFIX,
@@ -201,6 +203,9 @@ class RunEntry(BaseModel):
   env: dict[Identifier, str] = Field(default_factory=dict)
   routes: dict[Identifier, RouteEntry] = Field(default_factory=dict)
   restart: Literal["no", "always", "on-failure", "unless-stopped"] = "unless-stopped"
+  # How kelso runs anything in this unit: `[*shell, script]`. The unit's commands
+  # and its console need it to exist in the image.
+  shell: list[str] = Field(default_factory=lambda: ["/bin/sh", "-c"], min_length=1)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (healthcheck, ulimits, ...).
   compose: dict[str, Any] = Field(default_factory=dict)
@@ -360,11 +365,17 @@ def _validate_volumes(manifest: Manifest) -> list[str]:
 def _validate_run_volumes(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
-    for volume_name in run_entry.volumes:
+    for volume_name, guest_path in run_entry.volumes.items():
       if volume_name not in manifest.volumes:
         errors.append(
           f"[run.{unit_name}.volumes]: volume {volume_name!r} is not declared "
           "in [volumes]"
+        )
+      target = posixpath.normpath(guest_path)
+      if target == KELSO_GUEST_DIR or target.startswith(f"{KELSO_GUEST_DIR}/"):
+        errors.append(
+          f"[run.{unit_name}.volumes]: {volume_name} is mounted at {guest_path}, "
+          f"but {KELSO_GUEST_DIR} is reserved for kelso; mount it somewhere else"
         )
   return errors
 

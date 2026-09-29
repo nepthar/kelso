@@ -694,3 +694,29 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
   assert fresh and fresh != minted
+
+
+def test_install_writes_a_shell_rc_for_every_unit(kelso_env):
+  two_units = """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine:latest"
+
+[run.worker]
+image = "alpine:latest"
+
+[commands.ping]
+cmd = "echo pong"
+"""
+  _write_bundle(kelso_env, "rc-demo", two_units)
+  assert kelso_env.run("install", "rc-demo").returncode == 0
+  kelso = kelso_env.run_root / "rc-demo" / "kelso"
+  assert "ping)" in (kelso / "main" / "shell.sh").read_text()
+  assert "No commands are defined" in (kelso / "worker" / "shell.sh").read_text()
+
+  # A unit dropped from the manifest leaves nothing behind.
+  _write_bundle(kelso_env, "rc-demo", two_units.replace("[run.worker]", "[run.w2]"))
+  assert kelso_env.run("install", "rc-demo").returncode == 0
+  assert sorted(p.name for p in kelso.iterdir()) == ["main", "w2"]

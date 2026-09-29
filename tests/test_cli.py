@@ -225,6 +225,9 @@ def test_logs_accepts_native_flags_before_app(kelso_env):
 # --- commands --------------------------------------------------------------
 
 
+KELSO_RUN = ["/bin/sh", "-c", '. /kelso/shell.sh && kelso "$@"', "kelso"]
+
+
 def test_cmd_lists_and_runs_manifest_commands(kelso_env):
   app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
@@ -265,14 +268,9 @@ desc = "List-form command"
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
   ]
-  assert ["compose", "exec", "main", "/bin/sh", "-c", "echo pong extra"] in calls
-
-  list_form = kelso_env.run("cmd", "cmd-demo", "argv", "world")
-  assert list_form.returncode == 0, list_form.stderr
-  calls = [
-    json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
-  ]
-  assert ["compose", "exec", "main", "echo", "hello", "world"] in calls
+  # Every command goes through the unit's /kelso/shell.sh; test_compose.py
+  # covers what `kelso` does there.
+  assert ["compose", "exec", "main", *KELSO_RUN, "ping", "extra"] in calls
 
 
 def test_cmd_uses_run_when_container_is_stopped(kelso_env):
@@ -308,9 +306,9 @@ cmd = "echo pong"
     "--rm",
     "--no-deps",
     "main",
-    "/bin/sh",
-    "-c",
-    "echo pong extra",
+    *KELSO_RUN,
+    "ping",
+    "extra",
   ] in calls
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0

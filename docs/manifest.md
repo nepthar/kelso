@@ -49,10 +49,11 @@ creates.
 | --- | --- | --- | --- |
 | `image` | string | **required** | Pin a tag. `latest` makes a bundle unreproducible. |
 | `cmd` | list of strings | image default | Overrides the image's command. |
-| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. |
+| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which is kelso's. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `no` \| `always` \| `on-failure` \| `unless-stopped` | `unless-stopped` | Compose restart policy. |
+| `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
 ```toml
@@ -161,9 +162,14 @@ Operations the app declares for itself, runnable from the CLI or as a button
 in the web UI. This is how a bundle ships its own maintenance: a backup, a
 reindex, a password reset.
 
+kelso writes each unit a `/kelso/shell.sh` defining `kelso <command> [args]` for
+the commands that run there. The Run button and `kelso cmd` call it through
+the unit's `shell`, and a console loads it, so a command means the same thing
+however it is started. Typing `kelso` alone in a console lists them.
+
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cmd` | string or list | **required** | As docker runs one: a string runs as `/bin/sh -c "<string>"`, a list is the argv. Operator arguments are shell-split, then quoted onto the end of a string or appended to a list. |
+| `cmd` | string or list | **required** | As docker runs one: a string runs in the unit's `shell`, a list is the argv. Operator arguments are shell-split, then added to the end of either. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 
