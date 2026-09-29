@@ -323,16 +323,16 @@ button.toggle[aria-pressed="true"] {
   color: var(--coral); border-color: var(--coral); background: var(--panel);
 }
 .head-actions .actions { gap: 8px; }
-.head .head-actions a.btn {
+a.btn {
   color: var(--dim); font-size: 13px; text-decoration: none;
   border: 1px solid var(--line); border-radius: var(--r); padding: 4px 11px;
   background: transparent;
 }
-.head .head-actions a.btn:hover { color: var(--fg); border-color: var(--dim); }
-.head .head-actions a.btn[aria-current="true"] {
+a.btn:hover { color: var(--fg); border-color: var(--dim); }
+a.btn[aria-current="true"] {
   color: var(--coral); border-color: var(--coral); background: var(--panel);
 }
-.head .head-actions a.btn.icon { padding: 5px 7px; line-height: 0; }
+a.btn.icon { padding: 5px 7px; line-height: 0; }
 
 /* --- rows and wells ------------------------------------------------------ */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -341,6 +341,9 @@ button.toggle[aria-pressed="true"] {
 .row .grow { flex: 1; min-width: 200px; }
 .row.between { justify-content: space-between; width: 100%; }
 .apphead { margin-bottom: 10px; }
+/* The dashboard's line about the host, with its shell beside it. */
+.host-line { gap: 8px; margin-bottom: 12px; }
+.host-line .lede { margin: 0; }
 .apphead h2 {
   margin: 0; font-size: 19px; font-weight: 600; text-transform: none;
   letter-spacing: -0.012em; color: var(--fg); display: block;

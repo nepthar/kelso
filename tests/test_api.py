@@ -1,6 +1,7 @@
 """The admin API surface: what it projects, what it refuses, and what it runs."""
 
 import json
+import socket
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -52,6 +53,7 @@ def submit(client: TestClient, jobs: JobRunner, verb: str, args: dict[str, str])
 def test_version(kelso_env, client):
   body = client.get("/version").json()
   assert body["api"] == API_VERSION
+  assert body["hostname"] == socket.gethostname()
   assert body["kelso"]
   # The root is the same answer, so a bare curl at the socket says something.
   assert client.get("/").json() == body

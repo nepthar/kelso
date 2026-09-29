@@ -1,0 +1,17 @@
+{% extends "frame.html" %}
+{% from "macros.html" import terminal %}
+
+{% block head %}<link rel="stylesheet" href="{{ asset('vendor/xterm-6.0.0/xterm.css') }}">{% endblock %}
+
+{% block refresh %}{% endblock %}
+{% block actions %}<span class="head-actions"><a class="btn" href="/">Back to dashboard</a></span>{% endblock %}
+
+{% block content %}
+{% call terminal('/host/console/ws') %}A login shell on <span class="mono">{{ hostname }}</span>, as the user kelsod runs as.{% endcall %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ asset('vendor/xterm-6.0.0/xterm.js') }}"></script>
+<script src="{{ asset('vendor/xterm-addon-fit-0.11.0/addon-fit.js') }}"></script>
+<script src="{{ asset('js/console.js') }}"></script>
+{% endblock %}

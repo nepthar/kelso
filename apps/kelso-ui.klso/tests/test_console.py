@@ -94,3 +94,19 @@ def test_nothing_running_draws_no_terminal(client, fake):
   assert "Start it to open a console" in text
   assert 'id="console"' not in text
   assert "xterm.js" not in text
+
+
+def test_the_host_shell_is_relayed_too(client, kelsod):
+  with client.websocket_connect(f"{BASE}/host/console/ws") as ws:
+    ws.send_bytes(b"hi")
+    assert ws.receive_bytes() == b"hi"
+  assert kelsod.paths == ["/host/console"]
+
+
+def test_the_dashboard_names_the_host_and_offers_its_shell(client, fake):
+  text = client.get("/").text
+  assert "tycho " in text
+  assert 'href="/host/console"' in text
+  assert (
+    "unsafe-inline" in client.get("/host/console").headers["content-security-policy"]
+  )
