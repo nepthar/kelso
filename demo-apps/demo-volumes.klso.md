@@ -18,8 +18,8 @@ files = { kind = "host", desc = "Host directory to inspect, must be set before r
 
 [run.main]
 image   = "alpine:latest"
-cmd     = ["/bin/sh", "-c", "/kelso/app/list_volumes.sh"]
-volumes = { app = "/kelso/app", state = "/kelso/state", files = "/kelso/host_files", temp = "/kelso/tmp" }
+cmd     = ["/bin/sh", "-c", "/demo/app/list_volumes.sh"]
+volumes = { app = "/demo/app", state = "/demo/state", files = "/demo/host_files", temp = "/demo/tmp" }
 restart = "no"
 ```
 

@@ -58,8 +58,8 @@ app = { kind = "app", desc = "shipped alongside the manifest" }
 
 [run.main]
 image   = "alpine:latest"
-cmd     = ["/bin/sh", "-c", "/kelso/app/go.sh"]
-volumes = { app = "/kelso/app" }
+cmd     = ["/bin/sh", "-c", "/demo/app/go.sh"]
+volumes = { app = "/demo/app" }
 restart = "no"
 """
 

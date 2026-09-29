@@ -7,8 +7,6 @@ becomes a route -- was previously only observable through generated compose
 files in the CLI tests.
 """
 
-import subprocess
-
 import pytest
 
 from kelso.lib.manifest import ConfigError
@@ -16,7 +14,6 @@ from kelso.lib.spec import (
   KELSO_APP_ID_LABEL,
   KELSO_RUN_UNIT_LABEL,
   KELSO_VERSION_LABEL,
-  shell_word,
 )
 from tests.conftest import spec_of
 
@@ -328,7 +325,7 @@ cmd = "python manage.py reset"
 desc = "Reset the admin password"
 
 [commands.reindex]
-cmd = ["python", "manage.py", "reindex"]
+cmd = "python manage.py reindex"
 run_unit = "worker"
 desc = "Rebuild the search index"
 """,
@@ -337,35 +334,28 @@ desc = "Rebuild the search index"
   reset = spec.commands["reset"]
   assert reset.run_unit == "main"
   assert reset.desc == "Reset the admin password"
-  assert reset.argv() == ["/bin/sh", "-c", "python manage.py reset"]
-  assert reset.argv(["alice", "a b"]) == [
-    "/bin/sh",
-    "-c",
-    "python manage.py reset alice 'a b'",
-  ]
+  assert reset.cmd == "python manage.py reset"
 
   reindex = spec.commands["reindex"]
   assert reindex.run_unit == "worker"
-  assert reindex.argv(["--all"]) == ["python", "manage.py", "reindex", "--all"]
+  assert reindex.cmd == "python manage.py reindex"
 
 
-def test_a_string_command_gets_its_arguments_as_they_were_typed(tmp_path):
-  spec = spec_of(
-    tmp_path,
-    """\
+def test_a_command_is_a_string(tmp_path):
+  with pytest.raises(ConfigError, match="cmd"):
+    spec_of(
+      tmp_path,
+      """\
 [app]
 version = "1"
 
 [run.main]
 image = "alpine"
 
-[commands.show]
-cmd = "printf '[%s]'"
+[commands.reindex]
+cmd = ["python", "manage.py", "reindex"]
 """,
-  )
-  argv = spec.commands["show"].argv(["it's", "a b", "$HOME", ";", "*"])
-  out = subprocess.run(argv, capture_output=True, text=True, check=True).stdout
-  assert out == "[it's][a b][$HOME][;][*]"
+    )
 
 
 def test_command_targeting_unknown_run_unit_is_rejected(tmp_path):
@@ -384,35 +374,3 @@ cmd = "true"
 run_unit = "missing"
 """,
     )
-
-
-@pytest.mark.parametrize(
-  "word",
-  [
-    "plain/path.sh",
-    "a b",
-    "it's",
-    "echo 'Hello, world!'",
-    "wow!!",
-    'say "hi"',
-    "$HOME `x`",
-    "back\\slash",
-    "",
-  ],
-)
-def test_a_pasted_command_word_reads_back_as_itself(word):
-  """What the banner shows must mean the same thing to a shell."""
-  out = subprocess.run(
-    ["/bin/sh", "-c", f"printf '[%s]' {shell_word(word)}"],
-    capture_output=True,
-    text=True,
-    check=True,
-  ).stdout
-  assert out == f"[{word}]"
-
-
-def test_command_words_are_quoted_as_a_person_would():
-  assert shell_word("manage.py") == "manage.py"
-  assert shell_word("a b") == "'a b'"
-  expected = '"echo \'Hello, world"\\!"\'"'
-  assert shell_word("echo 'Hello, world!'") == expected

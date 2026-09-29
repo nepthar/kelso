@@ -66,12 +66,22 @@
     if (live()) ws.send(Uint8Array.from(data, function (ch) { return ch.charCodeAt(0); }));
   });
 
+  // A closed session keeps its output, to read and copy, but takes no keys and
+  // draws no cursor. "\x1b[?25l" / "\x1b[?25h" hide and show xterm's cursor.
+  function setLive(on) {
+    box.classList.toggle("ended", !on);
+    term.options.disableStdin = !on;
+    term.write(on ? "\x1b[?25h" : "\x1b[?25l");
+    if (!on) term.blur();
+  }
+
   function connect() {
     again.hidden = true;
     status.textContent = "connecting";
     ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
     ws.onopen = function () {
+      setLive(true);
       status.textContent = "connected";
       sendSize();
       term.focus();
@@ -80,6 +90,7 @@
       if (typeof event.data !== "string") term.write(new Uint8Array(event.data));
     };
     ws.onclose = function (event) {
+      setLive(false);
       again.hidden = false;
       if (event.code === IDLE) status.textContent = "closed: idle";
       else status.textContent = event.reason || "disconnected";

@@ -49,10 +49,11 @@ creates.
 | --- | --- | --- | --- |
 | `image` | string | **required** | Pin a tag. `latest` makes a bundle unreproducible. |
 | `cmd` | list of strings | image default | Overrides the image's command. |
-| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. |
+| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which is kelso's. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `no` \| `always` \| `on-failure` \| `unless-stopped` | `unless-stopped` | Compose restart policy. |
+| `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
 ```toml
@@ -161,9 +162,15 @@ Operations the app declares for itself, runnable from the CLI or as a button
 in the web UI. This is how a bundle ships its own maintenance: a backup, a
 reindex, a password reset.
 
+The Run button and `kelso cmd` run a command's string in its unit's `shell`,
+with the operator's arguments added to the end. For someone in a console, each
+unit with commands also gets `/kelso/bin/kelso_cmd`, which runs one the same
+way (`kelso_cmd backup --full`) or, with no arguments, lists them. kelso's
+consoles put `/kelso/bin` at the end of `PATH` and open with that list.
+
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cmd` | string or list | **required** | As docker runs one: a string runs as `/bin/sh -c "<string>"`, a list is the argv. Operator arguments are shell-split, then quoted onto the end of a string or appended to a list. |
+| `cmd` | string | **required** | Run by the unit's `shell`, with any operator arguments added to the end as they were typed. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 
@@ -173,7 +180,7 @@ cmd      = "mealie-cli backup create"
 desc     = "Write a backup into the data volume"
 
 [commands.psql]
-cmd      = ["psql", "-U", "postgres"]
+cmd      = "psql -U postgres"
 run_unit = "database"
 desc     = "Open a database shell"
 ```

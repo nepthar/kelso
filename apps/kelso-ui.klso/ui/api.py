@@ -7,7 +7,7 @@ import socket
 from websockets.asyncio.client import connect as ws_connect
 from websockets.asyncio.client import unix_connect as ws_unix_connect
 
-SOCKET = os.environ.get("KELSO_SOCKET", "/kelso/conn/admin.sock")
+SOCKET = os.environ.get("KELSO_SOCKET", "/run/kelso-admin/admin.sock")
 # host:port wins over the socket when set. Docker Desktop's bind mounts cannot
 # carry AF_UNIX, so a mac host serves this over TCP instead.
 API = os.environ.get("KELSO_API", "").strip()

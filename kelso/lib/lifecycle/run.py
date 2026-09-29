@@ -18,7 +18,7 @@ from kelso.lib.lifecycle.stage import (
   unlink_host_volumes,
 )
 from kelso.lib.routes import RouteProviderError
-from kelso.lib.run_layout import ConfigIssue, load_run_data
+from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
 from kelso.lib.spec import AppSpec
 
 
@@ -164,7 +164,7 @@ def run_command(
     )
 
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}
-  argv = entry.argv(args)
+  argv = command_argv(spec.run_units[entry.run_unit], entry, args)
   env = compose_env(app_id, ctx)
 
   if entry.run_unit in running:

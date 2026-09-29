@@ -5,6 +5,7 @@ fake docker is the only docker these tests are allowed to see.
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -694,3 +695,31 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
   assert fresh and fresh != minted
+
+
+def test_install_writes_kelso_cmd_only_where_there_are_commands(kelso_env):
+  manifest = """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine:latest"
+
+[run.worker]
+image = "alpine:latest"
+
+[commands.ping]
+cmd = "echo pong"
+"""
+  _write_bundle(kelso_env, "rc-demo", manifest)
+  assert kelso_env.run("install", "rc-demo").returncode == 0
+  kelso = kelso_env.run_root / "rc-demo" / "kelso"
+  script = kelso / "main" / "bin" / "kelso_cmd"
+  assert os.access(script, os.X_OK)
+  assert "ping)" in script.read_text()
+  assert sorted(p.name for p in kelso.iterdir()) == ["main"]
+
+  # A command that moves takes its script with it.
+  _write_bundle(kelso_env, "rc-demo", manifest + 'run_unit = "worker"\n')
+  assert kelso_env.run("install", "rc-demo").returncode == 0
+  assert sorted(p.name for p in kelso.iterdir()) == ["worker"]

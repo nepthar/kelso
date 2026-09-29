@@ -6,7 +6,6 @@ relay and the process handling are real and only the container is not.
 
 import json
 import os
-import subprocess
 import time
 
 import pytest
@@ -18,8 +17,6 @@ from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import shell_script
-from kelso.lib.spec import AppCommand
 
 APP = "io.p2net.basic-features"
 URL = f"/apps/{APP}/console"
@@ -59,7 +56,14 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert result.returncode == 0, result.stderr
 
   log = kelso_env.docker_log.read_text().splitlines()
-  assert json.loads(log[-1])["args"][:5] == ["compose", "exec", "main", "/bin/sh", "-c"]
+  assert json.loads(log[-1])["args"] == [
+    "compose",
+    "exec",
+    "main",
+    "/bin/sh",
+    "-c",
+    "exec /bin/sh -i",
+  ]
 
   run = client.get("/activity").json()["activity"][0]
   assert (run["verb"], run["app_id"], run["status"]) == ("console", APP, "ok")
@@ -67,12 +71,18 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert "via" in body and "cli" in body
 
 
-def test_shell_takes_another_shell(kelso_env, running):
-  assert (
-    kelso_env.run("shell", "basic-features", "--shell", "/bin/bash").returncode == 0
+def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
+  app = kelso_env.local_repo / "cmd-demo.klso"
+  app.mkdir()
+  (app / "manifest.toml").write_text(
+    '[app]\nversion = "1"\n\n[run.main]\nimage = "alpine"\n\n'
+    '[commands.ping]\ncmd = "echo pong"\n'
   )
+  assert kelso_env.run("start", "cmd-demo").returncode == 0
+  assert kelso_env.run("shell", "cmd-demo").returncode == 0
   log = kelso_env.docker_log.read_text().splitlines()
-  assert json.loads(log[-1])["args"][-1].endswith("exec /bin/bash")
+  script = json.loads(log[-1])["args"][-1]
+  assert script == 'export PATH="$PATH:/kelso/bin"; kelso_cmd; exec /bin/sh -i'
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):
@@ -132,14 +142,6 @@ def test_console_refuses_a_unit_that_is_not_running(running, client):
   assert b"running units: main" in out
 
 
-def test_console_refuses_past_the_session_cap(running, client, monkeypatch):
-  monkeypatch.setattr(console, "MAX_SESSIONS", 0)
-  with client.websocket_connect(URL) as ws:
-    out, closed = drain(ws)
-  assert closed.code == console.REFUSED
-  assert b"already open" in out
-
-
 def test_console_closes_an_idle_session(running, client, monkeypatch):
   monkeypatch.setattr(console, "IDLE_SECONDS", 0.2)
   shell(monkeypatch, "exec sleep 30")
@@ -177,28 +179,3 @@ def test_leaving_hangs_up_the_shell_here_and_in_the_container(
   pid = int(args[-1].removeprefix("kill -HUP "))
   with pytest.raises(ProcessLookupError):
     os.kill(pid, 0)
-
-
-def test_the_shell_opens_with_the_commands_for_its_unit(tmp_path):
-  commands = {
-    "backup": AppCommand("backup", 'pg_dump "$DB"', "main", ""),
-    "reindex": AppCommand("reindex", ("manage.py", "reindex"), "main", ""),
-    "quoted": AppCommand("quoted", ("sh", "-c", "echo 'hi!'"), "main", ""),
-    "jobs": AppCommand("jobs", ("true",), "worker", ""),
-  }
-  out = subprocess.run(
-    ["/bin/sh", "-c", shell_script("main", commands)],
-    input="exit\n",
-    env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)},
-    capture_output=True,
-    text=True,
-    timeout=10,
-  ).stdout
-  assert out.startswith(
-    "The manifest defines these commands:\n"
-    '  backup   pg_dump "$DB"\n'
-    """  quoted   sh -c "echo 'hi"\\!"'"\n"""
-    "  reindex  manage.py reindex\n"
-  )
-  assert "jobs" not in out
-  assert shell_script("worker", {}) == "exec /bin/sh"

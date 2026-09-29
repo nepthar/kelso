@@ -438,6 +438,8 @@ details.reveal > summary:hover { color: var(--coral); }
   font: 13px "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 .console:focus-within { border-color: var(--coral); }
+/* A closed session: its output stays readable, but nothing here is live. */
+.console.ended, .console.ended:focus-within { border-color: var(--line); }
 .console .xterm { height: 100%; padding: 8px 12px; }
 /* xterm.css paints this #000 (as `.xterm .xterm-viewport`, and loads later); the
    theme only reaches the element inside it. */
