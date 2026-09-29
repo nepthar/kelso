@@ -34,13 +34,10 @@ from kelso.lib.lifecycle.console import (
 logger = logging.getLogger("kelsod.console")
 
 IDLE_SECONDS = 15 * 60
-MAX_SESSIONS = 8
 
 EXITED = 1000
 IDLE = 4000
 REFUSED = 4001
-
-_sessions = 0
 
 
 def shell_argv(cmd: ConsoleCommand) -> list[str]:
@@ -65,28 +62,20 @@ async def refuse(ws: WebSocket, message: str) -> None:
 
 async def serve(ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx) -> None:
   """Run one session for `cmd` on `ws`, filed in the activity log."""
-  global _sessions
-  if _sessions >= MAX_SESSIONS:
-    await refuse(ws, f"{MAX_SESSIONS} consoles are already open; close one first")
-    return
-  _sessions += 1
+  record = await asyncio.to_thread(ConsoleRecord, ctx, cmd, "web")
+  ending = _Ending()
   try:
-    record = await asyncio.to_thread(ConsoleRecord, ctx, cmd, "web")
-    ending = _Ending()
-    try:
-      await ws.accept()
-      await _relay(
-        ws,
-        shell_argv(cmd),
-        cwd=cmd.cwd,
-        env=cmd.env,
-        hangup=lambda pid: hang_up(cmd, pid),
-        ending=ending,
-      )
-    finally:
-      await asyncio.shield(asyncio.to_thread(record.close, ending.text, ok=ending.ok))
+    await ws.accept()
+    await _relay(
+      ws,
+      shell_argv(cmd),
+      cwd=cmd.cwd,
+      env=cmd.env,
+      hangup=lambda pid: hang_up(cmd, pid),
+      ending=ending,
+    )
   finally:
-    _sessions -= 1
+    await asyncio.shield(asyncio.to_thread(record.close, ending.text, ok=ending.ok))
 
 
 @dataclass

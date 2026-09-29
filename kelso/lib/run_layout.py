@@ -13,6 +13,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
   PRIMARY_ROUTE_NAME,
+  AppCommand,
   AppConfig,
   AppRoute,
   AppRunUnit,
@@ -32,8 +33,9 @@ logger = getLogger("kelso.run_layout")
 # The host clock, bind-mounted into every container. See `_host_mounts`.
 LOCALTIME_PATH = "/etc/localtime"
 
-# Defines `kelso <command>` for a unit's shell. Each unit sees its own at /kelso.
-SHELL_RC = f"{KELSO_GUEST_DIR}/shell.sh"
+# A unit's commands, for someone in its shell. On PATH in kelso's consoles.
+KELSO_BIN = f"{KELSO_GUEST_DIR}/bin"
+KELSO_CMD = f"{KELSO_BIN}/kelso_cmd"
 
 
 def _project_name(app_id: str) -> str:
@@ -49,61 +51,58 @@ def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
   return mount
 
 
-class _ShellRcTemplate(string.Template):
+class _KelsoCmdTemplate(string.Template):
   # `$` is the shell's, so placeholders are `@@name`.
   delimiter = "@@"
 
 
-# `/kelso/shell.sh`. Sourced by every command kelso runs in a unit and by its
-# console, so a command means the same thing however it is started. bash
-# --rcfile reads it in place of its own startup files, hence the bashrc lines.
-SHELL_RC_TEMPLATE = _ShellRcTemplate("""\
+# `/kelso/bin/kelso_cmd`. Each case runs exactly what the Run button sends; see
+# `command_argv`.
+KELSO_CMD_TEMPLATE = _KelsoCmdTemplate("""\
+#!@@shell
 # Written by kelso for @@app, unit @@unit. Rewritten on install.
-kelso() {
-  case "$1" in
+case "$1" in
 @@cases
-    '') cat <<'KELSO_COMMANDS'
+  '') cat <<'KELSO_COMMANDS'
 @@listing
 KELSO_COMMANDS
-      ;;
-    *) echo "kelso: no command $1 in @@unit; run kelso to list them" >&2
-       return 127 ;;
-  esac
-}
-case $- in
-  *i*)
-    if [ -n "${BASH_VERSION:-}" ]; then
-      [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc
-      [ -f ~/.bashrc ] && . ~/.bashrc
-    fi
-    echo "Shell on @@app unit @@unit"
-    kelso ;;
+    ;;
+  *) echo "kelso_cmd: no command $1 in @@unit; run kelso_cmd to list them" >&2
+     exit 127 ;;
 esac
 """)
 
 
-def shell_rc(spec: AppSpec, unit_name: str) -> str:
-  """`/kelso/shell.sh` for one unit: `kelso <command>` and, when interactive, a banner."""
-  shell = shlex.join(spec.run_units[unit_name].shell)
-  here = [(n, c) for n, c in sorted(spec.commands.items()) if c.run_unit == unit_name]
+def unit_commands(spec: AppSpec, unit_name: str) -> list[AppCommand]:
+  return [c for _, c in sorted(spec.commands.items()) if c.run_unit == unit_name]
+
+
+def kelso_cmd(spec: AppSpec, unit_name: str) -> str:
+  """`/kelso/bin/kelso_cmd` for a unit with commands: runs one, or lists them."""
+  unit = spec.run_units[unit_name]
+  commands = unit_commands(spec, unit_name)
+  width = max(len(c.name) for c in commands)
   cases = [
-    f'    {name}) shift; {shell} {shlex.quote(c.cmd + ' "$@"')} {name} "$@" ;;'
-    for name, c in here
+    f'  {c.name}) shift; exec {shlex.join(command_argv(unit, c, []))} "$@" ;;'
+    for c in commands
   ]
-  if here:
-    width = max(len(name) for name, _ in here)
-    listing = ["Commands, run as: kelso <name> [args]"]
-    listing += [f"  {name.ljust(width)}  {c.cmd}" for name, c in here]
-  else:
-    listing = ["No commands are defined for this unit."]
-  return SHELL_RC_TEMPLATE.substitute(
-    app=spec.app, unit=unit_name, cases="\n".join(cases), listing="\n".join(listing)
+  listing = [f"{spec.app} ({unit_name}) commands, run as: kelso_cmd <name> [args]"]
+  listing += [f"  {c.name.ljust(width)}  {c.cmd}" for c in commands]
+  return KELSO_CMD_TEMPLATE.substitute(
+    shell=unit.shell[0],
+    app=spec.app,
+    unit=unit_name,
+    cases="\n".join(cases),
+    listing="\n".join(listing),
   )
 
 
-def command_argv(unit: AppRunUnit, name: str, args: Sequence[str]) -> list[str]:
-  """What `docker compose exec` runs for a manifest command: the unit's `kelso`."""
-  return [*unit.shell, f'. {SHELL_RC} && kelso "$@"', "kelso", name, *args]
+def command_argv(
+  unit: AppRunUnit, command: AppCommand, args: Sequence[str]
+) -> list[str]:
+  """What `docker compose exec` runs for a manifest command: its string in the
+  unit's shell, with `args` added to the end as typed."""
+  return [*unit.shell, f'{command.cmd} "$@"', command.name, *args]
 
 
 def _env_kvpair(key: str, val: str) -> str:
@@ -514,7 +513,8 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     ]
     # Kelso's own mounts stay out of `${klso.volumes}`: that value tells an app
     # where the volumes it declared ended up.
-    mounts.append(_mount(f"./kelso/{run_name}", KELSO_GUEST_DIR, readonly=True))
+    if unit_commands(spec, run_name):
+      mounts.append(_mount(f"./kelso/{run_name}", KELSO_GUEST_DIR, readonly=True))
     mounts.extend(data.host_mounts)
     if mounts:
       service["volumes"] = mounts

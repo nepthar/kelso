@@ -5,6 +5,7 @@ fake docker is the only docker these tests are allowed to see.
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -696,8 +697,8 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
   assert fresh and fresh != minted
 
 
-def test_install_writes_a_shell_rc_for_every_unit(kelso_env):
-  two_units = """\
+def test_install_writes_kelso_cmd_only_where_there_are_commands(kelso_env):
+  manifest = """\
 [app]
 version = "1"
 
@@ -710,13 +711,15 @@ image = "alpine:latest"
 [commands.ping]
 cmd = "echo pong"
 """
-  _write_bundle(kelso_env, "rc-demo", two_units)
+  _write_bundle(kelso_env, "rc-demo", manifest)
   assert kelso_env.run("install", "rc-demo").returncode == 0
   kelso = kelso_env.run_root / "rc-demo" / "kelso"
-  assert "ping)" in (kelso / "main" / "shell.sh").read_text()
-  assert "No commands are defined" in (kelso / "worker" / "shell.sh").read_text()
+  script = kelso / "main" / "bin" / "kelso_cmd"
+  assert os.access(script, os.X_OK)
+  assert "ping)" in script.read_text()
+  assert sorted(p.name for p in kelso.iterdir()) == ["main"]
 
-  # A unit dropped from the manifest leaves nothing behind.
-  _write_bundle(kelso_env, "rc-demo", two_units.replace("[run.worker]", "[run.w2]"))
+  # A command that moves takes its script with it.
+  _write_bundle(kelso_env, "rc-demo", manifest + 'run_unit = "worker"\n')
   assert kelso_env.run("install", "rc-demo").returncode == 0
-  assert sorted(p.name for p in kelso.iterdir()) == ["main", "w2"]
+  assert sorted(p.name for p in kelso.iterdir()) == ["worker"]

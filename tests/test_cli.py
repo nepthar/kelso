@@ -225,7 +225,7 @@ def test_logs_accepts_native_flags_before_app(kelso_env):
 # --- commands --------------------------------------------------------------
 
 
-KELSO_RUN = ["/bin/sh", "-c", '. /kelso/shell.sh && kelso "$@"', "kelso"]
+KELSO_RUN = ["/bin/sh", "-c", 'echo pong "$@"']
 
 
 def test_cmd_lists_and_runs_manifest_commands(kelso_env):

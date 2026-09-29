@@ -3,8 +3,8 @@
 `console_command` resolves what to run and refuses what cannot be; `kelso
 shell` hands it the operator's own terminal and kelsod runs it on a PTY.
 `ConsoleRecord` puts each session in the activity log -- that it happened, not
-what was typed. The shell loads the unit's /kelso/shell.sh, which defines
-`kelso <command>` and says what there is.
+what was typed. A unit with commands opens with them listed, and with
+/kelso/bin on PATH so `kelso_cmd` runs them.
 
 docker has no way to end an exec: killing the client leaves its shell running
 in the container. So a session kelsod abandons announces its shell's pid
@@ -22,7 +22,7 @@ from kelso.lib.activity import ERROR, OK, begin_run, finish_run
 from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
-from kelso.lib.run_layout import SHELL_RC
+from kelso.lib.run_layout import KELSO_BIN, unit_commands
 from kelso.lib.spec import AppSpec
 
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
@@ -43,13 +43,9 @@ def console_command(
   unit: str,
   ctx: KelsoCtx,
   *,
-  shell: str | None = None,
   announce_pid: bool = False,
 ) -> ConsoleCommand:
-  """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running.
-
-  `shell` is the program to run interactively; the unit's own shell by default.
-  """
+  """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
   app_id = ctx.resolve_app(app)
   state = ctx.run_state(app_id)
   if not state.compose_exists:
@@ -65,7 +61,9 @@ def console_command(
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
   spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
   unit_shell = spec.run_units[unit].shell
-  script = interactive_script(shell or unit_shell[0])
+  script = f"exec {shlex.quote(unit_shell[0])} -i"
+  if unit_commands(spec, unit):
+    script = f'export PATH="$PATH:{KELSO_BIN}"; kelso_cmd; {script}'
   if announce_pid:
     script = "printf '\\033]697;kelso-pid=%s\\007' $$; " + script
   return ConsoleCommand(
@@ -76,13 +74,6 @@ def console_command(
     cwd=state.run_path,
     env=compose_env(app_id, ctx),
   )
-
-
-def interactive_script(program: str) -> str:
-  """What the unit's shell runs to become `program`, with /kelso/shell.sh loaded."""
-  if Path(program).name == "bash":
-    return f"exec {shlex.quote(program)} --rcfile {SHELL_RC} -i"
-  return f"export ENV={SHELL_RC}; exec {shlex.quote(program)} -i"
 
 
 def hangup_args(cmd: ConsoleCommand, pid: int) -> list[str]:

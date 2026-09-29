@@ -62,7 +62,7 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
     "main",
     "/bin/sh",
     "-c",
-    "export ENV=/kelso/shell.sh; exec /bin/sh -i",
+    "exec /bin/sh -i",
   ]
 
   run = client.get("/activity").json()["activity"][0]
@@ -71,14 +71,18 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert "via" in body and "cli" in body
 
 
-def test_shell_takes_another_shell(kelso_env, running):
-  assert (
-    kelso_env.run("shell", "basic-features", "--shell", "/bin/bash").returncode == 0
+def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
+  app = kelso_env.local_repo / "cmd-demo.klso"
+  app.mkdir()
+  (app / "manifest.toml").write_text(
+    '[app]\nversion = "1"\n\n[run.main]\nimage = "alpine"\n\n'
+    '[commands.ping]\ncmd = "echo pong"\n'
   )
+  assert kelso_env.run("start", "cmd-demo").returncode == 0
+  assert kelso_env.run("shell", "cmd-demo").returncode == 0
   log = kelso_env.docker_log.read_text().splitlines()
-  # bash ignores ENV, so it is handed the file as its rc file instead.
   script = json.loads(log[-1])["args"][-1]
-  assert script == "exec /bin/bash --rcfile /kelso/shell.sh -i"
+  assert script == 'export PATH="$PATH:/kelso/bin"; kelso_cmd; exec /bin/sh -i'
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):
@@ -136,14 +140,6 @@ def test_console_refuses_a_unit_that_is_not_running(running, client):
   assert closed.code == console.REFUSED
   assert b"worker is not running" in out
   assert b"running units: main" in out
-
-
-def test_console_refuses_past_the_session_cap(running, client, monkeypatch):
-  monkeypatch.setattr(console, "MAX_SESSIONS", 0)
-  with client.websocket_connect(URL) as ws:
-    out, closed = drain(ws)
-  assert closed.code == console.REFUSED
-  assert b"already open" in out
 
 
 def test_console_closes_an_idle_session(running, client, monkeypatch):

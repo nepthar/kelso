@@ -162,10 +162,11 @@ Operations the app declares for itself, runnable from the CLI or as a button
 in the web UI. This is how a bundle ships its own maintenance: a backup, a
 reindex, a password reset.
 
-kelso writes each unit a `/kelso/shell.sh` defining `kelso <command> [args]` for
-the commands that run there. The Run button and `kelso cmd` call it through
-the unit's `shell`, and a console loads it, so a command means the same thing
-however it is started. Typing `kelso` alone in a console lists them.
+The Run button and `kelso cmd` run a command's string in its unit's `shell`,
+with the operator's arguments added to the end. For someone in a console, each
+unit with commands also gets `/kelso/bin/kelso_cmd`, which runs one the same
+way (`kelso_cmd backup --full`) or, with no arguments, lists them. kelso's
+consoles put `/kelso/bin` at the end of `PATH` and open with that list.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |

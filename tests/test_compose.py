@@ -17,7 +17,6 @@ from kelso.lib.config import PLACEHOLDER_DOMAIN
 from kelso.lib.manifest import ConfigError, parse_manifest
 from kelso.lib.run_layout import (
   LOCALTIME_PATH,
-  SHELL_RC,
   AppRunData,
   AssignedRoute,
   ConfigIssue,
@@ -25,8 +24,8 @@ from kelso.lib.run_layout import (
   _host_mounts,
   _route_urls,
   command_argv,
+  kelso_cmd,
   make_compose_dict,
-  shell_rc,
 )
 from kelso.lib.spec import KELSO_SUBDOMAIN_LABEL, AppConfig, AppSpec
 from tests.conftest import spec_of
@@ -135,7 +134,6 @@ image = "alpine:latest"
           "driver": "json-file",
           "options": {"max-size": "10m", "max-file": "3"},
         },
-        "volumes": [_kelso_mount()],
         "labels": {
           "kelso.app_id": "demo",
           "kelso.version": "1.2.3",
@@ -205,7 +203,6 @@ volumes = { bin = "/opt/bin", app_config = "/config" }
       "target": "/config",
       "bind": {"create_host_path": False},
     },
-    _kelso_mount(),
   ]
   assert "KLSO_VOLUMES" not in service["environment"]
 
@@ -263,7 +260,6 @@ env = { VOLS = "${klso.volumes}" }
       "target": "/config",
       "bind": {"create_host_path": False},
     },
-    _kelso_mount(),
     _localtime_mount(),
   ]
   assert service["environment"]["VOLS"] == "app_config:/config"
@@ -284,7 +280,7 @@ image = "alpine"
   data = run_data(spec, host_mounts=(_localtime_mount(),))
   service = make_compose_dict(spec, data)["services"]["main"]
 
-  assert service["volumes"] == [_kelso_mount(), _localtime_mount()]
+  assert service["volumes"] == [_localtime_mount()]
   assert "KLSO_VOLUMES" not in service["environment"]
 
 
@@ -719,7 +715,7 @@ compose = { image = "nginx" }
     )
 
 
-SHELL_MANIFEST = """\
+COMMANDS_MANIFEST = """\
 [app]
 version = "1"
 
@@ -730,85 +726,63 @@ image = "alpine"
 image = "alpine"
 shell = ["/bin/bash", "-c"]
 
+[run.idle]
+image = "alpine"
+
 [commands.show]
 cmd = "printf '[%s]' \\"it's $0\\""
-desc = "A string command"
-
-[commands.listed]
-cmd = "printf '<%s>'"
+desc = "A command"
 
 [commands.jobs]
 cmd = "true"
 run_unit = "worker"
 """
 
-
-def _run_command(tmp_path, spec, name, *args):
-  """What Run and `kelso cmd` send docker, run here with shell.sh at a local path."""
-  rc = tmp_path / "shell.sh"
-  rc.write_text(shell_rc(spec, "main"))
-  argv = command_argv(spec.run_units["main"], name, list(args))
-  argv = [part.replace(SHELL_RC, str(rc)) for part in argv]
-  return subprocess.run(argv, capture_output=True, text=True, timeout=10)
+TRICKY = ["it's", "a b", "$HOME", ";", "*"]
 
 
-def test_every_unit_runs_things_through_its_own_shell(tmp_path):
-  spec = spec_of(tmp_path, SHELL_MANIFEST)
-  assert spec.run_units["main"].shell == ("/bin/sh", "-c")
-  assert command_argv(spec.run_units["worker"], "jobs", ["x"]) == [
+def test_a_command_runs_in_its_units_shell_with_arguments_as_typed(tmp_path):
+  spec = spec_of(tmp_path, COMMANDS_MANIFEST)
+  worker = spec.run_units["worker"]
+  assert command_argv(worker, spec.commands["jobs"], ["x"]) == [
     "/bin/bash",
     "-c",
-    '. /kelso/shell.sh && kelso "$@"',
-    "kelso",
+    'true "$@"',
     "jobs",
     "x",
   ]
+  argv = command_argv(spec.run_units["main"], spec.commands["show"], TRICKY)
+  out = subprocess.run(argv, capture_output=True, text=True, timeout=10).stdout
+  assert out == "[it's show][it's][a b][$HOME][;][*]"
 
 
-def test_a_command_gets_its_arguments_as_they_were_typed(tmp_path):
-  spec = spec_of(tmp_path, SHELL_MANIFEST)
-  tricky = ["it's", "a b", "$HOME", ";", "*"]
-  assert _run_command(tmp_path, spec, "show", *tricky).stdout == (
-    "[it's show][it's][a b][$HOME][;][*]"
+def test_kelso_cmd_runs_what_the_run_button_would(tmp_path):
+  spec = spec_of(tmp_path, COMMANDS_MANIFEST)
+  script = tmp_path / "kelso_cmd"
+  script.write_text(kelso_cmd(spec, "main"))
+  script.chmod(0o755)
+
+  def run(*args):
+    return subprocess.run([script, *args], capture_output=True, text=True, timeout=10)
+
+  assert run("show", *TRICKY).stdout == "[it's show][it's][a b][$HOME][;][*]"
+  assert run().stdout == (
+    "demo (main) commands, run as: kelso_cmd <name> [args]\n"
+    """  show  printf '[%s]' "it's $0"\n"""
   )
-  assert _run_command(tmp_path, spec, "listed", *tricky).stdout == (
-    "<it's><a b><$HOME><;><*>"
-  )
+  # Another unit's command is not this one's to run.
+  refused = run("jobs")
+  assert refused.returncode == 127
+  assert "kelso_cmd: no command jobs in main" in refused.stderr
 
 
-def test_an_unknown_command_or_one_from_another_unit_is_refused(tmp_path):
-  spec = spec_of(tmp_path, SHELL_MANIFEST)
-  for name in ("nope", "jobs"):
-    result = _run_command(tmp_path, spec, name)
-    assert result.returncode == 127
-    assert f"kelso: no command {name} in main" in result.stderr
-
-
-def test_an_interactive_shell_opens_with_a_banner_and_the_commands(tmp_path):
-  spec = spec_of(tmp_path, SHELL_MANIFEST)
-  rc = tmp_path / "shell.sh"
-  rc.write_text(shell_rc(spec, "main"))
-  out = subprocess.run(
-    ["/bin/sh", "-i"],
-    input="kelso listed hi\nexit\n",
-    env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "ENV": str(rc)},
-    capture_output=True,
-    text=True,
-    timeout=10,
-  ).stdout
-  assert out.startswith(
-    "Shell on demo unit main\n"
-    "Commands, run as: kelso <name> [args]\n"
-    "  listed  printf '<%s>'\n"
-    """  show    printf '[%s]' "it's $0"\n"""
-  )
-  assert "<hi>" in out
-  assert "jobs" not in out
-
-
-def test_a_run_command_prints_no_banner(tmp_path):
-  spec = spec_of(tmp_path, SHELL_MANIFEST)
-  assert _run_command(tmp_path, spec, "listed", "x").stdout == "<x>"
+def test_only_a_unit_with_commands_gets_kelso_mounted(tmp_path):
+  spec = spec_of(tmp_path, COMMANDS_MANIFEST)
+  services = make_compose_dict(spec, run_data(spec))["services"]
+  assert _kelso_mount("main") in services["main"]["volumes"]
+  assert _kelso_mount("worker") in services["worker"]["volumes"]
+  idle = services["idle"].get("volumes", [])
+  assert all(mount["target"] != "/kelso" for mount in idle)
 
 
 @pytest.mark.parametrize("target", ["/kelso", "/kelso/conn", "/kelso/../kelso/x"])

@@ -164,7 +164,7 @@ def run_command(
     )
 
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}
-  argv = command_argv(spec.run_units[entry.run_unit], cmd_name, args)
+  argv = command_argv(spec.run_units[entry.run_unit], entry, args)
   env = compose_env(app_id, ctx)
 
   if entry.run_unit in running:

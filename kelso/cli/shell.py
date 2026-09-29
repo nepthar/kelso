@@ -13,17 +13,12 @@ def register(subparsers) -> None:
   parser.add_argument(
     "unit", nargs="?", default="main", help="Run unit to open it in (default: main)"
   )
-  parser.add_argument(
-    "--shell",
-    metavar="PATH",
-    help="Shell to run in the container (default: the unit's `shell`)",
-  )
   # No lock: a session can last hours and must not shut out stop or reload.
   parser.set_defaults(func=run)
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
-  cmd = console_command(args.app_id, args.unit, ctx, shell=args.shell)
+  cmd = console_command(args.app_id, args.unit, ctx)
   record = ConsoleRecord(ctx, cmd, "cli")
   code = None
   try:

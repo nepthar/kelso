@@ -10,13 +10,15 @@ from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.kelso import KelsoCtx, StagedAppPaths, ambiguity_message
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.run_layout import (
-  SHELL_RC,
+  KELSO_CMD,
+  KELSO_GUEST_DIR,
   AppRunData,
   AssignedRoute,
+  kelso_cmd,
   load_run_data,
   make_compose_dict,
   resolved_subdomain,
-  shell_rc,
+  unit_commands,
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
@@ -220,13 +222,16 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
 
 def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
-  """`kelso/<unit>/`, what each unit sees at /kelso."""
+  """`kelso/<unit>/`, what a unit with commands sees at /kelso."""
   root = run_path / "kelso"
   shutil.rmtree(root, ignore_errors=True)
   for unit_name in spec.run_units:
-    unit_dir = root / unit_name
-    unit_dir.mkdir(parents=True)
-    (unit_dir / Path(SHELL_RC).name).write_text(shell_rc(spec, unit_name))
+    if not unit_commands(spec, unit_name):
+      continue
+    script = root / unit_name / Path(KELSO_CMD).relative_to(KELSO_GUEST_DIR)
+    script.parent.mkdir(parents=True)
+    script.write_text(kelso_cmd(spec, unit_name))
+    script.chmod(0o755)
 
 
 # Lives in the app's config store, so `--purge` clears it and nothing else does.
