@@ -9,9 +9,9 @@
 {% block body %}
 <div class="app">
 <nav>
-  {%- set brand = hostname|default('Kelso', true) %}
-  <div class="brand"><span class="name" title="{{ brand }}">{{ brand }}</span><span class="mark" aria-hidden="true">{{ brand[0]|upper }}</span>
-    {%- if version %}<span class="ver">kelso {{ version }}</span>{% endif %}</div>
+  {%- set brand = hostname|default('', true)|brand %}
+  <div class="brand"><span class="name" title="{{ hostname|default(brand, true) }}">{{ brand }}</span><span class="mark" aria-hidden="true">{{ brand[0]|upper }}</span>
+<span class="ver">kelso{% if version %} {{ version }}{% endif %}{% if INSTANCE_ID %} id: {{ INSTANCE_ID }}{% endif %}</span></div>
   {% for item in nav %}
   <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
   {% endfor %}

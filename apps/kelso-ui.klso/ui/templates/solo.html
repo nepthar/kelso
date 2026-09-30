@@ -3,7 +3,7 @@
 {% block body %}
 <div class="app solo">
 <div class="solo-box">
-  <div class="head"><h1>{{ hostname|default('Kelso', true) }}</h1><p class="head-sub">{{ title|lower }}</p></div>
+  <div class="head"><h1>{{ hostname|default('', true)|brand }}</h1><p class="head-sub">{{ title|lower }}</p></div>
   {% block content %}{% endblock %}
 </div>
 </div>

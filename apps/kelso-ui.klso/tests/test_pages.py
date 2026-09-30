@@ -3,8 +3,9 @@
 import json
 import re
 
-import pytest
 import fakekelsod
+import pytest
+import web
 from fakekelsod import EVIL
 
 PAGES = [
@@ -161,6 +162,28 @@ def test_nav_is_titled_with_the_daemons_hostname(client, fake):
   brand = text.split('<div class="brand">')[1].split("</div>")[0]
   assert '<span class="name" title="tycho &lt;i' in brand
   assert '<span class="mark" aria-hidden="true">T</span>' in brand
+
+
+@pytest.mark.parametrize(
+  ("hostname", "expected"),
+  [
+    ("Neptune.local", "Neptune"),
+    ("box.home.arpa", "box.home"),
+    ("tycho", "tycho"),
+    ("", "Kelso 1a2b"),
+  ],
+)
+def test_brand_drops_the_last_dot_and_falls_back_to_the_install_id(
+  monkeypatch, hostname, expected
+):
+  monkeypatch.setattr(web, "INSTANCE_ID", "1a2b")
+  assert web.brand(hostname) == expected
+
+
+def test_nav_names_the_version_and_install_id(client, fake, monkeypatch):
+  monkeypatch.setitem(web.templates.globals, "INSTANCE_ID", "1a2b")
+  brand = client.get("/").text.split('<div class="brand">')[1].split("</div>")[0]
+  assert '<span class="ver">kelso 0.1.0 id: 1a2b</span>' in brand
 
 
 def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):

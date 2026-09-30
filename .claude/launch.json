@@ -10,7 +10,7 @@
     {
       "name": "kelso-ui",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["KELSO_API=127.0.0.1:9797", "KELSO_UI_NO_AUTH=1", "uv", "run", "--directory", "apps/kelso-ui.klso/ui", "uvicorn", "server:app", "--port", "9798"],
+      "runtimeArgs": ["KELSO_API=127.0.0.1:9797", "KELSO_UI_NO_AUTH=1", "KELSO_UI_ID=beef", "uv", "run", "--directory", "apps/kelso-ui.klso/ui", "uvicorn", "server:app", "--port", "9798"],
       "port": 9798
     }
   ]

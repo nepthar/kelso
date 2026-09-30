@@ -5,6 +5,7 @@ and returns `page.render(template, title, **context)`; a POST handler does its
 work and returns `see(...)` so the browser lands back on a GET.
 """
 
+import os
 from functools import cache
 from hashlib import blake2s
 from pathlib import Path
@@ -27,6 +28,16 @@ NO_STORE = {"Cache-Control": "no-store"}
 # when a response shape changes, so a mismatch means one of the two was
 # installed without the other and fields this UI reads may be missing.
 NEEDS_API = 24
+
+# Random per install (kelso-ui's `instance_id`), so two kelso-ui tabs can be
+# told apart even when neither can reach its kelsod.
+INSTANCE_ID = os.environ.get("KELSO_UI_ID", "").strip()
+
+
+def brand(hostname):
+  """The name at the top of the page: the hostname up to its last dot."""
+  short = hostname.rsplit(".", 1)[0] if "." in hostname else hostname
+  return short or f"Kelso {INSTANCE_ID}".strip()
 
 
 class NavItem(NamedTuple):
@@ -96,9 +107,15 @@ templates = Environment(
   extensions=["jinja2.ext.do"],
 )
 templates.globals.update(
-  asset=asset, mdi=mdi, nav=NAV, themes=THEMES, NEEDS_API=NEEDS_API
+  asset=asset,
+  mdi=mdi,
+  nav=NAV,
+  themes=THEMES,
+  NEEDS_API=NEEDS_API,
+  INSTANCE_ID=INSTANCE_ID,
 )
 templates.filters["size"] = fmt_size
+templates.filters["brand"] = brand
 
 
 def render(request, template, title, *, status_code=200, headers=None, **context):
