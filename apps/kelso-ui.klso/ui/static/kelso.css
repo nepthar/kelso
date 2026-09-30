@@ -64,7 +64,13 @@ nav {
   padding: calc(var(--chamfer) + 4px) 16px 16px;
   overflow: auto; display: flex; flex-direction: column;
 }
-.brand { padding: 0 0 24px; letter-spacing: -0.005em; }
+/* Laid out like a nav link: the icon in the icon column, the name where the
+   labels start. */
+.brand {
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 0 0 24px 10px; letter-spacing: -0.005em;
+}
+.brand .who { min-width: 0; }
 .brand .name {
   font-size: 17px; font-weight: 600; display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -74,8 +80,7 @@ nav {
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   margin-top: 1px;
 }
-/* The ribbon again, flat: the mark and the corner are the same object. */
-.brand .mark { display: none; }
+.brand .mark { display: flex; flex: none; color: var(--fg); }
 /* Active is a coral edge and coral type -- not a filled pill. The 2px inset
    border keeps every item on the same baseline grid whether lit or not. */
 nav a {
@@ -106,11 +111,10 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 }
 .nav-toggle:hover { color: var(--fg); background: var(--panel); }
 html.nav-collapsed nav { width: 52px; flex-basis: 52px; padding: calc(var(--chamfer) + 4px) 8px 16px; }
-html.nav-collapsed .brand { padding: 0 0 24px; }
-html.nav-collapsed .brand .name, html.nav-collapsed .brand .ver,
+html.nav-collapsed .brand { padding: 0 0 24px; justify-content: center; }
+html.nav-collapsed .brand .who,
 html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
 html.nav-collapsed .nav-theme .label { display: none; }
-html.nav-collapsed .brand .mark { display: flex; justify-content: center; }
 .brand .mark .mdi { width: 22px; height: 22px; fill: currentColor; }
 html.nav-collapsed nav a { padding: 5px 0; justify-content: center; }
 html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
