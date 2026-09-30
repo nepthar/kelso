@@ -106,11 +106,11 @@ MDI = {
 # Drawn for kelso rather than taken from MDI, as 2px lines on the same 24px grid
 # so they match MDI's outline icons.
 STROKED = {
-  # A dune, the ridge down its slip face, and the sun.
+  # In a ring: a dune running edge to edge, and the sun.
   "dune": (
-    "M1 18C9 18 10.5 11 16 11C18.5 12.5 20.5 15.5 23 18Z"
-    "M16 11C14 13 15.5 15.5 13 18"
-    "M6 5A2 2 0 1 1 6 9A2 2 0 1 1 6 5Z"
+    "M12 2A10 10 0 1 1 12 22A10 10 0 1 1 12 2Z"
+    "M2.4 15C8 15 9.5 10 14 10C16 11 18.5 13.5 21.6 15"
+    "M8.5 4.8A1.8 1.8 0 1 1 8.5 8.4A1.8 1.8 0 1 1 8.5 4.8Z"
   ),
 }
 
