@@ -4,6 +4,13 @@ from materialdesignicons.com under the icon's MDI name."""
 from markupsafe import Markup
 
 MDI = {
+  # Not from MDI: drawn for kelso. A dune, with the ridge wound the other way
+  # so it cuts through, and a sun.
+  "dune": (
+    "M1 20C4 14 8 11 12 11.5C16 12 19 15 23 17.5V20Z"
+    "M5 18.5C8.5 16.6 11.8 15.5 15.5 15.3C11.8 14.2 8 15.4 5 18.5Z"
+    "M18 3.5A2.5 2.5 0 1 1 18 8.5A2.5 2.5 0 1 1 18 3.5Z"
+  ),
   "home-outline": (
     "M12 5.69L17 10.19V18H15V12H9V18H7V10.19L12 5.69M12 3L2 "
     "12H5V20H11V14H13V20H19V12H22"

@@ -161,7 +161,7 @@ def test_nav_is_titled_with_the_daemons_hostname(client, fake):
   text = client.get("/").text
   brand = text.split('<div class="brand">')[1].split("</div>")[0]
   assert '<span class="name" title="tycho &lt;i' in brand
-  assert '<span class="mark" aria-hidden="true">T</span>' in brand
+  assert '<span class="mark" aria-hidden="true"><svg class="mdi"' in brand
 
 
 @pytest.mark.parametrize(
@@ -183,7 +183,7 @@ def test_brand_drops_the_last_dot_and_falls_back_to_the_install_id(
 def test_nav_names_the_version_and_install_id(client, fake, monkeypatch):
   monkeypatch.setitem(web.templates.globals, "INSTANCE_ID", "1a2b")
   brand = client.get("/").text.split('<div class="brand">')[1].split("</div>")[0]
-  assert '<span class="ver">kelso 0.1.0 id: 1a2b</span>' in brand
+  assert '<span class="ver">kelso 0.1.0</span><span class="ver">1a2b</span>' in brand
 
 
 def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
