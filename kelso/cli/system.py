@@ -3,6 +3,7 @@ import secrets
 
 from tabulate import tabulate
 
+from kelso.cli import activity, decrypt, doctor, service, volumes
 from kelso.cli.kv import parse_kv
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
 from kelso.lib.kelso import KelsoCtx
@@ -11,10 +12,12 @@ from kelso.lib.logtab import LogTab
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
-    "config-sys",
-    help="List or set encrypted system config",
+    "system", help="Host setup, secrets, and diagnostics for kelso itself"
   )
-  parser.add_argument(
+  sub = parser.add_subparsers(dest="system_command", required=True)
+
+  secret = sub.add_parser("secret", help="List or set encrypted system config")
+  secret.add_argument(
     "--set",
     action="append",
     default=[],
@@ -22,7 +25,7 @@ def register(subparsers) -> None:
     metavar="KEY=VALUE",
     help="Set a system config value (repeatable)",
   )
-  parser.add_argument(
+  secret.add_argument(
     "--unset",
     action="append",
     default=[],
@@ -30,15 +33,14 @@ def register(subparsers) -> None:
     metavar="KEY",
     help="Remove a system config (repeatable)",
   )
-  parser.add_argument(
+  secret.add_argument(
     "--stdin",
     dest="stdin_key",
     metavar="KEY",
     help="Set KEY from stdin (for secrets)",
   )
-  parser.set_defaults(func=run)
+  secret.set_defaults(func=run)
 
-  sub = parser.add_subparsers(dest="config_sys_command", required=False)
   gen = sub.add_parser("gen-masterkey", help="Generate a new master key")
   gen.set_defaults(func=run_gen_masterkey)
 
@@ -63,9 +65,12 @@ def register(subparsers) -> None:
   )
   hv.set_defaults(func=run_host_volume)
 
+  for command in (activity, decrypt, doctor, service, volumes):
+    command.register(sub)
+
 
 def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
-  with ctx.kelso_lock("config-sys"):
+  with ctx.kelso_lock("system secret"):
     db = ctx.kelso_db
     changed = False
 

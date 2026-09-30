@@ -20,7 +20,7 @@ GENERAL_HINT = (
   "holds everyone up. Wait a moment, then reload."
 )
 
-RELOAD = "kelso reload kelso-ui"
+RELOAD = "kelso install kelso-ui"
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 

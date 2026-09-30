@@ -111,7 +111,7 @@ def test_cmd_does_not_hold_the_kelso_lock(kelso_env):
   _stage_cmd_demo(kelso_env)
 
   with FileLock(kelso_env.kelso_lockfile_path):
-    ran = kelso_env.run("cmd", "cmd-demo", "ping")
+    ran = kelso_env.run("run", "cmd-demo", "ping")
     blocked = kelso_env.run("ps")
 
   assert ran.returncode == 0, ran.stderr
@@ -126,7 +126,7 @@ def test_cmd_holds_the_app_lock(kelso_env):
   assert kelso_env.run("install", "routes-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("cmd-demo"))
   with lock:
-    blocked = kelso_env.run("cmd", "cmd-demo", "ping")
+    blocked = kelso_env.run("run", "cmd-demo", "ping")
     other = kelso_env.run("start", "routes-demo")
 
   assert blocked.returncode == 1
@@ -210,5 +210,5 @@ def test_snapshot_releases_kelso_while_copying(kelso_env, monkeypatch):
     return original(app, ctx, label=label)
 
   monkeypatch.setattr(snapshot_mod, "snapshot", during_copy)
-  taken = kelso_env.run("snapshot", "ports-demo", "--label", "copy")
+  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "copy")
   assert taken.returncode == 0, taken.stderr

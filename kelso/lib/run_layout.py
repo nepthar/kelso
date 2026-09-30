@@ -336,7 +336,7 @@ def _compare_route(
     issues.append(
       ConfigIssue(
         f"route {spec_route.route_name}: {field} mismatch: manifest={from_spec} config={from_config}",
-        "Examine w/ `kelso routes`, remove app data & runtime with `kelso rm`",
+        "Examine w/ `kelso route list`, remove app data & runtime with `kelso uninstall --purge`",
         self_healing=True,
       )
     )
@@ -351,7 +351,7 @@ def _compare_route(
       issues.append(
         ConfigIssue(
           f"route {spec_route.route_name}: host port not allocated",
-          "Clear data with `kelso rm` and retry with `kelso start`",
+          "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
           self_healing=True,
         )
       )
@@ -378,7 +378,7 @@ def _load_routes(
     issues.append(
       ConfigIssue(
         f"route {name}: declared but not allocated",
-        "Clear data with `kelso rm` and retry with `kelso start`",
+        "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
         self_healing=True,
       )
     )
@@ -386,7 +386,7 @@ def _load_routes(
     issues.append(
       ConfigIssue(
         f"route {name}: allocated but not in the manifest",
-        "Clear data with `kelso rm` and retry with `kelso start`",
+        "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
         self_healing=True,
       )
     )

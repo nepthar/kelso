@@ -122,7 +122,7 @@ def test_rm_removes_run_state_configuration_and_managed_volumes(kelso_env):
   assert (kelso_env.volumes_root / "data" / BASIC / "config").is_dir()
   assert (kelso_env.volumes_root / "temp" / BASIC / "cache").is_dir()
 
-  removed = kelso_env.run("rm", BASIC, "-y")
+  removed = kelso_env.run("uninstall", "--purge", BASIC, "-y")
   assert removed.returncode == 0, removed.stderr
 
   assert not (kelso_env.run_root / BASIC).exists()
@@ -138,7 +138,7 @@ def test_rm_leaves_the_catalog_entry_alone(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
-  assert kelso_env.run("rm", app_id, "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
   assert bundle.is_dir()
 
@@ -252,7 +252,7 @@ desc = "Another command"
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0
 
-  listed = kelso_env.run("cmd", "cmd-demo")
+  listed = kelso_env.run("run", "cmd-demo")
   assert listed.returncode == 0, listed.stderr
   assert listed.stdout.splitlines()[0].split() == [
     "COMMAND",
@@ -263,7 +263,7 @@ desc = "Another command"
   assert "Print pong" in listed.stdout
   assert "argv" in listed.stdout
 
-  ran = kelso_env.run("cmd", "cmd-demo", "ping", "extra")
+  ran = kelso_env.run("run", "cmd-demo", "ping", "extra")
   assert ran.returncode == 0, ran.stderr
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
@@ -290,12 +290,12 @@ cmd = "echo pong"
 """
   )
 
-  not_staged = kelso_env.run("cmd", "cmd-demo")
+  not_staged = kelso_env.run("run", "cmd-demo")
   assert not_staged.returncode == 1
   assert "not installed" in not_staged.stderr
 
   assert kelso_env.run("install", "cmd-demo").returncode == 0
-  one_off = kelso_env.run("cmd", "cmd-demo", "ping", "extra")
+  one_off = kelso_env.run("run", "cmd-demo", "ping", "extra")
   assert one_off.returncode == 0, one_off.stderr
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
@@ -312,10 +312,10 @@ cmd = "echo pong"
   ] in calls
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0
-  missing = kelso_env.run("cmd", "cmd-demo", "nope")
+  missing = kelso_env.run("run", "cmd-demo", "nope")
   assert missing.returncode == 1
   assert "Unknown command 'nope'" in missing.stderr
-  assert "kelso cmd cmd-demo" in missing.stderr
+  assert "kelso run cmd-demo" in missing.stderr
 
 
 # --- refusals --------------------------------------------------------------
@@ -403,12 +403,12 @@ def test_missing_run_directory_with_container_refuses_lifecycle(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   shutil.rmtree(kelso_env.run_root / app_id)
 
-  doctor = kelso_env.run("doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
   assert "run directory missing" in doctor.stderr
   assert "manual container recovery required" in doctor.stderr
 
-  for command in (("stop",), ("rm", "-y")):
+  for command in (("stop",), ("uninstall", "--purge", "-y")):
     refused = kelso_env.run(*command, app_id)
     assert refused.returncode == 1
     assert "fake-container" in refused.stderr
@@ -428,7 +428,7 @@ def test_removed_app_bundle_remains_runnable_from_the_staged_copy(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   shutil.rmtree(kelso_env.local_repo / f"{app_id}.klso")
 
-  doctor = kelso_env.run("doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
   assert (
     f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
@@ -446,31 +446,30 @@ def test_removed_app_bundle_remains_runnable_from_the_staged_copy(kelso_env):
   assert "No app found" in restaged.stderr
 
 
-def test_reload_picks_up_a_changed_manifest_and_comes_back_up(kelso_env):
-  """The whole point: edit the bundle, reload, and the running app has it."""
+def test_install_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
+  kelso_env,
+):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   manifest = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
-  reloaded = kelso_env.run("reload", app_id)
-  assert reloaded.returncode == 0, reloaded.stderr
-  assert f"Reloaded {app_id}" in reloaded.stdout
+  installed = kelso_env.run("install", app_id)
+  assert installed.returncode == 0, installed.stderr
+  assert f"Restarted {app_id}" in installed.stdout
 
   staged = (kelso_env.run_root / app_id / "staged" / "manifest.toml").read_text()
   assert "0.2.0" in staged
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
 
 
-def test_reload_of_a_stopped_app_does_not_start_it(kelso_env):
-  """A reload is never a way to start something: it puts back what it found."""
+def test_install_of_a_stopped_app_does_not_start_it(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("install", app_id).returncode == 0
 
-  reloaded = kelso_env.run("reload", app_id)
-  assert reloaded.returncode == 0, reloaded.stderr
-  assert f"Re-installed {app_id}" in reloaded.stdout
-  assert "it was not running" in reloaded.stdout
+  installed = kelso_env.run("install", app_id)
+  assert installed.returncode == 0, installed.stderr
+  assert f"Start it with: kelso start {app_id}" in installed.stdout
   # Installed but never started reads as "-", not "stopped".
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "-"
 
@@ -643,11 +642,12 @@ def test_system_config_is_encrypted_listed_and_unset(kelso_env):
   route_password = "correct horse battery staple"
 
   stored = kelso_env.run(
-    "config-sys", "--stdin", route_key, input=f"{route_password}\n"
+    "system", "secret", "--stdin", route_key, input=f"{route_password}\n"
   )
   assert stored.returncode == 0, stored.stderr
   assert (
-    kelso_env.run("config-sys", "--set", f"{other_key}=backup-secret").returncode == 0
+    kelso_env.run("system", "secret", "--set", f"{other_key}=backup-secret").returncode
+    == 0
   )
 
   db = kelso_env.read_db()
@@ -655,15 +655,15 @@ def test_system_config_is_encrypted_listed_and_unset(kelso_env):
   assert encrypted != route_password
   assert route_password not in encrypted
 
-  listed = kelso_env.run("config-sys")
+  listed = kelso_env.run("system", "secret")
   assert listed.returncode == 0, listed.stderr
   assert listed.stdout.splitlines() == [other_key, route_key]
   assert route_password not in listed.stdout
   assert "backup-secret" not in listed.stdout
 
-  unset = kelso_env.run("config-sys", "--unset", route_key)
+  unset = kelso_env.run("system", "secret", "--unset", route_key)
   assert unset.returncode == 0, unset.stderr
-  assert kelso_env.run("config-sys").stdout.splitlines() == [other_key]
+  assert kelso_env.run("system", "secret").stdout.splitlines() == [other_key]
 
   old_command = kelso_env.run("provider", "set-password")
   assert old_command.returncode == 2
@@ -674,23 +674,24 @@ def test_decrypt_round_trips_a_stored_secret(kelso_env):
   secret = "correct horse battery staple"
   key = "backup.api_key"
   assert (
-    kelso_env.run("config-sys", "--stdin", key, input=f"{secret}\n").returncode == 0
+    kelso_env.run("system", "secret", "--stdin", key, input=f"{secret}\n").returncode
+    == 0
   )
 
   blob = kelso_env.read_db()["system"]["secrets"][key]
   assert secret not in blob
 
-  result = kelso_env.run("decrypt", input=f"{blob}\n")
+  result = kelso_env.run("system", "decrypt", input=f"{blob}\n")
   assert result.returncode == 0, result.stderr
   assert result.stdout.strip() == secret
 
 
 def test_decrypt_tolerates_surrounding_whitespace(kelso_env):
   # A blob pasted out of the logtab or a shell pipeline arrives padded.
-  kelso_env.run("config-sys", "--set", "k=hunter2")
+  kelso_env.run("system", "secret", "--set", "k=hunter2")
   blob = kelso_env.read_db()["system"]["secrets"]["k"]
 
-  result = kelso_env.run("decrypt", input=f"   {blob}  \n")
+  result = kelso_env.run("system", "decrypt", input=f"   {blob}  \n")
   assert result.returncode == 0, result.stderr
   assert result.stdout.strip() == "hunter2"
 
@@ -704,7 +705,7 @@ def test_decrypt_tolerates_surrounding_whitespace(kelso_env):
   ],
 )
 def test_decrypt_refuses_what_it_cannot_authenticate(kelso_env, blob):
-  result = kelso_env.run("decrypt", input=f"{blob}\n")
+  result = kelso_env.run("system", "decrypt", input=f"{blob}\n")
 
   assert result.returncode == 1
   assert "Could not decrypt" in result.stderr
@@ -713,7 +714,7 @@ def test_decrypt_refuses_what_it_cannot_authenticate(kelso_env, blob):
 
 
 def test_decrypt_refuses_empty_stdin(kelso_env):
-  result = kelso_env.run("decrypt", input="\n")
+  result = kelso_env.run("system", "decrypt", input="\n")
   assert result.returncode == 1
   assert "Nothing on stdin" in result.stderr
 
@@ -723,7 +724,7 @@ def test_decrypt_refuses_when_there_is_no_master_key(kelso_env):
   kelso_env.master_keyfile.write_text("")
   blob = FernetCryptoEngine("0" * 64).encrypt("hunter2")
 
-  result = kelso_env.run("decrypt", input=f"{blob}\n")
+  result = kelso_env.run("system", "decrypt", input=f"{blob}\n")
   assert result.returncode == 1
   assert "No master key" in result.stderr
   assert "hunter2" not in result.stdout
@@ -1098,7 +1099,7 @@ def test_doctor_shows_where_volume_kinds_resolve(kelso_env):
   (kelso_env.volumes_root / "bulk").symlink_to(bulk)
   (kelso_env.volumes_root / "logs").symlink_to(kelso_env.root.parent / "gone")
 
-  result = kelso_env.run("doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert f"bulk:  {kelso_env.volumes_root / 'bulk'} -> {bulk}\n" in result.stdout
   assert "(missing)" in result.stdout
@@ -1130,7 +1131,7 @@ def test_doctor_reports_orphaned_routes(kelso_env):
   ps = kelso_env.run("ps")
   assert _ps_row(ps.stdout, "io.example.abandoned")[1:4] == ["-", "-", "-"]
 
-  doctor = kelso_env.run("doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
   assert "orphaned route allocation" in doctor.stderr
 
@@ -1154,7 +1155,7 @@ def test_doctor_exposes_mixed_container_states(kelso_env):
     ]
   )
 
-  doctor = kelso_env.run("doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
   assert "mixed container states" in doctor.stderr
 
@@ -1304,7 +1305,7 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
 
 def test_gen_masterkey_appends_to_the_keyfile(kelso_env):
   before = kelso_env.master_keyfile.read_text()
-  result = kelso_env.run("config-sys", "gen-masterkey")
+  result = kelso_env.run("system", "gen-masterkey")
 
   assert result.returncode == 0, result.stderr
   after = kelso_env.master_keyfile.read_text()
@@ -1385,7 +1386,7 @@ def test_removal_is_recorded_when_an_app_is_removed(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   assert read_last_app_action(app_id, ctx) == "started"
 
-  assert kelso_env.run("rm", app_id, "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", app_id, "-y").returncode == 0
 
   assert not (kelso_env.run_root / app_id).exists()
   assert read_last_app_action(app_id, ctx) == "removed"
@@ -1411,7 +1412,7 @@ def test_refuse_root_names_who_and_what_to_do(monkeypatch):
 def test_every_command_refuses_to_run_as_root(kelso_env, monkeypatch):
   """`init` included: it is the command that would create the root-owned tree."""
   monkeypatch.setattr(os, "geteuid", lambda: 0)
-  for argv in (["init"], ["ps"], ["snapshot", BASIC]):
+  for argv in (["init"], ["ps"], ["snapshot", "take", BASIC]):
     refused = kelso_env.run(*argv)
     assert refused.returncode == 1, argv
     assert "refuses to run as root" in refused.stderr, argv
@@ -1457,7 +1458,7 @@ def _seed_activity(kelso_env, **kwargs):
 
 
 def test_activity_reports_nothing_when_empty(kelso_env):
-  result = kelso_env.run("activity")
+  result = kelso_env.run("system", "activity")
   assert result.returncode == 0
   assert "No recorded activity" in result.stdout
 
@@ -1466,7 +1467,7 @@ def test_activity_lists_recorded_runs(kelso_env):
   _seed_activity(kelso_env, verb="start", app="ports-demo")
   _seed_activity(kelso_env, verb="stop", app="ports-demo", status="error")
 
-  result = kelso_env.run("activity")
+  result = kelso_env.run("system", "activity")
   assert result.returncode == 0
   assert "start ports-demo" in result.stdout
   assert "stop ports-demo" in result.stdout
@@ -1476,7 +1477,7 @@ def test_activity_lists_recorded_runs(kelso_env):
 
 def test_activity_show_prints_a_run_file(kelso_env):
   _seed_activity(kelso_env, output="the captured output")
-  result = kelso_env.run("activity", "--show")
+  result = kelso_env.run("system", "activity", "--show")
   assert result.returncode == 0
   assert "the captured output" in result.stdout
 
@@ -1484,7 +1485,7 @@ def test_activity_show_prints_a_run_file(kelso_env):
 def test_activity_filters_by_app_stem(kelso_env):
   _seed_activity(kelso_env, app="ports-demo")
   _seed_activity(kelso_env, app="routes-demo")
-  result = kelso_env.run("activity", "ports-demo")
+  result = kelso_env.run("system", "activity", "ports-demo")
   assert "ports-demo" in result.stdout
   assert "routes-demo" not in result.stdout
 
@@ -1517,7 +1518,7 @@ def test_uninstall_and_reset_keep_an_app_route_allocation(kelso_env):
   assert kelso_env.read_db()["routes"][app_id]["web"]["host_port"] == allocated
 
   # Only rm gives the address back.
-  assert kelso_env.run("rm", app_id, "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", app_id, "-y").returncode == 0
   assert app_id not in kelso_env.read_db().get("routes", {})
 
 

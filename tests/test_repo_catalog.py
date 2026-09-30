@@ -261,7 +261,7 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
 def test_doctor_reports_a_missing_repo_directory(kelso_env):
   add_repo_block(kelso_env, "gone", kelso_env.root / "not-here")
 
-  result = kelso_env.run("doctor")
+  result = kelso_env.run("system", "doctor")
 
   assert result.returncode == 1
   assert "is not a directory" in result.stderr
@@ -290,7 +290,7 @@ def test_doctor_reports_an_ambiguous_id(kelso_env):
   a_bundle(dev, "ports-demo")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  result = kelso_env.run("doctor")
+  result = kelso_env.run("system", "doctor")
 
   assert result.returncode == 1
   assert "More than one repo carries" in result.stderr
@@ -336,7 +336,7 @@ def test_an_ambiguous_id_still_stops_and_removes(kelso_env):
   assert kelso_env.run("start", str(bundle)).returncode == 0
 
   assert kelso_env.run("stop", "ports-demo").returncode == 0
-  assert kelso_env.run("rm", "ports-demo", "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", "ports-demo", "-y").returncode == 0
 
 
 # --- binding ----------------------------------------------------------------

@@ -555,7 +555,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
 
 def test_restore_verb(kelso_env, client, jobs):
   assert kelso_env.run("install", "ports-demo").returncode == 0
-  taken = kelso_env.run("snapshot", "ports-demo", "--label", "back")
+  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "back")
   assert taken.returncode == 0, taken.stderr
   name = Path(taken.stdout.split("written to ")[1].strip()).name.removesuffix(".tar.gz")
   job = submit(client, jobs, "restore", {"app": "ports-demo", "snapshot": name})

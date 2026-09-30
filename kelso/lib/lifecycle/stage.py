@@ -160,7 +160,7 @@ def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...
       raise ValueError(
         f"App {spec.app} - volume {name} changed kind from {kind} to "
         f"{volume.kind}, but its data lives under the {kind} root. Move it by "
-        f"hand, or run `kelso rm {spec.app}` to delete it."
+        f"hand, or run `kelso uninstall --purge {spec.app}` to delete it."
       )
 
   # Only links live here; the data they point at is outside the run dir, or (for
@@ -482,7 +482,7 @@ def stage(
       f"App {app} has volume data but no config at {config_path}. "
       f"Staging would generate new secrets that its existing data does not "
       f"expect. Restore from a snapshot, or run "
-      f"`kelso rm {app}` to delete its config and data together."
+      f"`kelso uninstall --purge {app}` to delete its config and data together."
     )
 
   # Extract the bundle under var/run/ first, validate *that* copy, then promote it

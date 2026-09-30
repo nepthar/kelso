@@ -390,7 +390,7 @@ ROUTE_PROVIDERS = {
 
 PROVIDER_CONFIG = {
   "title": "route provider web (nginx_proxy_manager)",
-  "note": f"Check it with `kelso routes check web` {EVIL}",
+  "note": f"Check it with `kelso route check web` {EVIL}",
   "missing": ["password"],
   "fields": [
     _field("domain", value="example.test", required=True),

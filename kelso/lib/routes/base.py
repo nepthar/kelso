@@ -67,7 +67,7 @@ class RouteProvider:
     value = kelso_db.get_secret(ref)
     if not value:
       raise RouteProviderError(
-        f"Missing secret {ref!r}. Run: kelso config-sys --stdin {ref}"
+        f"Missing secret {ref!r}. Run: kelso system secret --stdin {ref}"
       )
     return value
 

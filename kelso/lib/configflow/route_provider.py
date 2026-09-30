@@ -101,7 +101,7 @@ def route_provider_config_request(
   return ConfigRequest(
     title=f"route provider {tag} ({provider.KIND})",
     fields=tuple(fields),
-    note=f"Check it afterwards with `kelso routes check {tag}`",
+    note=f"Check it afterwards with `kelso route check {tag}`",
   )
 
 

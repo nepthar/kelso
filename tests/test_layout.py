@@ -14,7 +14,7 @@ import yaml
 
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import dev_plan, source_volume_links
+from kelso.lib.lifecycle import dev_plan, source_volume_links, stage
 
 BASIC = "io.p2net.basic-features"
 
@@ -144,9 +144,10 @@ def test_stage_refuses_while_containers_are_running(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
-  refused = kelso_env.run("install", app_id)
-  assert refused.returncode == 1
-  assert f"kelso stop {app_id}" in refused.stderr
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app(app_id)
+  with pytest.raises(ValueError, match=f"kelso stop {app_id}"):
+    stage(app, ctx.bundle_path(app), ctx)
 
 
 def test_stage_refuses_when_config_is_gone_but_data_remains(kelso_env):
@@ -162,7 +163,7 @@ def test_stage_refuses_when_config_is_gone_but_data_remains(kelso_env):
   refused = kelso_env.run("install", BASIC)
   assert refused.returncode == 1
   assert "volume data but no config" in refused.stderr
-  assert f"kelso rm {BASIC}" in refused.stderr
+  assert f"kelso uninstall --purge {BASIC}" in refused.stderr
 
 
 def test_restaging_after_a_deleted_run_dir_reuses_config(kelso_env):
@@ -638,7 +639,7 @@ def test_rm_removes_the_run_dir_volumes_and_routes(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]
 
-  removed = kelso_env.run("rm", app_id, "-y")
+  removed = kelso_env.run("uninstall", "--purge", app_id, "-y")
   assert removed.returncode == 0, removed.stderr
 
   assert not (kelso_env.run_root / app_id).exists()
@@ -654,13 +655,13 @@ def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
-  declined = kelso_env.run("rm", app_id, input="n\n")
+  declined = kelso_env.run("uninstall", "--purge", app_id, input="n\n")
   assert declined.returncode == 0, declined.stderr
   assert "take a snapshot first" in declined.stdout
   assert "Nothing removed" in declined.stdout
   assert (kelso_env.run_root / app_id).is_dir()
 
-  confirmed = kelso_env.run("rm", app_id, input="y\n")
+  confirmed = kelso_env.run("uninstall", "--purge", app_id, input="y\n")
   assert confirmed.returncode == 0, confirmed.stderr
   assert not (kelso_env.run_root / app_id).exists()
   assert not kelso_env.app_logtab(app_id).exists()
@@ -672,7 +673,7 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
   host_path.mkdir()
   assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
 
-  removed = kelso_env.run("rm", app_id, input="y\n")
+  removed = kelso_env.run("uninstall", "--purge", app_id, input="y\n")
   assert removed.returncode == 0, removed.stderr
   assert str(host_path) in removed.stdout
   assert host_path.is_dir()
@@ -684,7 +685,7 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
 
-  assert kelso_env.run("rm", BASIC, "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", BASIC, "-y").returncode == 0
 
   restarted = kelso_env.run("start", BASIC, "--set", "admin_user=bob")
   assert restarted.returncode == 0, restarted.stderr

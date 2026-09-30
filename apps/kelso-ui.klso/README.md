@@ -34,7 +34,7 @@ It needs `kelsod` running on the host, and `$kelso/var/conn` bound in. For now
 that is manual — declare the directory as a host volume:
 
 ```
-kelso config-sys host-volume --add kelso_conn=${kelso_root}/var/conn
+kelso system host-volume --add kelso_conn=${kelso_root}/var/conn
 kelso config kelso-ui --bind conn=kelso_conn
 kelso start kelso-ui
 ```
@@ -55,7 +55,7 @@ and reset the way every other kelso secret is:
 
 ```
 kelso config kelso-ui --set admin_pass=<password>
-kelso reload kelso-ui
+kelso install kelso-ui
 ```
 
 The app will not start until it has one. Signing in mints a cookie signed
@@ -89,7 +89,7 @@ request arrives from the proxy's address, so per-client counting would be
 counting one client. That means anyone who can reach this app can bring it to
 a halt, and anyone who can reach the sign-in form can spend the hour's
 attempts — the accepted trade for a LAN interface. Sessions already issued are
-unaffected, and `kelso reload kelso-ui` clears both counts. A refusal does
+unaffected, and `kelso install kelso-ui` clears both counts. A refusal does
 not move the window, so service resumes when the flooding stops rather than
 staying shut.
 

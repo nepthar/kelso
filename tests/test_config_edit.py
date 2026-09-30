@@ -87,7 +87,7 @@ def test_config_toml_is_never_left_invalid(kelso_env):
 
 def test_an_edit_is_recorded_as_a_lock_holder(kelso_env, host_dir):
   """config.toml is kelso-wide state; two writers would lose an edit."""
-  added = kelso_env.run("config-sys", "host-volume", "--add", f"extra={host_dir}")
+  added = kelso_env.run("system", "host-volume", "--add", f"extra={host_dir}")
   assert added.returncode == 0, added.stderr
 
   record = json.loads(kelso_env.kelso_lockfile_path.read_text())

@@ -33,7 +33,7 @@ class CmdJob(Job):
       available = ", ".join(sorted(spec.commands)) or "(none)"
       raise ValueError(
         f"Unknown command {kwargs['command']!r} for {app}; "
-        f"available: {available}. List with `kelso cmd {app}`"
+        f"available: {available}. List with `kelso run {app}`"
       )
 
     self.app = str(app)
