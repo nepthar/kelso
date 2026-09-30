@@ -2,6 +2,8 @@
 
 import asyncio
 
+from textual.widgets import Static
+
 from kelso.cli.configtui import ConfigApp
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigField, ConfigRequest
 
@@ -75,31 +77,32 @@ def test_a_typed_secret_is_submitted():
   assert app.return_value.values == {"api_key": "new-key"}
 
 
-def test_every_section_is_shown_and_reachable():
-  request = ConfigRequest(
-    title="demo",
-    config_title="App config",
-    fields=(
-      ConfigField(name="admin_email"),
-      ConfigField(name="pool_size", default="5", section="advanced"),
-      ConfigField(name="start_order", default="5", section="option"),
-    ),
-  )
-
+def test_advanced_fields_stay_hidden_until_ctrl_o():
   async def steps(app, pilot):
-    titles = [box.border_title for box in app.query(".group")]
-    assert titles == ["App config", "Advanced config", "App options"]
-    focused = []
-    for _ in range(3):
-      focused.append(app.focused)
-      await pilot.press("tab")
-    assert focused == [
-      app.control(n) for n in ("admin_email", "pool_size", "start_order")
-    ]
-    assert all(_shown(app.control(n)) for n in ("pool_size", "start_order"))
+    pool = app.control("pool_size")
+    help_line = app.query_one("#help", Static)
+    assert not _shown(pool)
+    assert "^o to show advanced" in str(help_line.render())
+
+    await pilot.press("ctrl+o")
+    assert _shown(pool)
+    assert "^o to hide advanced" in str(help_line.render())
+
+    await pilot.press("ctrl+o")
+    assert not _shown(pool)
     await pilot.press("escape")
 
-  _drive(request, steps)
+  _drive(_request(), steps)
+
+
+def test_hidden_advanced_fields_are_not_tab_stops():
+  async def steps(app, pilot):
+    for _ in range(4):
+      await pilot.press("tab")
+      assert app.focused is not app.control("pool_size")
+    await pilot.press("escape")
+
+  _drive(_request(), steps)
 
 
 def test_ctrl_a_still_moves_to_the_start_of_a_field():
@@ -117,6 +120,18 @@ def test_ctrl_q_quits_without_saving():
     await pilot.press(*"a@b.c", "ctrl+q")
 
   assert _drive(_request(), steps).return_value == EMPTY_CONFIG_RESPONSE
+
+
+def test_help_leaves_out_advanced_when_there_is_none():
+  request = ConfigRequest(title="plain", fields=(ConfigField(name="only"),))
+
+  async def steps(app, pilot):
+    help_text = str(app.query_one("#help", Static).render())
+    assert "advanced" not in help_text
+    assert "^s save" in help_text
+    await pilot.press("escape")
+
+  _drive(request, steps)
 
 
 def test_each_section_sits_in_its_own_titled_box():
