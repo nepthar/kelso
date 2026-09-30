@@ -173,7 +173,7 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
     "dev-app",
     "hrbr-dev",
     "-",
-    str(dev / "dev-app.klso"),
+    "dev-app.klso",
   ]
   assert _row(result.stdout, "ports-demo")[1] == "local"
 

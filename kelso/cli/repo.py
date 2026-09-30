@@ -97,13 +97,18 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       block = f"{name} {len(entries)} apps {repo.describe()}{at}"
       if entries:
         rows = [
-          (e.app_id, _status(e, staged, origins, actions), str(e.path)) for e in entries
+          (e.app_id, _status(e, staged, origins, actions), _relative(e.path, repo.path))
+          for e in entries
         ]
         block += "\n" + tabulate(
           rows, headers=["APP_ID", "STATUS", "PATH"], tablefmt="simple"
         )
       blocks.append(block)
     conn.out("\n\n".join(blocks))
+
+
+def _relative(path: Path, root: Path) -> str:
+  return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
 
 
 def _status(
