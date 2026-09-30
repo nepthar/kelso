@@ -94,7 +94,8 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       ]
       state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
       at = f" {state['sha'][:8]}" if state else ""
-      block = f"{name} {len(entries)} apps {repo.describe()}{at}"
+      header = f"Repo: {name} {len(entries)} apps {repo.describe()}{at}"
+      block = f"{header}\n{'=' * len(header)}"
       if entries:
         rows = [
           (e.app_id, _status(e, staged, origins, actions), _relative(e.path, repo.path))

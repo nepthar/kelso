@@ -49,7 +49,7 @@ def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
   rows = []
   repo = ""
   for line in catalog_output.splitlines():
-    header = re.match(r"(\S+) \d+ apps ", line)
+    header = re.match(r"Repo: (\S+) \d+ apps ", line)
     if header:
       repo = header[1]
     elif line.startswith(app_id + " "):
@@ -168,7 +168,7 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
   result = kelso_env.run("repo", "list")
 
   assert result.returncode == 0, result.stderr
-  assert result.stdout.splitlines()[1].split() == ["APP_ID", "STATUS", "PATH"]
+  assert result.stdout.splitlines()[2].split() == ["APP_ID", "STATUS", "PATH"]
   assert _row(result.stdout, "dev-app") == [
     "dev-app",
     "hrbr-dev",
