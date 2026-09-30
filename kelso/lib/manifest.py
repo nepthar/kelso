@@ -35,8 +35,7 @@ class ConfigError(ValueError):
 
 
 class AppSection(BaseModel):
-  # extra="allow" (unlike the other sections): app metadata is passed through verbatim
-  model_config = ConfigDict(extra="allow")
+  model_config = ConfigDict(extra="forbid")
 
   app_id: str | None = None
   version: str

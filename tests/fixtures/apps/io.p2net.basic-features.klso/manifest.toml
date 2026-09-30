@@ -5,7 +5,6 @@
 version      = "0.1.0"
 display_name = "Basic Features"
 description  = "Config and volumes fixture"
-runtime      = "image"
 
 [config]
 # Generated automatically on first stage (secret, default = auto).

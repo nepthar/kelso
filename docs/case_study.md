@@ -23,11 +23,10 @@ Let's start with a barebones app containing what we already know, placed in our 
 # unifi-network-app.klso/manifest.toml
 [app]
 version = "0.1.0"
-author  = "Demo Author"
 description = "The unifi network application"
-subdomain = "unifi-admin" # I want this on my network as "https://unifi-admin.<kelso-domain>"
 
 [config]
+subdomain = { default = "unifi-admin" } # I want this on my network as "https://unifi-admin.<kelso-domain>"
 # There will probably be config, not sure what yet
 
 [volumes]
@@ -207,9 +206,9 @@ Using that information, we can complete our `manifest`:
 [app]
 version      = "1.0.0"
 display_name = "Unifi Network Application"
-subdomain    = "unifi"
 
 [config]
+subdomain  = { default = "unifi" }
 mongo_pass = { desc = "MongoDB Password", secret = true, default = "auto" }
 
 [volumes]

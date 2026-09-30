@@ -604,7 +604,7 @@ def test_dev_lists_an_https_route_with_its_scheme(kelso_env):
   bundle = _write_bundle(
     kelso_env,
     "tls-demo",
-    '[app]\nversion = "1"\nsubdomain = "tls"\n\n'
+    '[app]\nversion = "1"\n\n'
     "[run.main]\n"
     'image  = "alpine:latest"\n'
     'routes = { main = { port = "8443", scheme = "https" } }\n',

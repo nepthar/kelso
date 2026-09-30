@@ -1,7 +1,6 @@
 [app]
 version      = "1.0.0"
 display_name = "Unifi Network Application"
-source       = "github:nepthar/kelso/main/apps/unifi-network-application.klso"
 
 [adv_config]
 subdomain = { default = "unifi" }

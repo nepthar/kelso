@@ -4,7 +4,6 @@
 version      = "0.1.0"
 display_name = "Host Volumes"
 description  = "Host volume bind fixture"
-runtime      = "image"
 
 [volumes]
 hostvol1 = { kind = "host", desc = "Where your extra stuff lives" }

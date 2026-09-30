@@ -4,7 +4,6 @@
 version      = "0.1.0"
 display_name = "Adguard Pause Button"
 description  = "A service that pauses adguard DNS blocking for a while via giant button"
-source       = "github:nepthar/kelso/main/apps/adguard-pause.klso"
 
 [config]
 ag_user = { desc = "Adguard login username"}

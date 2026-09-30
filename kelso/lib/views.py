@@ -329,9 +329,6 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   view.update(
     {
       "description": spec.description,
-      # The whole `[app]` table, extras included -- the section allows unknown
-      # keys precisely so a bundle can carry author, source, license and the
-      # like, and a viewer should show whatever the author wrote.
       "metadata": {
         key: value
         for key, value in spec.manifest.app.model_dump().items()

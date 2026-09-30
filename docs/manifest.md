@@ -17,9 +17,7 @@ silently did nothing.
 
 ## `[app]`
 
-The only required section, and the only one that accepts keys kelso does not
-know: extra keys are kept and shown verbatim on the app's page, so an author
-can carry `author`, `source`, `license` and the like.
+The only required section. Keys kelso does not know are refused.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
