@@ -199,6 +199,14 @@ class AppSpec:
     return self.manifest.app.description
 
   @property
+  def author(self) -> str:
+    return self.manifest.app.author
+
+  @property
+  def url(self) -> str:
+    return self.manifest.app.url
+
+  @property
   def network_mode(self) -> str:
     return self.manifest.app.network_mode
 

@@ -75,6 +75,8 @@ APPS = [
 APP_DETAIL = {
   **APPS[0],
   "description": f"Web interface {EVIL}",
+  "author": f"Jordan {EVIL}",
+  "url": "https://example.com/help",
   "metadata": {
     "version": "0.6.0",
     "subdomain": "kelso",
@@ -450,7 +452,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 23, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 24, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -482,7 +484,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 23
+    self.api = 24
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

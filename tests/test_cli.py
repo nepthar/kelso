@@ -211,6 +211,32 @@ def test_inspect_by_path_shows_declared_config_without_installing(kelso_env):
   assert "State:" not in inspected.stdout
 
 
+def test_inspect_shows_who_made_the_app_and_where_to_read_more(kelso_env):
+  bundle = kelso_env.local_repo / "about-demo.klso"
+  bundle.mkdir()
+  (bundle / "manifest.toml").write_text(
+    """\
+[app]
+version     = "2.0"
+description = "Does a thing"
+author      = "Jordan Parker <jordan@parker.sh>"
+url         = "https://example.com/help"
+
+[run.main]
+image = "alpine:latest"
+"""
+  )
+  inspected = kelso_env.run("inspect", str(bundle))
+  assert inspected.returncode == 0, inspected.stderr
+  lines = [line.split(None, 1) for line in inspected.stdout.splitlines()[1:5]]
+  assert lines == [
+    ["About:", "Does a thing"],
+    ["Version:", "2.0"],
+    ["Author:", "Jordan Parker <jordan@parker.sh>"],
+    ["URL:", "https://example.com/help"],
+  ]
+
+
 def test_logs_accepts_native_flags_before_app(kelso_env):
   assert kelso_env.run("start", "ports-demo").returncode == 0
   # Fake docker ignores unknown compose args; success means argparse accepted order.

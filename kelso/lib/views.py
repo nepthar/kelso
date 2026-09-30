@@ -72,6 +72,8 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
     "display_name": spec.display_name if spec else "",
     "version": spec.version if spec else None,
     "description": spec.description if spec else "",
+    "author": spec.author if spec else "",
+    "url": spec.url if spec else "",
     "repo": entry.source,
     "state": ctx.app_state(entry.app_id),
     "configured": config_status(spec, store) if spec else None,
@@ -329,6 +331,8 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   view.update(
     {
       "description": spec.description,
+      "author": spec.author,
+      "url": spec.url,
       "metadata": {
         key: value
         for key, value in spec.manifest.app.model_dump().items()

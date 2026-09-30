@@ -25,6 +25,8 @@ The only required section. Keys kelso does not know are refused.
 | `app_id` | string | from the filename | Refused if it disagrees with the filename. |
 | `display_name` | string | `""` | Shown in the UI and `kelso ps` instead of the id. |
 | `description` | string | `""` | One line. Shown in the catalog. |
+| `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso inspect` and the web UI. |
+| `url` | string | `""` | Where to read more. Must start with `https://` or `http://`; the web UI links to it. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
 | `network_mode` | `normal` \| `host` | `normal` | `host` drops port isolation and is called out as dangerous. |
 

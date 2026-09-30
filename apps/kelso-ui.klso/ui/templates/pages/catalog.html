@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import job_button, when %}
+{% from "macros.html" import byline, job_button, when %}
 
 {% block actions %}
 <span class="head-actions">{{ job_button('+ Add Repo', 'repo-add', title='Add a repo', done='/catalog',
@@ -48,6 +48,7 @@
     {%- if readable %}{{ status_pill(app) }}{% endif %}</div>
   {% if readable %}
   <p class="lede">{{ app.get('description') or '' }}</p>
+  {{ byline(app) }}
   <p class="muted mono">{{ app.get('app_id') }} · {{ app.get('repo') or 'main' }}</p>
   {% else %}
   <p class="lede">This app's manifest could not be read.</p>

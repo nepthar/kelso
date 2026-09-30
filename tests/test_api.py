@@ -148,6 +148,8 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "display_name": "",
     "version": None,
     "description": "",
+    "author": "",
+    "url": "",
     "repo": "local",
     "state": "available",
     "configured": None,

@@ -4,6 +4,7 @@ import json
 import re
 
 import pytest
+import fakekelsod
 from fakekelsod import EVIL
 
 PAGES = [
@@ -153,6 +154,17 @@ def test_catalog_link_opens_its_card(client, fake):
   assert '<article class="app-card" id="card-examples--mealie" hidden>' in text
   closed = client.get("/catalog").text
   assert 'id="catalog-shade" class="shade" hidden>' in closed
+
+
+def test_byline_links_only_an_http_url(client, fake, monkeypatch):
+  text = client.get("/apps/kelso-ui").text
+  assert "by Jordan " in text
+  assert '<a href="https://example.com/help" rel="noopener noreferrer"' in text
+
+  monkeypatch.setitem(fakekelsod.APP_DETAIL, "url", "javascript:alert(1)")
+  text = client.get("/apps/kelso-ui").text
+  assert "javascript:" not in text
+  assert "by Jordan " in text
 
 
 def test_config_form(client, fake):

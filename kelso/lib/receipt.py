@@ -177,6 +177,15 @@ def capability_receipt(
   app_id = spec.app
   lines: list[str] = [f"{app_id}"]
 
+  if not compact:
+    about = [
+      ("About:", spec.description),
+      ("Version:", spec.version),
+      ("Author:", spec.author),
+      ("URL:", spec.url),
+    ]
+    lines += [_labeled_line(label, value) for label, value in about if value]
+
   if state_line is not None:
     lines.append(_labeled_line("State:", state_line))
 

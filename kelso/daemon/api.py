@@ -64,7 +64,8 @@ from kelso.lib.spec import AppSpec
 # 22: `reload` is gone; `install` restarts an app that was running.
 # 23: config fields carry `section` (config/advanced/option) in place of
 #     `advanced`; every app has the app options.
-API_VERSION = 23
+# 24: apps and catalog apps carry `author` and `url`.
+API_VERSION = 24
 
 CtxFactory = Callable[[], KelsoCtx]
 

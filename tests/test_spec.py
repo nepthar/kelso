@@ -197,6 +197,21 @@ image = "alpine"
     )
 
 
+def test_app_url_must_be_http(tmp_path):
+  with pytest.raises(ConfigError, match="must start with https://"):
+    spec_of(
+      tmp_path,
+      """\
+[app]
+version = "1"
+url = "javascript:alert(1)"
+
+[run.main]
+image = "alpine"
+""",
+    )
+
+
 def test_a_name_in_both_config_sections_is_refused(tmp_path):
   with pytest.raises(ConfigError, match="already declared in \\[config\\]"):
     spec_of(

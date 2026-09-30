@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import pill, sub, kv_table, job_button, empty %}
+{% from "macros.html" import byline, pill, sub, kv_table, job_button, empty %}
 {% from "configform.html" import config_form %}
 {% set app_id = app.app_id %}
 {% set name = app.get('display_name') or app_id %}
@@ -44,6 +44,7 @@
 {% block content %}
 <div class="apphead">{% include "pages/_app_status.html" %}
   <p class="lede">{{ app.get('description') or '' }}</p>
+  {{ byline(app) }}
   <p class="muted mono">{{ app_id }}</p></div>
 
 {#- The repo's manifest has moved on from the copy this app was installed
@@ -63,7 +64,7 @@
 {% endif %}
 
 <h2>Manifest</h2>
-{% set skip = ['display_name', 'description', 'app_id'] %}
+{% set skip = ['display_name', 'description', 'app_id', 'author', 'url'] %}
 {% set pairs = (app.get('metadata') or {})|dictsort(true)|rejectattr(0, 'in', skip)|list %}
 <div class="card">{{ kv_table(pairs) if pairs else empty('No extra metadata.') }}</div>
 

@@ -12,6 +12,7 @@ from pydantic import (
   ConfigDict,
   Field,
   ValidationError,
+  field_validator,
   model_validator,
 )
 
@@ -42,7 +43,17 @@ class AppSection(BaseModel):
   network_mode: NetworkMode = "normal"
   display_name: str = ""
   description: str = ""
+  author: str = ""
+  url: str = ""
   main: Identifier = "main"
+
+  @field_validator("url")
+  @classmethod
+  def check_url(cls, value: str) -> str:
+    # The web UI renders this as a link, so no javascript: and friends.
+    if value and not value.startswith(("https://", "http://")):
+      raise ValueError("must start with https:// or http://")
+    return value
 
 
 class VolumeEntry(BaseModel):
