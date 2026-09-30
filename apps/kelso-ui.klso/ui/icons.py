@@ -4,13 +4,6 @@ from materialdesignicons.com under the icon's MDI name."""
 from markupsafe import Markup
 
 MDI = {
-  # Not from MDI: drawn for kelso. A dune, with the ridge wound the other way
-  # so it cuts through, and a sun.
-  "dune": (
-    "M1 20C4 14 8 11 12 11.5C16 12 19 15 23 17.5V20Z"
-    "M5 18.5C8.5 16.6 11.8 15.5 15.5 15.3C11.8 14.2 8 15.4 5 18.5Z"
-    "M18 3.5A2.5 2.5 0 1 1 18 8.5A2.5 2.5 0 1 1 18 3.5Z"
-  ),
   "home-outline": (
     "M12 5.69L17 10.19V18H15V12H9V18H7V10.19L12 5.69M12 3L2 "
     "12H5V20H11V14H13V20H19V12H22"
@@ -110,8 +103,26 @@ MDI = {
 }
 
 
+# Drawn for kelso rather than taken from MDI, as 2px lines on the same 24px grid
+# so they match MDI's outline icons.
+STROKED = {
+  # A dune, the ridge down its slip face, and the sun.
+  "dune": (
+    "M2 19C10 19 9 7 15 7C17.5 9.5 19 15.5 22 19Z"
+    "M15 7C12.5 11 16 15 12.5 19"
+    "M6 4A2 2 0 1 1 6 8A2 2 0 1 1 6 4Z"
+  ),
+}
+
+
 def mdi(name):
   """The icon as an inline <svg>. An unknown name is a bug, so it raises."""
+  if name in STROKED:
+    return Markup(
+      '<svg class="mdi" viewBox="0 0 24 24" aria-hidden="true"><path d="{}" '
+      'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+      'stroke-linejoin="round"/></svg>'
+    ).format(STROKED[name])
   path = MDI.get(name)
   if path is None:
     raise ValueError(f"unknown icon {name!r}")
