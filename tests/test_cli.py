@@ -222,6 +222,29 @@ def test_logs_accepts_native_flags_before_app(kelso_env):
   assert ["compose", "logs", "--follow", "--tail", "10"] in calls
 
 
+def test_start_asks_before_installing_unmodelled_compose_keys(kelso_env):
+  app = kelso_env.local_repo / "privileged-demo.klso"
+  app.mkdir()
+  (app / "manifest.toml").write_text(
+    """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine:latest"
+compose = { privileged = true }
+"""
+  )
+
+  declined = kelso_env.run("start", "privileged-demo", input="n\n")
+  assert declined.returncode == 0, declined.stderr
+  assert "Nothing started." in declined.stdout
+  assert not (kelso_env.run_root / "privileged-demo").exists()
+
+  started = kelso_env.run("start", "privileged-demo", "-y")
+  assert started.returncode == 0, started.stderr
+
+
 # --- commands --------------------------------------------------------------
 
 
