@@ -42,6 +42,8 @@ class ConfigApp(App[ConfigResponse]):
   Input:focus { background: $primary-muted; }
   .folded { display: none; }
   #form.unfolded .folded { display: block; }
+  #more { color: $accent; text-style: bold; padding: 1 1 0 1; }
+  #form.unfolded #more { display: none; }
   #help { color: $text-muted; padding: 1 1 0 1; }
   """
 
@@ -118,6 +120,8 @@ class ConfigApp(App[ConfigResponse]):
         )
         box.border_title = title
         boxes.append(box)
+      if self._folded:
+        boxes.append(Static(f"To set {self._folded_titles()}, press ctrl+o", id="more"))
       yield Vertical(*boxes, id="form")
     yield Static(id="help")
 
@@ -145,14 +149,16 @@ class ConfigApp(App[ConfigResponse]):
     keys = []
     if self._folded:
       verb = "hide" if self.unfolded else "show"
-      titles = [
-        title.lower()
-        for title, fields in self.request.groups()
-        if any(f.name in self._folded for f in fields)
-      ]
-      keys.append(f"^o to {verb} {' and '.join(titles)}")
+      keys.append(f"^o to {verb} {self._folded_titles()}")
     keys += ["^s save", "^q or esc to quit without saving"]
     self.query_one("#help", Static).update(", ".join(keys))
+
+  def _folded_titles(self) -> str:
+    return " and ".join(
+      title.lower()
+      for title, fields in self.request.groups()
+      if any(f.name in self._folded for f in fields)
+    )
 
   def action_toggle_folded(self) -> None:
     if not self._folded:

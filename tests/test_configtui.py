@@ -95,6 +95,18 @@ def test_advanced_fields_stay_hidden_until_ctrl_o():
   _drive(_request(), steps)
 
 
+def test_the_form_says_how_to_reach_the_folded_sections():
+  async def steps(app, pilot):
+    more = app.query_one("#more", Static)
+    assert _shown(more)
+    assert str(more.render()) == "To set advanced config, press ctrl+o"
+    await pilot.press("ctrl+o")
+    assert not _shown(more)
+    await pilot.press("escape")
+
+  _drive(_request(), steps)
+
+
 def test_hidden_advanced_fields_are_not_tab_stops():
   async def steps(app, pilot):
     for _ in range(4):
