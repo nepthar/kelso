@@ -163,6 +163,17 @@ def test_nav_is_titled_with_the_daemons_hostname(client, fake):
   assert '<span class="mark" aria-hidden="true">T</span>' in brand
 
 
+def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
+  assert "<h1>tycho &lt;i" in client.get("/login").text
+
+
+def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
+  fake.fail = "down"
+  response = client.get("/login")
+  assert response.status_code == 200
+  assert "<h1>Kelso</h1>" in response.text
+
+
 def test_byline_links_only_an_http_url(client, fake, monkeypatch):
   text = client.get("/apps/kelso-ui").text
   assert "by Jordan " in text
