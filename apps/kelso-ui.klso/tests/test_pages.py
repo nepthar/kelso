@@ -62,7 +62,7 @@ def test_nothing_loads_from_off_the_box(client, fake, path):
   """
   text = client.get(path).text
   for url in re.findall(r'<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"', text):
-    assert url.startswith("/static/"), url
+    assert url.startswith(("/static/", "data:")), url
 
 
 @pytest.mark.parametrize(
@@ -195,6 +195,14 @@ def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
   response = client.get("/login")
   assert response.status_code == 200
   assert "<h1>Kelso</h1>" in response.text
+
+
+def test_every_page_has_the_dune_favicon(client, fake):
+  for path in ("/", "/login"):
+    icon = re.search(
+      r'<link rel="icon" type="image/svg\+xml" href="([^"]+)">', client.get(path).text
+    )
+    assert icon and icon[1].startswith("data:image/svg+xml,"), path
 
 
 def test_byline_links_only_an_http_url(client, fake, monkeypatch):

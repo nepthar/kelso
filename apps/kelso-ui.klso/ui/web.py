@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 from api import ApiError, api
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from icons import mdi
+from icons import favicon, mdi
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from themes import THEMES
 
@@ -113,6 +113,8 @@ templates.globals.update(
   themes=THEMES,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
+  # Mojave's coral: a tab icon has no theme, and this reads on light and dark.
+  FAVICON=favicon("dune", "#f08a4b"),
 )
 templates.filters["size"] = fmt_size
 templates.filters["brand"] = brand
