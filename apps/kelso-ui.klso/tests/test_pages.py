@@ -161,7 +161,8 @@ def test_nav_is_titled_with_the_daemons_hostname(client, fake):
   text = client.get("/").text
   brand = text.split('<div class="brand">')[1].split("</div>")[0]
   assert '<span class="name" title="tycho &lt;i' in brand
-  assert '<span class="mark" aria-hidden="true"><svg class="mdi"' in brand
+  assert '<a class="mark" href="https://www.nps.gov/moja/kelso-dunes.htm"' in brand
+  assert '<svg class="mdi"' in brand
 
 
 @pytest.mark.parametrize(

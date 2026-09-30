@@ -64,10 +64,10 @@ nav {
   padding: calc(var(--chamfer) + 4px) 16px 16px;
   overflow: auto; display: flex; flex-direction: column;
 }
-/* The dune on its own line, centered over the name and version below it. The
-   block is as wide as its widest line, so that is what the dune centers on. */
+/* The dune on its own line above the name and version, all on the left edge
+   the nav icons share. */
 .brand {
-  display: grid; width: fit-content; max-width: 100%;
+  display: grid; justify-items: start;
   padding: 0 0 24px 12px; letter-spacing: -0.005em;
 }
 .brand .who { min-width: 0; }
@@ -80,7 +80,13 @@ nav {
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   margin-top: 1px;
 }
-.brand .mark { justify-self: center; margin-bottom: 10px; color: var(--fg); }
+/* A link, but not a nav item: none of `nav a`'s padding or edge. Pulled up
+   into the space under the corner. */
+.brand a.mark {
+  display: block; padding: 0; border: 0; margin: -12px 0 10px;
+  color: var(--fg);
+}
+.brand a.mark:hover { color: var(--coral); }
 /* Active is a coral edge and coral type -- not a filled pill. The 2px inset
    border keeps every item on the same baseline grid whether lit or not. */
 nav a {
@@ -111,8 +117,8 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 }
 .nav-toggle:hover { color: var(--fg); background: var(--panel); }
 html.nav-collapsed nav { width: 52px; flex-basis: 52px; padding: calc(var(--chamfer) + 4px) 8px 16px; }
-html.nav-collapsed .brand { padding: 0 0 24px; margin: 0 auto; }
-html.nav-collapsed .brand .mark { margin-bottom: 0; }
+html.nav-collapsed .brand { padding: 0 0 24px; justify-items: center; }
+html.nav-collapsed .brand a.mark { margin-bottom: 0; }
 html.nav-collapsed .brand .mark .mdi { width: 22px; height: 22px; }
 html.nav-collapsed .brand .who,
 html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,

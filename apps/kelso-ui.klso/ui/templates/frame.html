@@ -10,7 +10,7 @@
 <div class="app">
 <nav>
   {%- set brand = hostname|default('', true)|brand %}
-  <div class="brand"><span class="mark" aria-hidden="true">{{ mdi('dune') }}</span>
+  <div class="brand"><a class="mark" href="https://www.nps.gov/moja/kelso-dunes.htm" target="_blank" rel="noopener noreferrer" title="Kelso Dunes" aria-label="Kelso Dunes">{{ mdi('dune') }}</a>
     <div class="who"><span class="name" title="{{ hostname|default(brand, true) }}">{{ brand }}</span>
       <span class="ver">kelso{% if version %} {{ version }}{% endif %}</span>
       {%- if INSTANCE_ID %}<span class="ver">{{ INSTANCE_ID }}</span>{% endif %}</div></div>
