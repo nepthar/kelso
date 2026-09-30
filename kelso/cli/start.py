@@ -1,5 +1,6 @@
 import argparse
 
+from kelso.cli.install import confirm_compose_warnings
 from kelso.cli.kv import parse_kv
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import staging_target, start
@@ -38,22 +39,33 @@ def register(subparsers) -> None:
     action="store_true",
     help="Start even though this id was last installed from somewhere else",
   )
+  parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Skip the confirmation for compose keys kelso does not model",
+  )
   parser.set_defaults(func=run)
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   target = staging_target(ctx, args.app, force=args.force)
   app = target.app_id
+  sets = [parse_kv(item, "--set") for item in args.sets]
+  binds = [parse_kv(item, "--bind") for item in args.binds]
+  staging = bool(sets or binds) or not ctx.is_staged(app)
+  if target.bundle is not None:
+    bundle = target.bundle
+  elif staging:
+    bundle = ctx.bundle_path(app)
+  else:
+    # Catalog may be gone; start will use the run copy as-is.
+    bundle = ctx.config.app_run_path(app)
+  if staging and not args.yes and not confirm_compose_warnings(app, bundle, conn):
+    conn.out("Nothing started.")
+    return
+
   with ctx.locked(f"start {app}", app):
-    sets = [parse_kv(item, "--set") for item in args.sets]
-    binds = [parse_kv(item, "--bind") for item in args.binds]
-    if target.bundle is not None:
-      bundle = target.bundle
-    elif sets or binds or not ctx.is_staged(target.app_id):
-      bundle = ctx.bundle_path(target.app_id)
-    else:
-      # Catalog may be gone; start will use the run copy as-is.
-      bundle = ctx.config.app_run_path(target.app_id)
     result = start(
       target.app_id, bundle, ctx, sets=sets, binds=binds, bound=target.bound_to
     )

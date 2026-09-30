@@ -1,6 +1,6 @@
 # Snapshot Demo
 
-For exercising `kelso snapshot` and `kelso restore`. The app appends a
+For exercising `kelso snapshot` and `kelso snapshot restore`. The app appends a
 timestamp to a data volume every 30s and serves the log back. Restore, and
 the tick log visibly jumps back to what the snapshot held.
 

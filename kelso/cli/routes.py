@@ -16,7 +16,7 @@ from kelso.lib.routes import NoopRouteProvider, RouteProviderError, get_route_pr
 
 
 def register(subparsers) -> None:
-  parser = subparsers.add_parser("routes", help="Manage route providers")
+  parser = subparsers.add_parser("route", help="Manage routes and route providers")
   parser.set_defaults(func=lambda args, ctx, conn: parser.print_help())
   sub = parser.add_subparsers(dest="routes_command")
 
@@ -81,7 +81,7 @@ def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
     apply_route_provider_config(args.tag, provider, response, ctx)
     conn.out(
       f"Configured route provider {args.tag!r}; "
-      f"check it with `kelso routes check {args.tag}`"
+      f"check it with `kelso route check {args.tag}`"
     )
 
 

@@ -8,7 +8,7 @@
 
 {% block refresh %}{% endblock %}
 
-{#- Logs and, while something runs, the console; then start or stop, reload,
+{#- Logs and, while something runs, the console; then start or stop, reinstall,
   snapshot, remove. Each verb opens the job modal. Only one of start/stop can
   apply, so only that one is drawn. -#}
 {% block actions %}
@@ -22,7 +22,7 @@
   {{ job_button('Start', 'start', icon='play', title='Start ' ~ name, args={'app': app_id},
       desc='Starts ' ~ app_id ~ ', installing it first if it is not installed yet.') }}
 {% endif %}
-  {{ job_button('Reload', 'reload', icon='reload', title='Reload ' ~ name, args={'app': app_id},
+  {{ job_button('Reinstall', 'install', icon='reload', title='Reinstall ' ~ name, args={'app': app_id},
       desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its installation from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
   {{ job_button('Snapshot', 'snapshot', icon='camera-plus-outline', title='Snapshot ' ~ name, args={'app': app_id},
       desc='Copies ' ~ app_id ~ "'s volumes and run state into an archive under snapshots/. The app is stopped for the copy and started again after.",
@@ -49,11 +49,11 @@
 {#- The repo's manifest has moved on from the copy this app was installed
   from: the same drift the Repos page marks, said where it can be acted on. -#}
 {% if app.get('manifest_stale') %}
-<div class="notice"><b>Manifest differs, reload to pick up the latest changes.</b>
-  {{- sub('The manifest in the repo has changed since this app was installed. What is installed keeps running until you reload.') }}</div>
+<div class="notice"><b>Manifest differs, reinstall to pick up the latest changes.</b>
+  {{- sub('The manifest in the repo has changed since this app was installed. What is installed keeps running until you reinstall.') }}</div>
 {% endif %}
 {% if app.get('config_pending') %}
-<div class="notice"><b>Reload to apply pending configuration changes.</b>
+<div class="notice"><b>Reinstall to apply pending configuration changes.</b>
   {{- sub('Settings and route assignments were changed after this app was started, so what is running does not have them yet.') }}</div>
 {% endif %}
 {% if app.get('issues') %}

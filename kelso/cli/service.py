@@ -1,4 +1,4 @@
-"""`kelso service` -- kelsod as a systemd user service."""
+"""`kelso system service` -- kelsod as a systemd user service."""
 
 import argparse
 from pathlib import Path
@@ -14,13 +14,10 @@ NO_SYSTEMD = (
 
 
 def register(subparsers) -> None:
-  parser = subparsers.add_parser("service", help="Run kelsod as a systemd service")
-  sub = parser.add_subparsers(dest="service_command", required=True)
-
-  install = sub.add_parser(
-    "install", help="Write kelsod's systemd user unit, then start it now and at boot"
+  parser = subparsers.add_parser(
+    "service", help="Write kelsod's systemd user unit, then start it now and at boot"
   )
-  install.set_defaults(func=_install)
+  parser.set_defaults(func=_install)
 
 
 def install_service(config_path: Path, conn: Conn) -> None:

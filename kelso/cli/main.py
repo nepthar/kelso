@@ -5,61 +5,71 @@ import sys
 
 from kelso import VERSION
 from kelso.cli import (
-  activity,
-  catalog,
   cmd,
   config,
-  config_sys,
-  decrypt,
   dev,
-  doctor,
   init,
   inspect,
   install,
   logs,
   ps,
-  reload,
   remove,
   repo,
-  restore,
   routes,
-  service,
   shell,
   snapshot,
   start,
   stop,
-  volumes,
+  system,
 )
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import Conn, refuse_root
 
 COMMANDS = [
-  catalog,
-  init,
-  doctor,
   ps,
-  inspect,
-  volumes,
-  install,
   start,
-  dev,
   stop,
-  reload,
+  config,
+  cmd,
+  install,
   remove,
-  snapshot,
-  restore,
+  inspect,
   logs,
   shell,
-  activity,
-  cmd,
+  dev,
+  snapshot,
   repo,
-  config,
-  config_sys,
-  decrypt,
   routes,
-  service,
+  system,
+  init,
 ]
+
+HELP = """\
+Apps
+  ps          List installed apps and their state
+  start       Start an app, installing it first if needed
+  stop        Stop a running app
+  config      View or set an app's config, routes, and volume binds
+  cmd         List or run an app's commands
+  install     Install or re-install an app, restarting it if running
+  uninstall   Uninstall an app (--purge to delete its data and config too)
+  inspect     Show an app's state, ports, routes, volumes, and config
+  logs        Show an app's logs
+  shell       Open a shell in one of an app's containers
+
+  dev         Run an app bundle in this terminal
+  reset       Delete an app's data, keeping its config
+
+Snapshots     kelso snapshot take | list | restore
+Repos         kelso repo list | add | update | remove
+Routes        kelso route list | add | remove | check | add-provider
+System        kelso system doctor | activity | volumes | secret | host-volume
+                           service | gen-masterkey | decrypt
+Setup         kelso init
+
+Run `kelso COMMAND --help` for details on any command.
+"""
 
 
 class StdConn(Conn):
@@ -74,7 +84,13 @@ class StdConn(Conn):
 
 
 def build_parser() -> argparse.ArgumentParser:
-  parser = argparse.ArgumentParser(prog="kelso", description="Kelso CLI")
+  parser = argparse.ArgumentParser(
+    prog="kelso",
+    usage="kelso [--root DIR] [--config FILE] COMMAND ...",
+    description="Kelso Server runs apps on hardware you own.",
+    epilog=HELP,
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+  )
   parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
   parser.add_argument(
     "--root",
@@ -87,7 +103,10 @@ def build_parser() -> argparse.ArgumentParser:
     help="Path to config.toml (overrides KELSO_CONFIG / --root)",
   )
   parser.set_defaults(func=lambda args, ctx, conn: parser.print_help())
-  subparsers = parser.add_subparsers(dest="command")
+  # SUPPRESS keeps argparse's flat command list out of --help; HELP replaces it.
+  subparsers = parser.add_subparsers(
+    dest="command", prog="kelso", help=argparse.SUPPRESS
+  )
 
   for command in COMMANDS:
     command.register(subparsers)

@@ -18,7 +18,6 @@ from kelso.jobs.cmd import CmdJob
 from kelso.jobs.install import InstallJob
 from kelso.jobs.job import DONE, FAILED, QUEUED, RUNNING, Job
 from kelso.jobs.metrics import HostMetricsJob, VolumeMetricsJob
-from kelso.jobs.reload import ReloadJob
 from kelso.jobs.remove import ResetJob, UninstallJob
 from kelso.jobs.repo import RepoAddJob, RepoRemoveJob, RepoUpdateJob
 from kelso.jobs.restore import RestoreJob
@@ -41,7 +40,6 @@ MAX_HISTORY = 200
 JOBS: dict[str, type[Job]] = {
   "start": StartJob,
   "stop": StopJob,
-  "reload": ReloadJob,
   "install": InstallJob,
   "snapshot": SnapshotJob,
   "snapshot-delete": DeleteSnapshotJob,

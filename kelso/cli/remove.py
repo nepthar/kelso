@@ -1,6 +1,6 @@
-"""The three removal verbs, which differ only in how much they take: an
-app's installation under `var/run/`, its data under the volume roots, and its
-config under `config/`.
+"""The removal verbs -- uninstall, uninstall --purge, and reset -- which differ
+only in how much they take: an app's installation under `var/run/`, its data
+under the volume roots, and its config under `config/`.
 """
 
 import argparse
@@ -39,14 +39,6 @@ def register(subparsers) -> None:
   reset.add_argument("app_id", help="App ID to reset")
   _add_yes(reset)
   reset.set_defaults(func=_run(RESET))
-
-  remove = subparsers.add_parser(
-    "rm",
-    help="Alias for `uninstall --purge`",
-  )
-  remove.add_argument("app_id", help="App ID to remove")
-  _add_yes(remove)
-  remove.set_defaults(func=_run(PURGE))
 
 
 def _add_yes(parser: argparse.ArgumentParser) -> None:

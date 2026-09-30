@@ -26,7 +26,7 @@ BASIC = "io.p2net.basic-features"
 def _snapshot(kelso_env, app_id: str, label: str) -> str:
   """Stop `app_id`, snapshot it, and return the snapshot name."""
   assert kelso_env.run("stop", app_id).returncode == 0
-  taken = kelso_env.run("snapshot", app_id, "--label", label)
+  taken = kelso_env.run("snapshot", "take", app_id, "--label", label)
   assert taken.returncode == 0, taken.stderr
   written = Path(taken.stdout.split("written to ")[1].strip())
   name = written.name.removesuffix(".tar.gz")
@@ -57,7 +57,7 @@ def test_snapshot_copies_data_volumes_in_a_container(kelso_env):
   # a snapshot silently becomes a different thing than the volume was.
   (volume / "current").symlink_to("db.txt")
 
-  taken = kelso_env.run("snapshot", BASIC, "--label", "one")
+  taken = kelso_env.run("snapshot", "take", BASIC, "--label", "one")
   assert taken.returncode == 0, taken.stderr
   archive = Path(taken.stdout.split("written to ")[1].strip())
 
@@ -88,7 +88,7 @@ def test_restore_brings_a_data_volume_back(kelso_env):
   (volume / "db.txt").write_text("v2")
   (volume / "stray.txt").write_text("written since")
 
-  restored = kelso_env.run("restore", BASIC, name, "-y")
+  restored = kelso_env.run("snapshot", "restore", BASIC, name, "-y")
   assert restored.returncode == 0, restored.stderr
   assert (volume / "db.txt").read_text() == "v1"
   assert not (volume / "stray.txt").exists()
@@ -111,12 +111,12 @@ def test_restore_rebuilds_a_removed_app_from_its_snapshot(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "before")
 
-  assert kelso_env.run("rm", app_id, "-y").returncode == 0
+  assert kelso_env.run("uninstall", "--purge", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
   assert not kelso_env.app_logtab(app_id).exists()
   assert app_id not in kelso_env.read_db().get("routes", {})
 
-  restored = kelso_env.run("restore", app_id, name, "-y")
+  restored = kelso_env.run("snapshot", "restore", app_id, name, "-y")
   assert restored.returncode == 0, restored.stderr
   assert not (kelso_env.root / "snapshots" / app_id / name).exists()
   assert kelso_env.app_logtab(app_id).is_file()
@@ -147,7 +147,7 @@ def test_restore_clobbers_whatever_is_there_now(kelso_env):
   scratch = kelso_env.run_root / app_id / "staged" / "scratch.txt"
   scratch.write_text("left over from today")
 
-  restored = kelso_env.run("restore", app_id, name, "-y")
+  restored = kelso_env.run("snapshot", "restore", app_id, name, "-y")
   assert restored.returncode == 0, restored.stderr
 
   shown = kelso_env.run("config", app_id, "--get", "subdomain")
@@ -168,7 +168,7 @@ def test_restore_no_snapshot_skips_pre_restore(kelso_env):
   name = _snapshot(kelso_env, app_id, "kept")
   before = {p.name for p in (kelso_env.root / "snapshots" / app_id).iterdir()}
 
-  restored = kelso_env.run("restore", app_id, name, "-y", "--no-snapshot")
+  restored = kelso_env.run("snapshot", "restore", app_id, name, "-y", "--no-snapshot")
   assert restored.returncode == 0, restored.stderr
 
   after = {p.name for p in (kelso_env.root / "snapshots" / app_id).iterdir()}
@@ -181,7 +181,7 @@ def test_restoring_latest_pre_restore_skips_new_snapshot(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "kept")
 
-  restored = kelso_env.run("restore", app_id, name, "-y")
+  restored = kelso_env.run("snapshot", "restore", app_id, name, "-y")
   assert restored.returncode == 0, restored.stderr
   snapshots = kelso_env.root / "snapshots" / app_id
   pre = sorted(
@@ -191,7 +191,7 @@ def test_restoring_latest_pre_restore_skips_new_snapshot(kelso_env):
   )
   assert len(pre) == 1
 
-  undo = kelso_env.run("restore", app_id, pre[-1], "-y")
+  undo = kelso_env.run("snapshot", "restore", app_id, pre[-1], "-y")
   assert undo.returncode == 0, undo.stderr
   after = {
     p.name.removesuffix(".tar.gz")
@@ -207,7 +207,7 @@ def test_restore_refuses_while_containers_are_running(kelso_env):
   name = _snapshot(kelso_env, app_id, "up")
   assert kelso_env.run("start", app_id).returncode == 0
 
-  refused = kelso_env.run("restore", app_id, name, "-y")
+  refused = kelso_env.run("snapshot", "restore", app_id, name, "-y")
   assert refused.returncode == 1
   assert f"kelso stop {app_id}" in refused.stderr
 
@@ -217,43 +217,27 @@ def test_restore_names_the_snapshots_it_could_have_used(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "real")
 
-  missing = kelso_env.run("restore", app_id, "nosuchsnapshot", "-y")
+  missing = kelso_env.run("snapshot", "restore", app_id, "nosuchsnapshot", "-y")
   assert missing.returncode == 1
   assert name in missing.stderr
 
-  unknown = kelso_env.run("restore", "never-snapshotted", name, "-y")
+  unknown = kelso_env.run("snapshot", "restore", "never-snapshotted", name, "-y")
   assert unknown.returncode == 1
   assert "No snapshots found" in unknown.stderr
 
 
-def test_restore_without_snapshot_lists_recent_ones(kelso_env):
-  app_id = "ports-demo"
-  assert kelso_env.run("start", app_id).returncode == 0
-  name = _snapshot(kelso_env, app_id, "listed")
-
-  omitted = kelso_env.run("restore", app_id)
-  assert omitted.returncode == 1
-  assert "SNAPSHOT is required" in omitted.stderr
-  assert name in omitted.stderr
-  assert f"kelso restore {app_id}" in omitted.stderr
-
-
-def test_restore_without_snapshot_caps_the_list_at_ten(kelso_env):
+def test_snapshot_list_shows_newest_first(kelso_env):
   """Plant archives directly: real snapshots collide within the same minute."""
   app_id = "ports-demo"
   snap_dir = kelso_env.root / "snapshots" / app_id
   snap_dir.mkdir(parents=True)
-  names = [f"2020-01-{day:02d}_00-00Z" for day in range(1, 13)]
+  names = [f"2020-01-{day:02d}_00-00Z" for day in range(1, 4)]
   for name in names:
     (snap_dir / f"{name}.tar.gz").write_bytes(b"")
 
-  omitted = kelso_env.run("restore", app_id)
-  assert omitted.returncode == 1
-  # Newest first, capped at 10; the two oldest stay off the list.
-  assert names[0] not in omitted.stderr
-  assert names[1] not in omitted.stderr
-  assert names[-1] in omitted.stderr
-  assert omitted.stderr.index(names[-1]) < omitted.stderr.index(names[2])
+  listed = kelso_env.run("snapshot", "list", app_id)
+  assert listed.returncode == 0, listed.stderr
+  assert listed.stdout.splitlines() == list(reversed(names))
 
 
 def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
@@ -263,7 +247,7 @@ def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
   marker = kelso_env.run_root / app_id / "staged" / "marker.txt"
   marker.write_text("still here")
 
-  declined = kelso_env.run("restore", app_id, name, input="n\n")
+  declined = kelso_env.run("snapshot", "restore", app_id, name, input="n\n")
   assert declined.returncode == 0, declined.stderr
   assert "Nothing restored." in declined.stdout
   assert marker.exists()
@@ -274,7 +258,7 @@ def test_snapshot_stops_and_restarts_a_running_app(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
-  taken = kelso_env.run("snapshot", app_id, "--label", "live")
+  taken = kelso_env.run("snapshot", "take", app_id, "--label", "live")
   assert taken.returncode == 0, taken.stderr
   archive = Path(taken.stdout.split("written to ")[1].strip())
   assert archive.is_file()
@@ -292,7 +276,7 @@ def test_a_volumeless_snapshot_is_cleaned_up_without_a_container(kelso_env):
   """Nothing in it is root-owned, so paying for a container would only make
   cleanup fail whenever docker is down."""
   assert kelso_env.run("install", "ports-demo").returncode == 0
-  taken = kelso_env.run("snapshot", "ports-demo", "--label", "bare")
+  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "bare")
   assert taken.returncode == 0, taken.stderr
 
   archive = Path(taken.stdout.split("written to ")[1].strip())

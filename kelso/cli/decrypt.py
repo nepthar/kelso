@@ -21,7 +21,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   if not ctx.config.master_key:
     raise ValueError(
       f"No master key in {ctx.config.master_keyfile}, so nothing was encrypted "
-      f"with one. Run: kelso config-sys gen-masterkey"
+      f"with one. Run: kelso system gen-masterkey"
     )
 
   blob = conn.read().strip()

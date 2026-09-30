@@ -30,7 +30,7 @@ PRE_RESTORE_LABEL = "pre-restore"
 
 @dataclass(frozen=True)
 class RestorePlan:
-  """What `kelso restore` will overwrite, and with what."""
+  """What `kelso snapshot restore` will overwrite, and with what."""
 
   app_id: AppID
   snapshot_path: Path

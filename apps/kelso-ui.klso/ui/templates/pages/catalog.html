@@ -54,23 +54,20 @@
   {% endif %}
   {% set others = app.contested|reject('equalto', app.get('repo'))|list %}
   {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Installing from here binds it to {{ app.get('repo') }}.</p>{% endif %}
-  {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was installed. Reload to pick up the new one.</p>{% endif %}
+  {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was installed. Reinstall to pick up the new one.</p>{% endif %}
   {#- Kelso cannot say what an arbitrary compose key does, so it says that it
     does not know and shows exactly what was asked for. -#}
   {% for w in app.get('warnings') or [] %}
   <div class="passthru"><b>Warning</b><p>{{ w.get('message') }}:</p><ul>{% for o in w.get('options') or [] %}<li><span class="mono">{{ o }}</span></li>{% endfor %}</ul></div>
   {% endfor %}
 </div>
-{#- Install from this repo, or reload an app already installed from it: install
-  re-stages and leaves the running containers on the old copy, reload puts the
-  new manifest in front of them. Opening this card chose the repo, so it is
-  always named. -#}
+{#- Opening this card chose the repo, so it is always named. -#}
 {% if readable %}
 {% set repo = app.get('repo') or '' %}
 {% set target = app_id ~ '@' ~ repo if repo else app_id %}
 <div class="row actions">
 {% if app.get('state') == 'installed' %}
-  {{ job_button('Reload', 'reload', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+  {{ job_button('Reinstall', 'install', title='Reinstall ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
       desc='Rebuilds ' ~ app_id ~ ' from ' ~ repo ~ ', restarting it if it is running. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% else %}
   {{ job_button('Install', 'install', title='Install ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',

@@ -321,14 +321,14 @@ def _compose_calls(kelso_env) -> list[list[str]]:
   ]
 
 
-def test_reload_stops_reinstalls_and_starts_a_running_app(kelso_env, client, jobs):
+def test_install_stops_reinstalls_and_starts_a_running_app(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=root")
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
-  job = submit(client, jobs, "reload", {"app": APP})
+  job = submit(client, jobs, "install", {"app": APP})
   assert job["state"] == "done", job["error"]
-  assert f"Reloaded {APP}" in read_log(job)
+  assert f"Restarted {APP}" in read_log(job)
   assert client.get(f"/apps/{APP}").json()["status"] == "running"
   staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
   assert 'version      = "0.2.0"' in staged
@@ -339,22 +339,22 @@ def test_reload_stops_reinstalls_and_starts_a_running_app(kelso_env, client, job
   ]
 
 
-def test_reload_reinstalls_a_stopped_app_without_starting(kelso_env, client, jobs):
+def test_install_reinstalls_a_stopped_app_without_starting(kelso_env, client, jobs):
   kelso_env.run("install", APP)
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
-  job = submit(client, jobs, "reload", {"app": APP})
+  job = submit(client, jobs, "install", {"app": APP})
   assert job["state"] == "done", job["error"]
-  assert f"Re-installed {APP}" in read_log(job)
+  assert "Restarted" not in read_log(job)
   assert client.get("/apps").json()["apps"][0]["status"] == "stopped"
   staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
   assert 'version      = "0.2.0"' in staged
   assert _compose_calls(kelso_env) == []
 
 
-def test_reload_unknown_app_is_refused(kelso_env, client):
-  response = client.post("/jobs", json={"verb": "reload", "args": {"app": "nope"}})
+def test_install_unknown_app_is_refused(kelso_env, client):
+  response = client.post("/jobs", json={"verb": "install", "args": {"app": "nope"}})
   assert response.status_code == 400
   assert "No app found" in response.json()["error"]
 
@@ -555,7 +555,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
 
 def test_restore_verb(kelso_env, client, jobs):
   assert kelso_env.run("install", "ports-demo").returncode == 0
-  taken = kelso_env.run("snapshot", "ports-demo", "--label", "back")
+  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "back")
   assert taken.returncode == 0, taken.stderr
   name = Path(taken.stdout.split("written to ")[1].strip()).name.removesuffix(".tar.gz")
   job = submit(client, jobs, "restore", {"app": "ports-demo", "snapshot": name})

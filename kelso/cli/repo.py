@@ -1,10 +1,15 @@
 """`kelso repo` -- the sources the catalog is built from."""
 
 import argparse
+from datetime import datetime
+from pathlib import Path
+
+from tabulate import tabulate
 
 from kelso.lib import repo as repo_lib
+from kelso.lib.apps import read_app_actions
 from kelso.lib.config import load_config_file
-from kelso.lib.kelso import KelsoCtx
+from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.repo import USAGE
 from kelso.lib.util import Conn, fmt_size
 
@@ -28,7 +33,7 @@ def register(subparsers) -> None:
   remove.add_argument("name", help="Repo to remove")
   remove.set_defaults(func=_remove)
 
-  listing = sub.add_parser("list", help="Show configured repos")
+  listing = sub.add_parser("list", help="Show configured repos and their apps")
   listing.set_defaults(func=_list)
 
 
@@ -72,12 +77,57 @@ def _remove(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
 
 def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
-  catalog = ctx.app_catalog()
-  for name, repo in ctx.config.repos.items():
-    count = sum(1 for entries in catalog.values() for e in entries if e.source == name)
-    state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
-    at = f"  {state['sha'][:8]}" if state else ""
-    conn.out(f"{name:16} {count:>3} apps  {repo.describe()}{at}")
+  with ctx.kelso_lock("repo list"):
+    catalog = ctx.app_catalog()
+    staged = ctx.staged_app_ids()
+    # One read of the activity log for every app, rather than one per row.
+    actions = read_app_actions(ctx)
+    origins = {app_id: ctx.staged_origin(app_id) for app_id in staged}
+
+    blocks = []
+    for name, repo in ctx.config.repos.items():
+      entries = [
+        entry
+        for app_id in sorted(catalog)
+        for entry in catalog[app_id]
+        if entry.source == name
+      ]
+      state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
+      at = f" {state['sha'][:8]}" if state else ""
+      header = f"Repo: {name} {len(entries)} apps {repo.describe()}{at}"
+      block = f"{header}\n{'=' * len(header)}"
+      if entries:
+        rows = [
+          (e.app_id, _status(e, staged, origins, actions), _relative(e.path, repo.path))
+          for e in entries
+        ]
+        block += "\n" + tabulate(
+          rows, headers=["APP_ID", "STATUS", "PATH"], tablefmt="simple"
+        )
+      blocks.append(block)
+    conn.out("\n\n".join(blocks))
+
+
+def _relative(path: Path, root: Path) -> str:
+  return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
+
+
+def _status(
+  entry: CatalogEntry,
+  staged: set[str],
+  origins: dict[str, Path | None],
+  actions: dict[str, tuple[datetime, str]],
+) -> str:
+  """The last thing kelso did with this bundle, or how it stands if nothing yet."""
+  if entry.app_id not in staged:
+    return "-"
+
+  origin = origins.get(entry.app_id)
+  if origin is not None and origin != entry.path:
+    return "-"
+
+  action = actions.get(entry.app_id)
+  return action[1] if action else "installed"
 
 
 def _report_contested(ctx: KelsoCtx, conn: Conn) -> None:

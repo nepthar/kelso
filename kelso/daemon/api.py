@@ -61,7 +61,8 @@ from kelso.lib.spec import AppSpec
 # 19: snapshot-delete is a job verb.
 # 20: WS /apps/{id}/console (a shell in a running unit).
 # 21: /version carries `hostname`; WS /host/console (a login shell on the host).
-API_VERSION = 21
+# 22: `reload` is gone; `install` restarts an app that was running.
+API_VERSION = 22
 
 CtxFactory = Callable[[], KelsoCtx]
 

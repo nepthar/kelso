@@ -3,7 +3,8 @@ from pathlib import Path
 
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import stage, staging_target
+from kelso.lib.lifecycle import reload_app, staging_target
+from kelso.lib.receipt import capability_receipt
 from kelso.lib.spec import ComposeWarning
 from kelso.lib.util import Conn
 
@@ -11,7 +12,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "install",
-    help="Install an application so it can be started (accepts app id or .klso path)",
+    help="Install or re-install an app from its bundle, restarting it if running",
   )
   parser.add_argument(
     "app",
@@ -39,14 +40,19 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   if not args.yes and not confirm_compose_warnings(app, bundle, conn):
     conn.out("Nothing installed.")
     return
-  with ctx.locked(f"stage {app}", app):
-    result = stage(app, bundle, ctx, bound=target.bound_to)
-    for name in result.dropped_volumes:
-      conn.err(
-        f"volume {name} is no longer declared in the manifest; "
-        f"its link is gone but its data was left in place"
-      )
-    conn.out(f"Installed {app} at {ctx.run_path(app)}")
+  with ctx.locked(f"install {app}", app):
+    result = reload_app(app, bundle, ctx, bound=target.bound_to)
+  stage = result.stage
+  for name in stage.dropped_volumes:
+    conn.err(
+      f"volume {name} is no longer declared in the manifest; "
+      f"its link is gone but its data was left in place"
+    )
+  conn.out(f"Installed {app} at {ctx.run_path(app)}")
+  if result.was_running:
+    conn.out(f"Restarted {app}")
+    conn.out(capability_receipt(stage.spec, stage.run_data, ctx, compact=True))
+  else:
     conn.out(f"Start it with: kelso start {app}")
 
 

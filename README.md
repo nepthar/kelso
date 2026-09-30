@@ -67,7 +67,7 @@ once you are done exploring: `kelso repo remove demos`.
 That install carries both commands: `kelso`, the CLI, and `kelsod`, the
 admin API the web UI talks to.
 On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
-service; `kelso service install` does the same for a root that already exists.
+service; `kelso system service` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
 ### Volume Storage Locations
@@ -105,7 +105,7 @@ Once you start using docker compose to run your own apps, you end up managing ea
 Kelso is simple to reason about. It is mostly just a bunch of folders and text files.
 
 - **Snapshotting containers SHOULD be trivial in 2026, but is not.**
-Since kelso is designed for a single machine you own, it assumes that a few seconds of downtime is an acceptable price for a snapshot you can actually trust. `kelso snapshot <app>` stops the app, archives its volumes and run state together, and starts it again if it was running — so what you get back is a coherent point in time rather than a copy of files that were being written to. Restoring is the same trade in reverse.
+Since kelso is designed for a single machine you own, it assumes that a few seconds of downtime is an acceptable price for a snapshot you can actually trust. `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again if it was running — so what you get back is a coherent point in time rather than a copy of files that were being written to. Restoring is the same trade in reverse.
 
 There are GUI options like Portainer and Dockge that help manage containers and stacks, but they basically wrap the problems above in a shiny UI rather than solve them.
 

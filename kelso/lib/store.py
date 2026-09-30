@@ -74,7 +74,7 @@ class KelsoStore:
 
   # Routes stay central because allocating a host port is contention between
   # apps, not state belonging to one. Fetch provenance (`app_source/`) is
-  # catalog state: it outlives `kelso rm`, which only deletes the install.
+  # catalog state: it outlives `kelso uninstall --purge`, which only deletes the install.
   def list_routes(self, app_id: str) -> dict[str, dict[str, Any]]:
     return self._store.scan(f"routes/{app_id}/")
 

@@ -210,5 +210,5 @@ def test_snapshot_releases_kelso_while_copying(kelso_env, monkeypatch):
     return original(app, ctx, label=label)
 
   monkeypatch.setattr(snapshot_mod, "snapshot", during_copy)
-  taken = kelso_env.run("snapshot", "ports-demo", "--label", "copy")
+  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "copy")
   assert taken.returncode == 0, taken.stderr

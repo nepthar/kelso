@@ -98,7 +98,7 @@ def add_host_volume(
   if tag in ctx.config.host_volumes:
     raise ValueError(
       f"Host volume {tag!r} already exists ({ctx.config.host_volumes[tag].path}). "
-      f"Change it with `kelso config-sys host-volume --set {tag}=<path>`."
+      f"Change it with `kelso system host-volume --set {tag}=<path>`."
     )
   _check_path(ctx, path, require_mount=require_mount)
   with edit_config(ctx) as document:
@@ -121,7 +121,7 @@ def set_host_volume(
     known = ", ".join(sorted(ctx.config.host_volumes)) or "(none)"
     raise ValueError(
       f"No host volume {tag!r}; known tags: {known}. "
-      f"Add it with `kelso config-sys host-volume --add {tag}=<path>`."
+      f"Add it with `kelso system host-volume --add {tag}=<path>`."
     )
   _check_path(ctx, path, require_mount=require_mount)
   with edit_config(ctx) as document:
