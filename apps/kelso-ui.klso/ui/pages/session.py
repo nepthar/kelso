@@ -3,7 +3,7 @@
 import auth
 from api import ApiError, api
 from fastapi import APIRouter, Request
-from web import NO_STORE, field, render, see
+from web import NO_STORE, field, known_hostname, remember_hostname, render, see
 
 router = APIRouter()
 
@@ -14,11 +14,16 @@ def safe_next(value):
 
 
 def _hostname():
-  """kelsod's hostname, or "" so signing in never waits on or fails with it."""
-  try:
-    return api("/version", timeout=2).get("hostname", "")
-  except ApiError:
-    return ""
+  """kelsod's hostname, or "" so signing in never waits on or fails with it.
+
+  Asks kelsod only until it has answered once.
+  """
+  if not known_hostname():
+    try:
+      remember_hostname(api("/version", timeout=2).get("hostname", ""))
+    except ApiError:
+      pass
+  return known_hostname()
 
 
 @router.get("/login")

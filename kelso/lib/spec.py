@@ -215,9 +215,16 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
   # Both sections and the app options land in one flat namespace -- everything
   # downstream (env substitution, the config store, `kelso config`) sees a
   # single dict. `_validate_config` has already refused a name declared in both
-  # sections. A manifest entry shadows the app option of the same name.
+  # sections. A manifest entry shadows the app option of the same name, keeping
+  # the option's description if it gives none.
   config = {
-    name: AppConfig(name, entry.secret, entry.default, entry.desc, section)
+    name: AppConfig(
+      name,
+      entry.secret,
+      entry.default,
+      entry.desc or (APP_OPTIONS[name].desc if name in APP_OPTIONS else ""),
+      section,
+    )
     for section, entries in (
       ("config", manifest.config),
       ("advanced", manifest.adv_config),

@@ -10,6 +10,7 @@ files in the CLI tests.
 import pytest
 
 from kelso.lib.manifest import ConfigError
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import (
   KELSO_APP_ID_LABEL,
   KELSO_RUN_UNIT_LABEL,
@@ -169,6 +170,26 @@ env = { ORDER = "${start_order}" }
   )
   assert spec.config["start_order"].section == "option"
   assert spec.run_units["main"].environment["ORDER"] == "${start_order}"
+
+
+def test_a_shadowed_app_option_keeps_its_description_unless_given_one(tmp_path):
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[adv_config]
+subdomain   = { default = "x" }
+start_order = { default = "3", desc = "Ours" }
+
+[run.main]
+image = "alpine"
+""",
+  )
+
+  assert spec.config["subdomain"].desc == APP_OPTIONS["subdomain"].desc
+  assert spec.config["start_order"].desc == "Ours"
 
 
 @pytest.mark.parametrize(

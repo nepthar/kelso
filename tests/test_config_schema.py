@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from kelso.lib.apps import AppID
 from kelso.lib.crypto import FernetCryptoEngine, NoopCryptoEngine
 from kelso.lib.manifest import ConfigEntry, parse_manifest
+from kelso.lib.secrets import generate_secret
 from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppConfig, AppSpec
 from kelso.lib.store import AppStore
 
@@ -149,3 +150,11 @@ def test_store_keeps_binds_and_meta(tmp_path):
   assert store.list_binds() == {"media": "nas_media"}
   assert store.get_meta("origin") == "/kelso/apps/io.test.example.klso"
   assert store.get_meta("installed_at") is None
+
+
+@pytest.mark.parametrize(
+  ("pattern", "length"),
+  [("{hex:4}", 4), ("{hex}", 16), ("{alnum:6}", 6), ("id-{hex:2}", 5)],
+)
+def test_generated_secrets_count_characters(pattern, length):
+  assert len(generate_secret(pattern)) == length

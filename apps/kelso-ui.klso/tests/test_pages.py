@@ -190,6 +190,12 @@ def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
   assert "<h1>tycho &lt;i" in client.get("/login").text
 
 
+def test_sign_in_uses_the_hostname_kelsod_already_gave(client, fake):
+  client.get("/")
+  fake.fail = "down"
+  assert "<h1>tycho &lt;i" in client.get("/login").text
+
+
 def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
   fake.fail = "down"
   response = client.get("/login")

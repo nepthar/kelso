@@ -34,6 +34,21 @@ NEEDS_API = 24
 INSTANCE_ID = os.environ.get("KELSO_UI_ID", "").strip()
 
 
+# kelsod's hostname, as it last gave it. Pages that do not otherwise need
+# kelsod (sign-in) read this rather than asking again.
+_hostname = ""
+
+
+def known_hostname():
+  return _hostname
+
+
+def remember_hostname(name):
+  global _hostname
+  if name:
+    _hostname = name
+
+
 def brand(hostname):
   """The name at the top of the page: the hostname up to its last dot."""
   short = hostname.rsplit(".", 1)[0] if "." in hostname else hostname
@@ -155,6 +170,7 @@ class Page:
     info = api("/version")
     context.setdefault("version", info.get("kelso", ""))
     context.setdefault("daemon_api", info.get("api"))
+    remember_hostname(info.get("hostname", ""))
     context.setdefault("hostname", info.get("hostname", ""))
     return render(self.request, template, title, **context)
 
