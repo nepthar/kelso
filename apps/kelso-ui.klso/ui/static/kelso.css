@@ -64,11 +64,11 @@ nav {
   padding: calc(var(--chamfer) + 4px) 16px 16px;
   overflow: auto; display: flex; flex-direction: column;
 }
-/* Laid out like a nav link: the icon in the icon column, the name where the
-   labels start. */
+/* The dune on its own line, centered over the name and version below it. The
+   block is as wide as its widest line, so that is what the dune centers on. */
 .brand {
-  display: flex; align-items: flex-start; gap: 6px;
-  padding: 0 0 24px 10px; letter-spacing: -0.005em;
+  display: grid; width: fit-content; max-width: 100%;
+  padding: 0 0 24px 12px; letter-spacing: -0.005em;
 }
 .brand .who { min-width: 0; }
 .brand .name {
@@ -80,7 +80,7 @@ nav {
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   margin-top: 1px;
 }
-.brand .mark { display: flex; flex: none; color: var(--fg); }
+.brand .mark { justify-self: center; margin-bottom: 10px; color: var(--fg); }
 /* Active is a coral edge and coral type -- not a filled pill. The 2px inset
    border keeps every item on the same baseline grid whether lit or not. */
 nav a {
@@ -111,11 +111,13 @@ nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight
 }
 .nav-toggle:hover { color: var(--fg); background: var(--panel); }
 html.nav-collapsed nav { width: 52px; flex-basis: 52px; padding: calc(var(--chamfer) + 4px) 8px 16px; }
-html.nav-collapsed .brand { padding: 0 0 24px; justify-content: center; }
+html.nav-collapsed .brand { padding: 0 0 24px; margin: 0 auto; }
+html.nav-collapsed .brand .mark { margin-bottom: 0; }
+html.nav-collapsed .brand .mark .mdi { width: 22px; height: 22px; }
 html.nav-collapsed .brand .who,
 html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
 html.nav-collapsed .nav-theme .label { display: none; }
-.brand .mark .mdi { width: 22px; height: 22px; fill: currentColor; }
+.brand .mark .mdi { display: block; width: 36px; height: 36px; fill: currentColor; }
 html.nav-collapsed nav a { padding: 5px 0; justify-content: center; }
 html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
 html.nav-collapsed .nav-out .mark { display: inline; }
