@@ -7,7 +7,8 @@ The smallest kelso app: one container, one command, no state.
 version      = "0.1.0"
 display_name = "Hello world"
 description  = "Says hello!"
-source       = "github:nepthar/kelso/main/demo-apps/hello-world.klso.md"
+author       = "Kelso Server"
+url          = "https://github.com/nepthar/kelso"
 
 [run.main]
 image  = "alpine:latest"

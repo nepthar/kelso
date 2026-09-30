@@ -429,15 +429,9 @@ def _route_urls(
 
 
 def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
-  """The DNS label this install uses: stored config, else the bundle default."""
-  cfg = spec.config.get("subdomain")
-  if cfg is not None:
-    _, value = ctx.app_store(spec.app).get_config("subdomain")
-    if value:
-      return value
-    if cfg.has_default():
-      return cfg.default
-  return spec.subdomain
+  """The DNS label this install uses, or None if it is required and unset."""
+  _, value = ctx.app_store(spec.app).get_config("subdomain")
+  return value or spec.config["subdomain"].default
 
 
 def _app_domain(

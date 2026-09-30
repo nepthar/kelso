@@ -5,6 +5,7 @@ and returns `page.render(template, title, **context)`; a POST handler does its
 work and returns `see(...)` so the browser lands back on a GET.
 """
 
+import os
 from functools import cache
 from hashlib import blake2s
 from pathlib import Path
@@ -14,7 +15,7 @@ from urllib.parse import urlencode
 from api import ApiError, api
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from icons import mdi
+from icons import favicon, mdi
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from themes import THEMES
 
@@ -26,7 +27,32 @@ NO_STORE = {"Cache-Control": "no-store"}
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
 # installed without the other and fields this UI reads may be missing.
-NEEDS_API = 21
+NEEDS_API = 24
+
+# Random per install (kelso-ui's `instance_id`), so two kelso-ui tabs can be
+# told apart even when neither can reach its kelsod.
+INSTANCE_ID = os.environ.get("KELSO_UI_ID", "").strip()
+
+
+# kelsod's hostname, as it last gave it. Pages that do not otherwise need
+# kelsod (sign-in) read this rather than asking again.
+_hostname = ""
+
+
+def known_hostname():
+  return _hostname
+
+
+def remember_hostname(name):
+  global _hostname
+  if name:
+    _hostname = name
+
+
+def brand(hostname):
+  """The name at the top of the page: the hostname up to its last dot."""
+  short = hostname.rsplit(".", 1)[0] if "." in hostname else hostname
+  return short or f"Kelso {INSTANCE_ID}".strip()
 
 
 class NavItem(NamedTuple):
@@ -96,9 +122,17 @@ templates = Environment(
   extensions=["jinja2.ext.do"],
 )
 templates.globals.update(
-  asset=asset, mdi=mdi, nav=NAV, themes=THEMES, NEEDS_API=NEEDS_API
+  asset=asset,
+  mdi=mdi,
+  nav=NAV,
+  themes=THEMES,
+  NEEDS_API=NEEDS_API,
+  INSTANCE_ID=INSTANCE_ID,
+  # Mojave's coral: a tab icon has no theme, and this reads on light and dark.
+  FAVICON=favicon("dune", "#f08a4b"),
 )
 templates.filters["size"] = fmt_size
+templates.filters["brand"] = brand
 
 
 def render(request, template, title, *, status_code=200, headers=None, **context):
@@ -136,6 +170,7 @@ class Page:
     info = api("/version")
     context.setdefault("version", info.get("kelso", ""))
     context.setdefault("daemon_api", info.get("api"))
+    remember_hostname(info.get("hostname", ""))
     context.setdefault("hostname", info.get("hostname", ""))
     return render(self.request, template, title, **context)
 

@@ -52,6 +52,17 @@
 </tbody></table></div>
 {%- endmacro %}
 
+{#- Author and link from the manifest. Only an http(s) url becomes a link. -#}
+{% macro byline(app) -%}
+{% set url = app.get('url') or '' %}
+{% set linkable = url.startswith('https://') or url.startswith('http://') %}
+{% if app.get('author') or linkable %}<p class="muted byline">
+  {%- if app.get('author') %}by {{ app.author }}{% endif %}
+  {%- if app.get('author') and linkable %} · {% endif %}
+  {%- if linkable %}<a href="{{ url }}" rel="noopener noreferrer" target="_blank">{{ url }}</a>{% endif -%}
+</p>{% endif %}
+{%- endmacro %}
+
 {% macro icon_button(label, icon, submit=false, danger=false) -%}
 <button type="{{ 'submit' if submit else 'button' }}" class="{{ 'icon danger' if danger else 'icon' }}" title="{{ label }}" aria-label="{{ label }}">{{ mdi(icon) }}</button>
 {%- endmacro %}

@@ -22,7 +22,6 @@ API token, a tunnel id and an account id; see `[route_provider.<tag>]` in
 version      = "1.0.0"
 display_name = "Cloudflared"
 description  = "Cloudflare Tunnel connector for the cloudflare_tunnel route provider"
-source       = "github:nepthar/kelso/main/apps/cloudflared.klso.md"
 
 [config]
 tunnel_token = { desc = "Tunnel token from Zero Trust > Networks > Tunnels", secret = true }

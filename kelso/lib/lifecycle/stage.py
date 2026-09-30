@@ -9,6 +9,7 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.kelso import KelsoCtx, StagedAppPaths, ambiguity_message
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
+from kelso.lib.options import validate_option
 from kelso.lib.run_layout import (
   KELSO_CMD,
   KELSO_GUEST_DIR,
@@ -22,7 +23,7 @@ from kelso.lib.run_layout import (
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
-from kelso.lib.util import now_ts, same_path, validate_identifier
+from kelso.lib.util import now_ts, same_path
 
 # Scratch names used while swapping in a new staged copy. Both are inside the run
 # dir so the swap is a rename on one filesystem rather than a second copy.
@@ -93,7 +94,10 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
 
   app_subdomain = resolved_subdomain(spec, ctx)
   if not app_subdomain:
-    raise ValueError(f"App {spec.app} declares routes but has no [app].subdomain")
+    raise ValueError(
+      f"App {spec.app} needs a subdomain for its routes; "
+      f"run `kelso config {spec.app} --set subdomain=<label>`"
+    )
 
   hdb = ctx.kelso_db
   hdb.clear_routes(spec.app)
@@ -345,14 +349,8 @@ def apply_config_sets(
       raise ValueError(f"No config {name} in {spec.app}'s manifest")
     if not value:
       raise ValueError(f"Empty value for config {name!r}")
+    validate_option(name, value)
     if name == "subdomain":
-      try:
-        validate_identifier(value)
-      except ValueError:
-        raise ValueError(
-          f"subdomain {value!r} is not a valid identifier "
-          f"(letters, digits, _ and -; no periods)"
-        ) from None
       if running:
         raise ValueError(
           f"App {spec.app} is running; run `kelso stop {spec.app}` first"

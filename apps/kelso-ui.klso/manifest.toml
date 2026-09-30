@@ -2,7 +2,6 @@
 version      = "0.6.0"
 display_name = "Kelso UI"
 description  = "Web interface for kelso, over the kelsod admin socket"
-subdomain    = "kelso"
 
 [config]
 # Development escape hatch. Docker Desktop's bind mounts cannot carry a unix
@@ -12,6 +11,10 @@ subdomain    = "kelso"
 # network. Empty means use the socket, which is what a Linux host should do.
 api_address = { default = "", desc = "host:port of kelsod, instead of the admin socket" }
 admin_pass  = { secret = true, desc = "password for the web ui" }
+
+[adv_config]
+subdomain   = { default = "kelso" }
+instance_id = { secret = true, default = "{hex:4}", desc = "Shown beside the hostname, to tell kelso-ui installs apart" }
 
 [volumes]
 ui   = { kind = "app", src = "ui", desc = "The application"}
@@ -29,6 +32,7 @@ routes  = { main = { port = "8080", scheme = "https" } }
 KELSO_SOCKET            = "/run/kelso-admin/admin.sock"
 KELSO_API               = "${api_address}"
 ADMIN_PASSWORD           = "${admin_pass}"
+KELSO_UI_ID              = "${instance_id}"
 TLS_DOMAIN               = "${klso.domain}"
 PORT                     = "8080"
 PYTHONUNBUFFERED         = "1"

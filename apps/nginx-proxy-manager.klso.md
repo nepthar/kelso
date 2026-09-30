@@ -9,7 +9,6 @@ data volumes hold its config and certs.
 version      = "1.0.0"
 display_name = "Nginx Proxy Manager"
 description  = "Reverse proxy, w/ ssl certs managed by letsencrypt. Pinned to :latest"
-source       = "github:nepthar/kelso/main/apps/nginx-proxy-manager.klso.md"
 network_mode = "host"
 
 [volumes]

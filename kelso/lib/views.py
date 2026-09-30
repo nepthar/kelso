@@ -21,7 +21,7 @@ from kelso.lib.metric import KELSO_DIRS
 from kelso.lib.observations import AppObservation
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
-from kelso.lib.run_layout import AppRunData, load_run_data
+from kelso.lib.run_layout import AppRunData, load_run_data, resolved_subdomain
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
@@ -72,6 +72,8 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
     "display_name": spec.display_name if spec else "",
     "version": spec.version if spec else None,
     "description": spec.description if spec else "",
+    "author": spec.author if spec else "",
+    "url": spec.url if spec else "",
     "repo": entry.source,
     "state": ctx.app_state(entry.app_id),
     "configured": config_status(spec, store) if spec else None,
@@ -329,15 +331,14 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   view.update(
     {
       "description": spec.description,
-      # The whole `[app]` table, extras included -- the section allows unknown
-      # keys precisely so a bundle can carry author, source, license and the
-      # like, and a viewer should show whatever the author wrote.
+      "author": spec.author,
+      "url": spec.url,
       "metadata": {
         key: value
         for key, value in spec.manifest.app.model_dump().items()
         if value not in (None, "", {})
       },
-      "subdomain": spec.subdomain,
+      "subdomain": resolved_subdomain(spec, ctx),
       "network_mode": spec.network_mode,
       "run_path": str(ctx.staged_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),

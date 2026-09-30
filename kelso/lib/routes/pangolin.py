@@ -38,7 +38,7 @@ class PangolinRouteProvider(RouteProvider):
       ConfigField(
         name="shared_policy",
         required=False,
-        advanced=True,
+        section="advanced",
         desc="Resource policy to attach to every route",
       ),
     )

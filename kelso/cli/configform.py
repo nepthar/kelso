@@ -70,8 +70,6 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse:
   """Walk the fields, then review; EMPTY_CONFIG_RESPONSE on cancel or no change."""
   edits: dict[str, str] = {}
   missing = request.missing()
-  basic = [f for f in request.fields if not f.advanced or f.name in missing]
-  advanced = [f for f in request.fields if f not in basic]
 
   conn.out(request.title)
   if request.note:
@@ -79,12 +77,14 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse:
   conn.out("Enter keeps the current value.")
 
   try:
-    for entry in basic:
-      _ask(entry, edits, conn)
-
-    if advanced and _confirm(f"Show {len(advanced)} advanced settings? [y/N] ", conn):
-      for entry in advanced:
+    for title, fields in request.groups():
+      shown = [f for f in fields if f.section == "config" or f.name in missing]
+      for entry in shown:
         _ask(entry, edits, conn)
+      folded = [f for f in fields if f not in shown]
+      if folded and _confirm(f"Show {title.lower()} ({len(folded)})? [y/N] ", conn):
+        for entry in folded:
+          _ask(entry, edits, conn)
 
     while True:
       _review(request, edits, conn)

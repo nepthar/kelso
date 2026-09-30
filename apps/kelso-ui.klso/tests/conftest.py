@@ -21,17 +21,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "ui"))
 
 import frontdoor  # noqa: E402
 import server  # noqa: E402
+import web  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture
 def fake():
+  web._hostname = ""
   _fake.posts.clear()
   _fake.fail = None
-  _fake.api = 21
+  _fake.api = 24
   yield _fake
   _fake.fail = None
-  _fake.api = 21
+  _fake.api = 24
 
 
 @pytest.fixture(autouse=True)

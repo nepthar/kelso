@@ -411,8 +411,8 @@ def test_dev_runs_in_the_foreground_against_the_source(kelso_env):
 
 def test_dev_installs_a_new_bundle_and_asks_for_missing_config(kelso_env):
   # admin_pass keeps its generated secret, admin_user is asked for, the
-  # advanced settings are skipped, then the form is submitted.
-  result = kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\ns\n")
+  # advanced config and app options are skipped, then the form is submitted.
+  result = kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n")
   assert result.returncode == 0, result.stderr
   assert (kelso_env.run_root / BASIC / "staged" / "manifest.toml").is_file()
   assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]
@@ -423,7 +423,7 @@ def test_dev_installs_a_new_bundle_and_asks_for_missing_config(kelso_env):
 
 def test_dev_config_carries_over_to_the_next_run(kelso_env):
   assert (
-    kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\ns\n").returncode == 0
+    kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n").returncode == 0
   )
   secret = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
@@ -604,7 +604,7 @@ def test_dev_lists_an_https_route_with_its_scheme(kelso_env):
   bundle = _write_bundle(
     kelso_env,
     "tls-demo",
-    '[app]\nversion = "1"\nsubdomain = "tls"\n\n'
+    '[app]\nversion = "1"\n\n'
     "[run.main]\n"
     'image  = "alpine:latest"\n'
     'routes = { main = { port = "8443", scheme = "https" } }\n',

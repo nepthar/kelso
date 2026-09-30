@@ -1,6 +1,8 @@
 """Material Design Icons, inlined as SVG paths. Add one by pasting its path
 from materialdesignicons.com under the icon's MDI name."""
 
+from urllib.parse import quote
+
 from markupsafe import Markup
 
 MDI = {
@@ -103,8 +105,36 @@ MDI = {
 }
 
 
+# Drawn for kelso rather than taken from MDI, as 2px lines on the same 24px grid
+# so they match MDI's outline icons.
+STROKED = {
+  # In a ring: a dune running edge to edge, and the sun.
+  "dune": (
+    "M12 2A10 10 0 1 1 12 22A10 10 0 1 1 12 2Z"
+    "M2.4 15C8 15 9.5 10 14 10C16 11 18.5 13.5 21.6 15"
+    "M8.5 4.8A1.8 1.8 0 1 1 8.5 8.4A1.8 1.8 0 1 1 8.5 4.8Z"
+  ),
+}
+
+
+def favicon(name, color):
+  """A stroked icon as a data: URL, for a <link rel="icon">."""
+  svg = (
+    f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path '
+    f'd="{STROKED[name]}" fill="none" stroke="{color}" stroke-width="2" '
+    f'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  )
+  return "data:image/svg+xml," + quote(svg)
+
+
 def mdi(name):
   """The icon as an inline <svg>. An unknown name is a bug, so it raises."""
+  if name in STROKED:
+    return Markup(
+      '<svg class="mdi" viewBox="0 0 24 24" aria-hidden="true"><path d="{}" '
+      'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+      'stroke-linejoin="round"/></svg>'
+    ).format(STROKED[name])
   path = MDI.get(name)
   if path is None:
     raise ValueError(f"unknown icon {name!r}")

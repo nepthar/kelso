@@ -16,7 +16,7 @@ def _request() -> ConfigRequest:
       ConfigField(name="admin_email", desc="Login for the web interface"),
       ConfigField(name="timezone", value="UTC", desc="IANA timezone"),
       ConfigField(name="api_key", secret=True, secret_set=True),
-      ConfigField(name="pool_size", default="5", advanced=True),
+      ConfigField(name="pool_size", default="5", section="advanced"),
     ),
   )
 
@@ -95,6 +95,18 @@ def test_advanced_fields_stay_hidden_until_ctrl_o():
   _drive(_request(), steps)
 
 
+def test_the_form_says_how_to_reach_the_folded_sections():
+  async def steps(app, pilot):
+    more = app.query_one("#more", Static)
+    assert _shown(more)
+    assert str(more.render()) == "To set advanced config, press ctrl+o"
+    await pilot.press("ctrl+o")
+    assert not _shown(more)
+    await pilot.press("escape")
+
+  _drive(_request(), steps)
+
+
 def test_hidden_advanced_fields_are_not_tab_stops():
   async def steps(app, pilot):
     for _ in range(4):
@@ -134,9 +146,10 @@ def test_help_leaves_out_advanced_when_there_is_none():
   _drive(request, steps)
 
 
-def test_fields_sit_in_a_box_titled_configuration():
+def test_each_section_sits_in_its_own_titled_box():
   async def steps(app, pilot):
-    assert app.query_one("#config").border_title == "Configuration"
+    titles = [box.border_title for box in app.query(".group")]
+    assert titles == ["Configuration", "Advanced config"]
     await pilot.press("escape")
 
   _drive(_request(), steps)

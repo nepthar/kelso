@@ -22,7 +22,8 @@ class ConfigField:
   # Secrets never carry their value, so "is it set" has to be said separately.
   secret_set: bool = False
   desc: str = ""
-  advanced: bool = False
+  # "config", "advanced", or "option" (an app option). Front ends group by it.
+  section: str = "config"
   required: bool = True
   # None for free text. Otherwise the value must be one of these; an empty tuple
   # means "pick one" with nothing defined to pick from yet.
@@ -49,6 +50,21 @@ class ConfigRequest:
   title: str
   fields: tuple[ConfigField, ...] = ()
   note: str = ""
+  # What to call the "config" section; the others have fixed names.
+  config_title: str = "Configuration"
+
+  def groups(self) -> list[tuple[str, tuple[ConfigField, ...]]]:
+    """(title, fields) for each section that has fields, in display order."""
+    titles = {
+      "config": self.config_title,
+      "advanced": "Advanced config",
+      "option": "App options",
+    }
+    return [
+      (title, fields)
+      for section, title in titles.items()
+      if (fields := tuple(f for f in self.fields if f.section == section))
+    ]
 
   def field(self, name: str) -> ConfigField | None:
     for entry in self.fields:

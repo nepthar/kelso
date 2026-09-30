@@ -14,7 +14,7 @@ _DIRECTIVE_SPLIT = re.compile(r"(\{[^}]*\})")
 _MAX_ALNUM = 1024
 
 _DEFAULT_PASS_LENGTH = 16
-_DEFAULT_HEX_LENGTH = 8
+_DEFAULT_HEX_LENGTH = 16
 
 
 class SecretGenerationError(ValueError):
@@ -74,4 +74,4 @@ def _password_directive(arg) -> str:
 
 def _hex_directive(arg) -> str:
   length = int(arg) if arg else _DEFAULT_HEX_LENGTH
-  return "".join(secrets.choice(_HEX) for _ in range(length * 2))
+  return "".join(secrets.choice(_HEX) for _ in range(length))

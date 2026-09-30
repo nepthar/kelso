@@ -62,7 +62,10 @@ from kelso.lib.spec import AppSpec
 # 20: WS /apps/{id}/console (a shell in a running unit).
 # 21: /version carries `hostname`; WS /host/console (a login shell on the host).
 # 22: `reload` is gone; `install` restarts an app that was running.
-API_VERSION = 22
+# 23: config fields carry `section` (config/advanced/option) in place of
+#     `advanced`; every app has the app options.
+# 24: apps and catalog apps carry `author` and `url`.
+API_VERSION = 24
 
 CtxFactory = Callable[[], KelsoCtx]
 

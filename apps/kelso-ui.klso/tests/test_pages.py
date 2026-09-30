@@ -3,7 +3,9 @@
 import json
 import re
 
+import fakekelsod
 import pytest
+import web
 from fakekelsod import EVIL
 
 PAGES = [
@@ -60,7 +62,7 @@ def test_nothing_loads_from_off_the_box(client, fake, path):
   """
   text = client.get(path).text
   for url in re.findall(r'<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"', text):
-    assert url.startswith("/static/"), url
+    assert url.startswith(("/static/", "data:")), url
 
 
 @pytest.mark.parametrize(
@@ -155,14 +157,83 @@ def test_catalog_link_opens_its_card(client, fake):
   assert 'id="catalog-shade" class="shade" hidden>' in closed
 
 
+def test_nav_is_titled_with_the_daemons_hostname(client, fake):
+  text = client.get("/").text
+  brand = text.split('<div class="brand">')[1].split("</div>")[0]
+  assert '<span class="name" title="tycho &lt;i' in brand
+  assert '<a class="mark" href="https://www.nps.gov/moja/kelso-dunes.htm"' in brand
+  assert '<svg class="mdi"' in brand
+
+
+@pytest.mark.parametrize(
+  ("hostname", "expected"),
+  [
+    ("Neptune.local", "Neptune"),
+    ("box.home.arpa", "box.home"),
+    ("tycho", "tycho"),
+    ("", "Kelso 1a2b"),
+  ],
+)
+def test_brand_drops_the_last_dot_and_falls_back_to_the_install_id(
+  monkeypatch, hostname, expected
+):
+  monkeypatch.setattr(web, "INSTANCE_ID", "1a2b")
+  assert web.brand(hostname) == expected
+
+
+def test_nav_names_the_version_and_install_id(client, fake, monkeypatch):
+  monkeypatch.setitem(web.templates.globals, "INSTANCE_ID", "1a2b")
+  brand = client.get("/").text.split('<div class="brand">')[1].split("</div>")[0]
+  assert '<span class="ver">kelso 0.1.0</span><span class="ver">1a2b</span>' in brand
+
+
+def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
+  assert "<h1>tycho &lt;i" in client.get("/login").text
+
+
+def test_sign_in_uses_the_hostname_kelsod_already_gave(client, fake):
+  client.get("/")
+  fake.fail = "down"
+  assert "<h1>tycho &lt;i" in client.get("/login").text
+
+
+def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
+  fake.fail = "down"
+  response = client.get("/login")
+  assert response.status_code == 200
+  assert "<h1>Kelso</h1>" in response.text
+
+
+def test_every_page_has_the_dune_favicon(client, fake):
+  for path in ("/", "/login"):
+    icon = re.search(
+      r'<link rel="icon" type="image/svg\+xml" href="([^"]+)">', client.get(path).text
+    )
+    assert icon and icon[1].startswith("data:image/svg+xml,"), path
+
+
+def test_byline_links_only_an_http_url(client, fake, monkeypatch):
+  text = client.get("/apps/kelso-ui").text
+  assert "by Jordan " in text
+  assert '<a href="https://example.com/help" rel="noopener noreferrer"' in text
+
+  monkeypatch.setitem(fakekelsod.APP_DETAIL, "url", "javascript:alert(1)")
+  text = client.get("/apps/kelso-ui").text
+  assert "javascript:" not in text
+  assert "by Jordan " in text
+
+
 def test_config_form(client, fake):
   text = client.get("/apps/kelso-ui").text
   form = text.split('class="cfg-form"')[1].split("</form>")[0]
-  basic, advanced = form.split("Show advanced configuration options")
+  basic, rest = form.split("<summary>Advanced config</summary>")
+  advanced, options = rest.split("<summary>App options</summary>")
   # Missing fields stay out of the fold even when advanced.
   assert 'name="set.tuning"' in basic
   assert 'name="set.debug"' in advanced
   assert 'placeholder="0 (default)"' in advanced
+  assert 'name="set.start_order"' in options
+  assert 'name="set.subdomain"' in options
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
   assert '<option value="">none defined yet</option>' in basic

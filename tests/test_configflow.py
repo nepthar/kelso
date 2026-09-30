@@ -56,7 +56,7 @@ def _request(**overrides) -> ConfigRequest:
       ConfigField(name="admin_email", desc="Login for the web interface"),
       ConfigField(name="timezone", default="UTC", desc="IANA timezone"),
       ConfigField(name="api_key", secret=True),
-      ConfigField(name="pool_size", default="5", advanced=True),
+      ConfigField(name="pool_size", default="5", section="advanced"),
     ),
   )
   return ConfigRequest(title="demo", fields=fields, **overrides)
@@ -134,7 +134,9 @@ def test_advanced_fields_are_offered_but_skipped_by_default():
 
 
 def test_a_missing_required_field_is_asked_even_when_advanced():
-  request = _request(fields=(ConfigField(name="token", secret=True, advanced=True),))
+  request = _request(
+    fields=(ConfigField(name="token", secret=True, section="advanced"),)
+  )
   conn = _ScriptedConn("t", "s")
 
   response = run_form(request, conn)

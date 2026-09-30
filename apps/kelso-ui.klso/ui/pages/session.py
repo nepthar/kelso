@@ -1,8 +1,9 @@
 """Signing in and out. See auth.py for what a session is."""
 
 import auth
+from api import ApiError, api
 from fastapi import APIRouter, Request
-from web import NO_STORE, field, render, see
+from web import NO_STORE, field, known_hostname, remember_hostname, render, see
 
 router = APIRouter()
 
@@ -12,9 +13,29 @@ def safe_next(value):
   return value if value.startswith("/") and not value.startswith("//") else "/"
 
 
+def _hostname():
+  """kelsod's hostname, or "" so signing in never waits on or fails with it.
+
+  Asks kelsod only until it has answered once.
+  """
+  if not known_hostname():
+    try:
+      remember_hostname(api("/version", timeout=2).get("hostname", ""))
+    except ApiError:
+      pass
+  return known_hostname()
+
+
 @router.get("/login")
 def login(request: Request, next: str = "/"):
-  return render(request, "signin.html", "Sign in", next_to=safe_next(next), error="")
+  return render(
+    request,
+    "signin.html",
+    "Sign in",
+    hostname=_hostname(),
+    next_to=safe_next(next),
+    error="",
+  )
 
 
 @router.post("/login")
@@ -28,6 +49,7 @@ async def login_post(request: Request):
       "Sign in",
       status_code=401,
       headers=NO_STORE,
+      hostname=_hostname(),
       next_to=target,
       error="That is not the admin password.",
     )

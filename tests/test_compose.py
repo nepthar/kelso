@@ -71,7 +71,7 @@ def run_data(
   routes = {
     name: AssignedRoute(
       name=name,
-      subdomain=route.subdomain(spec.subdomain) if spec.subdomain else "",
+      subdomain=route.subdomain(spec.config["subdomain"].default),
       run_unit_name=route.run_unit_name,
       host_port=host_ports.get(name, route.host_port),
       container_port=route.container_port,
@@ -213,7 +213,9 @@ def test_routes_become_published_ports(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine"
@@ -393,7 +395,9 @@ def test_the_app_domain_reaches_labels_not_env(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine"
@@ -419,7 +423,9 @@ def test_a_route_reference_in_env_becomes_the_published_url(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "mealie"
+
+[adv_config]
+subdomain = { default = "mealie" }
 
 [run.main]
 image = "alpine"
@@ -448,7 +454,9 @@ def test_a_route_reference_survives_alongside_a_config_reference(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "mealie"
+
+[adv_config]
+subdomain = { default = "mealie" }
 
 [config]
 timezone = { default = "UTC" }
@@ -480,7 +488,9 @@ def test_klso_references_in_env_become_runtime_context(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "jrnl"
+
+[adv_config]
+subdomain = { default = "jrnl" }
 
 [volumes]
 data = { kind = "data" }
