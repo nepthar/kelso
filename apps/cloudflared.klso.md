@@ -26,6 +26,10 @@ description  = "Cloudflare Tunnel connector for the cloudflare_tunnel route prov
 [config]
 tunnel_token = { desc = "Tunnel token from Zero Trust > Networks > Tunnels", secret = true }
 
+[adv_config]
+# Routing: up before the apps it routes to.
+start_order = { default = "4" }
+
 [run.main]
 image = "docker.io/cloudflare/cloudflared:2026.9.1"
 cmd   = ["tunnel", "--no-autoupdate", "run"]

@@ -487,7 +487,7 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       "hostname": run_unit.hostname,
     }
 
-    service["restart"] = run_unit.restart or "unless-stopped"
+    service["restart"] = run_unit.restart or "on-failure"
 
     # Rotate container logs; dockerd otherwise keeps every byte. Deliberately not a
     # managed key, so a manifest's own `logging` overrides it below.

@@ -11,6 +11,10 @@ display_name = "Nginx Proxy Manager"
 description  = "Reverse proxy, w/ ssl certs managed by letsencrypt. Pinned to :latest"
 network_mode = "host"
 
+[adv_config]
+# Routing: up before the apps it routes to.
+start_order = { default = "4" }
+
 [volumes]
 data    = { kind = "data" }
 letsenc = { kind = "data" }

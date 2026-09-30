@@ -50,7 +50,7 @@ creates.
 | `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which is kelso's. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
-| `restart` | `no` \| `always` \| `on-failure` \| `unless-stopped` | `unless-stopped` | Compose restart policy. |
+| `restart` | `no` \| `always` \| `on-failure` \| `unless-stopped` | `on-failure` | Compose restart policy. The default restarts a crashed container but leaves boot to kelsod, which starts apps in `start_order`; `always` and `unless-stopped` come back at boot on their own, out of order. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
@@ -140,7 +140,7 @@ share the config namespace and always have a default.
 | Name | Default | Accepts |
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
-| `start_order` | `5` | A whole number from 0 (first) to 10 (last). Not used yet. |
+| `start_order` | `5` | A whole number from 0 (first) to 10 (last): the group `kelso up` starts this app in. By convention 0 is right after kelsod, 2 supporting services such as databases, 4 routing, and 5 everything else. |
 | `snapshot_max_count` | `0` | A whole number; keep this many snapshots, 0 for all. Not used yet. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to

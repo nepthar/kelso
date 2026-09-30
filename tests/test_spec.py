@@ -47,7 +47,7 @@ image = "alpine:latest"
   assert main.image == "alpine:latest"
   assert main.hostname == "main"
   assert main.command is None
-  assert main.restart == "unless-stopped"
+  assert main.restart == "on-failure"
   assert main.volumes == {}
   assert main.routes == {}
 

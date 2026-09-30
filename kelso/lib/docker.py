@@ -42,6 +42,19 @@ class KelsoRunUnitStatus:
   container_id: str
   name: str
   state: str
+  # docker's own summary, e.g. "Up 2 minutes (healthy)" or "Exited (0) 3s ago".
+  status: str = ""
+
+  @property
+  def health(self) -> str:
+    """ "healthy", "unhealthy" or "starting" from a healthcheck; "" with none."""
+    if "(health: starting)" in self.status:
+      return "starting"
+    if "(unhealthy)" in self.status:
+      return "unhealthy"
+    if "(healthy)" in self.status:
+      return "healthy"
+    return ""
 
 
 @dataclass(frozen=True)
@@ -89,6 +102,7 @@ def load_kelso_run_unit_status() -> dict[str, tuple[KelsoRunUnitStatus, ...]]:
         container_id=container.get("ID", ""),
         name=container.get("Names", ""),
         state=container.get("State", ""),
+        status=container.get("Status", ""),
       )
     )
   return {app_id: tuple(app_units) for app_id, app_units in statuses.items()}

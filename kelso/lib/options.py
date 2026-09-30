@@ -55,7 +55,8 @@ APP_OPTIONS: dict[str, AppOption] = {
     ),
     AppOption(
       "start_order",
-      "When this app starts relative to other apps, 0 (first) to 10 (last)",
+      "Start group for `kelso up`, 0 (first) to 10 (last): 0 right after kelsod, "
+      "2 supporting services such as databases, 4 routing, 5 everything else",
       lambda app: "5",
       _int_between(0, 10),
     ),

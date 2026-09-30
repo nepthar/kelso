@@ -65,7 +65,8 @@ from kelso.lib.spec import AppSpec
 # 23: config fields carry `section` (config/advanced/option) in place of
 #     `advanced`; every app has the app options.
 # 24: apps and catalog apps carry `author` and `url`.
-API_VERSION = 24
+# 25: `up` and `down` are job verbs.
+API_VERSION = 25
 
 CtxFactory = Callable[[], KelsoCtx]
 

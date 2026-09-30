@@ -24,6 +24,7 @@ from kelso.jobs.restore import RestoreJob
 from kelso.jobs.snapshot import DeleteSnapshotJob, SnapshotJob
 from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
+from kelso.jobs.updown import DownJob, UpJob
 from kelso.lib.kelso import KelsoCtx
 
 logger = logging.getLogger("kelso.jobs")
@@ -40,6 +41,8 @@ MAX_HISTORY = 200
 JOBS: dict[str, type[Job]] = {
   "start": StartJob,
   "stop": StopJob,
+  "up": UpJob,
+  "down": DownJob,
   "install": InstallJob,
   "snapshot": SnapshotJob,
   "snapshot-delete": DeleteSnapshotJob,

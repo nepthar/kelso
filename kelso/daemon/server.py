@@ -119,6 +119,9 @@ def serve(
 
   jobs = JobRunner(ctx_factory)
   jobs.start()
+  # Containers restart on failure, not at boot: bringing the box up in
+  # start_order is kelsod's job.
+  jobs.submit("up", {}, ctx_factory())
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)
