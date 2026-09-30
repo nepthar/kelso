@@ -91,7 +91,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
       _edit(app, spec, ctx, conn)
       return
 
-    _list(app, spec, store, conn)
+    _list(app, spec, ctx, conn)
 
 
 def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
@@ -193,22 +193,18 @@ def _apply_routes(
     conn.out(f"route {route_name} -> {tag} (applied on next start)")
 
 
-def _list(app: AppID, spec: AppSpec, store: AppStore, conn) -> None:
-  rows = []
-  for name, entry in spec.config.items():
-    secret, value = store.get_config(name)
-    if value is None:
-      if entry.has_default():
-        display = f"{entry.default} (default)"
-      else:
-        display = "(required)"
-    elif secret:
-      display = "(secret)"
-    else:
-      display = value
-    rows.append([name, display, entry.desc or ""])
+def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
+  store = ctx.app_store(app)
   conn.out(f"Configuration parameters for: {app}")
-  conn.out(tabulate(rows, headers=["name", "value", "description"]))
+  for title, fields in app_config_request(spec, ctx).groups():
+    # Binds and route assignments have their own tables below.
+    rows = [[f.name, f.display(), f.desc] for f in fields if "." not in f.name]
+    if rows:
+      conn.out("")
+      conn.out(f"{title}:")
+      conn.out(
+        tabulate(rows, headers=["name", "value", "description"], tablefmt="simple")
+      )
 
   if spec.routes:
     assignments = store.list_route_assignments()

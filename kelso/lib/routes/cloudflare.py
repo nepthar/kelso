@@ -50,7 +50,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
       ConfigField(
         name="zone_id",
         required=False,
-        advanced=True,
+        section="advanced",
         desc="Only needed when the token cannot list zones",
       ),
     )

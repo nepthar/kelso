@@ -23,7 +23,7 @@ class ConfigApp(App[ConfigResponse]):
   VerticalScroll { height: auto; }
   #title { text-style: bold; padding: 1 1 0 1; }
   #note { color: $text-muted; padding: 0 1; }
-  #config {
+  .group {
     height: auto;
     margin: 1 1 0 1;
     padding: 1 1;
@@ -40,13 +40,13 @@ class ConfigApp(App[ConfigResponse]):
   Input, Select { width: 1fr; }
   Input { background: $panel; }
   Input:focus { background: $primary-muted; }
-  .advanced { display: none; }
-  #config.show-advanced .advanced { display: block; }
+  .folded { display: none; }
+  #form.unfolded .folded { display: block; }
   #help { color: $text-muted; padding: 1 1 0 1; }
   """
 
   BINDINGS = [
-    Binding("ctrl+o", "toggle_advanced"),
+    Binding("ctrl+o", "toggle_folded"),
     Binding("ctrl+s", "submit", priority=True),
     Binding("ctrl+q", "cancel", priority=True),
     Binding("escape", "cancel"),
@@ -56,8 +56,9 @@ class ConfigApp(App[ConfigResponse]):
     super().__init__()
     self.request = request
     missing = request.missing()
-    self._advanced = {
-      f.name for f in request.fields if f.advanced and f.name not in missing
+    # Advanced config and app options fold away, unless one is what is missing.
+    self._folded = {
+      f.name for f in request.fields if f.section != "config" and f.name not in missing
     }
     # Widget ids are positional: field names such as `volume.media` hold dots,
     # which Textual refuses in an id.
@@ -76,7 +77,7 @@ class ConfigApp(App[ConfigResponse]):
       name.add_class("missing")
     widgets.append(Horizontal(name, self._control(entry), classes="row"))
 
-    classes = "field advanced" if entry.name in self._advanced else "field"
+    classes = "field folded" if entry.name in self._folded else "field"
     return Vertical(*widgets, classes=classes)
 
   def _control(self, entry: ConfigField) -> Input | Select:
@@ -108,17 +109,24 @@ class ConfigApp(App[ConfigResponse]):
       yield Static(self.request.title, id="title")
       if self.request.note:
         yield Static(self.request.note, id="note")
-      box = Vertical(*(self._field(f) for f in self.request.fields), id="config")
-      box.border_title = "Configuration"
-      yield box
+      boxes = []
+      for title, fields in self.request.groups():
+        folded = all(f.name in self._folded for f in fields)
+        box = Vertical(
+          *(self._field(f) for f in fields),
+          classes="group folded" if folded else "group",
+        )
+        box.border_title = title
+        boxes.append(box)
+      yield Vertical(*boxes, id="form")
     yield Static(id="help")
 
   def on_mount(self) -> None:
     self._show_help()
 
   @property
-  def showing_advanced(self) -> bool:
-    return self.query_one("#config").has_class("show-advanced")
+  def unfolded(self) -> bool:
+    return self.query_one("#form").has_class("unfolded")
 
   def values(self) -> dict[str, str]:
     """What the operator changed; an empty or untouched field keeps what is on file."""
@@ -135,16 +143,21 @@ class ConfigApp(App[ConfigResponse]):
 
   def _show_help(self) -> None:
     keys = []
-    if self._advanced:
-      verb = "hide" if self.showing_advanced else "show"
-      keys.append(f"^o to {verb} advanced configuration")
+    if self._folded:
+      verb = "hide" if self.unfolded else "show"
+      titles = [
+        title.lower()
+        for title, fields in self.request.groups()
+        if any(f.name in self._folded for f in fields)
+      ]
+      keys.append(f"^o to {verb} {' and '.join(titles)}")
     keys += ["^s save", "^q or esc to quit without saving"]
     self.query_one("#help", Static).update(", ".join(keys))
 
-  def action_toggle_advanced(self) -> None:
-    if not self._advanced:
+  def action_toggle_folded(self) -> None:
+    if not self._folded:
       return
-    self.query_one("#config").toggle_class("show-advanced")
+    self.query_one("#form").toggle_class("unfolded")
     self._show_help()
 
   def action_submit(self) -> None:

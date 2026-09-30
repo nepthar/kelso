@@ -1,6 +1,6 @@
 # Routes Demo
 
-Three routes: `main` (bare `[app]` subdomain), `sub1` (`sub1-routes.<domain>`
+Three routes: `main` (the bare subdomain), `sub1` (`sub1-<subdomain>.<domain>`
 when assigned), and `host_only` (host port until the operator assigns a
 provider).
 
@@ -9,7 +9,6 @@ provider).
 version      = "0.1.0"
 display_name = "Routes Demo"
 description  = "Publishes primary, secondary, and host-only routes"
-subdomain    = "routes"
 
 [volumes]
 # Ship the nginx config alongside the manifest and mount it read-only.
@@ -21,9 +20,9 @@ image  = "nginx:alpine"
 volumes = { app = "/etc/nginx/templates" }
 
 [run.main.routes]
-# "main" is the bare [app] subdomain; non-private routes auto-assign to default_route_provider
+# "main" is the bare subdomain; non-private routes auto-assign to default_route_provider
 main     = { port = "8081" }
-# "sub1" will be "sub1-routes.<provider_domain>" when assigned
+# "sub1" will be "sub1-<subdomain>.<provider_domain>" when assigned
 sub1     = { port = "8082" }
 # private: available to publish, but not auto-assigned
 host_only = { port = "8083", private = true }

@@ -29,14 +29,12 @@ can carry `author`, `source`, `license` and the like.
 | `description` | string | `""` | One line. Shown in the catalog. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
 | `network_mode` | `normal` \| `host` | `normal` | `host` drops port isolation and is called out as dangerous. |
-| `subdomain` | identifier | none | DNS label routes are published under. Becomes a config key the operator can override. |
 
 ```toml
 [app]
 version      = "1.4.0"
 display_name = "Mealie"
 description  = "Manage, save, share recipes and make shopping lists"
-subdomain    = "recipes"
 ```
 
 ## `[run.<unit>]`
@@ -134,6 +132,27 @@ mongo_pass  = { secret = true, default = "auto" }
 Set them with `kelso config <app> --set timezone=America/Denver`, or from the
 app's page in the web UI.
 
+### App options
+
+Every app also has these, whether its manifest mentions them or not. They
+share the config namespace and always have a default.
+
+| Name | Default | Accepts |
+| --- | --- | --- |
+| `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
+| `start_order` | `5` | A whole number from 0 (first) to 10 (last). Not used yet. |
+| `snapshot_max_count` | `0` | A whole number; keep this many snapshots, 0 for all. Not used yet. |
+
+A manifest may declare one of these names in `[config]` or `[adv_config]` to
+change its default and description, or to leave the default out and make the
+operator set it. The value is still checked the same way, and it cannot be a
+secret.
+
+```toml
+[adv_config]
+subdomain = { default = "recipes" }
+```
+
 ## `[run.<unit>.routes.<name>]`
 
 A named port the outside world may reach. The route named `main` is published
@@ -191,7 +210,8 @@ desc     = "Open a database shell"
 time, and a reference to something that does not exist is an error rather than
 an empty string:
 
-- `${<config key>}` — anything from `[config]` or `[adv_config]`.
+- `${<config key>}` — anything from `[config]` or `[adv_config]`, and the app
+  options.
 - `${routes.<name>}` — the full public URL of a declared route.
 - `${klso.domain}`, `${klso.volumes}`, `${klso.cmd}`, `${klso.routes}` — the
   app's own resolved values.

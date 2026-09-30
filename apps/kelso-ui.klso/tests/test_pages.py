@@ -158,11 +158,14 @@ def test_catalog_link_opens_its_card(client, fake):
 def test_config_form(client, fake):
   text = client.get("/apps/kelso-ui").text
   form = text.split('class="cfg-form"')[1].split("</form>")[0]
-  basic, advanced = form.split("Show advanced configuration options")
+  basic, rest = form.split("<summary>Advanced config</summary>")
+  advanced, options = rest.split("<summary>App options</summary>")
   # Missing fields stay out of the fold even when advanced.
   assert 'name="set.tuning"' in basic
   assert 'name="set.debug"' in advanced
   assert 'placeholder="0 (default)"' in advanced
+  assert 'name="set.start_order"' in options
+  assert 'name="set.subdomain"' in options
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
   assert '<option value="">none defined yet</option>' in basic

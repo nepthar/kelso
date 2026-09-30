@@ -11,6 +11,7 @@ from kelso.lib.manifest import (
   parse_manifest,
   unlisted_compose_options,
 )
+from kelso.lib.options import APP_OPTIONS
 
 KELSO_APP_ID_LABEL = "kelso.app_id"
 KELSO_RUN_UNIT_LABEL = "kelso.run_unit"
@@ -23,6 +24,10 @@ KELSO_CONFIG_ENV_PREFIX = "__KELSO_CONFIG_"
 # "<name>-<appsub>" label). See docs/ingress.md.
 PRIMARY_ROUTE_NAME = "main"
 
+# Where a config value was declared: [config], [adv_config], or kelso's own
+# app options. Front ends group fields by it.
+ConfigSection = Literal["config", "advanced", "option"]
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -30,9 +35,7 @@ class AppConfig:
   secret: bool
   default: str | None
   desc: str | None
-  # Declared in [adv_config] rather than [config]: a hint to the UI that this
-  # value is noise beside the ones an operator is expected to set.
-  advanced: bool = False
+  section: ConfigSection = "config"
 
   def has_default(self) -> bool:
     return not self.secret and self.default is not None
@@ -46,7 +49,7 @@ class AppConfig:
   def __repr__(self) -> str:
     return (
       f"AppConfig(name={self.name}, secret={self.secret}, "
-      f"default={self.default}, advanced={self.advanced})"
+      f"default={self.default}, section={self.section})"
     )
 
 
@@ -199,32 +202,23 @@ class AppSpec:
   def network_mode(self) -> str:
     return self.manifest.app.network_mode
 
-  @property
-  def subdomain(self) -> str | None:
-    return self.manifest.app.subdomain
-
 
 def _build(manifest: Manifest, app: AppID) -> AppSpec:
-  # Both sections land in one flat namespace -- everything downstream (env
-  # substitution, the config store, `kelso config`) sees a single dict. The
-  # section a value came from survives only as `advanced`. `_validate_config`
-  # has already refused a name declared in both.
+  # Both sections and the app options land in one flat namespace -- everything
+  # downstream (env substitution, the config store, `kelso config`) sees a
+  # single dict. `_validate_config` has already refused a name declared in both
+  # sections. A manifest entry shadows the app option of the same name.
   config = {
-    name: AppConfig(name, entry.secret, entry.default, entry.desc, advanced)
-    for section, advanced in ((manifest.config, False), (manifest.adv_config, True))
-    for name, entry in section.items()
+    name: AppConfig(name, entry.secret, entry.default, entry.desc, section)
+    for section, entries in (
+      ("config", manifest.config),
+      ("advanced", manifest.adv_config),
+    )
+    for name, entry in entries.items()
   }
-  # An app that names a subdomain gets it as a config key too, so the operator
-  # can move it off the label the bundle shipped with -- `resolved_subdomain`
-  # reads the stored value back. Only when the manifest names one: an app with
-  # no routes has nothing to label, and a key with no default would read as
-  # unset configuration and block every start.
-  if manifest.app.subdomain and "subdomain" not in config:
-    config["subdomain"] = AppConfig(
-      name="subdomain",
-      secret=False,
-      default=manifest.app.subdomain,
-      desc="DNS label these routes are published under",
+  for name, option in APP_OPTIONS.items():
+    config.setdefault(
+      name, AppConfig(name, False, option.default(app), option.desc, "option")
     )
   # `app` volumes carry the bundle's own files and are always read-only, so a
   # container write fails at mount time instead of being silently discarded

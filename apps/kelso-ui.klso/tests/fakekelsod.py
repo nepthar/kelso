@@ -25,7 +25,7 @@ def _field(name, **kw):
     "secret": False,
     "secret_set": False,
     "desc": "",
-    "advanced": False,
+    "section": "config",
     "required": False,
     "choices": None,
   }
@@ -186,11 +186,12 @@ APP_CONFIG = {
     _field("api_address", value=EVIL, default="", desc=f"host:port {EVIL}"),
     _field("admin_pass", secret=True, secret_set=False, desc="password"),
     _field("token", secret=True, secret_set=True),
-    _field("subdomain", value="kelso", default="kelso"),
+    _field("subdomain", value="kelso", default="kelso", section="option"),
     _field("volume.conn", value="harbor_conn", choices=["harbor_conn", EVIL]),
     _field("route.none", choices=[]),
-    _field("tuning", advanced=True),
-    _field("debug", advanced=True, default="0"),
+    _field("tuning", section="advanced"),
+    _field("debug", section="advanced", default="0"),
+    _field("start_order", section="option", default="5"),
   ],
 }
 
@@ -449,7 +450,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 21, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 23, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,

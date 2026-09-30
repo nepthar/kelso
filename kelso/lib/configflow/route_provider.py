@@ -93,7 +93,7 @@ def route_provider_config_request(
         secret=declared.secret,
         secret_set=secret_set,
         desc=declared.desc,
-        advanced=declared.advanced,
+        section=declared.section,
         required=declared.required,
       )
     )

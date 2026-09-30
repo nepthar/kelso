@@ -3,7 +3,6 @@
 [app]
 version      = "0.1.0"
 display_name = "Routes Demo"
-subdomain    = "photos"
 
 [config]
 subdomain = { default = "photos" }

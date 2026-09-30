@@ -50,7 +50,9 @@ def _spec(body: str, app_id: str = "io.test.example"):
 ROUTES = """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -88,7 +90,9 @@ def test_scheme_https_resolved():
     """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -149,8 +153,10 @@ def test_routes_across_multiple_run_units():
     """
 [app]
 version = "0.1.0"
-subdomain = "photos"
 main = "web"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.web]
 image = "alpine:latest"
@@ -180,7 +186,7 @@ def test_assigned_routes_skips_none_and_unassigned():
 
 
 # ── validation ────────────────────────────────────────────────────────────
-def test_any_route_requires_app_subdomain():
+def test_routes_need_no_subdomain_in_the_manifest():
   errors = _validate_routes(
     _model(
       """
@@ -194,7 +200,7 @@ admin = { port = "8082" }
 """
     )
   )
-  assert any("subdomain" in e for e in errors)
+  assert errors == []
 
 
 def test_duplicate_route_name_across_units_is_rejected():
@@ -203,7 +209,9 @@ def test_duplicate_route_name_across_units_is_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.a]
 image = "alpine:latest"
@@ -232,8 +240,10 @@ def test_duplicate_route_name_never_reaches_a_spec():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
 main = "web"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.web]
 image = "alpine:latest"
@@ -255,7 +265,9 @@ def test_host_network_mode_forbids_routes():
 [app]
 version = "0.1.0"
 network_mode = "host"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -274,7 +286,9 @@ def test_invalid_port_spec_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -290,7 +304,9 @@ def test_unknown_scheme_value_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -321,7 +337,9 @@ def test_env_may_reference_any_declared_route():
     """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -341,7 +359,9 @@ def test_env_may_reference_a_route_on_another_run_unit():
     """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -362,7 +382,9 @@ def test_env_reference_to_an_undeclared_route_is_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -377,7 +399,9 @@ def test_env_reference_to_an_unknown_dotted_key_is_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -391,7 +415,9 @@ def test_env_may_reference_klso_keys():
     """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -408,7 +434,9 @@ def test_env_reference_to_an_unknown_klso_key_is_rejected():
       """
 [app]
 version = "0.1.0"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine:latest"
@@ -1189,10 +1217,9 @@ def test_pangolin_validate_reports_missing_shared_policy():
 # ── preflight against the route provider ───────────────────────────────────
 def _assigned(spec, route_name: str, host_port: int = 41000) -> AssignedRoute:
   route = spec.routes[route_name]
-  assert spec.subdomain is not None
   return AssignedRoute(
     name=route_name,
-    subdomain=route.subdomain(spec.subdomain),
+    subdomain=route.subdomain(spec.config["subdomain"].default),
     run_unit_name=route.run_unit_name,
     host_port=host_port,
     container_port=route.container_port,
@@ -1218,7 +1245,7 @@ def _run_data(spec, host_ports: dict[str, int] | None = None) -> AppRunData:
   return AppRunData(
     app=spec.app,
     run_path=Path("/tmp/unused"),
-    app_domain=f"{spec.subdomain}.home.example" if spec.subdomain else None,
+    app_domain=f"{spec.config['subdomain'].default}.home.example",
     volume_links={},
     config_values={},
     routes=assigned,
@@ -1233,7 +1260,9 @@ def _web_spec(app_id: str, subdomain: str):
     f"""
 [app]
 version = "0.1.0"
-subdomain = "{subdomain}"
+
+[adv_config]
+subdomain = {{ default = "{subdomain}" }}
 
 [run.main]
 image = "alpine:latest"

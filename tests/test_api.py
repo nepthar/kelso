@@ -260,8 +260,8 @@ def test_app_config_request_describes_every_field(kelso_env, client):
 
   body = client.get(f"/apps/{APP}/config-request").json()
   fields = {f["name"]: f for f in body["fields"]}
-  assert fields["admin_user"]["advanced"] is False
-  assert fields["log_level"]["advanced"] is True
+  assert fields["admin_user"]["section"] == "config"
+  assert fields["log_level"]["section"] == "advanced"
   assert fields["log_level"]["default"] == "info"
   # admin_pass has `default = "auto"`: kelso generates it, nobody supplies it.
   assert fields["admin_pass"]["required"] is False

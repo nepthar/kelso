@@ -21,7 +21,7 @@ from kelso.lib.metric import KELSO_DIRS
 from kelso.lib.observations import AppObservation
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
-from kelso.lib.run_layout import AppRunData, load_run_data
+from kelso.lib.run_layout import AppRunData, load_run_data, resolved_subdomain
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
@@ -337,7 +337,7 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
         for key, value in spec.manifest.app.model_dump().items()
         if value not in (None, "", {})
       },
-      "subdomain": spec.subdomain,
+      "subdomain": resolved_subdomain(spec, ctx),
       "network_mode": spec.network_mode,
       "run_path": str(ctx.staged_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),

@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.run_layout import AppRunData
+from kelso.lib.run_layout import AppRunData, resolved_subdomain
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import PUBLIC_ROUTE_SCHEME
 
@@ -24,12 +24,11 @@ def published_route_urls(
     if route_name in run_data.route_urls:
       urls[route_name] = run_data.route_urls[route_name]
       continue
-    if not spec.subdomain:
+    subdomain = resolved_subdomain(spec, ctx)
+    if not subdomain:
       continue
     domain = ctx.config.provider_domain(tag)
-    urls[route_name] = (
-      f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(spec.subdomain)}.{domain}"
-    )
+    urls[route_name] = f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(subdomain)}.{domain}"
   return urls
 
 
@@ -214,8 +213,8 @@ def capability_receipt(
         lines.append(_labeled_line("Routes:", reach[0]))
         for extra in reach[1:]:
           lines.append(_labeled_line("", extra))
-    elif spec.subdomain:
-      lines.append(_labeled_line("Routes:", f"subdomain={spec.subdomain}"))
+    elif spec.routes and (subdomain := resolved_subdomain(spec, ctx)):
+      lines.append(_labeled_line("Routes:", f"subdomain={subdomain}"))
 
     vols = volume_lines(spec, run_data, ctx)
     if vols:

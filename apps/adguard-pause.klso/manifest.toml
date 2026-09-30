@@ -4,7 +4,6 @@
 version      = "0.1.0"
 display_name = "Adguard Pause Button"
 description  = "A service that pauses adguard DNS blocking for a while via giant button"
-subdomain    = "ag-pause"
 source       = "github:nepthar/kelso/main/apps/adguard-pause.klso"
 
 [config]
@@ -12,6 +11,9 @@ ag_user = { desc = "Adguard login username"}
 ag_pass = { desc = "Adguard login password", secret = true }
 ag_host = { desc = "Adguard's admin http url"}
 pause_minutes = { desc = "Number of minutes to pause when the button is pressed", default = "15" }
+
+[adv_config]
+subdomain = { default = "ag-pause" }
 
 [volumes]
 script = { kind = "app", src = "app.py" }

@@ -16,6 +16,7 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
   KLSO_KEY_PREFIX,
@@ -40,7 +41,6 @@ class AppSection(BaseModel):
   app_id: str | None = None
   version: str
   network_mode: NetworkMode = "normal"
-  subdomain: Identifier | None = None
   display_name: str = ""
   description: str = ""
   main: Identifier = "main"
@@ -303,15 +303,32 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
 
 
 def _validate_config(manifest: Manifest) -> list[str]:
-  """[config] and [adv_config] share one namespace, so a name may only be in one."""
-  clashes = sorted(manifest.config.keys() & manifest.adv_config.keys())
-  if not clashes:
-    return []
-  return [
+  """[config] and [adv_config] share one namespace, so a name may only be in one.
+
+  A name that shadows an app option may not be secret, and its default must be
+  a value the option accepts.
+  """
+  errors = [
     f"[adv_config]: {name} is already declared in [config]; "
     f"move it to one section or the other"
-    for name in clashes
+    for name in sorted(manifest.config.keys() & manifest.adv_config.keys())
   ]
+  for section, entries in (
+    ("config", manifest.config),
+    ("adv_config", manifest.adv_config),
+  ):
+    for name, entry in entries.items():
+      option = APP_OPTIONS.get(name)
+      if option is None:
+        continue
+      if entry.secret:
+        errors.append(f"[{section}]: {name} is an app option and cannot be secret")
+      elif entry.default is not None:
+        try:
+          option.validate(entry.default)
+        except ValueError as error:
+          errors.append(f"[{section}]: default for {error}")
+  return errors
 
 
 def _validate_commands(manifest: Manifest) -> list[str]:
@@ -326,7 +343,7 @@ def _validate_commands(manifest: Manifest) -> list[str]:
 
 def _validate_env_refs(manifest: Manifest) -> list[str]:
   """Every `${…}` in [run.*.env] must name a key in the flat substitution map."""
-  known = set(manifest.config) | set(manifest.adv_config)
+  known = set(manifest.config) | set(manifest.adv_config) | set(APP_OPTIONS)
   known.update(
     f"{ROUTE_KEY_PREFIX}{name}"
     for run_entry in manifest.run.values()
@@ -404,9 +421,5 @@ def _validate_routes(manifest: Manifest) -> list[str]:
   if manifest.app.network_mode == "host":
     if has_routes:
       errors.append("[run]: network_mode 'host' forbids [run.*.routes]")
-
-  # Routes use [app].subdomain as the DNS label base; it must be set.
-  if has_routes and not manifest.app.subdomain:
-    errors.append("[run.*.routes]: routes require [app].subdomain")
 
   return errors

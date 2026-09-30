@@ -14,7 +14,9 @@ place metadata.
 version      = "1.0.0"
 display_name = "Jellyfin Media Server"
 description  = "Stream your own movies, shows and music to any device"
-subdomain    = "jelly"
+
+[adv_config]
+subdomain = { default = "jelly" }
 
 [volumes]
 config   = { kind = "data", desc = "Server config, users, playback state" }

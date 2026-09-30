@@ -19,7 +19,6 @@ being told what it is.
 version      = "3.22.0"
 display_name = "Mealie Recipe Manager (sqlite)"
 description  = "Manage, save, share recipes and make shopping lists"
-subdomain    = "mealie"
 
 [volumes]
 data = { kind = "data", desc = "sqlite database, mealie state" }

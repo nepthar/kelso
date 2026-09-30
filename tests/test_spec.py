@@ -32,9 +32,12 @@ image = "alpine:latest"
 
   assert spec.app == "demo"
   assert spec.network_mode == "normal"
-  assert spec.subdomain is None
   assert spec.routes == {}
-  assert spec.config == {}
+  assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
+    "subdomain": ("demo", "option"),
+    "start_order": ("5", "option"),
+    "snapshot_max_count": ("0", "option"),
+  }
   assert spec.volumes == {}
   assert spec.commands == {}
 
@@ -110,7 +113,7 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
 
 
 def test_adv_config_declares_the_same_values_but_marked_advanced(tmp_path):
-  """The section is the only difference: one namespace, one `advanced` flag."""
+  """The section is the only difference: one namespace, one `section` field."""
   spec = spec_of(
     tmp_path,
     """\
@@ -130,9 +133,9 @@ env = { USER = "${admin_user}", LEVEL = "${log_level}" }
 """,
   )
 
-  assert set(spec.config) == {"admin_user", "log_level", "debug_key"}
-  assert spec.config["admin_user"].advanced is False
-  assert spec.config["log_level"].advanced is True
+  assert {"admin_user", "log_level", "debug_key"} <= set(spec.config)
+  assert spec.config["admin_user"].section == "config"
+  assert spec.config["log_level"].section == "advanced"
   assert spec.config["log_level"].default == "info"
   assert spec.config["log_level"].desc == "internal log verbosity"
   assert spec.config["debug_key"].secret is True
@@ -140,6 +143,58 @@ env = { USER = "${admin_user}", LEVEL = "${log_level}" }
   # Advanced is a display hint, nothing more: an advanced name substitutes into
   # env exactly like a plain one.
   assert spec.run_units["main"].environment["LEVEL"] == "${log_level}"
+
+
+def test_a_manifest_can_shadow_an_app_option_and_make_it_required(tmp_path):
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[config]
+subdomain = { desc = "Pick one" }
+
+[run.main]
+image = "alpine"
+env = { ORDER = "${start_order}" }
+""",
+  )
+
+  subdomain = spec.config["subdomain"]
+  assert (subdomain.section, subdomain.default, subdomain.desc) == (
+    "config",
+    None,
+    "Pick one",
+  )
+  assert spec.config["start_order"].section == "option"
+  assert spec.run_units["main"].environment["ORDER"] == "${start_order}"
+
+
+@pytest.mark.parametrize(
+  ("entry", "error"),
+  [
+    ('start_order = { default = "11" }', "from 0 to 10"),
+    ('snapshot_max_count = { default = "-1" }', "0 or more"),
+    ('subdomain = { default = "a.b" }', "no periods"),
+    ("subdomain = { secret = true }", "cannot be secret"),
+  ],
+)
+def test_a_shadowed_app_option_is_still_checked(tmp_path, entry, error):
+  with pytest.raises(ConfigError, match=error):
+    spec_of(
+      tmp_path,
+      f"""\
+[app]
+version = "1"
+
+[adv_config]
+{entry}
+
+[run.main]
+image = "alpine"
+""",
+    )
 
 
 def test_a_name_in_both_config_sections_is_refused(tmp_path):
@@ -213,7 +268,9 @@ def test_port_strings_become_routes(tmp_path):
     """\
 [app]
 version = "1"
-subdomain = "photos"
+
+[adv_config]
+subdomain = { default = "photos" }
 
 [run.main]
 image = "alpine"
@@ -259,7 +316,9 @@ def test_multiple_run_units_share_one_route_namespace(tmp_path):
 [app]
 version = "2"
 main = "web"
-subdomain = "demo"
+
+[adv_config]
+subdomain = { default = "demo" }
 
 [run.web]
 image = "nginx:1.27"

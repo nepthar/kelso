@@ -32,7 +32,7 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
         secret=config.secret,
         secret_set=bool(secret) and value is not None,
         desc=config.desc or "",
-        advanced=config.advanced,
+        section=config.section,
         # A secret's default is a generator kelso runs at install, so nobody
         # has to supply it.
         required=not (config.secret and config.default is not None),
@@ -80,6 +80,7 @@ def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
       *_route_fields(spec, ctx),
     ),
     note=spec.description,
+    config_title="App config",
   )
 
 

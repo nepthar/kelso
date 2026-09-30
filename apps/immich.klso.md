@@ -25,7 +25,6 @@ kelso start immich --bind photos=photos
 version      = "3.1.0"
 display_name = "Immich"
 description  = "Self-hosted photo and video backup"
-subdomain    = "immich"
 
 [config]
 db_password = { desc = "Postgres password", secret = true, default = "{alnum:16}" }

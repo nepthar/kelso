@@ -34,14 +34,20 @@
 <p class="empty">Nothing to configure.</p>
 {% else %}
 {% set missing = request.get('missing') or [] %}
-{#- Advanced fields fold away, unless one of them is what is missing. -#}
-{% set basic = [] %}{% set advanced = [] %}
-{% for f in fields %}{% do (basic if not f.get('advanced') or f.name in missing else advanced).append(f) %}{% endfor %}
+{#- Advanced config and app options fold away, unless one is what is missing. -#}
+{% set basic = [] %}{% set advanced = [] %}{% set options = [] %}
+{% for f in fields %}
+  {%- set section = f.get('section') or 'config' -%}
+  {% do (basic if section == 'config' or f.name in missing else advanced if section == 'advanced' else options).append(f) %}
+{%- endfor %}
 <form method="post" action="{{ action }}" class="cfg-form">
   {% for k, v in hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   {% if basic %}{{ _table(basic, missing) }}{% endif %}
   {% if advanced %}
-  <details class="reveal"><summary>Show advanced configuration options</summary>{{ _table(advanced, missing) }}</details>
+  <details class="reveal"><summary>Advanced config</summary>{{ _table(advanced, missing) }}</details>
+  {% endif %}
+  {% if options %}
+  <details class="reveal"><summary>App options</summary>{{ _table(options, missing) }}</details>
   {% endif %}
   <div class="cfg-actions"><button type="submit" class="cfg-save" disabled>Save</button></div>
 </form>

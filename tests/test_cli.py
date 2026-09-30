@@ -527,7 +527,7 @@ def test_config_before_staging_reads_the_bundle(kelso_env):
 
 def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
   """`--edit` renders the app's ConfigRequest and applies the response."""
-  edited = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\ns\n")
+  edited = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nn\ns\n")
 
   assert edited.returncode == 0, edited.stderr
   assert "Set admin_user" in edited.stdout
@@ -535,7 +535,7 @@ def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
 
 
 def test_config_edit_writes_nothing_when_cancelled(kelso_env):
-  cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nq\n")
+  cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nn\nq\n")
 
   assert cancelled.returncode == 0, cancelled.stderr
   assert "No changes" in cancelled.stdout
@@ -614,7 +614,7 @@ def test_config_set_secret(kelso_env):
   listed = kelso_env.run("config", BASIC)
   assert listed.returncode == 0, listed.stderr
   assert password not in listed.stdout
-  assert "(secret)" in listed.stdout
+  assert "(set)" in listed.stdout
 
 
 def test_config_set_while_running_warns(kelso_env):
@@ -656,7 +656,25 @@ def test_config_set_subdomain_rejects_a_dotted_name(kelso_env):
   result = kelso_env.run("config", "ports-demo", "--set", "subdomain=foo.bar")
   assert result.returncode == 1
   assert "foo.bar" in result.stderr
-  assert "identifier" in result.stderr
+  assert "no periods" in result.stderr
+
+
+@pytest.mark.parametrize("value", ["11", "-1", "five"])
+def test_config_set_refuses_a_start_order_out_of_range(kelso_env, value):
+  result = kelso_env.run("config", "ports-demo", "--set", f"start_order={value}")
+  assert result.returncode == 1
+  assert "from 0 to 10" in result.stderr
+  assert kelso_env.run("config", "ports-demo", "--get", "start_order").stdout == "5\n"
+
+
+def test_config_lists_app_options_in_their_own_section(kelso_env):
+  listed = kelso_env.run("config", "ports-demo")
+  assert listed.returncode == 0, listed.stderr
+  options = listed.stdout.split("App options:")[1]
+  assert "start_order" in options
+  assert "snapshot_max_count" in options
+  # ports-demo declares subdomain itself, so it sits with the app's own config.
+  assert "subdomain" not in options
 
 
 def test_system_config_is_encrypted_listed_and_unset(kelso_env):
@@ -1357,7 +1375,7 @@ def test_every_shipped_bundle_stages(kelso_env):
       shutil.copy2(source, dest)
     fresh = KelsoCtx(load_config_file(kelso_env.config))
     app = fresh.resolve_app(app_id)
-    lifecycle.stage(app, fresh.bundle_path(app), fresh)
+    lifecycle.stage(app, fresh.bundle_path(app), fresh, sets=[("subdomain", app.stem)])
     assert (kelso_env.run_root / app_id / "compose.yml").is_file(), source.name
 
 
