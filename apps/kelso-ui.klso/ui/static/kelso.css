@@ -65,7 +65,10 @@ nav {
   overflow: auto; display: flex; flex-direction: column;
 }
 .brand { padding: 0 0 24px; letter-spacing: -0.005em; }
-.brand .name { font-size: 17px; font-weight: 600; display: block; }
+.brand .name {
+  font-size: 17px; font-weight: 600; display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .brand .ver {
   display: block; font-size: 11px; color: var(--muted);
   font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;

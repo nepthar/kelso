@@ -156,6 +156,13 @@ def test_catalog_link_opens_its_card(client, fake):
   assert 'id="catalog-shade" class="shade" hidden>' in closed
 
 
+def test_nav_is_titled_with_the_daemons_hostname(client, fake):
+  text = client.get("/").text
+  brand = text.split('<div class="brand">')[1].split("</div>")[0]
+  assert '<span class="name" title="tycho &lt;i' in brand
+  assert '<span class="mark" aria-hidden="true">T</span>' in brand
+
+
 def test_byline_links_only_an_http_url(client, fake, monkeypatch):
   text = client.get("/apps/kelso-ui").text
   assert "by Jordan " in text

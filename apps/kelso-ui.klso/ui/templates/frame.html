@@ -9,7 +9,8 @@
 {% block body %}
 <div class="app">
 <nav>
-  <div class="brand"><span class="name">Kelso</span><span class="mark" aria-hidden="true">K</span>
+  {%- set brand = hostname|default('Kelso', true) %}
+  <div class="brand"><span class="name" title="{{ brand }}">{{ brand }}</span><span class="mark" aria-hidden="true">{{ brand[0]|upper }}</span>
     {%- if version %}<span class="ver">kelso {{ version }}</span>{% endif %}</div>
   {% for item in nav %}
   <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
