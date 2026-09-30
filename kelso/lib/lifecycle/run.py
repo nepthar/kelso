@@ -160,7 +160,7 @@ def run_command(
     available = ", ".join(sorted(spec.commands)) or "(none)"
     raise ValueError(
       f"Unknown command {cmd_name!r} for {app_id}; "
-      f"available: {available}. List with `kelso run {app_id}`"
+      f"available: {available}. List with `kelso cmd {app_id}`"
     )
 
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}

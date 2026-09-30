@@ -5,7 +5,6 @@ import sys
 
 from kelso import VERSION
 from kelso.cli import (
-  catalog,
   cmd,
   config,
   dev,
@@ -28,17 +27,16 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import Conn, refuse_root
 
 COMMANDS = [
-  catalog,
   ps,
-  inspect,
   start,
   stop,
-  logs,
-  shell,
-  cmd,
   config,
+  cmd,
   install,
   remove,
+  inspect,
+  logs,
+  shell,
   dev,
   snapshot,
   repo,
@@ -49,23 +47,22 @@ COMMANDS = [
 
 HELP = """\
 Apps
-  catalog     List apps you can install, and the repo each is in
   ps          List installed apps and their state
-  inspect     Show an app's state, ports, routes, volumes, and config
   start       Start an app, installing it first if needed
   stop        Stop a running app
+  config      View or set an app's config, routes, and volume binds
+  cmd         List or run an app's commands
+  install     Install or re-install an app, restarting it if running
+  uninstall   Uninstall an app (--purge to delete its data and config too)
+  inspect     Show an app's state, ports, routes, volumes, and config
   logs        Show an app's logs
   shell       Open a shell in one of an app's containers
-  run         List or run an app's commands
-  config      View or set an app's config, routes, and volume binds
-  uninstall   Uninstall an app (--purge to delete its data and config too)
-  dev         Run an app bundle in this terminal
 
-  install     Install or re-install an app, restarting it if running
+  dev         Run an app bundle in this terminal
   reset       Delete an app's data, keeping its config
 
 Snapshots     kelso snapshot take | list | restore
-Repos         kelso repo list | add | update | remove
+Repos         kelso repo apps | list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
 System        kelso system doctor | activity | volumes | secret | host-volume
                            service | gen-masterkey | decrypt

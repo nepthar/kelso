@@ -52,7 +52,7 @@ def test_start_materializes_compose_and_port_state(kelso_env):
 
 
 def test_start_ps_stop_tracks_docker_reality(kelso_env):
-  catalog = kelso_env.run("catalog")
+  catalog = kelso_env.run("repo", "apps")
   assert catalog.returncode == 0, catalog.stderr
   assert "ports-demo" in catalog.stdout
 
@@ -158,7 +158,7 @@ def test_inspect_shows_live_state_for_an_installed_app(kelso_env):
 
 def test_catalog_shows_available_apps_ps_hides_until_installed(kelso_env):
   app_id = "ports-demo"
-  catalog = kelso_env.run("catalog")
+  catalog = kelso_env.run("repo", "apps")
   assert any(line.startswith(app_id) for line in catalog.stdout.splitlines())
 
   ps = kelso_env.run("ps")
@@ -275,7 +275,7 @@ desc = "Another command"
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0
 
-  listed = kelso_env.run("run", "cmd-demo")
+  listed = kelso_env.run("cmd", "cmd-demo")
   assert listed.returncode == 0, listed.stderr
   assert listed.stdout.splitlines()[0].split() == [
     "COMMAND",
@@ -286,7 +286,7 @@ desc = "Another command"
   assert "Print pong" in listed.stdout
   assert "argv" in listed.stdout
 
-  ran = kelso_env.run("run", "cmd-demo", "ping", "extra")
+  ran = kelso_env.run("cmd", "cmd-demo", "ping", "extra")
   assert ran.returncode == 0, ran.stderr
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
@@ -313,12 +313,12 @@ cmd = "echo pong"
 """
   )
 
-  not_staged = kelso_env.run("run", "cmd-demo")
+  not_staged = kelso_env.run("cmd", "cmd-demo")
   assert not_staged.returncode == 1
   assert "not installed" in not_staged.stderr
 
   assert kelso_env.run("install", "cmd-demo").returncode == 0
-  one_off = kelso_env.run("run", "cmd-demo", "ping", "extra")
+  one_off = kelso_env.run("cmd", "cmd-demo", "ping", "extra")
   assert one_off.returncode == 0, one_off.stderr
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
@@ -335,10 +335,10 @@ cmd = "echo pong"
   ] in calls
 
   assert kelso_env.run("start", "cmd-demo").returncode == 0
-  missing = kelso_env.run("run", "cmd-demo", "nope")
+  missing = kelso_env.run("cmd", "cmd-demo", "nope")
   assert missing.returncode == 1
   assert "Unknown command 'nope'" in missing.stderr
-  assert "kelso run cmd-demo" in missing.stderr
+  assert "kelso cmd cmd-demo" in missing.stderr
 
 
 # --- refusals --------------------------------------------------------------

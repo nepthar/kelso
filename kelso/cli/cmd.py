@@ -9,7 +9,7 @@ from kelso.lib.spec import AppSpec
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
-    "run",
+    "cmd",
     help="List or run commands defined in an app's manifest",
   )
   parser.add_argument("app_id", help="App ID")

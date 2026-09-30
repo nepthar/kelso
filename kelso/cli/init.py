@@ -229,7 +229,7 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
 
   conn.out(f"\nTo change your configuration, edit {config_path}")
   conn.out(
-    "\nNext: pick something from `kelso catalog`, then\n"
+    "\nNext: pick something from `kelso repo apps`, then\n"
     "  kelso install <app>   install it without starting it\n"
     "  kelso start <app>     start it (installing first if needed)\n"
     "  kelso stop <app>      stop it\n"

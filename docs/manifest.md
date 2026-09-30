@@ -162,7 +162,7 @@ Operations the app declares for itself, runnable from the CLI or as a button
 in the web UI. This is how a bundle ships its own maintenance: a backup, a
 reindex, a password reset.
 
-The Run button and `kelso run` run a command's string in its unit's `shell`,
+The Run button and `kelso cmd` run a command's string in its unit's `shell`,
 with the operator's arguments added to the end. For someone in a console, each
 unit with commands also gets `/kelso/bin/kelso_cmd`, which runs one the same
 way (`kelso_cmd backup --full`) or, with no arguments, lists them. kelso's
@@ -172,7 +172,7 @@ consoles put `/kelso/bin` at the end of `PATH` and open with that list.
 | --- | --- | --- | --- |
 | `cmd` | string | **required** | Run by the unit's `shell`, with any operator arguments added to the end as they were typed. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
-| `desc` | string | `""` | Shown in `kelso run <app>` and in the UI. |
+| `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 
 ```toml
 [commands.backup]

@@ -2,6 +2,7 @@
 
 import argparse
 
+from kelso.cli import catalog
 from kelso.lib import repo as repo_lib
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
@@ -30,6 +31,8 @@ def register(subparsers) -> None:
 
   listing = sub.add_parser("list", help="Show configured repos")
   listing.set_defaults(func=_list)
+
+  catalog.register(sub)
 
 
 def _add(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
