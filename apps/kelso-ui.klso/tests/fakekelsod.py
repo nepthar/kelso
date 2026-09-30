@@ -482,7 +482,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 21
+    self.api = 23
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

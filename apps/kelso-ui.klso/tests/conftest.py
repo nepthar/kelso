@@ -28,10 +28,10 @@ from starlette.testclient import TestClient  # noqa: E402
 def fake():
   _fake.posts.clear()
   _fake.fail = None
-  _fake.api = 21
+  _fake.api = 23
   yield _fake
   _fake.fail = None
-  _fake.api = 21
+  _fake.api = 23
 
 
 @pytest.fixture(autouse=True)
