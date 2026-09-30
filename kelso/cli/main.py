@@ -62,7 +62,7 @@ Apps
   reset       Delete an app's data, keeping its config
 
 Snapshots     kelso snapshot take | list | restore
-Repos         kelso repo apps | list | add | update | remove
+Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
 System        kelso system doctor | activity | volumes | secret | host-volume
                            service | gen-masterkey | decrypt

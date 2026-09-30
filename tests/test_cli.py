@@ -52,7 +52,7 @@ def test_start_materializes_compose_and_port_state(kelso_env):
 
 
 def test_start_ps_stop_tracks_docker_reality(kelso_env):
-  catalog = kelso_env.run("repo", "apps")
+  catalog = kelso_env.run("repo", "list")
   assert catalog.returncode == 0, catalog.stderr
   assert "ports-demo" in catalog.stdout
 
@@ -158,7 +158,7 @@ def test_inspect_shows_live_state_for_an_installed_app(kelso_env):
 
 def test_catalog_shows_available_apps_ps_hides_until_installed(kelso_env):
   app_id = "ports-demo"
-  catalog = kelso_env.run("repo", "apps")
+  catalog = kelso_env.run("repo", "list")
   assert any(line.startswith(app_id) for line in catalog.stdout.splitlines())
 
   ps = kelso_env.run("ps")

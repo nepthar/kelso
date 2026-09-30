@@ -6,6 +6,7 @@ how you say which one you mean.
 """
 
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -44,16 +45,21 @@ def ctx_for(kelso_env) -> KelsoCtx:
 
 
 def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
-  """Every `kelso repo apps` row for `app_id`, each split into its columns."""
-  return [
-    line.split()
-    for line in catalog_output.splitlines()
-    if line.startswith(app_id + " ")
-  ]
+  """Every `kelso repo list` row for `app_id`, as [app_id, repo, status, path]."""
+  rows = []
+  repo = ""
+  for line in catalog_output.splitlines():
+    header = re.match(r"(\S+) \d+ apps ", line)
+    if header:
+      repo = header[1]
+    elif line.startswith(app_id + " "):
+      app, *rest = line.split()
+      rows.append([app, repo, *rest])
+  return rows
 
 
 def _row(catalog_output: str, app_id: str) -> list[str]:
-  """The one `kelso repo apps` row for `app_id`, split into its columns."""
+  """The one `kelso repo list` row for `app_id`, split into its columns."""
   rows = _rows(catalog_output, app_id)
   assert len(rows) == 1, f"expected one {app_id} row, got {rows}"
   return rows[0]
@@ -120,7 +126,7 @@ def test_one_bad_repo_drops_the_good_ones_too(kelso_env, caplog):
 def test_a_bad_repo_still_lets_commands_run(kelso_env):
   add_repo_block(kelso_env, "b a d", kelso_env.root / "other")
 
-  result = kelso_env.run("repo", "apps")
+  result = kelso_env.run("repo", "list")
 
   assert result.returncode == 0, result.stderr
   assert "ports-demo" in result.stdout
@@ -159,10 +165,10 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
   a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  result = kelso_env.run("repo", "apps")
+  result = kelso_env.run("repo", "list")
 
   assert result.returncode == 0, result.stderr
-  assert result.stdout.splitlines()[0].split() == ["APP_ID", "SOURCE", "STATUS", "PATH"]
+  assert result.stdout.splitlines()[1].split() == ["APP_ID", "STATUS", "PATH"]
   assert _row(result.stdout, "dev-app") == [
     "dev-app",
     "hrbr-dev",
@@ -175,15 +181,15 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
 def test_catalog_reports_the_last_action_as_status(kelso_env):
   assert kelso_env.run("install", "ports-demo").returncode == 0
 
-  staged = _row(kelso_env.run("repo", "apps").stdout, "ports-demo")
+  staged = _row(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert staged[2] == "installed"
 
   assert kelso_env.run("start", "ports-demo").returncode == 0
-  started = _row(kelso_env.run("repo", "apps").stdout, "ports-demo")
+  started = _row(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert started[2] == "started"
 
   # Not installed, so no status of its own.
-  assert _row(kelso_env.run("repo", "apps").stdout, "routes-demo")[2] == "-"
+  assert _row(kelso_env.run("repo", "list").stdout, "routes-demo")[2] == "-"
 
 
 def test_an_ambiguous_id_gets_a_row_per_source(kelso_env):
@@ -191,7 +197,7 @@ def test_an_ambiguous_id_gets_a_row_per_source(kelso_env):
   a_bundle(dev, "ports-demo")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  rows = _rows(kelso_env.run("repo", "apps").stdout, "ports-demo")
+  rows = _rows(kelso_env.run("repo", "list").stdout, "ports-demo")
 
   assert [row[1] for row in rows] == ["local", "hrbr-dev"]
 
@@ -204,7 +210,7 @@ def test_status_follows_the_bundle_that_is_actually_installed(kelso_env):
 
   assert kelso_env.run("start", str(bundle)).returncode == 0
 
-  rows = _rows(kelso_env.run("repo", "apps").stdout, "ports-demo")
+  rows = _rows(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert [(row[1], row[2]) for row in rows] == [
     ("local", "-"),
     ("hrbr-dev", "started"),
@@ -220,7 +226,7 @@ def test_status_follows_the_bundle_that_is_actually_installed(kelso_env):
 
   assert kelso_env.run("install", str(from_local), "--force").returncode == 0
 
-  rows = _rows(kelso_env.run("repo", "apps").stdout, "ports-demo")
+  rows = _rows(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert [(row[1], row[2]) for row in rows] == [
     ("local", "installed"),
     ("hrbr-dev", "-"),
@@ -251,7 +257,7 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   # install is refused as a change of source.
   assert kelso_env.run("install", str(bundle)).returncode == 0
 
-  rows = _rows(kelso_env.run("repo", "apps").stdout, "dev-app")
+  rows = _rows(kelso_env.run("repo", "list").stdout, "dev-app")
   assert [(row[1], row[2]) for row in rows] == [
     ("local", "-"),
     ("hrbr-dev", "installed"),
