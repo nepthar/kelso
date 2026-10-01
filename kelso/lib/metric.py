@@ -80,21 +80,17 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
   for kind, root in ctx.config.volume_roots.items():
     if not root.is_dir():
       continue
-    total = 0
     for app_dir in root.iterdir():
       if not app_dir.is_dir():
         continue
       for volume_dir in app_dir.iterdir():
         if not volume_dir.is_dir():
           continue
-        size = path_size(volume_dir)
         ctx.record_gauge(
-          f"volume_size_bytes/{app_dir.name}/{kind}/{volume_dir.name}", size
+          f"volume_size_bytes/{app_dir.name}/{kind}/{volume_dir.name}",
+          path_size(volume_dir),
         )
-        total += size
         n += 1
-    ctx.record_gauge(f"volume_root_size_bytes/{kind}", total)
-    n += 1
   # `app` volumes are not under a volume root: they are the loaded bundle's own
   # files, symlinked into `var/run/<app>/volumes/app/`. Gauged here so that every
   # volume a manifest declares has a size a reader can look up, rather than the
