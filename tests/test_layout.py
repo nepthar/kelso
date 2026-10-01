@@ -641,6 +641,7 @@ def test_rm_removes_the_run_dir_volumes_and_routes(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]
 
+  kelso_env.run("stop", app_id)
   removed = kelso_env.run("rm", "--purge", app_id, "-y")
   assert removed.returncode == 0, removed.stderr
 
@@ -657,12 +658,14 @@ def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
+  kelso_env.run("stop", app_id)
   declined = kelso_env.run("rm", app_id, input="n\n")
   assert declined.returncode == 0, declined.stderr
   assert "take a snapshot first" in declined.stdout
   assert "Nothing removed" in declined.stdout
   assert (kelso_env.run_root / app_id).is_dir()
 
+  kelso_env.run("stop", app_id)
   confirmed = kelso_env.run("rm", "--purge", app_id, input="y\n")
   assert confirmed.returncode == 0, confirmed.stderr
   assert not (kelso_env.run_root / app_id).exists()
@@ -675,6 +678,7 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
   host_path.mkdir()
   assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
 
+  kelso_env.run("stop", app_id)
   removed = kelso_env.run("rm", "--purge", app_id, input="y\n")
   assert removed.returncode == 0, removed.stderr
   assert str(host_path) in removed.stdout
@@ -687,6 +691,7 @@ def test_rm_then_start_is_a_clean_reload(kelso_env):
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
 
+  kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", "--purge", BASIC, "-y").returncode == 0
 
   restarted = kelso_env.run("start", BASIC, "--set", "admin_user=bob")

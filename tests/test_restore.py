@@ -111,6 +111,7 @@ def test_restore_rebuilds_a_removed_app_from_its_snapshot(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "before")
 
+  kelso_env.run("stop", app_id)
   assert kelso_env.run("rm", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
 

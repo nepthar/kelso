@@ -68,7 +68,8 @@ from kelso.lib.spec import AppSpec
 # 25: `up` and `down` are job verbs.
 # 26: install/uninstall are load/unload, reset is gone and rm is a job verb;
 #     app states are loaded/unloaded/available.
-API_VERSION = 26
+# 27: rm takes `tier` (temp, data, purge) in place of `purge`.
+API_VERSION = 27
 
 CtxFactory = Callable[[], KelsoCtx]
 

@@ -1,14 +1,16 @@
-"""The removal verbs -- unload, rm, and rm --purge -- which differ only in how
-much they take: an app's loaded copy under `var/run/`, its data under the volume
-roots, and its config, snapshots and routes.
+"""`kelso unload` and `kelso rm`, which differ only in how much they take: an
+app's loaded copy under `var/run/`, its volumes by kind, and its config,
+snapshots and routes.
 """
 
 import argparse
 
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
+  DATA,
   PURGE,
   RM,
+  TEMP,
   UNLOAD,
   RemovalMode,
   RemovalPlan,
@@ -25,56 +27,75 @@ def register(subparsers) -> None:
   )
   unload.add_argument("app_id", help="App ID to unload")
   _add_yes(unload)
-  unload.set_defaults(func=_run(UNLOAD))
+  unload.set_defaults(func=run, mode=UNLOAD)
 
   remove = subparsers.add_parser(
     "rm",
-    help="Unload an app and delete its data, keeping its config unless --purge",
+    help="Unload a stopped app and delete its temp and logs volumes",
   )
   remove.add_argument("app_id", help="App ID to remove")
-  remove.add_argument(
+  tier = remove.add_mutually_exclusive_group()
+  tier.add_argument(
+    "--temp",
+    dest="mode",
+    action="store_const",
+    const=TEMP,
+    help="Only empty its temp and logs volumes; it stays loaded",
+  )
+  tier.add_argument(
+    "--data",
+    dest="mode",
+    action="store_const",
+    const=DATA,
+    help="Empty all its volumes, keeping its config; it stays loaded",
+  )
+  tier.add_argument(
     "--purge",
-    action="store_true",
-    help="Also delete its config, secrets, snapshots, and route allocations",
+    dest="mode",
+    action="store_const",
+    const=PURGE,
+    help="Delete everything: volumes, config, secrets, snapshots, and routes",
   )
   _add_yes(remove)
-  remove.set_defaults(func=_run(RM))
+  remove.set_defaults(func=run, mode=RM)
 
 
 def _add_yes(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
 
 
-def _run(mode: RemovalMode):
-  def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
-    resolved = PURGE if getattr(args, "purge", False) else mode
-    state = ctx.run_state(args.app_id)
-    plan = removal_plan(state.app_id, ctx, mode=resolved)
+def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+  state = ctx.run_state(args.app_id)
+  plan = removal_plan(state.app_id, ctx, mode=args.mode)
 
-    if not args.yes and not _confirmed(plan, conn):
-      conn.out("Nothing removed.")
-      return
+  if not args.yes and not _confirmed(plan, conn):
+    conn.out("Nothing removed.")
+    return
 
-    with ctx.locked(f"{plan.mode} {plan.app_id}", plan.app_id):
-      rm(plan, ctx)
-    conn.out(_done(plan))
-
-  return run
+  with ctx.locked(f"{plan.mode} {plan.app_id}", plan.app_id):
+    rm(plan, ctx)
+  conn.out(_DONE[plan.mode].format(app=plan.app_id))
 
 
-def _done(plan: RemovalPlan) -> str:
-  app = plan.app_id
-  if plan.mode == UNLOAD:
-    return (
-      f"Unloaded {app}. Configuration and volume data were kept.\n"
-      f"Load it again with `kelso load {app}`."
-    )
-  if plan.mode == RM:
-    return (
-      f"Removed {app}. Its configuration and address are unchanged; "
-      f"`kelso load {app}` starts it fresh with them."
-    )
-  return f"Purged {app}"
+_DONE: dict[RemovalMode, str] = {
+  UNLOAD: (
+    "Unloaded {app}. Configuration and volume data were kept.\n"
+    "Load it again with `kelso load {app}`."
+  ),
+  RM: "Removed {app}. Its data and configuration were kept.",
+  TEMP: "Emptied {app}'s temp and logs volumes.",
+  DATA: "Emptied all of {app}'s volumes. Its configuration and address are kept.",
+  PURGE: "Purged {app}.",
+}
+
+# How each removal asks.
+_ASKED: dict[RemovalMode, str] = {
+  UNLOAD: "Unload",
+  RM: "Remove",
+  TEMP: "Empty temp and logs of",
+  DATA: "Empty all volumes of",
+  PURGE: "Purge",
+}
 
 
 def _confirmed(plan: RemovalPlan, conn: Conn) -> bool:
@@ -82,7 +103,7 @@ def _confirmed(plan: RemovalPlan, conn: Conn) -> bool:
   if plan.mode == UNLOAD:
     conn.out(
       f"Configuration and volume data will be kept. Use `kelso rm {plan.app_id}` "
-      f"to delete the data too."
+      f"to delete its temp and logs too."
     )
   else:
     _describe_removal(plan, conn)
@@ -93,13 +114,10 @@ def _confirmed(plan: RemovalPlan, conn: Conn) -> bool:
   return answer.strip().lower() in ("y", "yes")
 
 
-# How each removal asks.
-_ASKED = {UNLOAD: "Unload", RM: "Remove", PURGE: "Purge"}
-
-
 def _describe_removal(plan: RemovalPlan, conn: Conn) -> None:
-  """Describe rm or rm --purge, naming the data it destroys."""
-  conn.out(f"This deletes {plan.app_id}'s data volumes:")
+  """Describe an rm, naming the volumes it deletes or empties."""
+  verb = "empties" if plan.empties else "deletes"
+  conn.out(f"This {verb} {plan.app_id}'s volumes:")
   for line in _volume_lines(plan):
     conn.out(f"  {line}")
   if plan.purges:
@@ -107,10 +125,7 @@ def _describe_removal(plan: RemovalPlan, conn: Conn) -> None:
     if plan.snapshot_path is not None:
       conn.out(f"Its snapshots under {plan.snapshot_path} are deleted too.")
   else:
-    conn.out(
-      f"Its configuration and address are kept. Use `kelso rm --purge "
-      f"{plan.app_id}` to delete those too."
-    )
+    conn.out("Its configuration and address are kept.")
   for path in plan.host_paths:
     conn.out(f"The host volume at {path} is left alone.")
   if not plan.purges:
@@ -123,4 +138,4 @@ def _volume_lines(plan: RemovalPlan) -> list[str]:
   for path in plan.volume_paths:
     volumes = sorted(p for p in path.iterdir() if p.is_dir()) if path.is_dir() else []
     lines += [str(volume) for volume in volumes] or [str(path)]
-  return lines or ["nothing -- this app has no data on disk"]
+  return lines or ["nothing -- this app has no such volumes on disk"]

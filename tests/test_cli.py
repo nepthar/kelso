@@ -122,6 +122,7 @@ def test_rm_removes_run_state_configuration_and_managed_volumes(kelso_env):
   assert (kelso_env.volumes_root / "data" / BASIC / "config").is_dir()
   assert (kelso_env.volumes_root / "temp" / BASIC / "cache").is_dir()
 
+  kelso_env.run("stop", BASIC)
   removed = kelso_env.run("rm", "--purge", BASIC, "-y")
   assert removed.returncode == 0, removed.stderr
 
@@ -138,6 +139,7 @@ def test_rm_leaves_the_catalog_entry_alone(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
+  kelso_env.run("stop", app_id)
   assert kelso_env.run("rm", "--purge", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
   assert bundle.is_dir()
@@ -1455,6 +1457,7 @@ def test_removal_is_recorded_when_an_app_is_removed(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   assert read_last_app_action(app_id, ctx) == "started"
 
+  kelso_env.run("stop", app_id)
   assert kelso_env.run("rm", "--purge", app_id, "-y").returncode == 0
 
   assert not (kelso_env.run_root / app_id).exists()
@@ -1584,10 +1587,12 @@ def test_unload_and_rm_keep_an_app_route_allocation(kelso_env):
   assert kelso_env.read_db()["routes"][app_id]["web"]["host_port"] == allocated
 
   assert kelso_env.run("load", app_id).returncode == 0
+  kelso_env.run("stop", app_id)
   assert kelso_env.run("rm", app_id, "-y").returncode == 0
   assert kelso_env.read_db()["routes"][app_id]["web"]["host_port"] == allocated
 
   # Only a purge gives the address back.
+  kelso_env.run("stop", app_id)
   assert kelso_env.run("rm", "--purge", app_id, "-y").returncode == 0
   assert app_id not in kelso_env.read_db().get("routes", {})
 
@@ -1606,21 +1611,65 @@ def test_unload_then_load_restores_the_app(kelso_env):
   assert "config/admin_user" in kelso_env.app_logtab(BASIC).read_text()
 
 
-def test_rm_deletes_data_and_keeps_config(kelso_env):
+def _basic_with_files(kelso_env):
+  """BASIC, started then stopped, with a file in its data and its temp volume."""
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("stop", BASIC).returncode == 0
   data = kelso_env.volumes_root / "data" / BASIC / "config"
+  temp = kelso_env.volumes_root / "temp" / BASIC / "cache"
   (data / "app.db").write_text("rows")
+  (temp / "scratch").mkdir()
+  (temp / "scratch" / "junk").write_text("junk")
+  return data, temp
+
+
+def test_rm_unloads_and_deletes_temp_keeping_data_and_config(kelso_env):
+  data, temp = _basic_with_files(kelso_env)
 
   removed = kelso_env.run("rm", BASIC, "-y")
-  assert removed.returncode == 0, removed.stderr
 
+  assert removed.returncode == 0, removed.stderr
   assert not (kelso_env.run_root / BASIC).exists()
-  assert not (kelso_env.volumes_root / "data" / BASIC).exists()
+  assert not (kelso_env.volumes_root / "temp" / BASIC).exists()
+  assert (data / "app.db").read_text() == "rows"
   assert "config/admin_user" in kelso_env.app_logtab(BASIC).read_text()
+
+
+def test_rm_temp_empties_temp_and_leaves_the_app_loaded(kelso_env):
+  data, temp = _basic_with_files(kelso_env)
+
+  assert kelso_env.run("rm", "--temp", BASIC, "-y").returncode == 0
+
+  assert temp.is_dir() and list(temp.iterdir()) == []
+  assert (data / "app.db").read_text() == "rows"
+  assert (kelso_env.run_root / BASIC).is_dir()
+
+
+def test_rm_data_empties_every_volume_and_leaves_an_app_that_starts(kelso_env):
+  data, temp = _basic_with_files(kelso_env)
+
+  assert kelso_env.run("rm", "--data", BASIC, "-y").returncode == 0
+
+  # Emptied, not deleted: the loaded compose file still binds these.
+  assert data.is_dir() and list(data.iterdir()) == []
+  assert temp.is_dir() and list(temp.iterdir()) == []
+  assert "config/admin_user" in kelso_env.app_logtab(BASIC).read_text()
+  started = kelso_env.run("start", BASIC)
+  assert started.returncode == 0, started.stderr
+
+
+def test_rm_refuses_a_running_app_and_unload_does_not(kelso_env):
+  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  for argv in (["rm"], ["rm", "--temp"], ["rm", "--data"], ["rm", "--purge"]):
+    refused = kelso_env.run(*argv, BASIC, "-y")
+    assert refused.returncode == 1, argv
+    assert f"kelso stop {BASIC}" in refused.stderr
+  assert kelso_env.run("unload", BASIC, "-y").returncode == 0
 
 
 def test_rm_then_start_starts_afresh_with_the_same_config(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", BASIC, "-y").returncode == 0
 
   started = kelso_env.run("start", BASIC)
@@ -1632,11 +1681,14 @@ def test_each_removal_records_what_it_did(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   for argv, action in (
     (["unload"], "unloaded"),
+    (["rm", "--temp"], "cleared-temp"),
+    (["rm", "--data"], "cleared-data"),
     (["rm"], "removed"),
     (["rm", "--purge"], "purged"),
   ):
     assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-    assert kelso_env.run(*argv, BASIC, "-y").returncode == 0
+    assert kelso_env.run("stop", BASIC).returncode == 0
+    assert kelso_env.run(*argv, BASIC, "-y").returncode == 0, argv
     assert read_last_app_action(BASIC, ctx) == action
 
 
@@ -1672,6 +1724,7 @@ def test_ps_reports_what_an_unloaded_app_kept(kelso_env):
 
 def test_ps_forgets_an_app_once_it_is_purged(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", "--purge", BASIC, "-y").returncode == 0
   assert BASIC not in kelso_env.run("ps").stdout
 
@@ -1679,6 +1732,7 @@ def test_ps_forgets_an_app_once_it_is_purged(kelso_env):
 def test_rm_purge_takes_everything_including_snapshots(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   assert kelso_env.run("snapshot", "take", BASIC).returncode == 0
+  kelso_env.run("stop", BASIC)
   purged = kelso_env.run("rm", "--purge", BASIC, "-y")
   assert purged.returncode == 0, purged.stderr
 

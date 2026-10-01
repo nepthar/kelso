@@ -141,8 +141,8 @@ def _job_buttons(text):
 def test_job_buttons_carry_parseable_json(client, fake):
   buttons = _job_buttons(client.get("/apps/kelso-ui").text)
   remove = next(b for b in buttons if b["title"].startswith("Remove"))
-  assert [c["verb"] for c in remove["choices"]] == ["unload", "rm", "rm"]
-  assert remove["choices"][2]["args"] == {"app": "kelso-ui", "purge": "1"}
+  assert [c["verb"] for c in remove["choices"]] == ["unload", "rm", "rm", "rm", "rm"]
+  assert remove["choices"][4]["args"] == {"app": "kelso-ui", "tier": "purge"}
   stop = next(b for b in buttons if b["verb"] == "stop")
   assert stop["args"] == {"app": "kelso-ui"}
   assert not any(b["verb"] == "start" for b in buttons)

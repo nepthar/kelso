@@ -398,6 +398,7 @@ def test_a_purge_clears_the_binding(kelso_env):
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
   assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
+  kelso_env.run("stop", "ports-demo")
   assert kelso_env.run("rm", "--purge", "ports-demo", "-y").returncode == 0
 
   assert kelso_env.run("load", "ports-demo@local").returncode == 0

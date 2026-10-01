@@ -56,7 +56,8 @@ Apps
   cmd         List or run an app's commands
   load        Load or re-load an app, restarting it if running
   unload      Stop an app and remove its loaded copy, keeping data and config
-  rm          Unload an app and delete its data (--purge: config too)
+  rm          Unload a stopped app and delete its temp and logs
+              (--temp, --data, --purge: more or less)
   inspect     Show an app's state, ports, routes, volumes, and config
   logs        Show an app's logs
   shell       Open a shell in one of an app's containers

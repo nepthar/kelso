@@ -26,8 +26,10 @@ from kelso.lib.lifecycle.restore import (
   snapshot_names,
 )
 from kelso.lib.lifecycle.rm import (
+  DATA,
   PURGE,
   RM,
+  TEMP,
   UNLOAD,
   RemovalMode,
   RemovalPlan,
@@ -78,6 +80,8 @@ __all__ = [
   "PURGE",
   "refuse_other_origin",
   "RM",
+  "TEMP",
+  "DATA",
   "UNLOAD",
   "RemovalMode",
   "removal_plan",

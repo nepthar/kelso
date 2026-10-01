@@ -986,6 +986,7 @@ def test_apps_and_catalog_agree_on_state(kelso_env, client, jobs):
   assert client.get("/apps").json()["apps"] == []
   assert catalog_entry()["state"] == "unloaded"
 
+  kelso_env.run("stop", APP)
   kelso_env.run("rm", "--purge", APP, "-y")
   assert client.get("/apps").json()["apps"] == []
   assert catalog_entry()["state"] == "available"
@@ -1005,20 +1006,26 @@ def test_unload_verb_keeps_data_and_config(kelso_env, client, jobs):
 
 def test_rm_purge_takes_everything(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
-  job = submit(client, jobs, "rm", {"app": APP, "purge": "1"})
+  kelso_env.run("stop", APP)
+  job = submit(client, jobs, "rm", {"app": APP, "tier": "purge"})
   assert job["state"] == "done", job["error"]
   assert not (kelso_env.volumes_root / "data" / APP).exists()
   assert not kelso_env.app_logtab(APP).exists()
 
 
-def test_rm_verb_deletes_data_and_keeps_config(kelso_env, client, jobs):
+def test_rm_verb_takes_a_tier(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.run("stop", APP)
+  data = kelso_env.volumes_root / "data" / APP / "config"
+  (data / "app.db").write_text("rows")
 
-  job = submit(client, jobs, "rm", {"app": APP})
+  job = submit(client, jobs, "rm", {"app": APP, "tier": "data"})
   assert job["state"] == "done", job["error"]
-  assert not (kelso_env.volumes_root / "data" / APP).exists()
-  assert not (kelso_env.run_root / APP).exists()
-  assert kelso_env.app_logtab(APP).exists()
+  assert data.is_dir() and list(data.iterdir()) == []
+  assert (kelso_env.run_root / APP).is_dir()
+
+  refused = client.post("/jobs", json={"verb": "rm", "args": {"app": APP, "tier": "x"}})
+  assert refused.status_code == 400
 
 
 def test_removal_verbs_refuse_an_unknown_app(kelso_env, client):
