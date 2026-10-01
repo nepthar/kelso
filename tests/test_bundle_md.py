@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 
 from kelso.lib.bundle import BundleFolder, BundleMdFile, load_bundle, scan_bundles
+from kelso.lib.config import load_config_file
+from kelso.lib.doctor import diagnose
+from kelso.lib.kelso import KelsoCtx
 
 MD_APP = """\
 # A tiny bundle, as one auditable file.
@@ -159,9 +162,9 @@ def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
   assert by_id.returncode == 1
   assert "More than one repo carries" in by_id.stderr
 
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert "More than one repo carries" in doctor.stdout
+  (problem,) = diagnose(KelsoCtx(load_config_file(kelso_env.config))).problems
+  assert problem.subject == ""
+  assert "More than one repo carries" in problem.message
 
 
 def test_a_full_path_picks_the_flavor_to_load(kelso_env):

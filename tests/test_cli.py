@@ -19,6 +19,7 @@ from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
+from kelso.lib.doctor import Finding, diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
 
@@ -454,10 +455,9 @@ def test_missing_run_directory_with_container_refuses_lifecycle(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   shutil.rmtree(kelso_env.run_root / app_id)
 
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert "run directory missing" in doctor.stdout
-  assert "manual container recovery required" in doctor.stdout
+  problems = _diagnose(kelso_env).problems
+  assert Finding(app_id, "run directory missing") in problems
+  assert Finding(app_id, "manual container recovery required") in problems
 
   for command in (("stop",), ("rm", "--purge", "-y")):
     refused = kelso_env.run(*command, app_id)
@@ -475,12 +475,12 @@ def test_doctor_accepts_an_app_loaded_from_outside_every_repo(kelso_env, tmp_pat
   shutil.rmtree(kelso_env.local_repo / "ports-demo.klso")
   assert kelso_env.run("load", str(bundle)).returncode == 0
 
-  assert kelso_env.run("system", "doctor").returncode == 0
+  assert _diagnose(kelso_env).healthy
 
   shutil.rmtree(bundle)
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert f"app bundle missing, was: {bundle}" in doctor.stdout
+  assert _diagnose(kelso_env).problems == (
+    Finding("ports-demo", f"app bundle missing, was: {bundle}"),
+  )
 
 
 def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
@@ -493,12 +493,8 @@ def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   shutil.rmtree(kelso_env.local_repo / f"{app_id}.klso")
 
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert (
-    f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
-    in doctor.stdout
-  )
+  missing = f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
+  assert Finding(app_id, missing) in _diagnose(kelso_env).problems
 
   stopped = kelso_env.run("stop", app_id)
   assert stopped.returncode == 0, stopped.stderr
@@ -1184,10 +1180,9 @@ def test_doctor_reports_a_dangling_volume_root_and_lists_no_others(kelso_env):
   (kelso_env.volumes_root / "bulk").symlink_to(bulk)
   (kelso_env.volumes_root / "logs").symlink_to(kelso_env.root.parent / "gone")
 
-  result = kelso_env.run("system", "doctor")
-  assert result.returncode == 1
-  assert "volumes logs:" in result.stdout
-  assert "bulk" not in result.stdout
+  prognosis = _diagnose(kelso_env)
+  assert [f.subject for f in prognosis.problems] == ["volumes logs"]
+  assert prognosis.warnings == ()
 
 
 def test_doctor_says_only_that_all_is_well(kelso_env):
@@ -1220,9 +1215,9 @@ def test_doctor_reports_orphaned_routes(kelso_env):
   ps = kelso_env.run("ps")
   assert _ps_row(ps.stdout, "io.example.abandoned")[1:4] == ["-", "-", "-"]
 
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert "orphaned route allocation" in doctor.stdout
+  assert _diagnose(kelso_env).warnings == (
+    Finding("io.example.abandoned", "orphaned route allocation"),
+  )
 
 
 def test_doctor_exposes_mixed_container_states(kelso_env):
@@ -1244,9 +1239,38 @@ def test_doctor_exposes_mixed_container_states(kelso_env):
     ]
   )
 
-  doctor = kelso_env.run("system", "doctor")
-  assert doctor.returncode == 1
-  assert "mixed container states" in doctor.stdout
+  prognosis = _diagnose(kelso_env)
+  assert Finding(app_id, "mixed container states") in prognosis.warnings
+  assert Finding(app_id, "mixed container states") not in prognosis.problems
+
+
+def test_doctor_lists_problems_then_warnings(kelso_env):
+  kelso_env.seed_db(
+    {
+      "routes/io.example.abandoned/web": {
+        "name": "web",
+        "subdomain": "",
+        "run_unit_name": "main",
+        "host_port": 41000,
+        "container_port": 8080,
+        "proto": "tcp",
+        "scheme": "http",
+      }
+    }
+  )
+
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert result.stdout == (
+    "Problems:\n"
+    "  io.example.abandoned: app bundle missing (no load source recorded)\n"
+    "Warnings:\n"
+    "  io.example.abandoned: orphaned route allocation\n"
+  )
+
+
+def _diagnose(kelso_env):
+  return diagnose(KelsoCtx(load_config_file(kelso_env.config)))
 
 
 # --- route provider --------------------------------------------------------
