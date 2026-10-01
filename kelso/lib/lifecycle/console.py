@@ -51,9 +51,7 @@ def console_command(
   app_id = ctx.resolve_app(app)
   state = ctx.run_state(app_id)
   if not state.compose_exists:
-    raise ValueError(
-      f"App {app_id} is not installed; run `kelso install {app_id}` first"
-    )
+    raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
   running = sorted(c.run_unit for c in state.containers if c.state.lower() == "running")
   if unit not in running:
     if running:
@@ -61,7 +59,7 @@ def console_command(
         f"{unit} is not running in {app_id}; running units: {', '.join(running)}"
       )
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
-  spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
+  spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
   unit_shell = spec.run_units[unit].shell
   script = f"exec {shlex.quote(unit_shell[0])} -i"
   if unit_commands(spec, unit):

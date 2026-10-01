@@ -66,7 +66,10 @@ from kelso.lib.spec import AppSpec
 #     `advanced`; every app has the app options.
 # 24: apps and catalog apps carry `author` and `url`.
 # 25: `up` and `down` are job verbs.
-API_VERSION = 25
+# 26: install/uninstall are load/unload, reset is gone and rm is a job verb;
+#     app states are loaded/unloaded/available.
+# 27: rm takes `tier` (temp, data, purge) in place of `purge`.
+API_VERSION = 27
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -121,7 +124,7 @@ Jobs = Annotated[JobRunner, Depends(_runner)]
 
 
 def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
-  """The schema for an app that is not installed yet."""
+  """The schema for an app that is not loaded yet."""
   return load_bundle(ctx.bundle_path(app)).app_spec()
 
 
@@ -223,7 +226,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     """The app's `[config]`, with what is on file now."""
     try:
       resolved = ctx.resolve_app(app_id)
-      spec = ctx.staged_spec(resolved) or _bundle_spec(resolved, ctx)
+      spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
     return views.config_request_view(app_config_request(spec, ctx))
@@ -234,7 +237,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     try:
       resolved = ctx.resolve_app(app_id)
       with ctx.locked(f"config {resolved}", resolved):
-        spec = ctx.staged_spec(resolved) or _bundle_spec(resolved, ctx)
+        spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
         apply_app_config(spec, ConfigResponse(values=body.values), ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e

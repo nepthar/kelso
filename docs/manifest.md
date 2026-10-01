@@ -10,7 +10,7 @@ This is the reference. For a manifest built from nothing in one sitting, read
 the [case study](case_study.md).
 
 A manifest is TOML, and unknown sections and keys are refused rather than
-ignored, so a typo is an error at install time instead of a setting that
+ignored, so a typo is an error at load time instead of a setting that
 silently did nothing.
 
 ---
@@ -81,7 +81,7 @@ that does not, with no change to the bundle.
 | `logs` | Output that can be rotated away without loss. |
 | `temp` | Caches and scratch. Safe to delete when the app is not running. |
 | `app` | Files the bundle itself ships. Always mounted read-only. |
-| `host` | A directory on the machine, chosen by the operator at install time. |
+| `host` | A directory on the machine, chosen by the operator at load time. |
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -116,7 +116,7 @@ so a name may appear in only one of them.
 | `default` | string | none | With no default, the app will not start until the value is set. |
 | `secret` | bool | `false` | Stored encrypted, never returned by the API or shown in the UI. |
 
-`default = "auto"` on a secret means kelso generates one at install and the
+`default = "auto"` on a secret means kelso generates one at load and the
 operator never sees or sets it — the right answer for a password two
 containers need to agree on and nobody else needs.
 
@@ -206,7 +206,7 @@ desc     = "Open a database shell"
 
 ## Substitution in `env`
 
-`${…}` in `[run.<unit>.env]` is resolved against one flat keyspace, at install
+`${…}` in `[run.<unit>.env]` is resolved against one flat keyspace, at load
 time, and a reference to something that does not exist is an error rather than
 an empty string:
 
@@ -248,7 +248,7 @@ manifest fields; setting them twice would mean one of them silently losing.
 **Keys kelso does not recognise are announced.** There is an allowlist of
 options that shape how a container runs without reaching outside it —
 `healthcheck`, `depends_on`, `mem_limit`, `user`, `ulimits`, `read_only` and
-friends — and anything outside it produces a warning on install, in `kelso
+friends — and anything outside it produces a warning on load, in `kelso
 inspect`, and on the app's card in the web UI:
 
 > Warning: This application sets free-form docker options on main that are not
@@ -293,8 +293,8 @@ never run kelso. See [demo-markdown](../demo-apps/demo-markdown.klso.md).
 
 ```bash
 kelso inspect <app>      # what the manifest declares, resolved
-kelso install <app>      # parse errors, one list, with the key that caused each
+kelso load <app>         # parse errors, one list, with the key that caused each
 ```
 
-`kelso inspect` on an uninstalled app reads the manifest it *would* install
+`kelso inspect` on an unloaded app reads the manifest it *would* load
 from, so it is the fastest way to see whether an edit did what you meant.

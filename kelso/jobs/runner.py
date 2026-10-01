@@ -15,10 +15,10 @@ from typing import Any
 import schedule
 
 from kelso.jobs.cmd import CmdJob
-from kelso.jobs.install import InstallJob
 from kelso.jobs.job import DONE, FAILED, QUEUED, RUNNING, Job
+from kelso.jobs.load import LoadJob
 from kelso.jobs.metrics import HostMetricsJob, VolumeMetricsJob
-from kelso.jobs.remove import ResetJob, UninstallJob
+from kelso.jobs.remove import RmJob, UnloadJob
 from kelso.jobs.repo import RepoAddJob, RepoRemoveJob, RepoUpdateJob
 from kelso.jobs.restore import RestoreJob
 from kelso.jobs.snapshot import DeleteSnapshotJob, SnapshotJob
@@ -36,20 +36,20 @@ MAX_HISTORY = 200
 # `repo-add`, a github:// url. Nothing accepts a manifest or a filesystem path:
 # those are the arguments that let a caller define what an app *is*, and
 # defining an app means arbitrary bind mounts, which means root. Path-style
-# `install`, and adding a local directory as a repo, stay CLI-only for exactly
+# `load`, and adding a local directory as a repo, stay CLI-only for exactly
 # that reason; `job.app_target` is where the app-side refusal happens.
 JOBS: dict[str, type[Job]] = {
   "start": StartJob,
   "stop": StopJob,
   "up": UpJob,
   "down": DownJob,
-  "install": InstallJob,
+  "load": LoadJob,
   "snapshot": SnapshotJob,
   "snapshot-delete": DeleteSnapshotJob,
   "restore": RestoreJob,
   "cmd": CmdJob,
-  "uninstall": UninstallJob,
-  "reset": ResetJob,
+  "unload": UnloadJob,
+  "rm": RmJob,
   "repo-add": RepoAddJob,
   "repo-update": RepoUpdateJob,
   "repo-remove": RepoRemoveJob,

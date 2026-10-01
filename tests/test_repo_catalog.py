@@ -147,16 +147,16 @@ def test_two_extra_repos_may_not_share_a_name(kelso_env):
 # --- using an extra source --------------------------------------------------
 
 
-def test_an_app_in_a_second_source_stages_by_id(kelso_env):
+def test_an_app_in_a_second_source_loads_by_id(kelso_env):
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  result = kelso_env.run("install", "dev-app")
+  result = kelso_env.run("load", "dev-app")
 
   assert result.returncode == 0, result.stderr
   assert (kelso_env.run_root / "dev-app" / "compose.yml").is_file()
-  # Staged from where it lives. Nothing is copied or linked into apps/.
+  # Loaded from where it lives. Nothing is copied or linked into apps/.
   assert not (kelso_env.root / "repos" / "local" / "dev-app.klso").exists()
 
 
@@ -179,16 +179,16 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
 
 
 def test_catalog_reports_the_last_action_as_status(kelso_env):
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
 
-  staged = _row(kelso_env.run("repo", "list").stdout, "ports-demo")
-  assert staged[2] == "installed"
+  loaded = _row(kelso_env.run("repo", "list").stdout, "ports-demo")
+  assert loaded[2] == "loaded"
 
   assert kelso_env.run("start", "ports-demo").returncode == 0
   started = _row(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert started[2] == "started"
 
-  # Not installed, so no status of its own.
+  # Not loaded, so no status of its own.
   assert _row(kelso_env.run("repo", "list").stdout, "routes-demo")[2] == "-"
 
 
@@ -202,8 +202,8 @@ def test_an_ambiguous_id_gets_a_row_per_source(kelso_env):
   assert [row[1] for row in rows] == ["local", "hrbr-dev"]
 
 
-def test_status_follows_the_bundle_that_is_actually_installed(kelso_env):
-  """Two bundles share the id; only the one staged from carries its status."""
+def test_status_follows_the_bundle_that_is_actually_loaded(kelso_env):
+  """Two bundles share the id; only the one loaded from carries its status."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -216,19 +216,19 @@ def test_status_follows_the_bundle_that_is_actually_installed(kelso_env):
     ("hrbr-dev", "started"),
   ]
 
-  # Re-staging from the other bundle is a rebinding: refused on its own, and
+  # Re-loading from the other bundle is a rebinding: refused on its own, and
   # the status stays where it was.
   assert kelso_env.run("stop", "ports-demo").returncode == 0
   from_local = kelso_env.root / "repos" / "local" / "ports-demo.klso"
-  refused = kelso_env.run("install", str(from_local))
+  refused = kelso_env.run("load", str(from_local))
   assert refused.returncode == 1
-  assert "previously installed from" in refused.stderr
+  assert "previously loaded from" in refused.stderr
 
-  assert kelso_env.run("install", str(from_local), "--force").returncode == 0
+  assert kelso_env.run("load", str(from_local), "--force").returncode == 0
 
   rows = _rows(kelso_env.run("repo", "list").stdout, "ports-demo")
   assert [(row[1], row[2]) for row in rows] == [
-    ("local", "installed"),
+    ("local", "loaded"),
     ("hrbr-dev", "-"),
   ]
 
@@ -236,7 +236,7 @@ def test_status_follows_the_bundle_that_is_actually_installed(kelso_env):
 def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   """Two entries are two catalog rows, even when they name one directory.
 
-  Installing by path resolves the link, so both routes to the bundle are one
+  Loading by path resolves the link, so both routes to the bundle are one
   binding rather than a rebinding.
   """
   dev = kelso_env.root / "dev-apps"
@@ -248,19 +248,19 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   entries = ctx_for(kelso_env).app_catalog()["dev-app"]
   assert [entry.source for entry in entries] == ["local", "hrbr-dev"]
 
-  by_id = kelso_env.run("install", "dev-app")
+  by_id = kelso_env.run("load", "dev-app")
   assert by_id.returncode == 1
   assert "More than one repo carries" in by_id.stderr
 
-  assert kelso_env.run("install", str(link)).returncode == 0
+  assert kelso_env.run("load", str(link)).returncode == 0
   # Naming the link and naming its target are the same binding, so neither
-  # install is refused as a change of source.
-  assert kelso_env.run("install", str(bundle)).returncode == 0
+  # load is refused as a change of source.
+  assert kelso_env.run("load", str(bundle)).returncode == 0
 
   rows = _rows(kelso_env.run("repo", "list").stdout, "dev-app")
   assert [(row[1], row[2]) for row in rows] == [
     ("local", "-"),
-    ("hrbr-dev", "installed"),
+    ("hrbr-dev", "loaded"),
   ]
 
 
@@ -276,15 +276,15 @@ def test_doctor_reports_a_missing_repo_directory(kelso_env):
 # --- one id in two sources --------------------------------------------------
 
 
-def test_an_id_in_two_sources_cannot_be_staged_or_started_by_id(kelso_env):
+def test_an_id_in_two_sources_cannot_be_loaded_or_started_by_id(kelso_env):
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "ports-demo")  # apps/ports-demo.klso is a fixture bundle
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  staged = kelso_env.run("install", "ports-demo")
-  assert staged.returncode == 1
-  assert "More than one repo carries" in staged.stderr
-  assert str(dev) in staged.stderr
+  loaded = kelso_env.run("load", "ports-demo")
+  assert loaded.returncode == 1
+  assert "More than one repo carries" in loaded.stderr
+  assert str(dev) in loaded.stderr
 
   started = kelso_env.run("start", "ports-demo")
   assert started.returncode == 1
@@ -303,57 +303,57 @@ def test_doctor_reports_an_ambiguous_id(kelso_env):
   assert "hrbr-dev" in result.stderr
 
 
-def test_a_full_path_picks_which_source_to_stage(kelso_env):
+def test_a_full_path_picks_which_source_to_load(kelso_env):
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  result = kelso_env.run("install", str(bundle))
+  result = kelso_env.run("load", str(bundle))
 
   assert result.returncode == 0, result.stderr
-  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
-  assert "From dev" in staged.read_text()
+  loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
+  assert "From dev" in loaded.read_text()
   # Picking one did not add a third entry for the id.
   assert len(ctx_for(kelso_env).app_catalog()["ports-demo"]) == 2
 
 
-def test_only_one_app_is_staged_per_id(kelso_env):
-  """Two bundles, one run dir: staging the other replaces what is installed."""
+def test_only_one_app_is_loaded_per_id(kelso_env):
+  """Two bundles, one run dir: loading the other replaces what is loaded."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  assert kelso_env.run("install", str(bundle)).returncode == 0
-  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
-  assert "From dev" in staged.read_text()
+  assert kelso_env.run("load", str(bundle)).returncode == 0
+  loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
+  assert "From dev" in loaded.read_text()
 
   from_local = kelso_env.root / "repos" / "local" / "ports-demo.klso"
-  assert kelso_env.run("install", str(from_local), "--force").returncode == 0
+  assert kelso_env.run("load", str(from_local), "--force").returncode == 0
 
-  assert "From dev" not in staged.read_text()
+  assert "From dev" not in loaded.read_text()
   assert [p.name for p in kelso_env.run_root.iterdir()] == ["ports-demo"]
 
 
 def test_an_ambiguous_id_still_stops_and_removes(kelso_env):
-  """The staged copy is unambiguous, so lifecycle commands keep working."""
+  """The loaded copy is unambiguous, so lifecycle commands keep working."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
   assert kelso_env.run("start", str(bundle)).returncode == 0
 
   assert kelso_env.run("stop", "ports-demo").returncode == 0
-  assert kelso_env.run("uninstall", "--purge", "ports-demo", "-y").returncode == 0
+  assert kelso_env.run("rm", "--purge", "ports-demo", "-y").returncode == 0
 
 
 # --- binding ----------------------------------------------------------------
 
 
-def test_installing_records_the_repo_it_came_from(kelso_env):
+def test_loading_records_the_repo_it_came_from(kelso_env):
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  assert kelso_env.run("install", "dev-app").returncode == 0
+  assert kelso_env.run("load", "dev-app").returncode == 0
 
   assert bound_to("dev-app", ctx_for(kelso_env)) == "repo hrbr-dev"
 
@@ -363,57 +363,58 @@ def test_a_repo_can_be_named_to_settle_an_ambiguous_id(kelso_env):
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  assert kelso_env.run("install", "ports-demo@hrbr-dev").returncode == 0
+  assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
 
-  staged = kelso_env.run_root / "ports-demo" / "staged" / "manifest.toml"
-  assert "From dev" in staged.read_text()
+  loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
+  assert "From dev" in loaded.read_text()
   assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo hrbr-dev"
 
 
 def test_naming_a_repo_that_does_not_carry_the_app_says_which_do(kelso_env):
-  result = kelso_env.run("install", "ports-demo@nowhere")
+  result = kelso_env.run("load", "ports-demo@nowhere")
 
   assert result.returncode == 1
   assert "does not carry" in result.stderr
   assert "local" in result.stderr
 
 
-def test_a_binding_outlives_an_uninstall(kelso_env):
-  """Config and secrets survive an uninstall; so does the source they suit."""
+def test_a_binding_outlives_an_unload(kelso_env):
+  """Config and secrets survive an unload; so does the source they suit."""
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
-  assert kelso_env.run("install", "ports-demo@hrbr-dev").returncode == 0
-  assert kelso_env.run("uninstall", "ports-demo", "-y").returncode == 0
+  assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
+  assert kelso_env.run("unload", "ports-demo", "-y").returncode == 0
 
-  refused = kelso_env.run("install", "ports-demo@local")
+  refused = kelso_env.run("load", "ports-demo@local")
   assert refused.returncode == 1
-  assert "previously installed from repo hrbr-dev" in refused.stderr
+  assert "previously loaded from repo hrbr-dev" in refused.stderr
   assert "--force" in refused.stderr
-  assert "uninstall --purge ports-demo" in refused.stderr
+  assert "rm --purge ports-demo" in refused.stderr
 
 
 def test_a_purge_clears_the_binding(kelso_env):
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
-  assert kelso_env.run("install", "ports-demo@hrbr-dev").returncode == 0
-  assert kelso_env.run("uninstall", "--purge", "ports-demo", "-y").returncode == 0
+  assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
+  kelso_env.run("stop", "ports-demo")
+  assert kelso_env.run("rm", "--purge", "ports-demo", "-y").returncode == 0
 
-  assert kelso_env.run("install", "ports-demo@local").returncode == 0
+  assert kelso_env.run("load", "ports-demo@local").returncode == 0
   assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo local"
 
 
-def test_force_installs_over_a_different_source(kelso_env):
+def test_force_loads_over_a_different_source(kelso_env):
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
-  assert kelso_env.run("install", "ports-demo@hrbr-dev").returncode == 0
+  assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
 
-  assert kelso_env.run("install", "ports-demo@local", "--force").returncode == 0
+  assert kelso_env.run("load", "ports-demo@local", "--force").returncode == 0
   assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo local"
 
 
-def test_reinstalling_from_the_same_repo_is_not_a_rebinding(kelso_env):
-  assert kelso_env.run("install", "ports-demo").returncode == 0
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+def test_reloading_from_the_same_repo_is_not_a_rebinding(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0

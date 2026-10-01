@@ -10,7 +10,7 @@ from kelso.cli import (
   dev,
   init,
   inspect,
-  install,
+  load,
   logs,
   ps,
   remove,
@@ -34,7 +34,7 @@ COMMANDS = [
   stop,
   config,
   cmd,
-  install,
+  load,
   remove,
   inspect,
   logs,
@@ -49,19 +49,20 @@ COMMANDS = [
 
 HELP = """\
 Apps
-  ps          List installed apps and their state
-  start       Start an app, installing it first if needed
+  ps          List loaded apps and their state
+  start       Start an app, loading it first if needed
   stop        Stop a running app
   config      View or set an app's config, routes, and volume binds
   cmd         List or run an app's commands
-  install     Install or re-install an app, restarting it if running
-  uninstall   Uninstall an app (--purge to delete its data and config too)
+  load        Load or re-load an app, restarting it if running
+  unload      Stop an app and remove its loaded copy, keeping data and config
+  rm          Unload a stopped app and delete its temp and logs
+              (--temp, --data, --purge: more or less)
   inspect     Show an app's state, ports, routes, volumes, and config
   logs        Show an app's logs
   shell       Open a shell in one of an app's containers
 
   dev         Run an app bundle in this terminal
-  reset       Delete an app's data, keeping its config
 
 This box
   up          Start all apps in start_order groups

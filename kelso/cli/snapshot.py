@@ -20,7 +20,7 @@ def register(subparsers) -> None:
 
   take = sub.add_parser(
     "take",
-    help="Capture a restore point (config, staged bundle, and data volumes)",
+    help="Capture a restore point (config, loaded bundle, and data volumes)",
   )
   take.add_argument("app", metavar="APP", help="App ID to snapshot")
   take.add_argument(
@@ -100,7 +100,7 @@ def run_restore(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
 def _confirmed(plan: RestorePlan, snapshot_first: bool, conn: Conn) -> bool:
   conn.out(f"Restoring {plan.app_id} from {plan.snapshot_path} overwrites:")
-  conn.out(f"  {plan.run_path} (staged bundle, compose)")
+  conn.out(f"  {plan.run_path} (loaded bundle, compose)")
   conn.out(f"  {plan.config_path} (config, secrets)")
   for _, dest in plan.data_volumes:
     conn.out(f"  {dest}")

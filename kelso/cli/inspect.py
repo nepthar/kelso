@@ -32,30 +32,29 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
 
   app = ctx.resolve_app(args.app)
   with ctx.locked(f"inspect {app}", app):
-    staged = ctx.staged_spec(app)
-    spec = staged or ctx.bundle_spec(app)
+    loaded = ctx.loaded_spec(app)
+    spec = loaded or ctx.bundle_spec(app)
     if spec is None:
       raise ValueError(
-        f"No manifest for {app}: it is neither installed nor in a catalog. "
+        f"No manifest for {app}: it is neither loaded nor in a catalog. "
         f"Pass a path to a .klso to inspect one directly."
       )
 
     notes: tuple[str, ...] = ()
-    if staged is None:
+    if loaded is None:
       notes = (
-        f"{app} is not installed; this is the manifest it would be installed "
-        f"from. Install it with `kelso install {app}`",
+        f"{app} is not loaded; this is the manifest it would be loaded "
+        f"from. Load it with `kelso load {app}`",
       )
     elif ctx.manifest_stale(app):
       notes = (
-        f"manifest has changed, `kelso install {app}` may be required to "
-        f"reflect changes",
+        f"manifest has changed, `kelso load {app}` may be required to reflect changes",
       )
 
     conn.out(
       capability_receipt(
         spec,
-        load_run_data(spec, ctx) if staged is not None else None,
+        load_run_data(spec, ctx) if loaded is not None else None,
         ctx,
         compact=False,
         notes=notes,

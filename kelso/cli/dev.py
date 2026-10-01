@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from kelso.cli.configform import collect
-from kelso.cli.install import confirm_compose_warnings
+from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, is_pathlike
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
@@ -12,8 +12,8 @@ from kelso.lib.lifecycle import (
   bound_to,
   dev,
   dev_plan,
+  load,
   refuse_other_origin,
-  stage,
 )
 from kelso.lib.receipt import LABEL_WIDTH, route_lines
 from kelso.lib.spec import AppSpec
@@ -23,7 +23,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "dev",
-    help="Install an app from its bundle and run it in this terminal",
+    help="Load an app from its bundle and run it in this terminal",
   )
   parser.add_argument(
     "bundle",
@@ -54,7 +54,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       return
 
     bound = None if bound_to(app, ctx) else str(source)
-    result = stage(app, source, ctx, bound=bound)
+    result = load(app, source, ctx, bound=bound)
     for name in result.dropped_volumes:
       conn.err(
         f"volume {name} is no longer declared in the manifest; "

@@ -6,16 +6,16 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.docker import DockerError, docker_run_command, sink_output
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import container_recovery_message, logger
+from kelso.lib.lifecycle.load import (
+  LoadResult,
+  link_host_volumes,
+  load,
+  unlink_host_volumes,
+)
 from kelso.lib.lifecycle.routes import (
   preflight_app_routes,
   register_app_routes,
   unregister_app_routes,
-)
-from kelso.lib.lifecycle.stage import (
-  StageSuccess,
-  link_host_volumes,
-  stage,
-  unlink_host_volumes,
 )
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
@@ -40,22 +40,22 @@ def start(
   sets: list[tuple[str, str]] | None = None,
   binds: list[tuple[str, str]] | None = None,
   bound: str | None = None,
-) -> StageSuccess:
-  """Stage if needed, then bring the app up and register assigned routes."""
-  paths = ctx.staged_paths(app)
+) -> LoadResult:
+  """Load if needed, then bring the app up and register assigned routes."""
+  paths = ctx.loaded_paths(app)
 
-  if sets or binds or not ctx.is_staged(app):
-    result = stage(app, bundle, ctx, sets=sets, binds=binds, bound=bound)
+  if sets or binds or not ctx.is_loaded(app):
+    result = load(app, bundle, ctx, sets=sets, binds=binds, bound=bound)
   else:
     spec = AppSpec.from_file(paths.manifest_path, app)
-    result = StageSuccess(spec, load_run_data(spec, ctx))
+    result = LoadResult(spec, load_run_data(spec, ctx))
 
   spec, run_data = result.spec, result.run_data
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
 
   if not paths.compose_path.is_file():
-    raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
+    raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
 
   try:
     preflight_app_routes(run_data, ctx)
@@ -64,7 +64,7 @@ def start(
     raise ValueError(str(e)) from e
 
   # Rebuilt from scratch every start, so a bind recorded since the last one --
-  # staging does not touch these -- takes effect now.
+  # loading does not touch these -- takes effect now.
   link_host_volumes(spec, run_data)
 
   try:
@@ -94,7 +94,7 @@ def start(
 def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
   """The config environment compose.yml interpolates `${__KELSO_CONFIG__*}` from."""
   try:
-    spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
+    spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
     return load_run_data(spec, ctx).config_env()
   except ValueError as e:
     logger.debug("no config env for %s: %s", app_id, e)
@@ -102,12 +102,10 @@ def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
 
 
 def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
-  """Stream ``docker compose logs`` for a staged app."""
+  """Stream ``docker compose logs`` for a loaded app."""
   state = ctx.run_state(app_id)
   if not state.compose_exists:
-    raise ValueError(
-      f"App {app_id} is not installed; run `kelso install {app_id}` first"
-    )
+    raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
 
   docker_run_command(
     ["compose", "logs", *(extra_args or [])],
@@ -125,9 +123,7 @@ def logs_text(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> str:
   """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
-    raise ValueError(
-      f"App {app_id} is not installed; run `kelso install {app_id}` first"
-    )
+    raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
 
   captured = io.StringIO()
   with sink_output(captured):
@@ -150,11 +146,9 @@ def run_command(
   """Run a manifest `[commands]` entry in its target unit."""
   state = ctx.run_state(app_id)
   if not state.compose_exists:
-    raise ValueError(
-      f"App {app_id} is not installed; run `kelso install {app_id}` first"
-    )
+    raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
 
-  spec = AppSpec.from_file(ctx.staged_paths(app_id).manifest_path, app_id)
+  spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
   entry = spec.commands.get(cmd_name)
   if entry is None:
     available = ", ".join(sorted(spec.commands)) or "(none)"
@@ -198,7 +192,7 @@ def run_command(
 class ReloadResult:
   """What a reload did, so a caller can say so without re-deriving it."""
 
-  stage: StageSuccess
+  load: LoadResult
   # Whether the app was running when the reload began, and so was started
   # again at the end. A reload never starts an app that was not running.
   was_running: bool
@@ -211,10 +205,10 @@ def reload_app(
   *,
   bound: str | None = None,
 ) -> ReloadResult:
-  """Stop if running, re-stage from the bundle, and start again if it was.
+  """Stop if running, re-load from the bundle, and start again if it was.
 
   The point is picking up a changed manifest or pending configuration without
-  the operator having to remember which of stop/install/start apply. Whether
+  the operator having to remember which of stop/load/start apply. Whether
   the app comes back up is decided by whether it was up to begin with -- a
   reload is never a way to start something.
 
@@ -224,15 +218,15 @@ def reload_app(
   try:
     running = bool(ctx.run_state(app).running_count)
   except ValueError:
-    # Never installed, so nothing to stop -- staging below is the whole job.
+    # Never loaded, so nothing to stop -- loading below is the whole job.
     running = False
 
   if running:
     stop(app, ctx)
-  result = stage(app, bundle, ctx, bound=bound)
+  result = load(app, bundle, ctx, bound=bound)
   if running:
     start(app, ctx.config.app_run_path(app), ctx)
-  return ReloadResult(stage=result, was_running=running)
+  return ReloadResult(load=result, was_running=running)
 
 
 def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
@@ -246,9 +240,7 @@ def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
   if not state.compose_exists:
     if state.containers:
       raise ValueError(container_recovery_message(app_id, ctx))
-    raise ValueError(
-      f"App {app_id} is not installed; run `kelso install {app_id}` first"
-    )
+    raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
 
   try:
     unregister_app_routes(app_id, ctx)

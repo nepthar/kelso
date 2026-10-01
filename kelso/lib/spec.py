@@ -148,7 +148,7 @@ class AppCommand:
 
 @dataclass(frozen=True)
 class AppSpec:
-  """An immutable, installation-independent app definition."""
+  """An immutable app definition, independent of any loaded copy."""
 
   app: AppID
   manifest: Manifest
@@ -237,7 +237,7 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
     )
   # `app` volumes carry the bundle's own files and are always read-only, so a
   # container write fails at mount time instead of being silently discarded
-  # by the next `stage` (docs/run-layout.md L4).
+  # by the next `load` (docs/run-layout.md L4).
   volumes = {
     name: AppVolume(
       name, v.kind, True if v.kind == "app" else v.readonly, v.src, v.desc

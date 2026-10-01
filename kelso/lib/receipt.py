@@ -64,12 +64,12 @@ def route_lines(
   return lines
 
 
-def config_lines(spec: AppSpec, ctx: KelsoCtx, *, installed: bool) -> list[str]:
+def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
   """Per-key config status, same wording as `kelso config`."""
   if not spec.config:
     return []
   store = None
-  if installed and ctx.config.app_config_path(spec.app).is_file():
+  if loaded and ctx.config.app_config_path(spec.app).is_file():
     store = ctx.app_store(spec.app)
   lines: list[str] = []
   for name, entry in spec.config.items():
@@ -231,7 +231,7 @@ def capability_receipt(
       for extra in vols[1:]:
         lines.append(_labeled_line("", extra))
 
-    configs = config_lines(spec, ctx, installed=run_data is not None)
+    configs = config_lines(spec, ctx, loaded=run_data is not None)
     if configs:
       lines.append(_labeled_line("Config:", configs[0]))
       for extra in configs[1:]:

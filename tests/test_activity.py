@@ -70,7 +70,7 @@ def test_runs_list_newest_first_and_filter_by_app(ctx):
 
 
 def test_appless_runs_omit_the_app_id(ctx):
-  relpath = _record(ctx, verb="fetch", app=None, output="Installed x")
+  relpath = _record(ctx, verb="fetch", app=None, output="Loaded x")
   assert relpath == "2026-08-25T033000Z.fetch.log"
 
   runs = activity.list_runs(ctx, app=activity.KELSO_DIR)

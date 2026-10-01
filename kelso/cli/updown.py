@@ -11,7 +11,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   up_parser = subparsers.add_parser(
     "up",
-    help="Start every installed app in start_order groups 1 to 9",
+    help="Start every loaded app in start_order groups 1 to 9",
   )
   up_parser.add_argument(
     "--timeout",

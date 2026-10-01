@@ -26,10 +26,10 @@ NO_STORE = {"Cache-Control": "no-store"}
 
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
-# installed without the other and fields this UI reads may be missing.
-NEEDS_API = 25
+# loaded without the other and fields this UI reads may be missing.
+NEEDS_API = 27
 
-# Random per install (kelso-ui's `instance_id`), so two kelso-ui tabs can be
+# Random per load (kelso-ui's `instance_id`), so two kelso-ui tabs can be
 # told apart even when neither can reach its kelsod.
 INSTANCE_ID = os.environ.get("KELSO_UI_ID", "").strip()
 

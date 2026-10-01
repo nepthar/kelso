@@ -5,7 +5,7 @@
 
 No hardware acceleration yet.
 
-## Installing
+## Loading
 
 The photo library has to be a directory on the host first — kelso binds a path, it does not speak NFS. Mount the share through fstab, autofs, or a systemd `.mount` unit, declare it in config.toml, then bind:
 

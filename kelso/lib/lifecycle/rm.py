@@ -5,31 +5,36 @@ from typing import Literal
 
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle._common import (
-  container_recovery_message,
-  logger,
-  managed_volume_dirs,
-)
+from kelso.lib.lifecycle._common import container_recovery_message, logger
 from kelso.lib.lifecycle.run import stop
-from kelso.lib.lifecycle.stage import stage
 
 # Deleting config while keeping data regenerates an app's secrets against a
 # database initialised with the old ones, and it comes back as an app that no
-# longer starts. PURGE takes both together, so nothing can end up mismatched.
-RemovalMode = Literal["uninstall", "reset", "purge"]
+# longer starts. So config only ever goes with the data, in PURGE.
+RemovalMode = Literal["unload", "rm", "temp", "data", "purge"]
 
-# The installation. Data and config stay.
-UNINSTALL: RemovalMode = "uninstall"
-# The data, and the installation with it, then installed again from the bundle.
-# `app`-kind volumes ship inside the bundle, so a reset picks up a changed bundle.
-RESET: RemovalMode = "reset"
-# All three, and the routes and host ports with them.
+# Stop it and remove the loaded copy under var/run. Nothing else.
+UNLOAD: RemovalMode = "unload"
+# Of a stopped app: the loaded copy, and its temp and logs volumes.
+RM: RemovalMode = "rm"
+# Of a stopped app: empty its temp and logs volumes. It stays loaded.
+TEMP: RemovalMode = "temp"
+# Of a stopped app: empty every volume, keeping its config, so it starts as if
+# just loaded. It stays loaded.
+DATA: RemovalMode = "data"
+# Of a stopped app: everything kelso holds for it -- the loaded copy, every
+# volume, its config and secrets, and its routes and host ports.
 PURGE: RemovalMode = "purge"
 
+_TEMP_KINDS = ("temp", "logs")
+_ALL_KINDS = ("data", "bulk", "temp", "logs")
+
 _ACTIONS: dict[str, str] = {
-  UNINSTALL: "uninstalled",
-  RESET: "reset",
-  PURGE: "removed",
+  UNLOAD: "unloaded",
+  RM: "removed",
+  TEMP: "cleared-temp",
+  DATA: "cleared-data",
+  PURGE: "purged",
 }
 
 
@@ -39,25 +44,37 @@ class RemovalPlan:
 
   app_id: AppID
   mode: RemovalMode
+  # The loaded copy, when this mode unloads.
   run_path: Path | None
   config_path: Path | None
+  # Deleted outright, or emptied in place for a mode that leaves the app loaded:
+  # its bind mounts must still resolve.
   volume_paths: tuple[Path, ...]
   host_paths: tuple[Path, ...]
+  # Containers to take down first: a running app for unload, leftover stopped
+  # ones for anything that removes the loaded copy.
   stop_first: bool
-  # Resolved while planning, so an app whose catalog entry is gone or ambiguous
-  # fails with everything still on disk.
-  restage_from: Path | None
 
   @property
   def purges(self) -> bool:
     return self.mode == PURGE
 
+  @property
+  def empties(self) -> bool:
+    """Volumes are emptied rather than deleted, because the app stays loaded."""
+    return self.mode in (TEMP, DATA)
+
 
 def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalPlan:
-  """Work out what a removal would destroy, without destroying it."""
+  """Work out what a removal would destroy, without destroying it.
+
+  Raises ValueError for anything but unload on a running app.
+  """
   state = ctx.run_state(app_id)
   if state.containers and not state.compose_exists:
     raise ValueError(container_recovery_message(app_id, ctx))
+  if mode != UNLOAD and state.running_count:
+    raise ValueError(f"App {app_id} is running; run `kelso stop {app_id}` first")
 
   host_paths: tuple[Path, ...] = ()
   config_path = ctx.config.app_config_path(app_id)
@@ -69,24 +86,24 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
       if tag in ctx.config.host_volumes
     )
 
-  volumes: tuple[Path, ...] = ()
-  if mode in (RESET, PURGE):
-    volumes = tuple(d for d in managed_volume_dirs(app_id, ctx) if d.is_dir())
+  kinds = {UNLOAD: (), RM: _TEMP_KINDS, TEMP: _TEMP_KINDS}.get(mode, _ALL_KINDS)
+  roots = ctx.config.volume_roots
+  volumes = tuple(roots[k] / app_id for k in kinds if (roots[k] / app_id).is_dir())
+  unloads = mode in (UNLOAD, RM, PURGE)
 
   return RemovalPlan(
     app_id=app_id,
     mode=mode,
-    run_path=state.run_path,
+    run_path=state.run_path if unloads else None,
     config_path=config_path if mode == PURGE and config_path.is_file() else None,
     volume_paths=volumes,
     host_paths=host_paths,
-    stop_first=state.compose_exists,
-    restage_from=ctx.bundle_path(app_id) if mode == RESET else None,
+    stop_first=unloads and state.compose_exists and bool(state.containers),
   )
 
 
 def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
-  """Carry out `plan`, and for a reset install the app again afterwards."""
+  """Carry out `plan`."""
   app_id = plan.app_id
   if plan.stop_first:
     logger.info("Stopping %s", app_id)
@@ -101,21 +118,30 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
     logger.info("removed config %s", plan.config_path)
 
   for path in plan.volume_paths:
-    if path.is_dir():
+    if plan.empties:
+      _empty_volumes(path)
+      logger.info("emptied volumes in %s", path)
+    elif path.is_dir():
       shutil.rmtree(path)
       logger.info("removed volume %s", path)
 
   if plan.purges:
     ctx.kelso_db.purge_app(app_id)
 
-  if plan.restage_from is not None:
-    # Staging recreates the volume directories the compose file binds to, which is
-    # why a reset can delete them outright.
-    logger.info("Staging %s from %s", app_id, plan.restage_from)
-    stage(app_id, plan.restage_from, ctx)
-
   # The activity log outlives the app on purpose, so close it out rather than
   # leaving the trail ending at whatever happened before the removal.
   action = _ACTIONS[plan.mode]
   record_app_action(action, app_id, ctx)
   logger.info("%s %s", action, app_id)
+
+
+def _empty_volumes(app_dir: Path) -> None:
+  """Delete what is inside each volume under `app_dir`, keeping the volume dirs."""
+  for volume in app_dir.iterdir():
+    if not volume.is_dir() or volume.is_symlink():
+      continue
+    for entry in volume.iterdir():
+      if entry.is_dir() and not entry.is_symlink():
+        shutil.rmtree(entry)
+      else:
+        entry.unlink()

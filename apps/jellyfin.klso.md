@@ -39,11 +39,11 @@ user = "1000:1000"
 
 [run.main.env]
 # Autodiscovery hands clients this address instead of the container's own.
-# kelso fills it in from the `main` route once the app is staged.
+# kelso fills it in from the `main` route once the app is loaded.
 JELLYFIN_PublishedServerUrl = "${routes.main}"
 ```
 
-## Installing
+## Loading
 
 The media share has to be mounted on the host first — kelso binds a directory,
 it does not speak NFS. Mount your media through fstab, autofs, or

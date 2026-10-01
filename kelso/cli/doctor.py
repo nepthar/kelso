@@ -40,7 +40,7 @@ def _volume_notes(ctx: KelsoCtx) -> list[str]:
     if target is not None:
       notes.append(
         f"volumes {kind}: {root} links to {target}, which does not exist. "
-        f"Apps with {kind} volumes will not install or start until it does."
+        f"Apps with {kind} volumes will not load or start until it does."
       )
   return notes
 
@@ -66,9 +66,9 @@ def _catalog_notes(ctx: KelsoCtx) -> list[str]:
 
 
 def _missing_bundle(observation: AppObservation, ctx: KelsoCtx) -> str:
-  origin = ctx.staged_origin(observation.app_id)
+  origin = ctx.loaded_origin(observation.app_id)
   if origin is None:
-    return "app bundle missing (no install source recorded)"
+    return "app bundle missing (no load source recorded)"
   return f"app bundle missing, was: {origin}"
 
 

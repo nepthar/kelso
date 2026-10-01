@@ -50,11 +50,11 @@ def _volume_names(volumes_root: Path) -> tuple[list[str], list[str]]:
   return included, excluded
 
 
-def _staging_failure(staging: Path, message: str) -> RuntimeError:
+def _incomplete(scratch: Path, message: str) -> RuntimeError:
   return RuntimeError(
     f"{message}\n"
-    f"Incomplete snapshot left at {staging}; "
-    f"remove it with `rm -rf {staging}` before retrying."
+    f"Incomplete snapshot left at {scratch}; "
+    f"remove it with `rm -rf {scratch}` before retrying."
   )
 
 
@@ -138,10 +138,10 @@ def snapshot(
 
   Assumes the caller holds the app lock and the app is stopped.
   """
-  paths = ctx.staged_paths(app)
+  paths = ctx.loaded_paths(app)
 
   if not paths.run_path.exists():
-    raise ValueError(f"App {app} is not installed and therefore cannot be snapshotted")
+    raise ValueError(f"App {app} is not loaded and therefore cannot be snapshotted")
 
   try:
     running_count = ctx.run_state(app).running_count
@@ -159,7 +159,7 @@ def snapshot(
     if not file.is_file():
       raise ValueError(
         f"App {app} missing required file: {file}. "
-        "This app appears to be staged improperly"
+        "This app appears to be loaded improperly"
       )
 
   folder_name = datetime.now(UTC).strftime(SNAPSHOT_STAMP)
@@ -180,19 +180,19 @@ def snapshot(
       f"remove it with `rm -rf {snapshot_folder}` before retrying."
     )
 
-  staging = ctx.config.temp_root / "current_snapshot"
-  if staging.exists():
+  scratch = ctx.config.temp_root / "current_snapshot"
+  if scratch.exists():
     raise ValueError(
-      f"Incomplete snapshot left at {staging}; "
-      f"remove it with `rm -rf {staging}` before retrying."
+      f"Incomplete snapshot left at {scratch}; "
+      f"remove it with `rm -rf {scratch}` before retrying."
     )
 
-  staging.mkdir(parents=True, mode=0o700)
+  scratch.mkdir(parents=True, mode=0o700)
 
   try:
     included, excluded = _volume_names(paths.run_path / "volumes")
     app_version = AppSpec.from_file(paths.manifest_path, app).version
-    (staging / "snapshot.toml").write_text(
+    (scratch / "snapshot.toml").write_text(
       "\n".join(
         [
           f'app_id = "{app}"',
@@ -208,13 +208,13 @@ def snapshot(
 
     # Secrets stay Fernet ciphertext; we never decrypt on this path. compose.yml is
     # not captured: its host ports are a photograph of kelsodb, and `restore`
-    # regenerates it from the staged copy below.
-    shutil.copy2(ctx.config.app_config_path(app), staging / "config.logtab")
-    shutil.copytree(paths.staged_path, staging / "staged")
+    # regenerates it from the loaded copy below.
+    shutil.copy2(ctx.config.app_config_path(app), scratch / "config.logtab")
+    shutil.copytree(paths.bundle_path_in_run, scratch / "app_bundle")
 
     data_vols = paths.run_path / "volumes" / "data"
     if data_vols.is_dir():
-      data_dest = staging / "volumes" / "data"
+      data_dest = scratch / "volumes" / "data"
       data_dest.mkdir(parents=True, mode=0o700)
       sources: list[Path] = []
       for vol_link in sorted(data_vols.iterdir()):
@@ -222,8 +222,8 @@ def snapshot(
         # which must not dereference symlinks *inside* the volume (silent corruption).
         source = vol_link.resolve()
         if not source.exists():
-          raise _staging_failure(
-            staging,
+          raise _incomplete(
+            scratch,
             f"App {app} data volume {vol_link.name} points at missing path: {source}",
           )
         sources.append(source)
@@ -241,16 +241,16 @@ def snapshot(
             [*sources, data_dest],
           )
         except RuntimeError as e:
-          raise _staging_failure(staging, str(e)) from e
+          raise _incomplete(scratch, str(e)) from e
 
     snapshot_folder.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-    shutil.move(str(staging), str(snapshot_folder))
-    if staging.exists():
-      shutil.rmtree(staging)
+    shutil.move(str(scratch), str(snapshot_folder))
+    if scratch.exists():
+      shutil.rmtree(scratch)
   except RuntimeError:
     raise
   except Exception as e:
-    raise _staging_failure(staging, str(e)) from e
+    raise _incomplete(scratch, str(e)) from e
 
   try:
     _tar_create(snapshot_folder, archive)

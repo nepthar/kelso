@@ -8,7 +8,7 @@ Create the tunnel in the Cloudflare dashboard (Zero Trust → Networks →
 Tunnels), copy its token, and set it here:
 
 ```
-kelso install cloudflared
+kelso load cloudflared
 kelso config cloudflared --set tunnel_token=<token>
 kelso start cloudflared
 ```

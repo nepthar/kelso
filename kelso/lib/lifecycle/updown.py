@@ -32,10 +32,10 @@ DOWN_ACTION = "down"
 
 
 def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[AppID]]]:
-  """Installed apps in the groups `which`, by `start_order`, lowest first."""
+  """Loaded apps in the groups `which`, by `start_order`, lowest first."""
   which = set(which)
   groups: dict[int, list[AppID]] = {}
-  for app_id in sorted(ctx.staged_app_ids()):
+  for app_id in sorted(ctx.loaded_app_ids()):
     app = AppID(app_id)
     order = _start_order(app, ctx)
     if order in which:
@@ -46,7 +46,7 @@ def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[Ap
 def _start_order(app: AppID, ctx: KelsoCtx) -> int:
   _, value = ctx.app_store(app).get_config("start_order")
   if value is None:
-    spec = ctx.staged_spec(app)
+    spec = ctx.loaded_spec(app)
     value = spec.config["start_order"].default if spec else None
   # A bundle may make start_order required; unset, it waits with the default
   # group, and `start` is what says it needs setting.

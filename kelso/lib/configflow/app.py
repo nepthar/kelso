@@ -33,7 +33,7 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
         secret_set=bool(secret) and value is not None,
         desc=config.desc or "",
         section=config.section,
-        # A secret's default is a generator kelso runs at install, so nobody
+        # A secret's default is a generator kelso runs at load, so nobody
         # has to supply it.
         required=not (config.secret and config.default is not None),
       )

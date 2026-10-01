@@ -72,7 +72,7 @@ class VolumeEntry(BaseModel):
 
 
 class ConfigEntry(BaseModel):
-  """A per-installation config value declared in [config] or [adv_config]."""
+  """A per-app config value declared in [config] or [adv_config]."""
 
   model_config = ConfigDict(extra="forbid")
 

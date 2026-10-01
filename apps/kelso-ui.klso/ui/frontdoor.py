@@ -20,7 +20,7 @@ GENERAL_HINT = (
   "holds everyone up. Wait a moment, then reload."
 )
 
-RELOAD = "kelso install kelso-ui"
+RELOAD = "kelso load kelso-ui"
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -114,7 +114,7 @@ def same_origin(headers):
 
   SameSite=Lax on the session cookie is not enough here. Kelso publishes every
   app on a subdomain beside this one, and sibling subdomains are the same
-  *site*, so any installed app's pages could POST a kelso verb with the cookie
+  *site*, so any loaded app's pages could POST a kelso verb with the cookie
   attached. The Origin header names the exact origin and no page can set it.
   A proxy may rename the host; X-Forwarded-Host is not something a page can
   send cross-origin either, so it is trusted as a second name.

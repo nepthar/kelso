@@ -1,8 +1,8 @@
-"""`AppSpec` plus per-installation data, out to a compose file.
+"""`AppSpec` plus per-app data, out to a compose file.
 
 `make_compose_dict` is the whole of kelso's compose generation. `AppRunData`
 is a plain frozen dataclass, so these build one directly rather than going
-through `load_run_data`, which needs a `KelsoCtx` and a staged app -- that
+through `load_run_data`, which needs a `KelsoCtx` and a loaded app -- that
 path is covered end to end in test_cli.py. The readiness section at the bottom
 covers the rest of what `AppRunData` decides.
 """
@@ -570,8 +570,8 @@ restart = "no"
 # --- readiness -------------------------------------------------------------
 
 
-def test_start_blockers_leave_out_what_staging_repairs_itself():
-  """`stage()` reallocates every route before judging readiness.
+def test_start_blockers_leave_out_what_loading_repairs_itself():
+  """`load()` reallocates every route before judging readiness.
 
   An unallocated route is therefore the normal pre-start state, not something
   the operator has to fix -- counting it made `kelso ps` report CONFIG as
@@ -579,7 +579,7 @@ def test_start_blockers_leave_out_what_staging_repairs_itself():
   """
   operator = ConfigIssue("config api_key is unset", "Set with `kelso config`")
   allocation = ConfigIssue("route web: not allocated", "…", self_healing=True)
-  fatal = ConfigIssue("volume data: unreadable", "…", stage_blocking=True)
+  fatal = ConfigIssue("volume data: unreadable", "…", load_blocking=True)
 
   data = AppRunData(
     app="demo",
@@ -594,7 +594,7 @@ def test_start_blockers_leave_out_what_staging_repairs_itself():
   )
 
   assert data.start_blockers == (operator, fatal)
-  assert data.stage_blockers == (fatal,)
+  assert data.load_blockers == (fatal,)
 
 
 def test_config_env_names_every_value_including_the_unset_ones():

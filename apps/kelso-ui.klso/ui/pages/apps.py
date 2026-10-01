@@ -1,4 +1,4 @@
-"""One installed app: its page, its config form, and its container logs."""
+"""One loaded app: its page, its config form, and its container logs."""
 
 from urllib.parse import quote
 

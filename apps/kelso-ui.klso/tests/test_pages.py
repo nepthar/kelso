@@ -141,8 +141,8 @@ def _job_buttons(text):
 def test_job_buttons_carry_parseable_json(client, fake):
   buttons = _job_buttons(client.get("/apps/kelso-ui").text)
   remove = next(b for b in buttons if b["title"].startswith("Remove"))
-  assert [c["verb"] for c in remove["choices"]] == ["uninstall", "reset", "uninstall"]
-  assert remove["choices"][2]["args"] == {"app": "kelso-ui", "purge": "1"}
+  assert [c["verb"] for c in remove["choices"]] == ["unload", "rm", "rm", "rm", "rm"]
+  assert remove["choices"][4]["args"] == {"app": "kelso-ui", "tier": "purge"}
   stop = next(b for b in buttons if b["verb"] == "stop")
   assert stop["args"] == {"app": "kelso-ui"}
   assert not any(b["verb"] == "start" for b in buttons)
@@ -174,14 +174,14 @@ def test_nav_is_titled_with_the_daemons_hostname(client, fake):
     ("", "Kelso 1a2b"),
   ],
 )
-def test_brand_drops_the_last_dot_and_falls_back_to_the_install_id(
+def test_brand_drops_the_last_dot_and_falls_back_to_the_instance_id(
   monkeypatch, hostname, expected
 ):
   monkeypatch.setattr(web, "INSTANCE_ID", "1a2b")
   assert web.brand(hostname) == expected
 
 
-def test_nav_names_the_version_and_install_id(client, fake, monkeypatch):
+def test_nav_names_the_version_and_instance_id(client, fake, monkeypatch):
   monkeypatch.setitem(web.templates.globals, "INSTANCE_ID", "1a2b")
   brand = client.get("/").text.split('<div class="brand">')[1].split("</div>")[0]
   assert '<span class="ver">kelso 0.1.0</span><span class="ver">1a2b</span>' in brand

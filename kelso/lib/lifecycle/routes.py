@@ -55,7 +55,7 @@ def register_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
     host_port = run_data.routes[route_name].host_port
     if host_port < 0:
       raise RouteProviderError(
-        f"route {route_name!r} has no allocated host port; run `kelso install` first"
+        f"route {route_name!r} has no allocated host port; run `kelso load` first"
       )
 
     provider = get_route_provider(ctx, tag)

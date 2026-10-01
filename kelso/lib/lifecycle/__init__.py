@@ -5,6 +5,19 @@ from kelso.lib.lifecycle.dev import (
   refuse_other_origin,
   source_volume_links,
 )
+from kelso.lib.lifecycle.load import (
+  LoadResult,
+  LoadTarget,
+  apply_config_sets,
+  assign_route,
+  bind,
+  bound_to,
+  link_host_volumes,
+  load,
+  load_target,
+  materialize,
+  unlink_host_volumes,
+)
 from kelso.lib.lifecycle.restore import (
   RestorePlan,
   resolve_snapshot_app,
@@ -13,9 +26,11 @@ from kelso.lib.lifecycle.restore import (
   snapshot_names,
 )
 from kelso.lib.lifecycle.rm import (
+  DATA,
   PURGE,
-  RESET,
-  UNINSTALL,
+  RM,
+  TEMP,
+  UNLOAD,
   RemovalMode,
   RemovalPlan,
   removal_plan,
@@ -38,27 +53,14 @@ from kelso.lib.lifecycle.run import (
   stop,
 )
 from kelso.lib.lifecycle.snapshot import delete_snapshot, snapshot
-from kelso.lib.lifecycle.stage import (
-  StageSuccess,
-  StagingTarget,
-  apply_config_sets,
-  assign_route,
-  bind,
-  bound_to,
-  link_host_volumes,
-  materialize,
-  stage,
-  staging_target,
-  unlink_host_volumes,
-)
 
 __all__ = [
   "DevPlan",
   "ReloadResult",
   "RemovalPlan",
   "RestorePlan",
-  "StageSuccess",
-  "StagingTarget",
+  "LoadResult",
+  "LoadTarget",
   "bound_to",
   "apply_config_sets",
   "assign_route",
@@ -77,8 +79,10 @@ __all__ = [
   "register_app_routes",
   "PURGE",
   "refuse_other_origin",
-  "RESET",
-  "UNINSTALL",
+  "RM",
+  "TEMP",
+  "DATA",
+  "UNLOAD",
   "RemovalMode",
   "removal_plan",
   "resolve_snapshot_app",
@@ -89,8 +93,8 @@ __all__ = [
   "snapshot",
   "snapshot_names",
   "source_volume_links",
-  "stage",
-  "staging_target",
+  "load",
+  "load_target",
   "start",
   "stop",
   "unlink_host_volumes",

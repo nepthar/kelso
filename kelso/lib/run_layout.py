@@ -59,7 +59,7 @@ class _KelsoCmdTemplate(string.Template):
 # by the unit's shell with the arguments added, as the Run button runs it.
 KELSO_CMD_TEMPLATE = _KelsoCmdTemplate("""\
 #!@@shell
-# Written by kelso for @@app, unit @@unit. Rewritten on install.
+# Written by kelso for @@app, unit @@unit. Rewritten on load.
 case "$1" in
 @@cases
   '') cat <<'KELSO_COMMANDS'
@@ -114,14 +114,14 @@ def _port_string(host_port: int, container_port: int, proto: str) -> str:
 
 @dataclass(frozen=True)
 class ConfigIssue:
-  """A per-installation requirement that is still unmet."""
+  """A per-app requirement that is still unmet."""
 
   problem: str
   fix: str | None
 
-  stage_blocking: bool = False
+  load_blocking: bool = False
 
-  # True when staging repairs this itself. `stage()` reallocates every route
+  # True when loading repairs this itself. `load()` reallocates every route
   # before evaluating readiness, so an unallocated route is the normal pre-start
   # state; counting these as blockers made `kelso ps` report CONFIG missing for
   # apps that needed no configuration.
@@ -182,8 +182,8 @@ class AppRunData:
   issues: tuple[ConfigIssue, ...]
 
   @property
-  def stage_blockers(self) -> tuple[ConfigIssue, ...]:
-    return tuple(issue for issue in self.issues if issue.stage_blocking)
+  def load_blockers(self) -> tuple[ConfigIssue, ...]:
+    return tuple(issue for issue in self.issues if issue.load_blocking)
 
   @property
   def start_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -278,7 +278,7 @@ def _load_volume_links(
           ConfigIssue(
             f"volume {volume_name}: host volume {tag!r} path does not exist: {source}",
             f"Make {source} available again, or re-bind with {bind_cmd}",
-            stage_blocking=True,
+            load_blocking=True,
           )
         )
         continue
@@ -288,7 +288,7 @@ def _load_volume_links(
             f"volume {volume_name}: host volume {tag!r} is not mounted at {source}",
             f"Mount the share at {source}, or clear require_mount on "
             f"[host_volume.{tag}]",
-            stage_blocking=True,
+            load_blocking=True,
           )
         )
         continue
@@ -301,7 +301,7 @@ def _load_volume_links(
             ConfigIssue(
               f"volume {volume_name}: {root} links to {target}, which does not exist",
               f"Mount what should be at {target}, or re-point {root}",
-              stage_blocking=True,
+              load_blocking=True,
             )
           )
           continue
@@ -316,7 +316,7 @@ def _load_volume_links(
         issues.append(
           ConfigIssue(
             f"volume {volume_name}: host path does not exist: {source}",
-            f"reinstall with `kelso install {app_id}` or this might be a bug.",
+            f"reload with `kelso load {app_id}` or this might be a bug.",
           )
         )
         continue
@@ -330,13 +330,13 @@ def _load_volume_links(
 def _compare_route(
   issues: list[ConfigIssue], spec_route: AppRoute, conf_route: AssignedRoute
 ) -> None:
-  # Note: In the current impl, we ALWAYS clear out all configured routes before staging/running
+  # Note: In the current impl, we ALWAYS clear out all configured routes before loading/running
   # so any stale data should be gone. I'm leaving this here out of caution for future work.
   def mismatch(field: str, from_spec: Any, from_config: Any):
     issues.append(
       ConfigIssue(
         f"route {spec_route.route_name}: {field} mismatch: manifest={from_spec} config={from_config}",
-        "Examine w/ `kelso route list`, remove app data & runtime with `kelso uninstall --purge`",
+        "Examine w/ `kelso route list`, remove app data & runtime with `kelso rm --purge`",
         self_healing=True,
       )
     )
@@ -351,7 +351,7 @@ def _compare_route(
       issues.append(
         ConfigIssue(
           f"route {spec_route.route_name}: host port not allocated",
-          "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
+          "Clear data with `kelso rm --purge` and retry with `kelso start`",
           self_healing=True,
         )
       )
@@ -378,7 +378,7 @@ def _load_routes(
     issues.append(
       ConfigIssue(
         f"route {name}: declared but not allocated",
-        "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
+        "Clear data with `kelso rm --purge` and retry with `kelso start`",
         self_healing=True,
       )
     )
@@ -386,7 +386,7 @@ def _load_routes(
     issues.append(
       ConfigIssue(
         f"route {name}: allocated but not in the manifest",
-        "Clear data with `kelso uninstall --purge` and retry with `kelso start`",
+        "Clear data with `kelso rm --purge` and retry with `kelso start`",
         self_healing=True,
       )
     )
@@ -429,7 +429,7 @@ def _route_urls(
 
 
 def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
-  """The DNS label this install uses, or None if it is required and unset."""
+  """The DNS label this load uses, or None if it is required and unset."""
   _, value = ctx.app_store(spec.app).get_config("subdomain")
   return value or spec.config["subdomain"].default
 
@@ -544,7 +544,7 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
 
 def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   issues: list[ConfigIssue] = []
-  run_path = ctx.staged_paths(spec.app).run_path
+  run_path = ctx.loaded_paths(spec.app).run_path
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
@@ -575,7 +575,7 @@ def _volume_paths(
   match volume.kind:
     case "app":
       src = volume.src if volume.src else volume.name
-      return run_path / "staged" / src, Path("../../staged") / src
+      return run_path / "app_bundle" / src, Path("../../app_bundle") / src
     case "host":
       tag = binds.get(volume.name)
       if tag is None:

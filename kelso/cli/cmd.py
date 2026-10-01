@@ -42,9 +42,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
 
 
 def _list_commands(app, ctx: KelsoCtx, conn) -> None:
-  paths = ctx.staged_paths(app)
+  paths = ctx.loaded_paths(app)
   if not paths.compose_path.is_file():
-    raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
+    raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
 
   spec = AppSpec.from_file(paths.manifest_path, app)
   if not spec.commands:

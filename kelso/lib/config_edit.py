@@ -39,14 +39,14 @@ def edit_config(ctx: KelsoCtx) -> Iterator[TOMLDocument]:
 
 def _commit(path: Path, text: str) -> None:
   """Replace `path` with `text`, but only once it loads as a kelso config."""
-  staging = path.with_name(f".{path.name}.incoming")
-  staging.write_text(text)
+  incoming = path.with_name(f".{path.name}.incoming")
+  incoming.write_text(text)
   try:
-    load_config_file(staging)
+    load_config_file(incoming)
   except (ValueError, RuntimeError) as e:
-    staging.unlink(missing_ok=True)
+    incoming.unlink(missing_ok=True)
     raise ValueError(f"Refusing to write {path}: the result is not valid.\n{e}") from e
-  os.replace(staging, path)
+  os.replace(incoming, path)
 
 
 def _host_volumes(document: TOMLDocument):

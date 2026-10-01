@@ -61,7 +61,7 @@ to 0.25s.
 | `test_compose.py` | `AppSpec` + run data out to a compose file; readiness |
 | `test_repo.py` | Repos and mirroring, against an in-process fake GitHub |
 | `test_repo_catalog.py` | Several repos: the catalog, ambiguity, and bindings |
-| `test_layout.py` | Staging: the run dir, volume links, re-staging |
+| `test_layout.py` | Loading: the run dir, volume links, re-loading |
 | `test_observations.py` | Where an app stands, and whether what runs is current |
 | `test_cli.py` | The command surface — exit codes, output, disk state |
 | `test_lock.py` | Kelso + app locks; who holds them and for how long |
@@ -95,7 +95,7 @@ Check: a snapshot of an app with genuinely root-owned files in a data volume,
 ownership and modes preserved on the way in, symlinks *inside* a volume not
 dereferenced, an archive left owned by the invoking user rather than root, and
 a restore that brings the data back intact. Also that an interrupted snapshot
-leaves the staging dir with the message that names it, and that kelso pulls
+leaves its scratch dir with the message that names it, and that kelso pulls
 the pinned image on a host that does not have it yet.
 
 **Refusing to run as root.** `refuse_root` is unit-tested against a faked uid;

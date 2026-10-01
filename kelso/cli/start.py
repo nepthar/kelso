@@ -1,9 +1,9 @@
 import argparse
 
-from kelso.cli.install import confirm_compose_warnings
 from kelso.cli.kv import parse_kv
+from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import staging_target, start
+from kelso.lib.lifecycle import load_target, start
 from kelso.lib.receipt import capability_receipt, location_receipt
 from kelso.lib.util import Conn
 
@@ -11,7 +11,7 @@ from kelso.lib.util import Conn
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "start",
-    help="Start an app, staging it first if needed (accepts app id or .klso path)",
+    help="Start an app, loading it first if needed (accepts app id or .klso path)",
   )
   parser.add_argument(
     "app",
@@ -37,7 +37,7 @@ def register(subparsers) -> None:
   parser.add_argument(
     "--force",
     action="store_true",
-    help="Start even though this id was last installed from somewhere else",
+    help="Start even though this id was last loaded from somewhere else",
   )
   parser.add_argument(
     "-y",
@@ -49,19 +49,19 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
-  target = staging_target(ctx, args.app, force=args.force)
+  target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
   sets = [parse_kv(item, "--set") for item in args.sets]
   binds = [parse_kv(item, "--bind") for item in args.binds]
-  staging = bool(sets or binds) or not ctx.is_staged(app)
+  loading = bool(sets or binds) or not ctx.is_loaded(app)
   if target.bundle is not None:
     bundle = target.bundle
-  elif staging:
+  elif loading:
     bundle = ctx.bundle_path(app)
   else:
     # Catalog may be gone; start will use the run copy as-is.
     bundle = ctx.config.app_run_path(app)
-  if staging and not args.yes and not confirm_compose_warnings(app, bundle, conn):
+  if loading and not args.yes and not confirm_compose_warnings(app, bundle, conn):
     conn.out("Nothing started.")
     return
 

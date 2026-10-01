@@ -109,7 +109,7 @@ def test_a_streamed_failure_hands_the_error_a_tail(kelso_env, monkeypatch):
 @pytest.mark.docker
 def test_real_docker_up_and_down(tmp_path):
   if shutil.which("docker") is None:
-    pytest.skip("docker is not installed")
+    pytest.skip("docker is not loaded")
   if subprocess.run(["docker", "info"], capture_output=True).returncode != 0:
     pytest.skip("docker daemon is not available")
 

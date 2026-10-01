@@ -32,7 +32,7 @@ def test_same_origin(headers, ok):
 def test_cross_site_job_is_refused(client, fake):
   response = client.post(
     "/jobs",
-    json={"verb": "uninstall", "args": {"app": "kelso-ui"}},
+    json={"verb": "unload", "args": {"app": "kelso-ui"}},
     headers={"origin": "https://jellyfin.kelso.test", "accept": "*/*"},
   )
   assert response.status_code == 403

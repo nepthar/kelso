@@ -1,7 +1,7 @@
 """A stand-in kelsod: canned JSON over real HTTP, so the UI's client is exercised.
 
 The fixtures are shaped after a live kelsod's responses and bent to hit every
-branch the pages have -- an app that is running, one that is uninstalled, one
+branch the pages have -- an app that is running, one that is unloaded, one
 with issues; a mirrored repo and one that is not; a secret that is set and one
 that is not. `EVIL` is planted in every free-text field: if it ever reaches a
 page unescaped, a test fails.
@@ -39,7 +39,7 @@ APPS = [
     "display_name": "Kelso UI",
     "version": "0.6.0",
     "status": "running",
-    "state": "installed",
+    "state": "loaded",
     "containers": {"running": 1, "total": 1},
     "configured": "ready",
     "config_pending": False,
@@ -51,7 +51,7 @@ APPS = [
     "display_name": f"Jellyfin {EVIL}",
     "version": None,
     "status": "stopped",
-    "state": "installed",
+    "state": "loaded",
     "containers": {"running": 0, "total": 0},
     "configured": "missing",
     "config_pending": True,
@@ -63,12 +63,12 @@ APPS = [
     "display_name": "Mealie",
     "version": "1.2.0",
     "status": "exited",
-    "state": "uninstalled",
+    "state": "unloaded",
     "containers": {"running": 0, "total": 2},
     "configured": None,
     "config_pending": False,
     "volume_count": 1,
-    "last_action": "uninstalled",
+    "last_action": "unloaded",
   },
 ]
 
@@ -167,7 +167,7 @@ APP_DETAIL = {
   ],
 }
 
-# An app with nothing declared, uninstalled, stopped: the empty branches.
+# An app with nothing declared, unloaded, stopped: the empty branches.
 APP_BARE = {
   **APPS[2],
   "description": "",
@@ -210,7 +210,7 @@ CATALOG = {
           "version": "0.6.0",
           "description": f"Web interface {EVIL}",
           "repo": "examples",
-          "state": "installed",
+          "state": "loaded",
           "configured": "ready",
           "manifest": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
           "manifest_stale": True,
@@ -257,7 +257,7 @@ CATALOG = {
           "version": "2.0",
           "description": "Recipes",
           "repo": "github",
-          "state": "uninstalled",
+          "state": "unloaded",
           "configured": "ready",
           "manifest": "[app]\n",
           "manifest_stale": False,
@@ -339,7 +339,7 @@ VOLUMES = {
     },
   ],
   "kelso_dirs": [
-    {"name": "run", "description": f"Installed apps {EVIL}", "bytes": 1024**3},
+    {"name": "run", "description": f"Loaded apps {EVIL}", "bytes": 1024**3},
   ],
 }
 
@@ -452,7 +452,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 25, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 27, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -484,7 +484,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 25
+    self.api = 27
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

@@ -6,7 +6,7 @@ from kelso.lib.receipt import published_urls
 
 class StartJob(Job):
   name = "start"
-  description = "Start an app, staging it first if needed"
+  description = "Start an app, loading it first if needed"
   required_args = ("app",)
   optional_args = ("force",)
 
@@ -18,11 +18,11 @@ class StartJob(Job):
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
     with ctx.locked(f"start {app}", app):
-      # Prefer the run copy once staged, so an app whose catalog entry has
+      # Prefer the run copy once loaded, so an app whose catalog entry has
       # since been deleted still starts.
       bundle = (
         ctx.config.app_run_path(app)
-        if ctx.is_staged(app)
+        if ctx.is_loaded(app)
         else (self.target.bundle or ctx.bundle_path(app))
       )
       result = start(app, bundle, ctx, bound=self.target.bound_to)

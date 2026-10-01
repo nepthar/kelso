@@ -16,7 +16,7 @@ from typing import Any, TextIO
 from kelso.lib.activity import Activity
 from kelso.lib.bundle import is_pathlike
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.stage import StagingTarget, staging_target
+from kelso.lib.lifecycle.load import LoadTarget, load_target
 
 logger = logging.getLogger("kelso.jobs")
 
@@ -30,15 +30,15 @@ def _now() -> str:
   return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def app_target(ctx: KelsoCtx, raw: str, *, force: bool = False) -> StagingTarget:
+def app_target(ctx: KelsoCtx, raw: str, *, force: bool = False) -> LoadTarget:
   """Resolve a verb's `app` argument: an id, optionally `<id>@<repo>`.
 
-  Never a path -- see `runner.JOBS`. `staging_target` accepts one, so the
+  Never a path -- see `runner.JOBS`. `load_target` accepts one, so the
   refusal happens here.
   """
   if is_pathlike(raw):
     raise ValueError(f'No app found for "{raw}": verbs name apps, not paths')
-  return staging_target(ctx, raw, force=force)
+  return load_target(ctx, raw, force=force)
 
 
 class Job:

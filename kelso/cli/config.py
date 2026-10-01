@@ -22,7 +22,7 @@ def register(subparsers) -> None:
   parser.add_argument(
     "app",
     metavar="APP",
-    help="App ID of an installed app, or of an app in the catalog",
+    help="App ID of an loaded app, or of an app in the catalog",
   )
   parser.add_argument(
     "--set",
@@ -111,7 +111,7 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The manifest this command reads its schema from."""
-  paths = ctx.staged_paths(app)
+  paths = ctx.loaded_paths(app)
   if paths.exists():
     return AppSpec.from_file(paths.manifest_path, app)
   # Refuses an id carried by two sources, and a bundle with no manifest.

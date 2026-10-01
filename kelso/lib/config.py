@@ -19,7 +19,7 @@ from kelso.lib.util import validate_identifier
 
 VOLUME_KINDS = ("data", "temp", "bulk", "logs")
 
-# Under `$kelso/var/`: installed apps, sockets, activity files, scratch, locks.
+# Under `$kelso/var/`: loaded apps, sockets, activity files, scratch, locks.
 VAR_DIRS = ("run", "conn", "logs", "temp", "lock")
 
 # Under `$kelso/conf/`: the master key, kelsodb, and one logtab per app in apps/.

@@ -31,8 +31,8 @@ class RunState:
 
 
 # Where an app stands, as one word.
-INSTALLED = "installed"  # there is a run dir kelso can start from
-UNINSTALLED = "uninstalled"  # no run dir, but kelso still holds state for it
+LOADED = "loaded"  # there is a run dir kelso can start from
+UNLOADED = "unloaded"  # no run dir, but kelso still holds state for it
 AVAILABLE = "available"  # a catalog entry and nothing else
 
 
@@ -43,12 +43,12 @@ def app_state(
   volumes_exist: bool,
   has_containers: bool = False,
 ) -> str:
-  """`installed`, `uninstalled`, or `available`."""
+  """`loaded`, `unloaded`, or `available`."""
   if run_dir_exists or has_containers:
-    return INSTALLED
+    return LOADED
   # A lone kelsodb row is an orphan for `doctor`, not a kept app.
   if config_exists or volumes_exist:
-    return UNINSTALLED
+    return UNLOADED
   return AVAILABLE
 
 
@@ -96,8 +96,8 @@ class AppObservation:
     return self.config_changed_at > self.started_at
 
   @property
-  def installed(self) -> bool:
-    return self.state == INSTALLED
+  def loaded(self) -> bool:
+    return self.state == LOADED
 
   @property
   def known(self) -> bool:
@@ -149,7 +149,7 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
   observations: dict[str, AppObservation] = {}
   for raw_id in app_ids:
     app_id = AppID(raw_id)
-    paths = ctx.staged_paths(app_id)
+    paths = ctx.loaded_paths(app_id)
     action = actions.get(raw_id)
     observations[app_id] = AppObservation(
       app_id=app_id,

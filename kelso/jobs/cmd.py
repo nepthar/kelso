@@ -26,9 +26,9 @@ class CmdJob(Job):
       except ValueError as e:
         raise ValueError(f"Could not parse arguments: {e}") from e
 
-    if not ctx.is_staged(app):
-      raise ValueError(f"App {app} is not installed; run `kelso install {app}` first")
-    spec = AppSpec.from_file(ctx.staged_paths(app).manifest_path, app)
+    if not ctx.is_loaded(app):
+      raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
+    spec = AppSpec.from_file(ctx.loaded_paths(app).manifest_path, app)
     if kwargs["command"] not in spec.commands:
       available = ", ".join(sorted(spec.commands)) or "(none)"
       raise ValueError(
