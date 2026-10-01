@@ -41,9 +41,9 @@ change; skip tests entirely for cosmetic ones.
 - **Vocabulary.** A *kelso app bundle* ("bundle") is a `.klso` folder or
   `.klso.md` file: what you write, publish, and load from. A *kelso app*
   ("app") is what is loaded and running, named by its app id; commands act
-  on apps. *Loading* an app freezes its bundle under `var/run/<id>/app_bundle/`
-  and builds its compose stack; *unloading* removes `var/run/<id>/`. Don't say
-  install, uninstall, or stage for any of this.
+  on apps. We refer to creating the stack in `var/run/<app_id>/` (the bundle
+  frozen under `app_bundle/`, and its compose file) as *loading* the app; an app
+  must be loaded before it runs. *Unloading* removes `var/run/<app_id>/`.
   `kelso` is the tool; `klso` is the bundle format (`KLSO_*`, `${klso.*}`).
   *AppSpec* is a parsed manifest resolved for one app id. The project's display
   name is *Kelso Server*.
