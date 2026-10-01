@@ -248,10 +248,7 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Each volume root's size, summed from its volumes', and the filesystem it shares.
-
-  `bytes` is None until volume-metrics has measured a volume under the root.
-  """
+  """Each volume root's size, summed from its volumes', and the filesystem it shares."""
   totals: dict[str, int] = {}
   for key, entry in ctx.read_gauges("volume_size_bytes/").items():
     _, _, app_id, kind, name = key.split("/", 4)
@@ -264,7 +261,7 @@ def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
     row: dict[str, Any] = {
       "kind": kind,
       "path": str(root),
-      "bytes": totals.get(kind),
+      "bytes": totals.get(kind, 0),
       "device": None,
       "mountpoint": None,
       "used": None,
