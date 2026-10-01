@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kelso.lib.apps import AppID, read_app_actions, read_app_starts
+from kelso.lib.apps import (
+  AppID,
+  read_app_actions,
+  read_app_starts,
+  read_last_app_action,
+)
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
 
@@ -114,22 +119,6 @@ class AppObservation:
       return "exited"
     return "stopped"
 
-  @property
-  def run_display(self) -> str:
-    if not self.run_dir_exists:
-      return "missing"
-    return "ready" if self.compose_exists else "broken"
-
-  @property
-  def app_display(self) -> str:
-    return "ready" if self.bundle_path is not None else "missing"
-
-  @property
-  def container_display(self) -> str:
-    if not self.containers:
-      return "0"
-    return f"{self.running_count}/{len(self.containers)} running"
-
 
 def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
   """Where an app outside every repo was loaded from, if that is still there."""
@@ -138,6 +127,7 @@ def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
 
 
 def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
+  """Every app kelso knows of, from one pass over each source."""
   bundles = ctx.resolved_bundles()
   run_ids = (
     {path.name for path in ctx.config.run_root.iterdir() if path.is_dir()}
@@ -147,35 +137,84 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
   docker = load_kelso_run_unit_status()
   db_ids = set(ctx.kelso_db.app_ids())
   config_ids = ctx.config.app_config_ids()
-  app_ids = set(bundles) | run_ids | set(docker) | db_ids | config_ids
-
   actions = read_app_actions(ctx)
   starts = read_app_starts(ctx)
 
-  observations: dict[str, AppObservation] = {}
-  for raw_id in app_ids:
-    app_id = AppID(raw_id)
-    paths = ctx.loaded_paths(app_id)
-    action = actions.get(raw_id)
-    observations[app_id] = AppObservation(
-      app_id=app_id,
-      bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
-      run_dir_exists=paths.run_path.is_dir(),
-      compose_exists=paths.compose_path.is_file(),
-      config_exists=raw_id in config_ids,
-      # Spelled out rather than borrowing `lifecycle.managed_volume_dirs`,
-      # which would import back through KelsoCtx into this module.
-      volumes_exist=any(
-        (root / raw_id).is_dir() for root in ctx.config.volume_roots.values()
-      ),
+  return {
+    raw_id: _observation(
+      AppID(raw_id),
+      ctx,
+      bundle=bundles.get(raw_id),
       containers=docker.get(raw_id, ()),
       db_present=raw_id in db_ids,
-      last_action=action[1] if action else None,
-      config_changed_at=(
-        LogTab(ctx.config.app_config_path(app_id)).last_ts()
-        if raw_id in config_ids
-        else None
-      ),
+      config_exists=raw_id in config_ids,
+      action=actions.get(raw_id, (None, None))[1],
       started_at=starts.get(raw_id),
     )
-  return observations
+    for raw_id in set(bundles) | run_ids | set(docker) | db_ids | config_ids
+  }
+
+
+def observe(app_id: AppID, ctx: KelsoCtx) -> AppObservation:
+  """One app's observation, without looking at any other app.
+
+  Raises ValueError for an id kelso holds nothing for.
+  """
+  raw_id = str(app_id)
+  entries = ctx.app_catalog().get(raw_id, ())
+  starts = [
+    entry.ts
+    for _, entry in ctx.activity_log.history(prefix=f"apps/{raw_id}/status")
+    if entry.value == "started"
+  ]
+  observation = _observation(
+    app_id,
+    ctx,
+    bundle=entries[0].path if len(entries) == 1 else None,
+    containers=load_kelso_run_unit_status().get(raw_id, ()),
+    db_present=bool(ctx.kelso_db.list_routes(raw_id)),
+    config_exists=ctx.config.app_config_path(app_id).is_file(),
+    action=read_last_app_action(app_id, ctx),
+    started_at=starts[-1] if starts else None,
+  )
+  if observation.bundle_path is None and not (
+    observation.run_dir_exists
+    or observation.containers
+    or observation.db_present
+    or observation.config_exists
+  ):
+    raise ValueError(f'No app state found for "{app_id}"')
+  return observation
+
+
+def _observation(
+  app_id: AppID,
+  ctx: KelsoCtx,
+  *,
+  bundle: Path | None,
+  containers: tuple[KelsoRunUnitStatus, ...],
+  db_present: bool,
+  config_exists: bool,
+  action: str | None,
+  started_at: str | None,
+) -> AppObservation:
+  paths = ctx.loaded_paths(app_id)
+  return AppObservation(
+    app_id=app_id,
+    bundle_path=bundle or _loaded_from(app_id, ctx),
+    run_dir_exists=paths.run_path.is_dir(),
+    compose_exists=paths.compose_path.is_file(),
+    config_exists=config_exists,
+    # Spelled out rather than borrowing `lifecycle.managed_volume_dirs`,
+    # which would import back through KelsoCtx into this module.
+    volumes_exist=any(
+      (root / app_id).is_dir() for root in ctx.config.volume_roots.values()
+    ),
+    containers=containers,
+    db_present=db_present,
+    last_action=action,
+    config_changed_at=(
+      LogTab(ctx.config.app_config_path(app_id)).last_ts() if config_exists else None
+    ),
+    started_at=started_at,
+  )
