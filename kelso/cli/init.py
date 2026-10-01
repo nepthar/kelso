@@ -136,7 +136,7 @@ def _mirror_default_repos(config, conn) -> None:
   """Fetch the repos the template ships with, so day one is not an empty store.
 
   Best-effort on purpose: `init` otherwise touches nothing but the filesystem,
-  and an load on a plane should still produce a working kelso root. A repo
+  and an install on a plane should still produce a working kelso root. A repo
   that does not mirror now is still configured, and `kelso repo update` picks
   it up later.
   """
