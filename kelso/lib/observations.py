@@ -131,6 +131,12 @@ class AppObservation:
     return f"{self.running_count}/{len(self.containers)} running"
 
 
+def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
+  """Where an app outside every repo was loaded from, if that is still there."""
+  origin = ctx.loaded_origin(app_id)
+  return origin if origin is not None and origin.exists() else None
+
+
 def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
   bundles = ctx.resolved_bundles()
   run_ids = (
@@ -153,7 +159,7 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
     action = actions.get(raw_id)
     observations[app_id] = AppObservation(
       app_id=app_id,
-      bundle_path=bundles.get(raw_id),
+      bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
       run_dir_exists=paths.run_path.is_dir(),
       compose_exists=paths.compose_path.is_file(),
       config_exists=raw_id in config_ids,

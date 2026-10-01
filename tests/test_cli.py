@@ -469,6 +469,20 @@ def test_missing_run_directory_with_container_refuses_lifecycle(kelso_env):
   assert kelso_env.docker_state.exists()
 
 
+def test_doctor_accepts_an_app_loaded_from_outside_every_repo(kelso_env, tmp_path):
+  bundle = tmp_path / "elsewhere" / "ports-demo.klso"
+  shutil.copytree(kelso_env.local_repo / "ports-demo.klso", bundle)
+  shutil.rmtree(kelso_env.local_repo / "ports-demo.klso")
+  assert kelso_env.run("load", str(bundle)).returncode == 0
+
+  assert kelso_env.run("system", "doctor").returncode == 0
+
+  shutil.rmtree(bundle)
+  doctor = kelso_env.run("system", "doctor")
+  assert doctor.returncode == 1
+  assert f"app bundle missing, was: {bundle}" in doctor.stdout
+
+
 def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
   """The run copy is what kelso runs, so deleting apps/<id>.klso is survivable.
 
