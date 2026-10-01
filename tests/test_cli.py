@@ -1729,7 +1729,7 @@ def test_ps_forgets_an_app_once_it_is_purged(kelso_env):
   assert BASIC not in kelso_env.run("ps").stdout
 
 
-def test_rm_purge_takes_everything_including_snapshots(kelso_env):
+def test_rm_purge_takes_everything_but_snapshots(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   assert kelso_env.run("snapshot", "take", BASIC).returncode == 0
   kelso_env.run("stop", BASIC)
@@ -1739,7 +1739,7 @@ def test_rm_purge_takes_everything_including_snapshots(kelso_env):
   assert not (kelso_env.run_root / BASIC).exists()
   assert not kelso_env.app_logtab(BASIC).exists()
   assert not (kelso_env.volumes_root / "data" / BASIC).exists()
-  assert not (kelso_env.root / "snapshots" / BASIC).exists()
+  assert (kelso_env.root / "snapshots" / BASIC).is_dir()
 
 
 def test_unload_says_how_to_load_it_again(kelso_env):

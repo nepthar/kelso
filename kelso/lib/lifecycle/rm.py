@@ -23,7 +23,7 @@ TEMP: RemovalMode = "temp"
 # just loaded. It stays loaded.
 DATA: RemovalMode = "data"
 # Of a stopped app: everything kelso holds for it -- the loaded copy, every
-# volume, its config and secrets, routes and host ports, and snapshots.
+# volume, its config and secrets, and its routes and host ports.
 PURGE: RemovalMode = "purge"
 
 _TEMP_KINDS = ("temp", "logs")
@@ -50,7 +50,6 @@ class RemovalPlan:
   # Deleted outright, or emptied in place for a mode that leaves the app loaded:
   # its bind mounts must still resolve.
   volume_paths: tuple[Path, ...]
-  snapshot_path: Path | None
   host_paths: tuple[Path, ...]
   # Containers to take down first: a running app for unload, leftover stopped
   # ones for anything that removes the loaded copy.
@@ -90,7 +89,6 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
   kinds = {UNLOAD: (), RM: _TEMP_KINDS, TEMP: _TEMP_KINDS}.get(mode, _ALL_KINDS)
   roots = ctx.config.volume_roots
   volumes = tuple(roots[k] / app_id for k in kinds if (roots[k] / app_id).is_dir())
-  snapshots = ctx.config.snapshot_root / app_id
   unloads = mode in (UNLOAD, RM, PURGE)
 
   return RemovalPlan(
@@ -99,7 +97,6 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
     run_path=state.run_path if unloads else None,
     config_path=config_path if mode == PURGE and config_path.is_file() else None,
     volume_paths=volumes,
-    snapshot_path=snapshots if mode == PURGE and snapshots.is_dir() else None,
     host_paths=host_paths,
     stop_first=unloads and state.compose_exists and bool(state.containers),
   )
@@ -127,10 +124,6 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
     elif path.is_dir():
       shutil.rmtree(path)
       logger.info("removed volume %s", path)
-
-  if plan.snapshot_path is not None and plan.snapshot_path.is_dir():
-    shutil.rmtree(plan.snapshot_path)
-    logger.info("removed snapshots %s", plan.snapshot_path)
 
   if plan.purges:
     ctx.kelso_db.purge_app(app_id)

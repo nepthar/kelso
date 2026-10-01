@@ -1,6 +1,6 @@
 """`kelso unload` and `kelso rm`, which differ only in how much they take: an
-app's loaded copy under `var/run/`, its volumes by kind, and its config,
-snapshots and routes.
+app's loaded copy under `var/run/`, its volumes by kind, and its config and
+routes.
 """
 
 import argparse
@@ -54,7 +54,7 @@ def register(subparsers) -> None:
     dest="mode",
     action="store_const",
     const=PURGE,
-    help="Delete everything: volumes, config, secrets, snapshots, and routes",
+    help="Delete everything: volumes, config, secrets, and routes",
   )
   _add_yes(remove)
   remove.set_defaults(func=run, mode=RM)
@@ -122,14 +122,11 @@ def _describe_removal(plan: RemovalPlan, conn: Conn) -> None:
     conn.out(f"  {line}")
   if plan.purges:
     conn.out("along with its configuration, secrets, and route allocations.")
-    if plan.snapshot_path is not None:
-      conn.out(f"Its snapshots under {plan.snapshot_path} are deleted too.")
   else:
     conn.out("Its configuration and address are kept.")
   for path in plan.host_paths:
     conn.out(f"The host volume at {path} is left alone.")
-  if not plan.purges:
-    conn.out("If you want this data back, take a snapshot first.")
+  conn.out("If you want this data back, take a snapshot first.")
 
 
 def _volume_lines(plan: RemovalPlan) -> list[str]:
