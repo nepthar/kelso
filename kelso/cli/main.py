@@ -5,6 +5,7 @@ import sys
 
 from kelso import VERSION
 from kelso.cli import (
+  cleanup,
   cmd,
   config,
   dev,
@@ -31,6 +32,7 @@ logger = logging.getLogger("kelso.cli")
 
 COMMANDS = [
   updown,
+  cleanup,
   ps,
   start,
   stop,
@@ -69,6 +71,8 @@ Apps
 This box
   up          Start all apps in start_order groups
   down        Stop all apps in start_order groups
+  cleanup     List what kelso no longer needs; --apply deletes it
+              (old snapshots, unused images, orphaned routes; --temp)
 
 Snapshots     kelso snapshot take | list | restore
 Repos         kelso repo list | add | update | remove

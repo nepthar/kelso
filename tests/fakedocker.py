@@ -36,6 +36,14 @@ class FakeDocker:
   def _containers(self) -> list[dict]:
     return json.loads(self.state.read_text()) if self.state.exists() else []
 
+  @property
+  def images_path(self) -> Path:
+    return self.state.with_name("docker-images")
+
+  def _images(self) -> list[dict]:
+    path = self.images_path
+    return json.loads(path.read_text()) if path.exists() else []
+
   def call(self, args: list[str], cwd: Path, stdout=None, stderr=None):
     """Run `docker *args` in `cwd`. Returns (returncode, stdout, stderr) text,
     except for `docker run`, which returns the real `sh` run's CompletedProcess."""
@@ -99,10 +107,22 @@ class FakeDocker:
               "Names": f"{c['app_id']}-{c['run_unit']}-1",
               "State": c["state"],
               "Status": c.get("status", ""),
+              "Image": c.get("image", ""),
               "Labels": f"kelso.app_id={c['app_id']},kelso.run_unit={c['run_unit']}",
             }
           )
         )
+    elif args[:2] == ["image", "ls"]:
+      out += [json.dumps(image) for image in self._images()]
+    elif args[:2] == ["image", "rm"]:
+      names = set(args[2:])
+      images = self._images()
+      gone = [i for i in images if names & {i["ID"], f"{i['Repository']}:{i['Tag']}"}]
+      in_use = {c.get("image") for c in containers}
+      if names & in_use:
+        return 1, "", "conflict: image is being used by a container"
+      kept = [i for i in images if i not in gone]
+      self.images_path.write_text(json.dumps(kept))
     elif args[0] == "stats":
       for c in containers:
         if c.get("state") != "running":

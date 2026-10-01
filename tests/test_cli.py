@@ -1218,7 +1218,9 @@ def test_doctor_reports_orphaned_routes(kelso_env):
   prognosis = _diagnose(kelso_env)
   assert prognosis.healthy
   assert prognosis.warnings == (
-    Finding("io.example.abandoned", "orphaned route allocation"),
+    Finding(
+      "io.example.abandoned", "orphaned route allocation; `kelso cleanup` releases it"
+    ),
   )
 
 
@@ -1271,7 +1273,7 @@ def test_doctor_lists_problems_then_warnings(kelso_env):
     f"  volumes logs: {logs} links to {kelso_env.root.parent / 'gone'}, which "
     "does not exist. Apps with logs volumes will not load or start until it does.\n"
     "Warnings:\n"
-    "  io.example.abandoned: orphaned route allocation\n"
+    "  io.example.abandoned: orphaned route allocation; `kelso cleanup` releases it\n"
   )
 
 

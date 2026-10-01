@@ -196,6 +196,10 @@ class KelsoEnv:
   def set_containers(self, containers: list[dict[str, str]]) -> None:
     self.docker_state.write_text(json.dumps(containers))
 
+  def set_images(self, images: list[dict[str, str]]) -> None:
+    """`docker image ls` rows: ID, Repository, Tag, Size."""
+    self.docker_state.with_name("docker-images").write_text(json.dumps(images))
+
 
 # The executable twin of `GuardDocker`, first on PATH, for anything that runs
 # `docker` without going through the modules `use_fake_docker` patches.

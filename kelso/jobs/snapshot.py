@@ -2,6 +2,7 @@ from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   delete_snapshot,
+  prune_snapshots,
   resolve_snapshot_app,
   snapshot,
   snapshot_names,
@@ -42,6 +43,7 @@ class SnapshotJob(Job):
           stop(app, ctx)
       try:
         path = snapshot(app, ctx, label=self.label)
+        prune_snapshots(app, ctx)
       finally:
         if running:
           with ctx.kelso_lock(by):

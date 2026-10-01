@@ -1,3 +1,9 @@
+from kelso.lib.lifecycle.cleanup import (
+  CleanupPlan,
+  cleanup,
+  cleanup_plan,
+  prune_snapshots,
+)
 from kelso.lib.lifecycle.dev import (
   DevPlan,
   dev,
@@ -55,6 +61,10 @@ from kelso.lib.lifecycle.run import (
 from kelso.lib.lifecycle.snapshot import delete_snapshot, snapshot
 
 __all__ = [
+  "CleanupPlan",
+  "cleanup",
+  "cleanup_plan",
+  "prune_snapshots",
   "DevPlan",
   "ReloadResult",
   "RemovalPlan",

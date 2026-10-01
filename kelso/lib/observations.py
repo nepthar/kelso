@@ -106,6 +106,16 @@ class AppObservation:
     return self.state != AVAILABLE or self.db_present
 
   @property
+  def orphaned_routes(self) -> bool:
+    """Routes kelso holds for an app with no bundle, loaded copy, or containers."""
+    return (
+      self.db_present
+      and self.bundle_path is None
+      and not self.run_dir_exists
+      and not self.containers
+    )
+
+  @property
   def status(self) -> str:
     """Container state as one word: what an operator scanning a list wants."""
     if self.running_count:

@@ -23,6 +23,7 @@ from kelso.lib.observations import (
   app_state,
   collect_observations,
 )
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore, KelsoStore
 
@@ -34,6 +35,8 @@ LOCK_TIMEOUT = 5.0
 
 ACTIVITY_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
 ACTIVITY_LOG_HISTORY = 2000  # records
+METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
+METRICS_LOG_HISTORY = 50_000  # records, days of readings
 
 LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2  # 2 hours
 
@@ -137,8 +140,11 @@ class KelsoCtx:
       auto_compact_history=ACTIVITY_LOG_HISTORY,
     )
 
+    # Only kelsod's job thread writes this, so compacting in place is safe.
     self.metrics_log = LogTab(
       config.metrics_log,
+      auto_compact_size_bytes=METRICS_LOG_MAX_BYTES,
+      auto_compact_history=METRICS_LOG_HISTORY,
     )
 
   def _app_filelock(self, app: AppID | str) -> FileLock:
@@ -213,6 +219,14 @@ class KelsoCtx:
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
+
+  def app_option(self, app: AppID | str, name: str) -> str:
+    """An app option: as configured, else the manifest's default, else kelso's."""
+    _, value = self.app_store(app).get_config(name)
+    if value is None:
+      spec = self.loaded_spec(app)
+      value = spec.config[name].default if spec else None
+    return value or APP_OPTIONS[name].default(AppID(app))
 
   def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
     """The loaded app's spec, or None when it is not loaded.
