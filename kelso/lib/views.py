@@ -18,7 +18,7 @@ from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
 from kelso.lib.metric import KELSO_DIRS
-from kelso.lib.observations import AppObservation
+from kelso.lib.observations import AppObservation, observe
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
 from kelso.lib.run_layout import AppRunData, load_run_data, resolved_subdomain
@@ -319,7 +319,7 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   """One app in full: what `kelso inspect` shows, as data."""
-  observation = _observation(app_id, ctx)
+  observation = observe(app_id, ctx)
   spec = ctx.loaded_spec(app_id)
   view = _summary(observation, ctx, spec=spec)
 
@@ -357,13 +357,6 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
     }
   )
   return view
-
-
-def _observation(app_id: AppID, ctx: KelsoCtx) -> AppObservation:
-  for observation in ctx.observations():
-    if observation.app_id == app_id:
-      return observation
-  raise ValueError(f'No app state found for "{app_id}"')
 
 
 def _summary(

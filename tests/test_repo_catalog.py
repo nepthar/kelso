@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from kelso.lib.config import load_config_file
+from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import bound_to
 
@@ -267,10 +268,9 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
 def test_doctor_reports_a_missing_repo_directory(kelso_env):
   add_repo_block(kelso_env, "gone", kelso_env.root / "not-here")
 
-  result = kelso_env.run("system", "doctor")
-
-  assert result.returncode == 1
-  assert "is not a directory" in result.stderr
+  (problem,) = diagnose(KelsoCtx(load_config_file(kelso_env.config))).problems
+  assert problem.subject == "repo gone"
+  assert "is not a directory" in problem.message
 
 
 # --- one id in two sources --------------------------------------------------
@@ -296,11 +296,10 @@ def test_doctor_reports_an_ambiguous_id(kelso_env):
   a_bundle(dev, "ports-demo")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
-  result = kelso_env.run("system", "doctor")
-
-  assert result.returncode == 1
-  assert "More than one repo carries" in result.stderr
-  assert "hrbr-dev" in result.stderr
+  (problem,) = diagnose(KelsoCtx(load_config_file(kelso_env.config))).problems
+  assert problem.subject == ""
+  assert "More than one repo carries" in problem.message
+  assert "hrbr-dev" in problem.message
 
 
 def test_a_full_path_picks_which_source_to_load(kelso_env):

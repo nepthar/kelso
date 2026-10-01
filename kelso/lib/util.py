@@ -3,7 +3,7 @@ import re
 import string
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Protocol
+from typing import Annotated
 
 from pydantic import AfterValidator
 
@@ -108,11 +108,3 @@ def path_size(path: Path) -> int:
   if path.is_file():
     return path.stat().st_size
   return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
-
-
-class Conn(Protocol):
-  def out(self, data: str): ...
-
-  def err(self, data: str): ...
-
-  def read(self, prompt: str = "") -> str: ...

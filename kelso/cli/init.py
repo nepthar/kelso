@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -15,6 +16,8 @@ from kelso.lib.config import (
 from kelso.lib.logtab import LogTab
 from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
+
+logger = logging.getLogger("kelso.cli")
 
 DEFAULT_ROOT = Path("~/.kelso")
 
@@ -132,7 +135,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def _mirror_default_repos(config, conn) -> None:
+def _mirror_default_repos(config) -> None:
   """Fetch the repos the template ships with, so day one is not an empty store.
 
   Best-effort on purpose: `init` otherwise touches nothing but the filesystem,
@@ -147,37 +150,37 @@ def _mirror_default_repos(config, conn) -> None:
   if not remotes:
     return
 
-  conn.out("")
+  print("")
   ctx = KelsoCtx(config)
   for repo in remotes:
     try:
       result = repo_lib.mirror(repo, ctx)
     except Exception as e:
-      conn.err(
+      logger.warning(
         f"Could not mirror {repo.name} from {repo.describe()}: {e}\n"
         f"  It is still configured. Run `kelso repo update {repo.name}` "
         f"when you can reach GitHub."
       )
       continue
-    conn.out(f"Mirrored {repo.name}: {len(result.bundles)} apps at {result.sha[:8]}")
+    print(f"Mirrored {repo.name}: {len(result.bundles)} apps at {result.sha[:8]}")
 
 
-def run(args: argparse.Namespace, _ctx, conn) -> None:
+def run(args: argparse.Namespace, _ctx) -> None:
   default = Path(os.environ.get("KELSO_ROOT", DEFAULT_ROOT)).expanduser()
   if getattr(args, "root", None):
     default = Path(args.root).expanduser()
-  response = conn.read(f"Kelso root directory [{default}]: ").strip()
+  response = input(f"Kelso root directory [{default}]: ").strip()
   root = Path(response if response else default).expanduser().resolve()
 
   if root.exists() and not root.is_dir():
-    conn.err(f"Error: {root} exists and is not a directory")
-    raise SystemExit(1)
+    raise ValueError(f"{root} exists and is not a directory")
 
   config_path = root / "config.toml"
   if config_path.exists():
-    conn.err(f"Error: config already exists at {config_path}")
-    conn.err("If you want to re-initialize, remove it first.")
-    raise SystemExit(1)
+    raise ValueError(
+      f"config already exists at {config_path}. "
+      f"If you want to re-initialize, remove it first."
+    )
 
   (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
   (root / CONF_DIR / "apps").mkdir(parents=True, exist_ok=True)
@@ -199,50 +202,50 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
 
   config = load_config_file(config_path)
 
-  conn.out(f"Initialized kelso root at {root}")
-  conn.out(f"  config:      {config_path}")
-  conn.out(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
-  conn.out(f"  repos:       {root / 'repos'}")
-  conn.out(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
-  conn.out("  volumes:")
+  print(f"Initialized kelso root at {root}")
+  print(f"  config:      {config_path}")
+  print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
+  print(f"  repos:       {root / 'repos'}")
+  print(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
+  print("  volumes:")
   for line in volume_root_lines(config):
-    conn.out(f"    {line}")
-  conn.out(
+    print(f"    {line}")
+  print(
     "    To keep one of these somewhere else -- bulk on a NAS, say -- replace\n"
     '    its directory with a symlink. See "Volume Storage Locations" in the README,\n'
     "    which covers what to link to on a share that may not be mounted."
   )
   if args.no_mirror:
-    conn.out("\nSkipped mirroring the default repos (--no-mirror).")
-    conn.out("  Fetch them with `kelso repo update`.")
+    print("\nSkipped mirroring the default repos (--no-mirror).")
+    print("  Fetch them with `kelso repo update`.")
   else:
-    _mirror_default_repos(config, conn)
+    _mirror_default_repos(config)
 
-  conn.out("")
+  print("")
   if not service.has_systemd():
-    conn.out(NO_SYSTEMD)
+    print(NO_SYSTEMD)
   else:
     try:
-      install_service(config.config_path, conn)
+      install_service(config.config_path)
     except RuntimeError as e:
-      conn.err(str(e))
+      logger.warning(str(e))
 
-  conn.out(f"\nTo change your configuration, edit {config_path}")
-  conn.out(
+  print(f"\nTo change your configuration, edit {config_path}")
+  print(
     "\nNext: pick something from `kelso repo list`, then\n"
     "  kelso load <app>    load it without starting it\n"
     "  kelso start <app>   start it (loading first if needed)\n"
     "  kelso stop <app>    stop it\n"
     "  kelso unload <app>  stop it and unload it, keeping data and config"
   )
-  conn.out(
+  print(
     "\nThe `demos` repo is there to explore what an app can do. You may wish "
     "to remove\nit once you are finished: `kelso repo remove demos`."
   )
 
   default_root = DEFAULT_ROOT.expanduser().resolve()
   if root != default_root:
-    conn.out(
+    print(
       f"\nThis root is not the default. Persist it with:\n"
       f"  export KELSO_ROOT={root}\n"
       f"or pass `--root {root}` on every kelso command."

@@ -114,24 +114,17 @@ class AppObservation:
       return "exited"
     return "stopped"
 
-  @property
-  def run_display(self) -> str:
-    if not self.run_dir_exists:
-      return "missing"
-    return "ready" if self.compose_exists else "broken"
 
-  @property
-  def app_display(self) -> str:
-    return "ready" if self.bundle_path is not None else "missing"
-
-  @property
-  def container_display(self) -> str:
-    if not self.containers:
-      return "0"
-    return f"{self.running_count}/{len(self.containers)} running"
+def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
+  """Where an app outside every repo was loaded from, if that is still there."""
+  origin = ctx.loaded_origin(app_id)
+  return origin if origin is not None and origin.exists() else None
 
 
-def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
+def collect_observations(
+  ctx: KelsoCtx, only: AppID | None = None
+) -> dict[str, AppObservation]:
+  """Every app kelso knows of, or just `only`, from one pass over each source."""
   bundles = ctx.resolved_bundles()
   run_ids = (
     {path.name for path in ctx.config.run_root.iterdir() if path.is_dir()}
@@ -142,6 +135,8 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
   db_ids = set(ctx.kelso_db.app_ids())
   config_ids = ctx.config.app_config_ids()
   app_ids = set(bundles) | run_ids | set(docker) | db_ids | config_ids
+  if only is not None:
+    app_ids &= {str(only)}
 
   actions = read_app_actions(ctx)
   starts = read_app_starts(ctx)
@@ -153,7 +148,7 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
     action = actions.get(raw_id)
     observations[app_id] = AppObservation(
       app_id=app_id,
-      bundle_path=bundles.get(raw_id),
+      bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
       run_dir_exists=paths.run_path.is_dir(),
       compose_exists=paths.compose_path.is_file(),
       config_exists=raw_id in config_ids,
@@ -173,3 +168,11 @@ def collect_observations(ctx: KelsoCtx) -> dict[str, AppObservation]:
       started_at=starts.get(raw_id),
     )
   return observations
+
+
+def observe(app_id: AppID, ctx: KelsoCtx) -> AppObservation:
+  """One app's observation. Raises ValueError for an id kelso holds nothing for."""
+  observation = collect_observations(ctx, only=app_id).get(str(app_id))
+  if observation is None:
+    raise ValueError(f'No app state found for "{app_id}"')
+  return observation

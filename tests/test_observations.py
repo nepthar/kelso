@@ -1,8 +1,12 @@
 """Where an app stands, and whether what is running is current."""
 
+import pytest
+
 from kelso.lib.apps import AppID
+from kelso.lib.config import load_config_file
 from kelso.lib.docker import KelsoRunUnitStatus
-from kelso.lib.observations import AppObservation
+from kelso.lib.kelso import KelsoCtx
+from kelso.lib.observations import AppObservation, observe
 
 
 def _observed(**kwargs) -> AppObservation:
@@ -57,3 +61,9 @@ def test_unknown_timestamps_are_not_pending():
   assert not _observed(
     started_at="2026-08-27T10:00:00Z", config_changed_at=None
   ).config_pending
+
+
+def test_observing_an_app_kelso_holds_nothing_for_is_refused(kelso_env):
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  with pytest.raises(ValueError, match="No app state found"):
+    observe(AppID("io.example.nothing"), ctx)

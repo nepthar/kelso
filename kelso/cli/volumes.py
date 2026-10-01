@@ -11,7 +11,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(_args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("volumes"):
     rows = []
 
@@ -34,6 +34,6 @@ def run(_args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
           )
 
     rows.sort()
-    conn.out(
+    print(
       tabulate(rows, headers=["app_id", "volume", "type", "size"], tablefmt="simple")
     )

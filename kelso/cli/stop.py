@@ -10,7 +10,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   state = ctx.run_state(args.app_id)
   with ctx.locked(f"stop {state.app_id}", state.app_id):
     stop(state.app_id, ctx)

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from kelso.lib import service
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.util import Conn
 
 NO_SYSTEMD = (
   "This machine does not run systemd, so kelsod was not installed as a service. "
@@ -20,16 +19,16 @@ def register(subparsers) -> None:
   parser.set_defaults(func=_install)
 
 
-def install_service(config_path: Path, conn: Conn) -> None:
+def install_service(config_path: Path) -> None:
   """Write and start the unit. Raises RuntimeError naming what is left to do."""
   if not service.has_systemd():
     raise RuntimeError(NO_SYSTEMD)
   unit = service.write_unit(config_path)
-  conn.out(f"Wrote {unit}")
+  print(f"Wrote {unit}")
   service.activate()
-  conn.out(f"kelsod is running as {service.UNIT_NAME}, and will start at boot.")
-  conn.out(f"  Logs: journalctl --user -u {service.UNIT_NAME}")
+  print(f"kelsod is running as {service.UNIT_NAME}, and will start at boot.")
+  print(f"  Logs: journalctl --user -u {service.UNIT_NAME}")
 
 
-def _install(_args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
-  install_service(ctx.config.config_path, conn)
+def _install(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  install_service(ctx.config.config_path)

@@ -25,7 +25,9 @@ from kelso.cli import (
 )
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.util import Conn, refuse_root
+from kelso.lib.util import refuse_root
+
+logger = logging.getLogger("kelso.cli")
 
 COMMANDS = [
   updown,
@@ -79,15 +81,38 @@ Run `kelso COMMAND --help` for details on any command.
 """
 
 
-class StdConn(Conn):
-  def out(self, data):
-    print(data)
+class _Narration(logging.Formatter):
+  """kelso's own log records as plain lines; warnings and errors say so."""
 
-  def err(self, data):
-    print(data, file=sys.stderr)
+  def format(self, record: logging.LogRecord) -> str:
+    message = record.getMessage()
+    if record.levelno >= logging.ERROR:
+      return f"Error: {message}"
+    if record.levelno >= logging.WARNING:
+      return f"Warning: {message}"
+    return message
 
-  def read(self, prompt: str = "") -> str:
-    return input(prompt)
+
+def _configure_logging() -> None:
+  """Narration to stderr, leaving stdout to what a command outputs.
+
+  Called per run against the current `sys.stderr`, so a caller that redirects
+  the stream still sees it.
+  """
+  # Everything that is not kelso's own: warnings only, and labelled.
+  logging.basicConfig(
+    level=logging.WARNING,
+    format="%(levelname)s %(name)s: %(message)s",
+    force=True,
+  )
+  handler = logging.StreamHandler(sys.stderr)
+  handler.setFormatter(_Narration())
+  kelso = logging.getLogger("kelso")
+  for old in [h for h in kelso.handlers if isinstance(h.formatter, _Narration)]:
+    kelso.removeHandler(old)
+  kelso.addHandler(handler)
+  kelso.setLevel(logging.INFO)
+  kelso.propagate = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -109,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     metavar="FILE",
     help="Path to config.toml (overrides KELSO_CONFIG / --root)",
   )
-  parser.set_defaults(func=lambda args, ctx, conn: parser.print_help())
+  parser.set_defaults(func=lambda args, ctx: parser.print_help())
   # SUPPRESS keeps argparse's flat command list out of --help; HELP replaces it.
   subparsers = parser.add_subparsers(
     dest="command", prog="kelso", help=argparse.SUPPRESS
@@ -121,13 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
   return parser
 
 
-def _dispatch(args: argparse.Namespace, conn: Conn) -> None:
+def _dispatch(args: argparse.Namespace) -> None:
   try:
     # Before anything else, and before `init` in particular: the first command
     # is the one that would create the kelso root with the wrong owner.
     refuse_root("kelso")
     if args.command is None or args.command == "init":
-      args.func(args, None, conn)
+      args.func(args, None)
     else:
       cfg = load_config(
         config_path=getattr(args, "config", None),
@@ -135,28 +160,20 @@ def _dispatch(args: argparse.Namespace, conn: Conn) -> None:
       )
       if not cfg:
         raise ValueError("Kelso is not initialized; run `kelso init` first")
-      args.func(args, KelsoCtx(cfg), conn)
+      args.func(args, KelsoCtx(cfg))
   except KeyboardInterrupt:
     raise SystemExit(130) from None
   except (RuntimeError, ValueError) as error:
-    conn.err(f"Error: {error}")
+    logger.error("%s", error)
     raise SystemExit(1) from error
 
 
-def run(argv: list[str] | None = None, conn: Conn | None = None) -> int:
-  """Execute one kelso command and return its exit code.
-
-  Logging is reconfigured per call against the current `sys.stderr`, so a
-  caller that redirects the stream still sees warnings.
-  """
-  logging.basicConfig(
-    level=logging.WARNING,
-    format="%(levelname)s %(name)s: %(message)s",
-    force=True,
-  )
+def run(argv: list[str] | None = None) -> int:
+  """Execute one kelso command and return its exit code."""
+  _configure_logging()
   parser = build_parser()
   try:
-    _dispatch(parser.parse_args(argv), conn or StdConn())
+    _dispatch(parser.parse_args(argv))
   except SystemExit as exit_:
     if exit_.code is None:
       return 0

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("kelso.routes")
 
 
-class RouteProviderError(Exception):
+class RouteProviderError(RuntimeError):
   """Raised when a route provider cannot complete an operation."""
 
 

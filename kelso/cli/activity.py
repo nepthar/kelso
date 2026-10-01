@@ -49,13 +49,13 @@ def _duration(ms: int | None) -> str:
   return f"{ms / 1000:.1f}s"
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = _resolve(args.app_id, ctx)
   runs = activity.list_runs(ctx, app=app, limit=max(args.last, args.show or 0))
 
   if not runs:
     where = f" for {app}" if app else ""
-    conn.out(f"No recorded activity{where}. Runs land here as kelsod executes jobs.")
+    print(f"No recorded activity{where}. Runs land here as kelsod executes jobs.")
     return
 
   if args.show is not None:
@@ -67,13 +67,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
         f"The output of that run ({entry['log']}) has been pruned; "
         f"its index record above is all that remains"
       )
-    conn.out(activity.read_run_log(ctx, entry["log"]).rstrip("\n"))
+    print(activity.read_run_log(ctx, entry["log"]).rstrip("\n"))
     return
 
   for index, entry in enumerate(runs, start=1):
     what = f"{entry['verb']} {entry['app_id'] or ''}".strip()
     log = entry["log"] if entry["available"] else f"{entry['log']} (pruned)"
-    conn.out(
+    print(
       f"{index:>3}  {entry['ts']}  {entry['status']:<5}  "
       f"{_duration(entry['duration_ms']):>7}  {what:<24}  var/logs/{log}"
     )

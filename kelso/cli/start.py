@@ -5,7 +5,6 @@ from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, start
 from kelso.lib.receipt import capability_receipt, location_receipt
-from kelso.lib.util import Conn
 
 
 def register(subparsers) -> None:
@@ -48,7 +47,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
   sets = [parse_kv(item, "--set") for item in args.sets]
@@ -61,8 +60,8 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   else:
     # Catalog may be gone; start will use the run copy as-is.
     bundle = ctx.config.app_run_path(app)
-  if loading and not args.yes and not confirm_compose_warnings(app, bundle, conn):
-    conn.out("Nothing started.")
+  if loading and not args.yes and not confirm_compose_warnings(app, bundle):
+    print("Nothing started.")
     return
 
   with ctx.locked(f"start {app}", app):
@@ -72,5 +71,5 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
     compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
     if compact.strip():
-      conn.out(compact)
-    conn.out(location_receipt(result.spec, result.run_data, ctx))
+      print(compact)
+    print(location_receipt(result.spec, result.run_data, ctx))

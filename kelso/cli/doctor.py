@@ -1,8 +1,7 @@
 import argparse
 
-from kelso.lib.kelso import KelsoCtx, ambiguity_message
-from kelso.lib.observations import AppObservation
-from kelso.lib.receipt import volume_root_lines
+from kelso.lib.doctor import Finding, diagnose
+from kelso.lib.kelso import KelsoCtx
 
 
 def register(subparsers) -> None:
@@ -12,87 +11,26 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("doctor"):
-    conn.out("Volume roots:")
-    for line in volume_root_lines(ctx.config):
-      conn.out(f"  {line}")
-    conn.out("")
+    prognosis = diagnose(ctx)
 
-    problems: list[str] = [*_volume_notes(ctx), *_catalog_notes(ctx)]
-    for observation in ctx.observations():
-      for note in _notes(observation, ctx):
-        problems.append(f"{observation.app_id}: {note}")
+  if not prognosis.problems and not prognosis.warnings:
+    print("No problems found")
+    return
 
-    if not problems:
-      conn.out("No problems found")
-      return
-
-    for problem in problems:
-      conn.err(problem)
+  _section("Problems", prognosis.problems)
+  _section("Warnings", prognosis.warnings)
+  if not prognosis.healthy:
     raise SystemExit(1)
 
 
-def _volume_notes(ctx: KelsoCtx) -> list[str]:
-  notes = []
-  for kind, root in ctx.config.volume_roots.items():
-    target = ctx.config.dangling_volume_root(kind)
-    if target is not None:
-      notes.append(
-        f"volumes {kind}: {root} links to {target}, which does not exist. "
-        f"Apps with {kind} volumes will not load or start until it does."
-      )
-  return notes
-
-
-def _catalog_notes(ctx: KelsoCtx) -> list[str]:
-  """Problems with the catalog itself, rather than with any one app's state."""
-  notes = []
-  for name, repo in ctx.config.repos.items():
-    if not repo.path.is_dir():
-      hint = (
-        f"Run `kelso repo update {name}` to mirror it."
-        if repo.mirrored
-        else "Create it, fix its path in config.toml, or drop the entry."
-      )
-      notes.append(f"repo {name}: {repo.path} is not a directory. {hint}")
-
-  catalog = ctx.app_catalog()
-  for app_id in sorted(catalog):
-    entries = catalog[app_id]
-    if len(entries) > 1:
-      notes.append(ambiguity_message(app_id, entries))
-  return notes
-
-
-def _missing_bundle(observation: AppObservation, ctx: KelsoCtx) -> str:
-  origin = ctx.loaded_origin(observation.app_id)
-  if origin is None:
-    return "app bundle missing (no load source recorded)"
-  return f"app bundle missing, was: {origin}"
-
-
-def _notes(observation: AppObservation, ctx: KelsoCtx) -> tuple[str, ...]:
-  notes = []
-  if observation.bundle_path is None and (
-    observation.run_dir_exists or observation.containers or observation.db_present
-  ):
-    notes.append(_missing_bundle(observation, ctx))
-  if not observation.run_dir_exists and observation.containers:
-    notes.append("run directory missing")
-  elif observation.run_dir_exists and not observation.compose_exists:
-    notes.append("compose missing")
-  if observation.containers and not observation.compose_exists:
-    notes.append("manual container recovery required")
-  if any(not container.run_unit for container in observation.containers):
-    notes.append("container run-unit label missing")
-  if 0 < observation.running_count < len(observation.containers):
-    notes.append("mixed container states")
-  if (
-    observation.db_present
-    and observation.bundle_path is None
-    and not observation.run_dir_exists
-    and not observation.containers
-  ):
-    notes.append("orphaned route allocation")
-  return tuple(notes)
+def _section(title: str, findings: tuple[Finding, ...]) -> None:
+  if not findings:
+    return
+  print(f"{title}:")
+  for finding in findings:
+    line = (
+      f"{finding.subject}: {finding.message}" if finding.subject else finding.message
+    )
+    print(f"  {line}")

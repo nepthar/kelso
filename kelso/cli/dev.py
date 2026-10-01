@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 
 from kelso.cli.configform import collect
@@ -17,7 +18,8 @@ from kelso.lib.lifecycle import (
 )
 from kelso.lib.receipt import LABEL_WIDTH, route_lines
 from kelso.lib.spec import AppSpec
-from kelso.lib.util import Conn
+
+logger = logging.getLogger("kelso.cli")
 
 
 def register(subparsers) -> None:
@@ -38,7 +40,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if not is_pathlike(args.bundle):
     raise ValueError(
       f"`kelso dev` takes a path to a bundle, not an app id; "
@@ -49,33 +51,33 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 
   with ctx.locked(f"dev {app}", app):
     refuse_other_origin(app, source, ctx)
-    if not confirm_compose_warnings(app, source, conn):
-      conn.out("Nothing started.")
+    if not confirm_compose_warnings(app, source):
+      print("Nothing started.")
       return
 
     bound = None if bound_to(app, ctx) else str(source)
     result = load(app, source, ctx, bound=bound)
     for name in result.dropped_volumes:
-      conn.err(
+      logger.warning(
         f"volume {name} is no longer declared in the manifest; "
         f"its link is gone but its data was left in place"
       )
-    _fill_missing_config(result.spec, ctx, conn)
+    _fill_missing_config(result.spec, ctx)
 
     plan = dev_plan(app, source, ctx, publish_routes=args.routes)
-    conn.out(_receipt(plan, ctx))
+    print(_receipt(plan, ctx))
 
     code = dev(plan, ctx)
     if code:
       raise SystemExit(code)
 
 
-def _fill_missing_config(spec: AppSpec, ctx: KelsoCtx, conn: Conn) -> None:
+def _fill_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
   """Ask for what the app cannot start without; `dev_plan` refuses if still unset."""
   request = app_config_request(spec, ctx)
   if not request.missing():
     return
-  response = collect(request, conn)
+  response = collect(request)
   if response != EMPTY_CONFIG_RESPONSE:
     apply_app_config(spec, response, ctx)
 

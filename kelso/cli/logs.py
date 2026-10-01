@@ -27,7 +27,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   extra: list[str] = []
   if args.follow:
     extra.append("--follow")
