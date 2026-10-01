@@ -74,8 +74,9 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
 
 def _app_problems(observation: AppObservation, ctx: KelsoCtx) -> list[str]:
   notes = []
+  # A route entry alone is the orphaned allocation warned about, not this.
   if observation.bundle_path is None and (
-    observation.run_dir_exists or observation.containers or observation.db_present
+    observation.run_dir_exists or observation.containers
   ):
     origin = ctx.loaded_origin(observation.app_id)
     if origin is None:

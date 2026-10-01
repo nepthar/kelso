@@ -1215,7 +1215,9 @@ def test_doctor_reports_orphaned_routes(kelso_env):
   ps = kelso_env.run("ps")
   assert _ps_row(ps.stdout, "io.example.abandoned")[1:4] == ["-", "-", "-"]
 
-  assert _diagnose(kelso_env).warnings == (
+  prognosis = _diagnose(kelso_env)
+  assert prognosis.healthy
+  assert prognosis.warnings == (
     Finding("io.example.abandoned", "orphaned route allocation"),
   )
 
@@ -1259,11 +1261,15 @@ def test_doctor_lists_problems_then_warnings(kelso_env):
     }
   )
 
+  logs = kelso_env.volumes_root / "logs"
+  logs.symlink_to(kelso_env.root.parent / "gone")
+
   result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert result.stdout == (
     "Problems:\n"
-    "  io.example.abandoned: app bundle missing (no load source recorded)\n"
+    f"  volumes logs: {logs} links to {kelso_env.root.parent / 'gone'}, which "
+    "does not exist. Apps with logs volumes will not load or start until it does.\n"
     "Warnings:\n"
     "  io.example.abandoned: orphaned route allocation\n"
   )
