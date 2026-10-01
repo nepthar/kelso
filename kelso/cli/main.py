@@ -21,12 +21,14 @@ from kelso.cli import (
   start,
   stop,
   system,
+  updown,
 )
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import Conn, refuse_root
 
 COMMANDS = [
+  updown,
   ps,
   start,
   stop,
@@ -60,6 +62,10 @@ Apps
 
   dev         Run an app bundle in this terminal
   reset       Delete an app's data, keeping its config
+
+This box
+  up          Start all apps in start_order groups
+  down        Stop all apps in start_order groups
 
 Snapshots     kelso snapshot take | list | restore
 Repos         kelso repo list | add | update | remove

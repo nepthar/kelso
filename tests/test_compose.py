@@ -129,7 +129,7 @@ image = "alpine:latest"
       "main": {
         "image": "alpine:latest",
         "hostname": "main",
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "logging": {
           "driver": "json-file",
           "options": {"max-size": "10m", "max-file": "3"},
@@ -555,15 +555,15 @@ image = "nginx:1.27"
 
 [run.db]
 image = "postgres:16"
-restart = "always"
+restart = "no"
 """,
   )
 
   services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert set(services) == {"web", "db"}
-  assert services["db"]["restart"] == "always"
-  assert services["web"]["restart"] == "unless-stopped"
+  assert services["db"]["restart"] == "no"
+  assert services["web"]["restart"] == "on-failure"
   assert services["db"]["hostname"] == "db"
 
 

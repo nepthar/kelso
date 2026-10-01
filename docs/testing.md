@@ -106,6 +106,15 @@ argument shapes. Untested against it: image pull, `${__KELSO_CONFIG__*}`
 interpolation actually reaching the container, restart policies, `depends_on`
 ordering, and drift between compose versions.
 
+**`kelso up` at boot.** `test_updown.py` drives the ordering against the fake,
+with the settle time at zero. Untested: that after a reboot Docker leaves
+`restart = "yes"` (`on-failure`) containers down, kelsod starts group 0 before
+it listens and queues an `up` that resumes, in `start_order`, every app whose
+last action was `started`, a real healthcheck's
+`(healthy)` is what ends a group's wait, an app with no healthcheck is held for
+the 10 seconds before the next group, and stopping kelsod (`systemctl --user
+stop kelsod`) takes group 0 down with it.
+
 **A multi-container app.** `unifi-network-application.klso` is the natural
 smoke test — two units, a generated secret shared between them, and a real
 health dependency.

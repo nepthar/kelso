@@ -487,7 +487,8 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       "hostname": run_unit.hostname,
     }
 
-    service["restart"] = run_unit.restart or "unless-stopped"
+    # Only on failure: at boot, kelsod starts apps in start_order, not docker.
+    service["restart"] = "on-failure" if run_unit.restart == "yes" else "no"
 
     # Rotate container logs; dockerd otherwise keeps every byte. Deliberately not a
     # managed key, so a manifest's own `logging` overrides it below.

@@ -235,8 +235,13 @@ def reload_app(
   return ReloadResult(stage=result, was_running=running)
 
 
-def stop(app_id: AppID, ctx: KelsoCtx) -> None:
-  """Tear down routes, then bring an app's containers down."""
+def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
+  """Tear down routes, then bring an app's containers down.
+
+  `action` is what the app's last action becomes; `up` skips an app whose last
+  action is "stopped", so anything that expects `up` to restart it says
+  otherwise.
+  """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     if state.containers:
@@ -261,7 +266,7 @@ def stop(app_id: AppID, ctx: KelsoCtx) -> None:
     # Nothing is mounting them now, and leaving them behind is how a stopped
     # app keeps looking like it is still bound to somebody's data.
     unlink_host_volumes(state.run_path)
-    record_app_action("stopped", app_id, ctx)
+    record_app_action(action, app_id, ctx)
   except DockerError as e:
     record_app_action("stop-failed", app_id, ctx)
     raise ValueError(str(e)) from e

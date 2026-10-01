@@ -98,6 +98,7 @@ class FakeDocker:
               "ID": c["id"],
               "Names": f"{c['app_id']}-{c['run_unit']}-1",
               "State": c["state"],
+              "Status": c.get("status", ""),
               "Labels": f"kelso.app_id={c['app_id']},kelso.run_unit={c['run_unit']}",
             }
           )

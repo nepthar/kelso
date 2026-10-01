@@ -36,7 +36,7 @@ image = "alpine:latest"
   assert spec.routes == {}
   assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
     "subdomain": ("demo", "option"),
-    "start_order": ("5", "option"),
+    "start_order": ("6", "option"),
     "snapshot_max_count": ("0", "option"),
   }
   assert spec.volumes == {}
@@ -47,7 +47,7 @@ image = "alpine:latest"
   assert main.image == "alpine:latest"
   assert main.hostname == "main"
   assert main.command is None
-  assert main.restart == "unless-stopped"
+  assert main.restart == "yes"
   assert main.volumes == {}
   assert main.routes == {}
 
@@ -195,7 +195,7 @@ image = "alpine"
 @pytest.mark.parametrize(
   ("entry", "error"),
   [
-    ('start_order = { default = "11" }', "from 0 to 10"),
+    ('start_order = { default = "10" }', "from 0 to 9"),
     ('snapshot_max_count = { default = "-1" }', "0 or more"),
     ('subdomain = { default = "a.b" }', "no periods"),
     ("subdomain = { secret = true }", "cannot be secret"),
@@ -365,7 +365,7 @@ main = { port = "80" }
 [run.db]
 image = "postgres:16"
 cmd = ["postgres", "-c", "max_connections=50"]
-restart = "always"
+restart = "no"
 env = { POSTGRES_DB = "app" }
 """,
   )
@@ -379,7 +379,7 @@ env = { POSTGRES_DB = "app" }
 
   db = spec.run_units["db"]
   assert db.command == ("postgres", "-c", "max_connections=50")
-  assert db.restart == "always"
+  assert db.restart == "no"
   assert db.routes == {}
   assert db.environment["KLSO_RUN_UNIT"] == "db"
   assert db.environment["POSTGRES_DB"] == "app"
