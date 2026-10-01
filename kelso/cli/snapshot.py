@@ -11,7 +11,6 @@ from kelso.lib.lifecycle import (
   start,
   stop,
 )
-from kelso.lib.util import Conn
 
 
 def register(subparsers) -> None:
@@ -54,9 +53,9 @@ def register(subparsers) -> None:
   rest.set_defaults(func=run_restore)
 
 
-def run_take(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run_take(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = ctx.resolve_app(args.app)
-  conn.out(f"Snapshotting {app}...")
+  print(f"Snapshotting {app}...")
   by = f"snapshot {app}"
   running = 0
   with ctx.app_lock(app, by):
@@ -73,41 +72,41 @@ def run_take(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       if running:
         with ctx.kelso_lock(by):
           start(app, ctx.config.app_run_path(app), ctx)
-  conn.out(f"Snapshot of {app} written to {path}")
+  print(f"Snapshot of {app} written to {path}")
 
 
-def run_list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run_list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = resolve_snapshot_app(ctx, args.app)
   names = snapshot_names(app, ctx)
   if not names:
-    conn.out(f"No snapshots of {app}. Take one with `kelso snapshot take {app}`")
+    print(f"No snapshots of {app}. Take one with `kelso snapshot take {app}`")
     return
   for name in reversed(names):
-    conn.out(name)
+    print(name)
 
 
-def run_restore(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run_restore(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = resolve_snapshot_app(ctx, args.app)
   plan = restore_plan(app, args.snapshot, ctx)
   snapshot_first = not args.no_snapshot
-  if not args.yes and not _confirmed(plan, snapshot_first, conn):
-    conn.out("Nothing restored.")
+  if not args.yes and not _confirmed(plan, snapshot_first):
+    print("Nothing restored.")
     return
   with ctx.locked(f"restore {app}", app):
     restore(plan, ctx, snapshot_first=snapshot_first)
-  conn.out(f"Restored {plan.app_id} from {plan.snapshot_path}")
+  print(f"Restored {plan.app_id} from {plan.snapshot_path}")
 
 
-def _confirmed(plan: RestorePlan, snapshot_first: bool, conn: Conn) -> bool:
-  conn.out(f"Restoring {plan.app_id} from {plan.snapshot_path} overwrites:")
-  conn.out(f"  {plan.run_path} (loaded bundle, compose)")
-  conn.out(f"  {plan.config_path} (config, secrets)")
+def _confirmed(plan: RestorePlan, snapshot_first: bool) -> bool:
+  print(f"Restoring {plan.app_id} from {plan.snapshot_path} overwrites:")
+  print(f"  {plan.run_path} (loaded bundle, compose)")
+  print(f"  {plan.config_path} (config, secrets)")
   for _, dest in plan.data_volumes:
-    conn.out(f"  {dest}")
-  conn.out("  its route and host-port allocations")
+    print(f"  {dest}")
+  print("  its route and host-port allocations")
 
   if plan.run_path.exists() and not snapshot_first:
-    conn.out(
+    print(
       f"Whatever {plan.app_id} holds right now is destroyed, not set aside "
       f"(--no-snapshot)."
     )
@@ -117,13 +116,13 @@ def _confirmed(plan: RestorePlan, snapshot_first: bool, conn: Conn) -> bool:
     )
   else:
     if snapshot_first and plan.run_path.exists():
-      conn.out(
+      print(
         "This is the newest pre-restore snapshot; no new pre-restore "
         "snapshot will be taken."
       )
     prompt = f"Restore {plan.app_id} to {plan.snapshot_path.name}? [y/N] "
   try:
-    answer = conn.read(prompt)
+    answer = input(prompt)
   except EOFError:
     return False
   return answer.strip().lower() in ("y", "yes")

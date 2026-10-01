@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 from tabulate import tabulate
 
@@ -12,6 +13,8 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
+
+logger = logging.getLogger("kelso.cli")
 
 
 def register(subparsers) -> None:
@@ -68,7 +71,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = ctx.resolve_app(args.app)
   with ctx.locked(f"config {app}", app):
     store = ctx.app_store(app)
@@ -77,36 +80,36 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
     if args.get_name is not None:
       if args.sets or args.binds or args.routes:
         raise ValueError("--get cannot be combined with --set, --route, or --bind")
-      _get(spec, store, args.get_name, conn, show_secret=args.show_secret)
+      _get(spec, store, args.get_name, show_secret=args.show_secret)
       return
 
     if args.show_secret:
       raise ValueError("--show-secret requires --get")
 
     if args.sets or args.binds or args.routes:
-      _apply(app, spec, args.sets, args.binds, args.routes, ctx, conn)
+      _apply(app, spec, args.sets, args.binds, args.routes, ctx)
       return
 
     if args.edit:
-      _edit(app, spec, ctx, conn)
+      _edit(app, spec, ctx)
       return
 
-    _list(app, spec, ctx, conn)
+    _list(app, spec, ctx)
 
 
-def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
+def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
   request = app_config_request(spec, ctx)
   if not request.fields:
-    conn.out(f"App {app} declares no config")
+    print(f"App {app} declares no config")
     return
 
-  response = collect(request, conn)
+  response = collect(request)
   if response == EMPTY_CONFIG_RESPONSE:
-    conn.out("No changes")
+    print("No changes")
     return
 
   written = apply_app_config(spec, response, ctx)
-  conn.out(f"Set {', '.join(written)}" if written else "No changes")
+  print(f"Set {', '.join(written)}" if written else "No changes")
 
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
@@ -122,7 +125,6 @@ def _get(
   spec: AppSpec,
   store: AppStore,
   name: str,
-  conn,
   *,
   show_secret: bool,
 ) -> None:
@@ -133,14 +135,14 @@ def _get(
   secret, value = store.get_config(name)
   if value is None:
     if config.has_default():
-      conn.err(f"Config {config.name} using default value")
-      conn.out(config.default)
+      logger.info("Config %s using default value", config.name)
+      print(config.default)
     else:
       raise SystemExit(1)
   elif secret and not show_secret:
-    conn.out("set")
+    print("set")
   else:
-    conn.out(value)
+    print(value)
 
 
 def _apply(
@@ -150,7 +152,6 @@ def _apply(
   binds_raw: list[str],
   routes_raw: list[str],
   ctx: KelsoCtx,
-  conn,
 ) -> None:
   sets = [parse_kv(item, "--set") for item in sets_raw]
   binds = [parse_kv(item, "--bind") for item in binds_raw]
@@ -161,7 +162,7 @@ def _apply(
   for volname, host_volume_tag in binds:
     bind(spec, volname, host_volume_tag, ctx)
   if routes:
-    _apply_routes(app, spec, routes, ctx, conn)
+    _apply_routes(app, spec, routes, ctx)
 
   try:
     state = ctx.run_state(app)
@@ -169,12 +170,12 @@ def _apply(
     state = None
   if state is not None and state.running_count:
     if sets or binds:
-      conn.err(
+      logger.warning(
         f"App {app} is running; run `kelso stop {app}` "
         f"&& `kelso start {app}` to apply new config"
       )
     if routes:
-      conn.err(
+      logger.warning(
         f"App {app} is running; route provider updates were applied, but "
         f"containers still have the previous route URLs in their environment. "
         f"Run `kelso stop {app}` && `kelso start {app}` to refresh them."
@@ -186,25 +187,22 @@ def _apply_routes(
   spec: AppSpec,
   routes: list[tuple[str, str]],
   ctx: KelsoCtx,
-  conn,
 ) -> None:
   for route_name, tag in routes:
     assign_route(spec, route_name, tag, ctx)
-    conn.out(f"route {route_name} -> {tag} (applied on next start)")
+    print(f"route {route_name} -> {tag} (applied on next start)")
 
 
-def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
+def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
   store = ctx.app_store(app)
-  conn.out(f"Configuration parameters for: {app}")
+  print(f"Configuration parameters for: {app}")
   for title, fields in app_config_request(spec, ctx).groups():
     # Binds and route assignments have their own tables below.
     rows = [[f.name, f.display(), f.desc] for f in fields if "." not in f.name]
     if rows:
-      conn.out("")
-      conn.out(f"{title}:")
-      conn.out(
-        tabulate(rows, headers=["name", "value", "description"], tablefmt="simple")
-      )
+      print("")
+      print(f"{title}:")
+      print(tabulate(rows, headers=["name", "value", "description"], tablefmt="simple"))
 
   if spec.routes:
     assignments = store.list_route_assignments()
@@ -217,9 +215,9 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
         display = tag
       private = "yes" if route.private else ""
       route_rows.append([name, display, private, route.desc or ""])
-    conn.out("")
-    conn.out("Route assignments:")
-    conn.out(
+    print("")
+    print("Route assignments:")
+    print(
       tabulate(
         route_rows,
         headers=["route", "provider", "private", "description"],
@@ -237,8 +235,6 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx, conn) -> None:
     tag = binds.get(name)
     display = tag if tag else "(not bound)"
     bind_rows.append([name, display])
-  conn.out("")
-  conn.out("Host volume binds:")
-  conn.out(
-    tabulate(bind_rows, headers=["volume_name", "host_volume"], tablefmt="simple")
-  )
+  print("")
+  print("Host volume binds:")
+  print(tabulate(bind_rows, headers=["volume_name", "host_volume"], tablefmt="simple"))

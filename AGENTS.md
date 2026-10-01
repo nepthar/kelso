@@ -67,6 +67,11 @@ change; skip tests entirely for cosmetic ones.
   to something the file's contents don't show — what this module owns, and what
   it deliberately doesn't. Not a design record, not history.
 - Errors are `ValueError` / `RuntimeError` whose message names the fix.
+- **Output.** What a command produces -- a table, a value, a receipt -- is
+  `print()`ed to stdout, so it can be piped. Everything else is narration and
+  goes through `logging` (`getLogger("kelso.…")`), which the CLI shows on
+  stderr and a job records in its activity log. Code under `kelso/lib` never
+  prints. Prompts are `input()`.
 - Tests must never reach the real docker daemon — `tests/conftest.py` enforces
   this. Test doubles live in `tests/`, never in `kelso/`.
 - The suite runs in ~65s and commands run in-process; see `docs/testing.md`

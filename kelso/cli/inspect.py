@@ -22,12 +22,12 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if is_pathlike(args.app):
     source = Path(args.app).expanduser().resolve()
     with ctx.kelso_lock(f"inspect {source}"):
       spec = load_bundle(source).app_spec()
-      conn.out(capability_receipt(spec, None, ctx, compact=False))
+      print(capability_receipt(spec, None, ctx, compact=False))
     return
 
   app = ctx.resolve_app(args.app)
@@ -51,7 +51,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
         f"manifest has changed, `kelso load {app}` may be required to reflect changes",
       )
 
-    conn.out(
+    print(
       capability_receipt(
         spec,
         load_run_data(spec, ctx) if loaded is not None else None,

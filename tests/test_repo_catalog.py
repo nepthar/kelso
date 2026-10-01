@@ -270,7 +270,7 @@ def test_doctor_reports_a_missing_repo_directory(kelso_env):
   result = kelso_env.run("system", "doctor")
 
   assert result.returncode == 1
-  assert "is not a directory" in result.stderr
+  assert "is not a directory" in result.stdout
 
 
 # --- one id in two sources --------------------------------------------------
@@ -299,8 +299,8 @@ def test_doctor_reports_an_ambiguous_id(kelso_env):
   result = kelso_env.run("system", "doctor")
 
   assert result.returncode == 1
-  assert "More than one repo carries" in result.stderr
-  assert "hrbr-dev" in result.stderr
+  assert "More than one repo carries" in result.stdout
+  assert "hrbr-dev" in result.stdout
 
 
 def test_a_full_path_picks_which_source_to_load(kelso_env):

@@ -25,28 +25,16 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.routes import PROVIDERS, CloudflareTunnelRouteProvider
 
 
-class _ScriptedConn:
-  """A Conn whose `read` replays a script; anything past the end is EOF."""
+def _answers(monkeypatch, *script: str) -> None:
+  """Make `input` replay `script`; anything past the end is EOF."""
+  queue = list(script)
 
-  def __init__(self, *script: str):
-    self.script = list(script)
-    self.out_lines: list[str] = []
-    self.err_lines: list[str] = []
-
-  def out(self, data: str) -> None:
-    self.out_lines.append(data)
-
-  def err(self, data: str) -> None:
-    self.err_lines.append(data)
-
-  def read(self, prompt: str = "") -> str:
-    if not self.script:
+  def scripted(prompt: str = "") -> str:
+    if not queue:
       raise EOFError
-    return self.script.pop(0)
+    return queue.pop(0)
 
-  @property
-  def output(self) -> str:
-    return "\n".join(self.out_lines)
+  monkeypatch.setattr("builtins.input", scripted)
 
 
 def _request(**overrides) -> ConfigRequest:
@@ -108,79 +96,79 @@ def test_response_refuses_values_it_cannot_apply():
 # ── the terminal form ──────────────────────────────────────────────────────
 # The wizard asks each basic field in order (admin_email, timezone, api_key),
 # then offers the advanced ones, then loops on the review screen.
-def test_wizard_walks_the_fields_then_submits():
-  conn = _ScriptedConn("a@b.c", "", "secret-value", "n", "s")
+def test_wizard_walks_the_fields_then_submits(monkeypatch):
+  _answers(monkeypatch, "a@b.c", "", "secret-value", "n", "s")
 
-  response = run_form(_request(), conn)
+  response = run_form(_request())
 
   assert response.values == {"admin_email": "a@b.c", "api_key": "secret-value"}
 
 
-def test_enter_keeps_what_is_already_there():
-  conn = _ScriptedConn("", "", "", "n", "s")
+def test_enter_keeps_what_is_already_there(monkeypatch):
+  _answers(monkeypatch, "", "", "", "n", "s")
 
-  assert run_form(_request(), conn) == EMPTY_CONFIG_RESPONSE
+  assert run_form(_request()) == EMPTY_CONFIG_RESPONSE
 
 
-def test_advanced_fields_are_offered_but_skipped_by_default():
+def test_advanced_fields_are_offered_but_skipped_by_default(monkeypatch):
   # Declining the offer means the extra "20" is never consumed as an answer.
-  conn = _ScriptedConn("a@b.c", "", "k", "n", "20", "s")
-  response = run_form(_request(), conn)
+  _answers(monkeypatch, "a@b.c", "", "k", "n", "20", "s")
+  response = run_form(_request())
   assert "pool_size" not in response.values
 
-  conn = _ScriptedConn("a@b.c", "", "k", "y", "20", "s")
-  response = run_form(_request(), conn)
+  _answers(monkeypatch, "a@b.c", "", "k", "y", "20", "s")
+  response = run_form(_request())
   assert response.values["pool_size"] == "20"
 
 
-def test_a_missing_required_field_is_asked_even_when_advanced():
+def test_a_missing_required_field_is_asked_even_when_advanced(monkeypatch):
   request = _request(
     fields=(ConfigField(name="token", secret=True, section="advanced"),)
   )
-  conn = _ScriptedConn("t", "s")
+  _answers(monkeypatch, "t", "s")
 
-  response = run_form(request, conn)
+  response = run_form(request)
 
   assert response.values == {"token": "t"}
 
 
-def test_review_can_send_you_back_to_one_field():
-  conn = _ScriptedConn("a@b.c", "", "k", "n", "timezone", "America/Denver", "s")
+def test_review_can_send_you_back_to_one_field(monkeypatch):
+  _answers(monkeypatch, "a@b.c", "", "k", "n", "timezone", "America/Denver", "s")
 
-  response = run_form(_request(), conn)
+  response = run_form(_request())
 
   assert response.values["timezone"] == "America/Denver"
   assert response.values["admin_email"] == "a@b.c"
 
 
-def test_a_partial_answer_can_be_submitted():
-  conn = _ScriptedConn("a@b.c", "", "", "n", "s")
+def test_a_partial_answer_can_be_submitted(monkeypatch):
+  _answers(monkeypatch, "a@b.c", "", "", "n", "s")
 
-  response = run_form(_request(), conn)
+  response = run_form(_request())
 
   assert response.values == {"admin_email": "a@b.c"}
 
 
-def test_the_form_never_echoes_a_secret():
-  conn = _ScriptedConn("a@b.c", "", "hunter2", "n", "s")
+def test_the_form_never_echoes_a_secret(monkeypatch, capsys):
+  _answers(monkeypatch, "a@b.c", "", "hunter2", "n", "s")
 
-  run_form(_request(), conn)
+  run_form(_request())
 
-  assert "hunter2" not in conn.output
-
-
-def test_form_cancels_on_quit_and_on_eof():
-  quit_ = _ScriptedConn("a@b.c", "", "k", "n", "q")
-  assert run_form(_request(), quit_) == EMPTY_CONFIG_RESPONSE
-  assert run_form(_request(), _ScriptedConn()) == EMPTY_CONFIG_RESPONSE
+  assert "hunter2" not in capsys.readouterr().out
 
 
-def test_an_unknown_choice_at_review_says_so_and_keeps_going():
-  conn = _ScriptedConn("a@b.c", "", "k", "n", "nope", "s")
+def test_form_cancels_on_quit_and_on_eof(monkeypatch):
+  _answers(monkeypatch, "a@b.c", "", "k", "n", "q")
+  assert run_form(_request()) == EMPTY_CONFIG_RESPONSE
+  assert run_form(_request()) == EMPTY_CONFIG_RESPONSE
 
-  response = run_form(_request(), conn)
 
-  assert any("No field 'nope'" in line for line in conn.err_lines)
+def test_an_unknown_choice_at_review_says_so_and_keeps_going(monkeypatch, capsys):
+  _answers(monkeypatch, "a@b.c", "", "k", "n", "nope", "s")
+
+  response = run_form(_request())
+
+  assert "No field 'nope'" in capsys.readouterr().out
   assert response.values == {"admin_email": "a@b.c", "api_key": "k"}
 
 
@@ -351,14 +339,14 @@ def test_a_bind_to_an_undeclared_host_volume_is_refused(kelso_env):
     apply_app_config(spec, ConfigResponse(values={"volume.hostvol1": "nope"}), ctx)
 
 
-def test_the_line_form_lists_a_fields_choices():
+def test_the_line_form_lists_a_fields_choices(monkeypatch, capsys):
   request = ConfigRequest(
     title="demo",
     fields=(ConfigField(name="volume.files", choices=("media", "other")),),
   )
-  conn = _ScriptedConn("media", "s")
+  _answers(monkeypatch, "media", "s")
 
-  response = run_form(request, conn)
+  response = run_form(request)
 
-  assert "  one of: media, other" in conn.out_lines
+  assert "  one of: media, other\n" in capsys.readouterr().out
   assert response.values == {"volume.files": "media"}

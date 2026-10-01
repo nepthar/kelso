@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 
 from kelso.lib.bundle import load_bundle
@@ -6,7 +7,8 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, reload_app
 from kelso.lib.receipt import capability_receipt
 from kelso.lib.spec import ComposeWarning
-from kelso.lib.util import Conn
+
+logger = logging.getLogger("kelso.cli")
 
 
 def register(subparsers) -> None:
@@ -33,27 +35,27 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
   bundle = target.bundle or ctx.bundle_path(app)
-  if not args.yes and not confirm_compose_warnings(app, bundle, conn):
-    conn.out("Nothing loaded.")
+  if not args.yes and not confirm_compose_warnings(app, bundle):
+    print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
     result = reload_app(app, bundle, ctx, bound=target.bound_to)
   load = result.load
   for name in load.dropped_volumes:
-    conn.err(
+    logger.warning(
       f"volume {name} is no longer declared in the manifest; "
       f"its link is gone but its data was left in place"
     )
-  conn.out(f"Loaded {app} at {ctx.run_path(app)}")
+  print(f"Loaded {app} at {ctx.run_path(app)}")
   if result.was_running:
-    conn.out(f"Restarted {app}")
-    conn.out(capability_receipt(load.spec, load.run_data, ctx, compact=True))
+    print(f"Restarted {app}")
+    print(capability_receipt(load.spec, load.run_data, ctx, compact=True))
   else:
-    conn.out(f"Start it with: kelso start {app}")
+    print(f"Start it with: kelso start {app}")
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
@@ -68,19 +70,19 @@ def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
     return ()
 
 
-def confirm_compose_warnings(app: str, bundle: Path, conn: Conn) -> bool:
+def confirm_compose_warnings(app: str, bundle: Path) -> bool:
   """Ask only when the manifest passes something through unmodelled."""
   warnings = _compose_warnings(bundle)
   if not warnings:
     return True
 
   for warning in warnings:
-    conn.out(f"Warning: {warning.message()}:")
+    print(f"Warning: {warning.message()}:")
     for line in warning.option_lines():
-      conn.out(f"  {line}")
+      print(f"  {line}")
 
   try:
-    answer = conn.read(f"Load {app} anyway? [y/N] ")
+    answer = input(f"Load {app} anyway? [y/N] ")
   except EOFError:
     return False
   return answer.strip().lower() in ("y", "yes")

@@ -27,10 +27,10 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = ctx.resolve_app(args.app_id)
   if args.cmd_name is None:
-    _list_commands(app, ctx, conn)
+    _list_commands(app, ctx)
     return
 
   extra = list(args.args or [])
@@ -41,20 +41,20 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
   raise SystemExit(code)
 
 
-def _list_commands(app, ctx: KelsoCtx, conn) -> None:
+def _list_commands(app, ctx: KelsoCtx) -> None:
   paths = ctx.loaded_paths(app)
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
 
   spec = AppSpec.from_file(paths.manifest_path, app)
   if not spec.commands:
-    conn.out(f"No commands defined for {app}")
+    print(f"No commands defined for {app}")
     return
 
   rows = [
     (name, entry.desc or "-", entry.run_unit)
     for name, entry in sorted(spec.commands.items())
   ]
-  conn.out(
+  print(
     tabulate(rows, headers=["COMMAND", "DESCRIPTION", "RUN_UNIT"], tablefmt="simple")
   )

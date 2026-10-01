@@ -17,7 +17,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   cmd = console_command(args.app_id, args.unit, ctx)
   record = ConsoleRecord(ctx, cmd.app_id, {"unit": cmd.unit, "via": "cli"})
   code = None

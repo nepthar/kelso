@@ -15,33 +15,31 @@ from kelso.lib.configflow import (
   ConfigRequest,
   ConfigResponse,
 )
-from kelso.lib.util import Conn
 
 REVIEW = "'s' to submit, a name or number to change, 'q' to cancel"
 
 
-def _ask(entry: ConfigField, edits: dict[str, str], conn: Conn) -> None:
+def _ask(entry: ConfigField, edits: dict[str, str]) -> None:
   """Prompt for one field; empty input keeps whatever is already there."""
   current = edits.get(entry.name) or entry.display()
   shown = "(set)" if entry.secret and entry.name in edits else current
   prompt = f"{entry.name} [{shown}]: "
   if entry.desc:
-    conn.out(f"  {entry.desc}")
+    print(f"  {entry.desc}")
   if entry.choices is not None:
-    conn.out(f"  one of: {', '.join(entry.choices) or '(none defined)'}")
+    print(f"  one of: {', '.join(entry.choices) or '(none defined)'}")
 
   if entry.secret and sys.stdin.isatty():
-    # Keep a secret off the screen; Conn.read cannot turn echo off.
     value = getpass(prompt).strip()
   else:
-    value = conn.read(prompt).strip()
+    value = input(prompt).strip()
 
   if value:
     edits[entry.name] = value
 
 
-def _confirm(prompt: str, conn: Conn) -> bool:
-  return conn.read(prompt).strip().lower() in ("y", "yes")
+def _confirm(prompt: str) -> bool:
+  return input(prompt).strip().lower() in ("y", "yes")
 
 
 def _value(entry: ConfigField, edits: dict[str, str]) -> str:
@@ -50,12 +48,12 @@ def _value(entry: ConfigField, edits: dict[str, str]) -> str:
   return "(set)" if entry.secret else edits[entry.name]
 
 
-def _review(request: ConfigRequest, edits: dict[str, str], conn: Conn) -> None:
+def _review(request: ConfigRequest, edits: dict[str, str]) -> None:
   rows = [
     [f"{i}.", f.name, _value(f, edits)] for i, f in enumerate(request.fields, start=1)
   ]
-  conn.out("")
-  conn.out(tabulate(rows, headers=["", "name", "value"]))
+  print("")
+  print(tabulate(rows, headers=["", "name", "value"]))
 
 
 def _pick(request: ConfigRequest, choice: str) -> ConfigField | None:
@@ -66,29 +64,29 @@ def _pick(request: ConfigRequest, choice: str) -> ConfigField | None:
   return request.field(choice)
 
 
-def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse:
+def run_form(request: ConfigRequest) -> ConfigResponse:
   """Walk the fields, then review; EMPTY_CONFIG_RESPONSE on cancel or no change."""
   edits: dict[str, str] = {}
   missing = request.missing()
 
-  conn.out(request.title)
+  print(request.title)
   if request.note:
-    conn.out(request.note)
-  conn.out("Enter keeps the current value.")
+    print(request.note)
+  print("Enter keeps the current value.")
 
   try:
     for title, fields in request.groups():
       shown = [f for f in fields if f.section == "config" or f.name in missing]
       for entry in shown:
-        _ask(entry, edits, conn)
+        _ask(entry, edits)
       folded = [f for f in fields if f not in shown]
-      if folded and _confirm(f"Show {title.lower()} ({len(folded)})? [y/N] ", conn):
+      if folded and _confirm(f"Show {title.lower()} ({len(folded)})? [y/N] "):
         for entry in folded:
-          _ask(entry, edits, conn)
+          _ask(entry, edits)
 
     while True:
-      _review(request, edits, conn)
-      choice = conn.read(f"[{REVIEW}] ").strip()
+      _review(request, edits)
+      choice = input(f"[{REVIEW}] ").strip()
 
       if choice in ("q", "quit"):
         return EMPTY_CONFIG_RESPONSE
@@ -97,22 +95,22 @@ def run_form(request: ConfigRequest, conn: Conn) -> ConfigResponse:
         if not errors:
           return ConfigResponse(values=edits) if edits else EMPTY_CONFIG_RESPONSE
         for err in errors:
-          conn.err(f"  - {err}")
+          print(f"  - {err}")
         continue
 
       entry = _pick(request, choice)
       if entry is None:
-        conn.err(f"No field {choice!r}. {REVIEW}")
+        print(f"No field {choice!r}. {REVIEW}")
         continue
-      _ask(entry, edits, conn)
+      _ask(entry, edits)
   except EOFError:
     return EMPTY_CONFIG_RESPONSE
 
 
-def collect(request: ConfigRequest, conn: Conn) -> ConfigResponse:
+def collect(request: ConfigRequest) -> ConfigResponse:
   """Collect a response; EMPTY_CONFIG_RESPONSE when there is nothing to apply."""
   if sys.stdin.isatty() and sys.stdout.isatty():
     from kelso.cli.configtui import run_tui
 
     return run_tui(request)
-  return run_form(request, conn)
+  return run_form(request)

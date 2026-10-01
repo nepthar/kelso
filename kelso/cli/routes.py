@@ -12,12 +12,12 @@ from kelso.lib.configflow.route_provider import (
   route_provider_config_request,
 )
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.routes import NoopRouteProvider, RouteProviderError, get_route_provider
+from kelso.lib.routes import NoopRouteProvider, get_route_provider
 
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser("route", help="Manage routes and route providers")
-  parser.set_defaults(func=lambda args, ctx, conn: parser.print_help())
+  parser.set_defaults(func=lambda args, ctx: parser.print_help())
   sub = parser.add_subparsers(dest="routes_command")
 
   check = sub.add_parser("check", help="Validate a configured route provider")
@@ -69,17 +69,17 @@ def register(subparsers) -> None:
   list_parser.set_defaults(func=run_list)
 
 
-def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes add-provider"):
     provider = resolve_route_provider(args.tag, ctx, args.kind)
     request = route_provider_config_request(args.tag, provider, ctx)
-    response = collect(request, conn)
+    response = collect(request)
     if response == EMPTY_CONFIG_RESPONSE:
-      conn.out("No changes")
+      print("No changes")
       return
 
     apply_route_provider_config(args.tag, provider, response, ctx)
-    conn.out(
+    print(
       f"Configured route provider {args.tag!r}; "
       f"check it with `kelso route check {args.tag}`"
     )
@@ -98,76 +98,50 @@ def _resolve_tag(ctx: KelsoCtx, tag: str | None) -> str:
   return resolved
 
 
-def _provider(ctx: KelsoCtx, conn, tag: str | None):
-  try:
-    resolved = _resolve_tag(ctx, tag)
-  except ValueError as e:
-    conn.err(f"Error: {e}")
-    raise SystemExit(1) from e
-
-  try:
-    provider = get_route_provider(ctx, resolved)
-  except RouteProviderError as e:
-    conn.err(f"Error: {e}")
-    raise SystemExit(1) from e
-
+def _provider(ctx: KelsoCtx, tag: str | None):
+  resolved = _resolve_tag(ctx, tag)
+  provider = get_route_provider(ctx, resolved)
   if isinstance(provider, NoopRouteProvider):
-    conn.err(f"Route provider {resolved!r} is a noop provider")
-    raise SystemExit(1)
-
+    raise ValueError(f"Route provider {resolved!r} is a noop provider")
   return resolved, provider
 
 
-def run_check(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_check(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes check"):
-    tag, provider = _provider(ctx, conn, args.provider)
+    tag, provider = _provider(ctx, args.provider)
 
     errors = provider.validate()
     if errors:
-      conn.err(f"Route provider {tag!r} is not usable:")
-      for err in errors:
-        conn.err(f"  - {err}")
-      raise SystemExit(1)
-    conn.out(f"Route provider {tag!r} OK")
+      lines = "".join(f"\n  - {err}" for err in errors)
+      raise ValueError(f"Route provider {tag!r} is not usable:{lines}")
+    print(f"Route provider {tag!r} OK")
 
 
-def run_add(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_add(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes add"):
-    tag, provider = _provider(ctx, conn, args.provider)
+    tag, provider = _provider(ctx, args.provider)
     domain = ctx.config.provider_domain(tag)
-    try:
-      provider.register_route(AppID("manual"), args.port, args.subdomain, domain)
-    except RouteProviderError as e:
-      conn.err(f"Error: {e}")
-      raise SystemExit(1) from e
-    conn.out(f"Added {args.subdomain}.{domain} -> :{args.port} via {tag}")
+    provider.register_route(AppID("manual"), args.port, args.subdomain, domain)
+    print(f"Added {args.subdomain}.{domain} -> :{args.port} via {tag}")
 
 
-def run_remove(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_remove(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes remove"):
-    tag, provider = _provider(ctx, conn, args.provider)
+    tag, provider = _provider(ctx, args.provider)
     domain = ctx.config.provider_domain(tag)
-    try:
-      provider.unregister_route(args.subdomain, domain)
-    except RouteProviderError as e:
-      conn.err(f"Error: {e}")
-      raise SystemExit(1) from e
-    conn.out(f"Removed {args.subdomain}.{domain} via {tag}")
+    provider.unregister_route(args.subdomain, domain)
+    print(f"Removed {args.subdomain}.{domain} via {tag}")
 
 
-def run_list(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes list"):
-    tag, provider = _provider(ctx, conn, args.provider)
-    try:
-      routes = provider.list_routes()
-    except RouteProviderError as e:
-      conn.err(f"Error: {e}")
-      raise SystemExit(1) from e
+    tag, provider = _provider(ctx, args.provider)
+    routes = provider.list_routes()
 
     if not routes:
-      conn.out("No routes")
+      print("No routes")
       return
 
     domain = ctx.config.provider_domain(tag)
     rows = [(f"https://{sub}.{domain}", dest) for sub, dest in routes]
-    conn.out(tabulate(rows, headers=["URL", "DESTINATION"], tablefmt="simple"))
+    print(tabulate(rows, headers=["URL", "DESTINATION"], tablefmt="simple"))

@@ -12,12 +12,12 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("doctor"):
-    conn.out("Volume roots:")
+    print("Volume roots:")
     for line in volume_root_lines(ctx.config):
-      conn.out(f"  {line}")
-    conn.out("")
+      print(f"  {line}")
+    print("")
 
     problems: list[str] = [*_volume_notes(ctx), *_catalog_notes(ctx)]
     for observation in ctx.observations():
@@ -25,11 +25,11 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
         problems.append(f"{observation.app_id}: {note}")
 
     if not problems:
-      conn.out("No problems found")
+      print("No problems found")
       return
 
     for problem in problems:
-      conn.err(problem)
+      print(problem)
     raise SystemExit(1)
 
 

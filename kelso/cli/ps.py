@@ -16,7 +16,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("ps"):
     rows = []
     for observation in ctx.observations():
@@ -36,7 +36,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
           observation.last_action or EMPTY,
         )
       )
-    conn.out(
+    print(
       tabulate(
         rows,
         headers=["APP_ID", "STATUS", "CONFIG", "VOLUMES", "LAST_ACTION"],

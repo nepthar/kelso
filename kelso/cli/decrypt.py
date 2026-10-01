@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 from cryptography.fernet import InvalidToken
 
@@ -15,7 +16,7 @@ def register(subparsers) -> None:
   parser.set_defaults(func=run)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   # Not crypto_from_config: with no master key that hands back the noop engine,
   # which returns its input unchanged and would report every blob as decrypted.
   if not ctx.config.master_key:
@@ -24,7 +25,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
       f"with one. Run: kelso system gen-masterkey"
     )
 
-  blob = conn.read().strip()
+  blob = sys.stdin.read().strip()
   if not blob:
     raise ValueError("Nothing on stdin to decrypt")
 
@@ -39,4 +40,4 @@ def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
       "was encrypted with a different master key"
     ) from None
 
-  conn.out(plaintext)
+  print(plaintext)

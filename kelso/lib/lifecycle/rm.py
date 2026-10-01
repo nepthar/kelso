@@ -111,28 +111,26 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
 
   if plan.run_path is not None and plan.run_path.exists():
     shutil.rmtree(plan.run_path)
-    logger.info("removed run directory %s", plan.run_path)
+    logger.info("Removed run directory %s", plan.run_path)
 
   if plan.config_path is not None and plan.config_path.is_file():
     plan.config_path.unlink()
-    logger.info("removed config %s", plan.config_path)
+    logger.info("Removed config %s", plan.config_path)
 
   for path in plan.volume_paths:
     if plan.empties:
       _empty_volumes(path)
-      logger.info("emptied volumes in %s", path)
+      logger.info("Emptied volumes in %s", path)
     elif path.is_dir():
       shutil.rmtree(path)
-      logger.info("removed volume %s", path)
+      logger.info("Removed volume %s", path)
 
   if plan.purges:
     ctx.kelso_db.purge_app(app_id)
 
   # The activity log outlives the app on purpose, so close it out rather than
   # leaving the trail ending at whatever happened before the removal.
-  action = _ACTIONS[plan.mode]
-  record_app_action(action, app_id, ctx)
-  logger.info("%s %s", action, app_id)
+  record_app_action(_ACTIONS[plan.mode], app_id, ctx)
 
 
 def _empty_volumes(app_dir: Path) -> None:

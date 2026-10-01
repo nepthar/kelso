@@ -161,7 +161,7 @@ def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
 
   doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
-  assert "More than one repo carries" in doctor.stderr
+  assert "More than one repo carries" in doctor.stdout
 
 
 def test_a_full_path_picks_the_flavor_to_load(kelso_env):

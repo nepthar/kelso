@@ -456,8 +456,8 @@ def test_missing_run_directory_with_container_refuses_lifecycle(kelso_env):
 
   doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
-  assert "run directory missing" in doctor.stderr
-  assert "manual container recovery required" in doctor.stderr
+  assert "run directory missing" in doctor.stdout
+  assert "manual container recovery required" in doctor.stdout
 
   for command in (("stop",), ("rm", "--purge", "-y")):
     refused = kelso_env.run(*command, app_id)
@@ -483,7 +483,7 @@ def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
   assert doctor.returncode == 1
   assert (
     f"app bundle missing, was: {kelso_env.local_repo / f'{app_id}.klso'}"
-    in doctor.stderr
+    in doctor.stdout
   )
 
   stopped = kelso_env.run("stop", app_id)
@@ -1174,7 +1174,7 @@ def test_doctor_shows_where_volume_kinds_resolve(kelso_env):
   assert result.returncode == 1
   assert f"bulk:  {kelso_env.volumes_root / 'bulk'} -> {bulk}\n" in result.stdout
   assert "(missing)" in result.stdout
-  assert "volumes logs:" in result.stderr
+  assert "volumes logs:" in result.stdout
   assert f"data:  {kelso_env.volumes_root / 'data'}\n" in result.stdout
 
 
@@ -1204,7 +1204,7 @@ def test_doctor_reports_orphaned_routes(kelso_env):
 
   doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
-  assert "orphaned route allocation" in doctor.stderr
+  assert "orphaned route allocation" in doctor.stdout
 
 
 def test_doctor_exposes_mixed_container_states(kelso_env):
@@ -1228,7 +1228,7 @@ def test_doctor_exposes_mixed_container_states(kelso_env):
 
   doctor = kelso_env.run("system", "doctor")
   assert doctor.returncode == 1
-  assert "mixed container states" in doctor.stderr
+  assert "mixed container states" in doctor.stdout
 
 
 # --- route provider --------------------------------------------------------

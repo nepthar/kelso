@@ -1,6 +1,7 @@
 """`kelso repo` -- the sources the catalog is built from."""
 
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from kelso.lib.apps import read_app_actions
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.repo import USAGE
-from kelso.lib.util import Conn, fmt_size
+from kelso.lib.util import fmt_size
+
+logger = logging.getLogger("kelso.cli")
 
 
 def register(subparsers) -> None:
@@ -37,46 +40,46 @@ def register(subparsers) -> None:
   listing.set_defaults(func=_list)
 
 
-def _add(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def _add(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   result = repo_lib.add(ctx, args.location, name=args.name)
-  conn.out(f"Added repo {result.repo.name} -> {result.repo.describe()}")
+  print(f"Added repo {result.repo.name} -> {result.repo.describe()}")
   if result.mirrored is not None:
     done = result.mirrored
-    conn.out(
+    print(
       f"Mirrored {len(done.bundles)} apps at {done.sha[:8]} "
       f"({fmt_size(done.total_bytes)})"
     )
-  _report_contested(ctx, conn)
+  _report_contested(ctx)
 
 
-def _update(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def _update(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   results = repo_lib.update(ctx, args.name)
   if not results:
-    conn.out("No mirrored repos to update.")
+    print("No mirrored repos to update.")
     return
   for result in results:
     if result.unchanged:
-      conn.out(f"{result.name}: already at {result.sha[:8]}")
+      print(f"{result.name}: already at {result.sha[:8]}")
     else:
-      conn.out(
+      print(
         f"{result.name}: {result.sha[:8]} "
         f"({len(result.bundles)} apps, {fmt_size(result.total_bytes)})"
       )
-  _report_contested(ctx, conn)
+  _report_contested(ctx)
 
 
-def _remove(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def _remove(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   result = repo_lib.remove(ctx, args.name)
   if result.bound:
-    conn.err(
+    logger.warning(
       f"These apps were loaded from {result.name}: {', '.join(result.bound)}.\n"
       f"They keep running -- what is loaded under var/run/ is already a copy -- but "
       f"kelso will no longer see updates for them."
     )
-  conn.out(f"Removed repo {result.name}")
+  print(f"Removed repo {result.name}")
 
 
-def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
+def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("repo list"):
     catalog = ctx.app_catalog()
     loaded = ctx.loaded_app_ids()
@@ -105,7 +108,7 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
           rows, headers=["APP_ID", "STATUS", "PATH"], tablefmt="simple"
         )
       blocks.append(block)
-    conn.out("\n\n".join(blocks))
+    print("\n\n".join(blocks))
 
 
 def _relative(path: Path, root: Path) -> str:
@@ -130,8 +133,8 @@ def _status(
   return action[1] if action else "loaded"
 
 
-def _report_contested(ctx: KelsoCtx, conn: Conn) -> None:
+def _report_contested(ctx: KelsoCtx) -> None:
   # `ctx.config` predates the change.
   fresh = KelsoCtx(load_config_file(ctx.config.config_path))
   for line in repo_lib.contested_lines(fresh):
-    conn.err(line)
+    logger.warning(line)

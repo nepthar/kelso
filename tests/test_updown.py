@@ -37,8 +37,8 @@ def test_up_starts_each_start_order_group_before_the_next(kelso_env):
 
   assert up.returncode == 0, up.stderr
   assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo"]
-  assert up.stdout.index("Starting run group 4 - routing & connections") < (
-    up.stdout.index("Starting run group 6 - applications")
+  assert up.stderr.index("Starting run group 4 - routing & connections") < (
+    up.stderr.index("Starting run group 6 - applications")
   )
 
 
@@ -62,7 +62,7 @@ def test_up_leaves_an_app_stopped_with_kelso_stop_alone(kelso_env):
   up = kelso_env.run("up")
 
   assert up.returncode == 0, up.stderr
-  assert "ports-demo: stopped with `kelso stop`, left stopped" in up.stdout
+  assert "ports-demo: stopped with `kelso stop`, left stopped" in up.stderr
   assert _compose(kelso_env, "up") == ["ports-demo"]
 
 
@@ -91,7 +91,7 @@ def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
 
   assert up.returncode == 0, up.stderr
   assert down.returncode == 0, down.stderr
-  assert "routes-demo" not in up.stdout + down.stdout
+  assert "routes-demo" not in up.stderr + down.stderr
   assert _compose(kelso_env, "down") == ["ports-demo"]
 
 
@@ -125,7 +125,7 @@ def test_an_odd_group_is_named_by_its_number(kelso_env):
   _load(kelso_env, "ports-demo")
   kelso_env.run("config", "ports-demo", "--set", "start_order=3")
 
-  assert "Starting run group 3\n" in kelso_env.run("up").stdout
+  assert "Starting run group 3\n" in kelso_env.run("up").stderr
 
 
 def test_down_records_its_own_action_so_up_does_not_skip(kelso_env):

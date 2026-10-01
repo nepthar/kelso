@@ -1,5 +1,6 @@
 import argparse
 import secrets
+import sys
 
 from tabulate import tabulate
 
@@ -69,38 +70,38 @@ def register(subparsers) -> None:
     command.register(sub)
 
 
-def run(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("system secret"):
     db = ctx.kelso_db
     changed = False
 
     if args.stdin_key is not None:
-      value = conn.read().rstrip("\n")
+      value = sys.stdin.read().rstrip("\n")
       if not value:
         raise ValueError("empty value")
       db.set_secret(args.stdin_key, value)
-      conn.out(f"Set system config {args.stdin_key!r}")
+      print(f"Set system config {args.stdin_key!r}")
       changed = True
 
     for raw in args.sets:
       name, value = parse_kv(raw, "--set")
       db.set_secret(name, value)
-      conn.out(f"Set system config {name!r}")
+      print(f"Set system config {name!r}")
       changed = True
 
     for name in args.unsets:
       db.del_secret(name)
-      conn.out(f"Unset system config {name!r}")
+      print(f"Unset system config {name!r}")
       changed = True
 
     if changed:
       return
 
     for name in db.list_secrets():
-      conn.out(name)
+      print(name)
 
 
-def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   chosen = [flag for flag in (args.add, args.set_, args.rm) if flag]
   if len(chosen) > 1:
     raise ValueError("Use one of --add, --set or --rm at a time")
@@ -115,7 +116,7 @@ def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
         readonly=args.readonly,
         require_mount=args.require_mount,
       )
-      conn.out(f"Added host volume {tag} -> {path}")
+      print(f"Added host volume {tag} -> {path}")
       return
 
     if args.set_:
@@ -127,12 +128,12 @@ def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
         readonly=args.readonly,
         require_mount=args.require_mount,
       )
-      conn.out(f"Set host volume {tag} -> {path}")
+      print(f"Set host volume {tag} -> {path}")
       return
 
     if args.rm:
       remove_host_volume(ctx, args.rm)
-      conn.out(f"Removed host volume {args.rm}")
+      print(f"Removed host volume {args.rm}")
       return
 
     rows = [
@@ -144,15 +145,15 @@ def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
       )
       for tag, volume in sorted(ctx.config.host_volumes.items())
     ]
-    conn.out(
+    print(
       tabulate(rows, headers=["tag", "path", "readonly", "require_mount"])
       if rows
       else "No host volumes declared."
     )
 
 
-def run_gen_masterkey(args: argparse.Namespace, ctx: KelsoCtx, conn) -> None:
+def run_gen_masterkey(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("gen-masterkey"):
     mkey_file = ctx.config.master_keyfile
     LogTab.write_entry(mkey_file, "master_key", "set", secrets.token_hex(128))
-    conn.out(f"New master key appended to: {mkey_file}")
+    print(f"New master key appended to: {mkey_file}")
