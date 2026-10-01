@@ -5,8 +5,8 @@ healthy where a container's image has a healthcheck, and otherwise still
 running `SETTLE` seconds in. A group that is not ready in time is reported and
 the next one starts anyway.
 
-Group 0 belongs to kelsod, which brings it up as it starts and down as it
-exits; `kelso up` and `kelso down` act on `BOX_GROUPS`. Progress is logged to
+Group 0 belongs to kelsod, which starts it without waiting as it starts and
+takes it down as it exits; `kelso up` and `kelso down` act on `BOX_GROUPS`. Progress is logged to
 `kelso.lifecycle.updown`.
 """
 
@@ -53,9 +53,15 @@ def _start_order(app: AppID, ctx: KelsoCtx) -> int:
 
 
 def up(
-  ctx: KelsoCtx, groups: Iterable[int] = BOX_GROUPS, *, wait: float = DEFAULT_WAIT
+  ctx: KelsoCtx,
+  groups: Iterable[int] = BOX_GROUPS,
+  *,
+  wait: float | None = DEFAULT_WAIT,
 ) -> list[str]:
-  """Start the groups' apps, except those stopped on purpose; what went wrong."""
+  """Start the groups' apps, except those stopped on purpose; what went wrong.
+
+  With `wait` None, a group's apps are started and nothing waits for them.
+  """
   problems: list[str] = []
   for order, apps in start_groups(ctx, groups):
     logger.info("Starting run group %s", start_group_name(order))
@@ -75,7 +81,7 @@ def up(
       except (ValueError, RuntimeError) as error:
         problems.append(f"{app}: {error}")
         logger.warning("  %s: failed: %s", app, error)
-    for app in _wait_ready(waiting, wait):
+    for app in _wait_ready(waiting, wait) if wait is not None else ():
       problems.append(f"{app}: not ready after {wait:g}s")
       logger.warning("  %s: not ready after %gs; going on", app, wait)
   return problems

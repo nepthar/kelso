@@ -118,10 +118,11 @@ def serve(
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
     return KelsoCtx(loaded)
 
-  # Group 0 lives and dies with kelsod. Containers restart on failure but not
-  # at boot, so bringing up the rest of the box in start_order is kelsod's job.
+  # Group 0 lives and dies with kelsod, started without waiting so nothing
+  # holds up the socket. Containers restart on failure but not at boot, so
+  # bringing up the rest of the box in start_order is kelsod's job too.
   updown.logger.setLevel(logging.INFO)
-  updown.up(ctx_factory(), updown.KELSOD_GROUPS)
+  updown.up(ctx_factory(), updown.KELSOD_GROUPS, wait=None)
   jobs = JobRunner(ctx_factory)
   jobs.start()
   jobs.submit("up", {}, ctx_factory())
