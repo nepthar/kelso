@@ -230,10 +230,10 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
   conn.out(f"\nTo change your configuration, edit {config_path}")
   conn.out(
     "\nNext: pick something from `kelso repo list`, then\n"
-    "  kelso load <app>   load it without starting it\n"
-    "  kelso start <app>     start it (loading first if needed)\n"
-    "  kelso stop <app>      stop it\n"
-    "  kelso unload <app> remove the installation, keeping data and config"
+    "  kelso load <app>    load it without starting it\n"
+    "  kelso start <app>   start it (loading first if needed)\n"
+    "  kelso stop <app>    stop it\n"
+    "  kelso unload <app>  stop it and unload it, keeping data and config"
   )
   conn.out(
     "\nThe `demos` repo is there to explore what an app can do. You may wish "
