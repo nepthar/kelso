@@ -555,14 +555,14 @@ image = "nginx:1.27"
 
 [run.db]
 image = "postgres:16"
-restart = "always"
+restart = "no"
 """,
   )
 
   services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert set(services) == {"web", "db"}
-  assert services["db"]["restart"] == "always"
+  assert services["db"]["restart"] == "no"
   assert services["web"]["restart"] == "on-failure"
   assert services["db"]["hostname"] == "db"
 

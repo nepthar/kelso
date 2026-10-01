@@ -1,11 +1,11 @@
-from kelso.jobs.job import Job, logger
+from kelso.jobs.job import Job
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.updown import DEFAULT_WAIT, down, up
 
 
 class UpJob(Job):
   name = "up"
-  description = "Start every installed app, one start_order group at a time"
+  description = "Start every installed app in start_order groups 1 to 9"
   optional_args = ("timeout",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
@@ -16,15 +16,15 @@ class UpJob(Job):
       raise ValueError(f"timeout {raw!r} is not a number of seconds") from None
 
   def run(self, ctx: KelsoCtx) -> None:
-    _finish(up(ctx, logger.info, wait=self.wait))
+    _finish(up(ctx, wait=self.wait))
 
 
 class DownJob(Job):
   name = "down"
-  description = "Stop every running app, in reverse start_order"
+  description = "Stop every running app in start_order groups 9 down to 1"
 
   def run(self, ctx: KelsoCtx) -> None:
-    _finish(down(ctx, logger.info))
+    _finish(down(ctx))
 
 
 def _finish(problems: list[str]) -> None:

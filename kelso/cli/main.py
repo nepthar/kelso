@@ -64,8 +64,8 @@ Apps
   reset       Delete an app's data, keeping its config
 
 This box
-  up          Start every installed app, in start_order groups
-  down        Stop every running app, in reverse start_order
+  up          Start every installed app in start_order groups 1 to 9
+  down        Stop every running app in start_order groups 9 down to 1
 
 Snapshots     kelso snapshot take | list | restore
 Repos         kelso repo list | add | update | remove

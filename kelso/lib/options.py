@@ -44,6 +44,23 @@ def _int_between(low: int, high: int | None) -> Callable[[str], None]:
   return check
 
 
+# The named start_order groups. The odd numbers between them are free, for
+# squeezing something in.
+START_GROUPS = {
+  0: "init",
+  2: "support services",
+  4: "routing & connections",
+  6: "applications",
+  8: "lazy applications",
+}
+
+
+def start_group_name(order: int) -> str:
+  """The group as shown: its number, then its name if it has one."""
+  name = START_GROUPS.get(order)
+  return f"{order} - {name}" if name else str(order)
+
+
 APP_OPTIONS: dict[str, AppOption] = {
   option.name: option
   for option in (
@@ -55,10 +72,11 @@ APP_OPTIONS: dict[str, AppOption] = {
     ),
     AppOption(
       "start_order",
-      "Start group for `kelso up`, 0 (first) to 10 (last): 0 right after kelsod, "
-      "2 supporting services such as databases, 4 routing, 5 everything else",
-      lambda app: "5",
-      _int_between(0, 10),
+      "Start group, 0 to 9: "
+      + ", ".join(f"{n} {name}" for n, name in START_GROUPS.items())
+      + ". Group 0 runs while kelsod does; `kelso up` starts the rest in order",
+      lambda app: "6",
+      _int_between(0, 9),
     ),
     AppOption(
       "snapshot_max_count",

@@ -4,31 +4,41 @@
 healthy where a container's image has a healthcheck, and otherwise still
 running `SETTLE` seconds in. A group that is not ready in time is reported and
 the next one starts anyway.
+
+Group 0 belongs to kelsod, which brings it up as it starts and down as it
+exits; `kelso up` and `kelso down` act on `BOX_GROUPS`. Progress is logged to
+`kelso.lifecycle.updown`.
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Iterable
+from logging import getLogger
 
 from kelso.lib.apps import AppID, read_last_app_action
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import start, stop
-from kelso.lib.options import APP_OPTIONS
+from kelso.lib.options import APP_OPTIONS, start_group_name
+
+logger = getLogger("kelso.lifecycle.updown")
 
 DEFAULT_WAIT = 60
 SETTLE = 10
+KELSOD_GROUPS = range(0, 1)
+BOX_GROUPS = range(1, 10)
 # What `down` records, so the `up` after it starts these apps again.
 DOWN_ACTION = "down"
 
-Say = Callable[[str], None]
 
-
-def start_groups(ctx: KelsoCtx) -> list[tuple[int, list[AppID]]]:
-  """Installed apps by `start_order`, lowest first."""
+def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[AppID]]]:
+  """Installed apps in the groups `which`, by `start_order`, lowest first."""
+  which = set(which)
   groups: dict[int, list[AppID]] = {}
   for app_id in sorted(ctx.staged_app_ids()):
     app = AppID(app_id)
-    groups.setdefault(_start_order(app, ctx), []).append(app)
+    order = _start_order(app, ctx)
+    if order in which:
+      groups.setdefault(order, []).append(app)
   return sorted(groups.items())
 
 
@@ -42,49 +52,51 @@ def _start_order(app: AppID, ctx: KelsoCtx) -> int:
   return int(value or APP_OPTIONS["start_order"].default(app))
 
 
-def up(ctx: KelsoCtx, say: Say, *, wait: float = DEFAULT_WAIT) -> list[str]:
-  """Start every installed app not stopped on purpose; return what went wrong."""
+def up(
+  ctx: KelsoCtx, groups: Iterable[int] = BOX_GROUPS, *, wait: float = DEFAULT_WAIT
+) -> list[str]:
+  """Start the groups' apps, except those stopped on purpose; what went wrong."""
   problems: list[str] = []
-  for order, apps in start_groups(ctx):
-    say(f"start_order {order}: {', '.join(apps)}")
+  for order, apps in start_groups(ctx, groups):
+    logger.info("Starting run group %s", start_group_name(order))
     waiting = []
     for app in apps:
       if read_last_app_action(app, ctx) == "stopped":
-        say(f"  {app}: stopped with `kelso stop`, left stopped")
+        logger.info("  %s: stopped with `kelso stop`, left stopped", app)
         continue
       try:
         with ctx.locked(f"up {app}", app):
           if ctx.run_state(app).running_count:
-            say(f"  {app}: already running")
+            logger.info("  %s: already running", app)
           else:
             start(app, ctx.config.app_run_path(app), ctx)
-            say(f"  {app}: started")
+            logger.info("  %s: started", app)
         waiting.append(app)
       except (ValueError, RuntimeError) as error:
         problems.append(f"{app}: {error}")
-        say(f"  {app}: failed: {error}")
+        logger.warning("  %s: failed: %s", app, error)
     for app in _wait_ready(waiting, wait):
       problems.append(f"{app}: not ready after {wait:g}s")
-      say(f"  {app}: not ready after {wait:g}s; going on")
+      logger.warning("  %s: not ready after %gs; going on", app, wait)
   return problems
 
 
-def down(ctx: KelsoCtx, say: Say) -> list[str]:
-  """Stop every running app, highest start_order first; return what went wrong."""
+def down(ctx: KelsoCtx, groups: Iterable[int] = BOX_GROUPS) -> list[str]:
+  """Stop the groups' running apps, highest group first; what went wrong."""
   problems: list[str] = []
-  for order, apps in reversed(start_groups(ctx)):
+  for order, apps in reversed(start_groups(ctx, groups)):
     running = [app for app in apps if ctx.run_state(app).running_count]
     if not running:
       continue
-    say(f"start_order {order}: {', '.join(running)}")
+    logger.info("Stopping run group %s", start_group_name(order))
     for app in running:
       try:
         with ctx.locked(f"down {app}", app):
           stop(app, ctx, action=DOWN_ACTION)
-        say(f"  {app}: stopped")
+        logger.info("  %s: stopped", app)
       except (ValueError, RuntimeError) as error:
         problems.append(f"{app}: {error}")
-        say(f"  {app}: failed: {error}")
+        logger.warning("  %s: failed: %s", app, error)
   return problems
 
 

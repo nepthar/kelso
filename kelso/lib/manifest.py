@@ -212,7 +212,7 @@ class RunEntry(BaseModel):
   volumes: dict[Identifier, str] = Field(default_factory=dict)
   env: dict[Identifier, str] = Field(default_factory=dict)
   routes: dict[Identifier, RouteEntry] = Field(default_factory=dict)
-  restart: Literal["no", "always", "on-failure", "unless-stopped"] = "on-failure"
+  restart: Literal["yes", "no"] = "yes"
   # How kelso runs anything in this unit: `[*shell, script]`. The unit's commands
   # and its console need it to exist in the image.
   shell: list[str] = Field(default_factory=lambda: ["/bin/sh", "-c"], min_length=1)

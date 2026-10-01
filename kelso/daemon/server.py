@@ -20,6 +20,7 @@ from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.config import Config, load_config
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle import updown
 from kelso.lib.util import refuse_root
 
 logger = logging.getLogger("kelsod")
@@ -117,10 +118,12 @@ def serve(
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
     return KelsoCtx(loaded)
 
+  # Group 0 lives and dies with kelsod. Containers restart on failure but not
+  # at boot, so bringing up the rest of the box in start_order is kelsod's job.
+  updown.logger.setLevel(logging.INFO)
+  updown.up(ctx_factory(), updown.KELSOD_GROUPS)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  # Containers restart on failure, not at boot: bringing the box up in
-  # start_order is kelsod's job.
   jobs.submit("up", {}, ctx_factory())
 
   sockets = [_bind_unix(socket_path)]
@@ -141,6 +144,7 @@ def serve(
     server.run(sockets=sockets)
   finally:
     socket_path.unlink(missing_ok=True)
+    updown.down(ctx_factory(), updown.KELSOD_GROUPS)
 
 
 def build_parser() -> argparse.ArgumentParser:

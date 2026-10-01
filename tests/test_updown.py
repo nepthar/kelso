@@ -37,7 +37,9 @@ def test_up_starts_each_start_order_group_before_the_next(kelso_env):
 
   assert up.returncode == 0, up.stderr
   assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo"]
-  assert up.stdout.index("start_order 4") < up.stdout.index("start_order 5")
+  assert up.stdout.index("Starting run group 4 - routing & connections") < (
+    up.stdout.index("Starting run group 6 - applications")
+  )
 
 
 def test_down_stops_in_reverse_and_up_brings_it_back(kelso_env):
@@ -77,6 +79,39 @@ def test_a_group_not_ready_in_time_is_reported_and_the_next_still_starts(kelso_e
   assert up.returncode == 1
   assert "routes-demo: not ready after 0s" in up.stderr
   assert _compose(kelso_env, "up")[-1] == "ports-demo"
+
+
+def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
+  _install(kelso_env, "ports-demo", "routes-demo")
+  kelso_env.run("config", "routes-demo", "--set", "start_order=0")
+  assert kelso_env.run("start", "routes-demo").returncode == 0
+
+  up = kelso_env.run("up")
+  down = kelso_env.run("down")
+
+  assert up.returncode == 0, up.stderr
+  assert down.returncode == 0, down.stderr
+  assert "routes-demo" not in up.stdout + down.stdout
+  assert _compose(kelso_env, "down") == ["ports-demo"]
+
+
+def test_kelsods_groups_come_up_and_go_down_with_it(kelso_env):
+  _install(kelso_env, "ports-demo", "routes-demo")
+  kelso_env.run("config", "routes-demo", "--set", "start_order=0")
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+
+  assert updown.up(ctx, updown.KELSOD_GROUPS) == []
+  assert updown.down(ctx, updown.KELSOD_GROUPS) == []
+
+  assert _compose(kelso_env, "up") == ["routes-demo"]
+  assert _compose(kelso_env, "down") == ["routes-demo"]
+
+
+def test_an_odd_group_is_named_by_its_number(kelso_env):
+  _install(kelso_env, "ports-demo")
+  kelso_env.run("config", "ports-demo", "--set", "start_order=3")
+
+  assert "Starting run group 3\n" in kelso_env.run("up").stdout
 
 
 def test_down_records_its_own_action_so_up_does_not_skip(kelso_env):

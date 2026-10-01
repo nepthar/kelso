@@ -108,9 +108,11 @@ ordering, and drift between compose versions.
 
 **`kelso up` at boot.** `test_updown.py` drives the ordering against the fake,
 with the settle time at zero. Untested: that after a reboot Docker leaves
-`on-failure` containers down, kelsod's `up` job then starts them in
-`start_order`, a real healthcheck's `(healthy)` is what ends a group's wait,
-and an app with no healthcheck is held for the 10 seconds before the next group.
+`restart = "yes"` (`on-failure`) containers down, kelsod starts group 0 before
+it listens and queues `up` for the rest in `start_order`, a real healthcheck's
+`(healthy)` is what ends a group's wait, an app with no healthcheck is held for
+the 10 seconds before the next group, and stopping kelsod (`systemctl --user
+stop kelsod`) takes group 0 down with it.
 
 **A multi-container app.** `unifi-network-application.klso` is the natural
 smoke test — two units, a generated secret shared between them, and a real

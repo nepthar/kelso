@@ -193,7 +193,7 @@ APP_CONFIG = {
     _field("route.none", choices=[]),
     _field("tuning", section="advanced"),
     _field("debug", section="advanced", default="0"),
-    _field("start_order", section="option", default="5"),
+    _field("start_order", section="option", default="6"),
   ],
 }
 
