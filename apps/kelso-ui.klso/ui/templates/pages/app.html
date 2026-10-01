@@ -4,11 +4,11 @@
 {% set app_id = app.app_id %}
 {% set name = app.get('display_name') or app_id %}
 {% set here = '/apps/' ~ app_id|urlencode %}
-{% set installed = app.get('state') == 'installed' %}
+{% set loaded = app.get('state') == 'loaded' %}
 
 {% block refresh %}{% endblock %}
 
-{#- Logs and, while something runs, the console; then start or stop, reinstall,
+{#- Logs and, while something runs, the console; then start or stop, reload,
   snapshot, remove. Each verb opens the job modal. Only one of start/stop can
   apply, so only that one is drawn. -#}
 {% block actions %}
@@ -20,23 +20,23 @@
       desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
 {% else %}
   {{ job_button('Start', 'start', icon='play', title='Start ' ~ name, args={'app': app_id},
-      desc='Starts ' ~ app_id ~ ', installing it first if it is not installed yet.') }}
+      desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
 {% endif %}
-  {{ job_button('Reinstall', 'install', icon='reload', title='Reinstall ' ~ name, args={'app': app_id},
-      desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its installation from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
+  {{ job_button('Reload', 'load', icon='reload', title='Reload ' ~ name, args={'app': app_id},
+      desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
   {{ job_button('Snapshot', 'snapshot', icon='camera-plus-outline', title='Snapshot ' ~ name, args={'app': app_id},
       desc='Copies ' ~ app_id ~ "'s volumes and run state into an archive under snapshots/. The app is stopped for the copy and started again after.",
-      fields=[{'name': 'label', 'placeholder': 'label (optional)'}], enabled=installed) }}
+      fields=[{'name': 'label', 'placeholder': 'label (optional)'}], enabled=loaded) }}
   {#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
   {{ job_button('Remove', icon='delete-outline', title='Remove ' ~ name, danger=true,
       desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and take a Snapshot.',
       choices=[
-        {'label': 'Uninstall', 'verb': 'uninstall', 'args': {'app': app_id},
-         'desc': 'Removes the installation. Data, configuration, secrets and its address are kept, so reinstalling picks up where it left off.'},
-        {'label': 'Reset', 'verb': 'reset', 'args': {'app': app_id},
-         'desc': 'Deletes the data volumes and installs the app again from the bundle. Configuration and address are kept.'},
-        {'label': 'Uninstall and purge', 'verb': 'uninstall', 'args': {'app': app_id, 'purge': '1'},
-         'desc': 'Removes everything kelso holds: the installation, the data volumes, the configuration and secrets, and its address. The catalog copy survives.'},
+        {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
+         'desc': 'Stops it and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
+        {'label': 'Remove', 'verb': 'rm', 'args': {'app': app_id},
+         'desc': 'Unloads it and deletes its data volumes. Configuration and address are kept, so loading it again starts afresh with the same settings.'},
+        {'label': 'Purge', 'verb': 'rm', 'args': {'app': app_id, 'purge': '1'},
+         'desc': 'Removes everything kelso holds: the loaded copy, the data volumes, the configuration and secrets, snapshots, and its address. The catalog copy survives.'},
       ]) }}
 </div></span>
 {% endblock %}
@@ -47,14 +47,14 @@
   {{ byline(app) }}
   <p class="muted mono">{{ app_id }}</p></div>
 
-{#- The repo's manifest has moved on from the copy this app was installed
+{#- The repo's manifest has moved on from the copy this app was loaded
   from: the same drift the Repos page marks, said where it can be acted on. -#}
 {% if app.get('manifest_stale') %}
-<div class="notice"><b>Manifest differs, reinstall to pick up the latest changes.</b>
-  {{- sub('The manifest in the repo has changed since this app was installed. What is installed keeps running until you reinstall.') }}</div>
+<div class="notice"><b>Manifest differs, reload to pick up the latest changes.</b>
+  {{- sub('The manifest in the repo has changed since this app was loaded. What is loaded keeps running until you reload.') }}</div>
 {% endif %}
 {% if app.get('config_pending') %}
-<div class="notice"><b>Reinstall to apply pending configuration changes.</b>
+<div class="notice"><b>Reload to apply pending configuration changes.</b>
   {{- sub('Settings and route assignments were changed after this app was started, so what is running does not have them yet.') }}</div>
 {% endif %}
 {% if app.get('issues') %}
@@ -111,7 +111,7 @@
   <td class="act">{{ job_button('Run', 'cmd', title=app_id ~ ': ' ~ c.name,
       desc=c.get('desc') or "Runs the '" ~ c.name ~ "' command declared in this app's manifest.",
       args={'app': app_id, 'command': c.name},
-      fields=[{'name': 'args', 'placeholder': 'extra arguments (optional)'}], enabled=installed) }}</td></tr>
+      fields=[{'name': 'args', 'placeholder': 'extra arguments (optional)'}], enabled=loaded) }}</td></tr>
 {% endfor %}
 </tbody></table></div>
 {% endif %}

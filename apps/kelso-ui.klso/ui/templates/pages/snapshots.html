@@ -23,7 +23,7 @@
         args={'app': snap.app_id, 'snapshot': snap.name}) -}}
     {{- job_button('delete', 'snapshot-delete', icon='delete-outline', danger=true,
         title='Delete ' ~ snap.name,
-        desc='Removes the snapshot archive ' ~ snap.name ~ ' of ' ~ snap.app_id ~ '. The installation is left as it is.',
+        desc='Removes the snapshot archive ' ~ snap.name ~ ' of ' ~ snap.app_id ~ '. The app is left as it is.',
         args={'app': snap.app_id, 'snapshot': snap.name}) -}}
   </td>
 </tr>

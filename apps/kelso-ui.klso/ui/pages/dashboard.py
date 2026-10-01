@@ -1,4 +1,4 @@
-"""The dashboard: host CPU and memory, and every installed app."""
+"""The dashboard: host CPU and memory, and every loaded app."""
 
 from api import api, where
 from fastapi import APIRouter

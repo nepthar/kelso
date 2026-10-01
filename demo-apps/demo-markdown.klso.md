@@ -13,7 +13,7 @@ You may add as little or as much document around this. Kelso will ignore it and 
 Below is the demo app itself. Since we're reproducing these files onto a real filesystem from here, if you want to mark a script as executable, add ":+x" to the end of the filename.
 
 ### manifest.toml
-Below is the complete manifest, which will be extracted to `manifest.toml` when this app is staged.
+Below is the complete manifest, which will be extracted to `manifest.toml` when this app is loaded.
 ```toml klso_path="manifest.toml"
 [app]
 version      = "0.1.0"

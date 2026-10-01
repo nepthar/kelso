@@ -1,4 +1,4 @@
-"""The `run/<app_id>/` layout and the stage / start / stop / rm lifecycle.
+"""The `run/<app_id>/` layout and the load / start / stop / rm lifecycle.
 
 Everything here goes through the CLI against the `kelso_env` fixture, whose
 fake docker is the only docker these tests are allowed to see.
@@ -14,7 +14,7 @@ import yaml
 
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import dev_plan, source_volume_links, stage
+from kelso.lib.lifecycle import dev_plan, load, source_volume_links
 
 BASIC = "io.p2net.basic-features"
 
@@ -46,18 +46,18 @@ volumes = {{ }}
 """
 
 
-# --- stage ------------------------------------------------------------------
+# --- load ------------------------------------------------------------------
 
 
-def test_stage_copies_the_bundle_into_the_run_dir(kelso_env):
-  """What is installed is a fact on disk, not a pointer to something else."""
+def test_load_copies_the_bundle_into_the_run_dir(kelso_env):
+  """What is loaded is a fact on disk, not a pointer to something else."""
   app_id = "ports-demo"
-  staged = kelso_env.run("install", app_id)
-  assert staged.returncode == 0, staged.stderr
+  loaded = kelso_env.run("load", app_id)
+  assert loaded.returncode == 0, loaded.stderr
 
   run_dir = kelso_env.run_root / app_id
   catalog = kelso_env.local_repo / f"{app_id}.klso"
-  copied = run_dir / "staged" / "manifest.toml"
+  copied = run_dir / "app_bundle" / "manifest.toml"
   assert copied.is_file()
   assert not copied.is_symlink()
   assert copied.read_text() == (catalog / "manifest.toml").read_text()
@@ -66,65 +66,65 @@ def test_stage_copies_the_bundle_into_the_run_dir(kelso_env):
   assert (run_dir / "compose.yml").is_file()
 
 
-def test_editing_the_catalog_then_restaging_recopies(kelso_env):
+def test_editing_the_catalog_then_reloading_recopies(kelso_env):
   app_id = "ports-demo"
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
   catalog = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
   catalog.write_text(
     catalog.read_text().replace('version      = "0.1.0"', 'version = "9"')
   )
 
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
   assert (
     'version = "9"'
-    in (kelso_env.run_root / app_id / "staged" / "manifest.toml").read_text()
+    in (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
   )
 
 
-def test_editing_the_run_copy_is_lost_on_the_next_stage(kelso_env):
+def test_editing_the_run_copy_is_lost_on_the_next_load(kelso_env):
   """The run copy is kelso's output, never its input: apps/ is the source."""
   app_id = "ports-demo"
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
-  copied = kelso_env.run_root / app_id / "staged" / "manifest.toml"
+  copied = kelso_env.run_root / app_id / "app_bundle" / "manifest.toml"
   copied.write_text(copied.read_text() + "\n# hand edit\n")
-  (kelso_env.run_root / app_id / "staged" / "stowaway.txt").write_text("hi")
+  (kelso_env.run_root / app_id / "app_bundle" / "stowaway.txt").write_text("hi")
 
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
   assert "# hand edit" not in copied.read_text()
-  assert not (kelso_env.run_root / app_id / "staged" / "stowaway.txt").exists()
+  assert not (kelso_env.run_root / app_id / "app_bundle" / "stowaway.txt").exists()
 
 
-def test_stage_preserves_config_and_volume_contents(kelso_env):
-  assert kelso_env.run("install", BASIC).returncode == 0
+def test_load_preserves_config_and_volume_contents(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
 
   payload = kelso_env.volumes_root / "data" / BASIC / "config" / "state.txt"
   payload.write_text("precious")
 
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
 
   got = kelso_env.run("config", BASIC, "--get", "admin_user")
   assert got.stdout.strip() == "alice"
   assert payload.read_text() == "precious"
 
 
-def test_stage_by_path_adds_nothing_to_a_repo(kelso_env):
+def test_load_by_path_adds_nothing_to_a_repo(kelso_env):
   app_id = "ports-demo"
   elsewhere = kelso_env.root / "checkout" / f"{app_id}.klso"
   elsewhere.parent.mkdir()
   (kelso_env.local_repo / f"{app_id}.klso").rename(elsewhere)
 
-  staged = kelso_env.run("install", str(elsewhere))
-  assert staged.returncode == 0, staged.stderr
+  loaded = kelso_env.run("load", str(elsewhere))
+  assert loaded.returncode == 0, loaded.stderr
 
   assert not (kelso_env.local_repo / f"{app_id}.klso").exists()
-  assert (kelso_env.run_root / app_id / "staged" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").is_file()
 
 
-def test_stage_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
-  """An id installed from one bundle is not silently taken over by another."""
+def test_load_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
+  """An id loaded from one bundle is not silently taken over by another."""
   app_id = "ports-demo"
   other = kelso_env.root / "checkout" / f"{app_id}.klso"
   other.parent.mkdir()
@@ -133,48 +133,48 @@ def test_stage_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
   )
   (kelso_env.local_repo / "scratch.klso").rename(other)
 
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
-  refused = kelso_env.run("install", str(other))
+  refused = kelso_env.run("load", str(other))
   assert refused.returncode == 1
-  assert "previously installed from" in refused.stderr
+  assert "previously loaded from" in refused.stderr
 
 
-def test_stage_refuses_while_containers_are_running(kelso_env):
+def test_load_refuses_while_containers_are_running(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   app = ctx.resolve_app(app_id)
   with pytest.raises(ValueError, match=f"kelso stop {app_id}"):
-    stage(app, ctx.bundle_path(app), ctx)
+    load(app, ctx.bundle_path(app), ctx)
 
 
-def test_stage_refuses_when_config_is_gone_but_data_remains(kelso_env):
+def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
   """Deleting the config logtab by hand must not silently regenerate secrets.
 
   Fresh `auto` secrets against data that expects the old ones produce an app
   that fails to authenticate for reasons nothing in the error explains.
   """
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   (kelso_env.volumes_root / "data" / BASIC / "config" / "db").write_text("rows")
   kelso_env.app_logtab(BASIC).unlink()
 
-  refused = kelso_env.run("install", BASIC)
+  refused = kelso_env.run("load", BASIC)
   assert refused.returncode == 1
   assert "volume data but no config" in refused.stderr
-  assert f"kelso uninstall --purge {BASIC}" in refused.stderr
+  assert f"kelso rm --purge {BASIC}" in refused.stderr
 
 
-def test_restaging_after_a_deleted_run_dir_reuses_config(kelso_env):
+def test_reloading_after_a_deleted_run_dir_reuses_config(kelso_env):
   """Config lives in config/, so wiping the run dir does not lose secrets."""
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   minted = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
   shutil.rmtree(kelso_env.run_root / BASIC)
 
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   again = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
@@ -186,13 +186,15 @@ def test_restaging_after_a_deleted_run_dir_reuses_config(kelso_env):
 
 def test_app_links_are_relative_and_managed_links_are_absolute(kelso_env):
   """Relative app links survive a moved run dir; managed roots may be elsewhere."""
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   volumes = kelso_env.run_root / BASIC / "volumes"
 
   app_link = volumes / "app" / "bin"
   assert app_link.is_symlink()
-  assert app_link.readlink() == Path("../../staged/bin")
-  assert app_link.resolve() == (kelso_env.run_root / BASIC / "staged" / "bin").resolve()
+  assert app_link.readlink() == Path("../../app_bundle/bin")
+  assert (
+    app_link.resolve() == (kelso_env.run_root / BASIC / "app_bundle" / "bin").resolve()
+  )
 
   data_link = volumes / "data" / "config"
   assert data_link.is_symlink()
@@ -215,25 +217,25 @@ def test_a_linked_volume_kind_puts_the_data_at_the_target(kelso_env):
   elsewhere.mkdir(parents=True)
   _link_volume_kind(kelso_env, "data", elsewhere)
 
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
 
   assert (elsewhere / BASIC / "config").is_dir()
   link = kelso_env.run_root / BASIC / "volumes" / "data" / "config"
   assert link.readlink() == kelso_env.volumes_root / "data" / BASIC / "config"
 
 
-def test_a_dangling_volume_kind_link_blocks_install(kelso_env):
+def test_a_dangling_volume_kind_link_blocks_load(kelso_env):
   missing = kelso_env.root.parent / "nas-not-mounted" / "data"
   _link_volume_kind(kelso_env, "data", missing)
 
-  refused = kelso_env.run("install", BASIC)
+  refused = kelso_env.run("load", BASIC)
   assert refused.returncode == 1
   assert f"links to {missing}, which does not exist" in refused.stderr
   assert not missing.exists()
 
 
 def test_app_volumes_are_mounted_read_only(kelso_env):
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   mounts = _compose(kelso_env, BASIC)["services"]["main"]["volumes"]
 
   by_target = {mount["target"]: mount for mount in mounts}
@@ -254,7 +256,7 @@ def test_readonly_false_on_an_app_volume_is_a_manifest_error(kelso_env):
     _volumes_manifest('assets = { kind = "app", readonly = false }'),
   )
 
-  refused = kelso_env.run("install", "bad-app-volume")
+  refused = kelso_env.run("load", "bad-app-volume")
   assert refused.returncode == 1
   assert "app volumes are always mounted read-only" in refused.stderr
   assert "assets" in refused.stderr
@@ -268,30 +270,30 @@ def test_a_dropped_volume_keeps_its_data_and_is_reported(kelso_env):
     app_id,
     _volumes_manifest('one = { kind = "data" }\ntwo = { kind = "data" }'),
   )
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
   payload = kelso_env.volumes_root / "data" / app_id / "two" / "keep.txt"
   payload.write_text("still here")
 
   _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "data" }'))
-  restaged = kelso_env.run("install", app_id)
-  assert restaged.returncode == 0, restaged.stderr
+  reloaded = kelso_env.run("load", app_id)
+  assert reloaded.returncode == 0, reloaded.stderr
 
   assert not (kelso_env.run_root / app_id / "volumes" / "data" / "two").exists()
   assert payload.read_text() == "still here"
-  assert "two" in restaged.stderr
+  assert "two" in reloaded.stderr
 
 
 def test_an_added_volume_is_created_empty(kelso_env):
   app_id = "vol-churn"
   _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "data" }'))
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
   _write_bundle(
     kelso_env,
     app_id,
     _volumes_manifest('one = { kind = "data" }\ntwo = { kind = "data" }'),
   )
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
   added = kelso_env.volumes_root / "data" / app_id / "two"
   assert added.is_dir()
@@ -302,10 +304,10 @@ def test_changing_a_volumes_kind_is_refused(kelso_env):
   """The bytes live under the old kind's root; moving them silently is worse."""
   app_id = "vol-churn"
   _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "data" }'))
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
 
   _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "bulk" }'))
-  refused = kelso_env.run("install", app_id)
+  refused = kelso_env.run("load", app_id)
   assert refused.returncode == 1
   assert "changed kind from data to bulk" in refused.stderr
   assert (kelso_env.run_root / app_id / "volumes" / "data" / "one").is_symlink()
@@ -315,19 +317,19 @@ def test_changing_a_volumes_kind_is_refused(kelso_env):
 
 
 def test_config_round_trips_through_config_dir(kelso_env):
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
 
   logtab = kelso_env.app_logtab(BASIC).read_text()
   assert "config/admin_user" in logtab
   assert "meta/origin" in logtab
-  assert "meta/installed_at" in logtab
+  assert "meta/loaded_at" in logtab
 
   # ...and nothing about this app is left in the central db.
   assert BASIC not in kelso_env.read_db().get("apps", {})
 
 
-def test_start_set_is_the_one_shot_for_an_unstaged_app(kelso_env):
+def test_start_set_is_the_one_shot_for_an_unloaded_app(kelso_env):
   started = kelso_env.run("start", BASIC, "--set", "admin_user=alice")
   assert started.returncode == 0, started.stderr
 
@@ -335,20 +337,20 @@ def test_start_set_is_the_one_shot_for_an_unstaged_app(kelso_env):
   assert got.stdout.strip() == "alice"
 
 
-def test_restaging_does_not_regenerate_an_existing_auto_secret(kelso_env):
+def test_reloading_does_not_regenerate_an_existing_auto_secret(kelso_env):
   """The worst possible bug here: a new secret against data expecting the old.
 
   `admin_pass` is `{ secret = true, default = "auto" }`, so it is minted on the
-  first stage and must survive every one after it.
+  first load and must survive every one after it.
   """
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   first = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
   assert first
 
-  assert kelso_env.run("install", BASIC).returncode == 0
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
 
   again = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
@@ -368,8 +370,8 @@ def _bundle(kelso_env, app_id: str = BASIC) -> str:
 
 
 def _configured_for_dev(kelso_env) -> Path:
-  """Stage BASIC with its required config set, and return the source bundle."""
-  assert kelso_env.run("install", BASIC).returncode == 0
+  """Load BASIC with its required config set, and return the source bundle."""
+  assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
   return kelso_env.local_repo / f"{BASIC}.klso"
 
@@ -409,12 +411,12 @@ def test_dev_runs_in_the_foreground_against_the_source(kelso_env):
   assert up["app_links"] == {"bin": str(source.resolve() / "bin")}
 
 
-def test_dev_installs_a_new_bundle_and_asks_for_missing_config(kelso_env):
+def test_dev_loads_a_new_bundle_and_asks_for_missing_config(kelso_env):
   # admin_pass keeps its generated secret, admin_user is asked for, the
   # advanced config and app options are skipped, then the form is submitted.
   result = kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n")
   assert result.returncode == 0, result.stderr
-  assert (kelso_env.run_root / BASIC / "staged" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").is_file()
   assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]
 
   got = kelso_env.run("config", BASIC, "--get", "admin_user")
@@ -453,8 +455,8 @@ def test_dev_puts_the_app_links_back_when_it_is_over(kelso_env):
 
   assert kelso_env.run("dev", str(source)).returncode == 0
 
-  assert link.readlink() == Path("../../staged/bin")
-  assert link.resolve() == (kelso_env.run_root / BASIC / "staged" / "bin").resolve()
+  assert link.readlink() == Path("../../app_bundle/bin")
+  assert link.resolve() == (kelso_env.run_root / BASIC / "app_bundle" / "bin").resolve()
 
 
 def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
@@ -469,19 +471,19 @@ def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
       assert link.readlink() == plan.source / "bin"
       raise RuntimeError("the spec blew up")
 
-  assert link.readlink() == Path("../../staged/bin")
+  assert link.readlink() == Path("../../app_bundle/bin")
 
 
-def test_dev_leaves_the_staged_bundle_copy_alone(kelso_env):
-  """Only the links move. `staged/` is still what `stage` put there."""
+def test_dev_leaves_the_loaded_bundle_copy_alone(kelso_env):
+  """Only the links move. `app_bundle/` is still what `load` put there."""
   source = _configured_for_dev(kelso_env)
-  copied = (kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh").read_text()
+  copied = (kelso_env.run_root / BASIC / "app_bundle" / "bin" / "hello.sh").read_text()
 
   assert kelso_env.run("dev", str(source)).returncode == 0
 
   (source / "bin" / "hello.sh").write_text("echo edited\n")
   assert (
-    kelso_env.run_root / BASIC / "staged" / "bin" / "hello.sh"
+    kelso_env.run_root / BASIC / "app_bundle" / "bin" / "hello.sh"
   ).read_text() == copied
 
 
@@ -504,7 +506,7 @@ def test_dev_refuses_an_app_id(kelso_env):
   assert "kelso dev ./hello.klso" in refused.stderr
 
 
-def test_dev_refuses_an_app_installed_from_another_bundle(kelso_env):
+def test_dev_refuses_an_app_loaded_from_another_bundle(kelso_env):
   _configured_for_dev(kelso_env)
   elsewhere = kelso_env.root / "checkout" / f"{BASIC}.klso"
   shutil.copytree(kelso_env.local_repo / f"{BASIC}.klso", elsewhere)
@@ -512,7 +514,7 @@ def test_dev_refuses_an_app_installed_from_another_bundle(kelso_env):
   refused = kelso_env.run("dev", str(elsewhere))
   assert refused.returncode == 1
   assert "were made for" in refused.stderr
-  assert f"kelso uninstall --purge {BASIC}" in refused.stderr
+  assert f"kelso rm --purge {BASIC}" in refused.stderr
   assert ["compose", "up"] not in [c["args"] for c in _docker_calls(kelso_env)]
 
 
@@ -526,26 +528,26 @@ def _respelled(path: Path) -> Path:
 
 def test_dev_accepts_its_own_bundle_spelled_in_another_case(kelso_env):
   source = kelso_env.local_repo / f"{BASIC}.klso"
-  assert kelso_env.run("install", str(_respelled(source))).returncode == 0
+  assert kelso_env.run("load", str(_respelled(source))).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
 
   result = kelso_env.run("dev", str(source))
   assert result.returncode == 0, result.stderr
 
 
-def test_dev_accepts_its_own_bundle_after_uninstall(kelso_env):
+def test_dev_accepts_its_own_bundle_after_unload(kelso_env):
   source = _configured_for_dev(kelso_env)
-  assert kelso_env.run("uninstall", BASIC, "-y").returncode == 0
+  assert kelso_env.run("unload", BASIC, "-y").returncode == 0
 
   result = kelso_env.run("dev", str(source))
   assert result.returncode == 0, result.stderr
 
 
-def test_install_accepts_its_own_bundle_spelled_in_another_case(kelso_env):
+def test_load_accepts_its_own_bundle_spelled_in_another_case(kelso_env):
   source = kelso_env.local_repo / f"{BASIC}.klso"
-  assert kelso_env.run("install", str(_respelled(source))).returncode == 0
+  assert kelso_env.run("load", str(_respelled(source))).returncode == 0
 
-  again = kelso_env.run("install", str(source))
+  again = kelso_env.run("load", str(source))
   assert again.returncode == 0, again.stderr
 
 
@@ -558,8 +560,8 @@ def test_dev_refuses_a_running_app(kelso_env):
   assert f"kelso stop {BASIC}" in refused.stderr
 
 
-def test_dev_runs_a_markdown_bundle_from_its_fresh_install(kelso_env):
-  """There is no folder to mount, so the links stay on the staged copy."""
+def test_dev_runs_a_markdown_bundle_from_its_fresh_load(kelso_env):
+  """There is no folder to mount, so the links stay on the loaded copy."""
   bundle = _write_md_bundle(kelso_env, "md-demo")
 
   result = kelso_env.run("dev", str(bundle))
@@ -567,7 +569,7 @@ def test_dev_runs_a_markdown_bundle_from_its_fresh_install(kelso_env):
   assert "edits take effect on the next run" in result.stdout
 
   up = next(c for c in _docker_calls(kelso_env) if c["args"] == ["compose", "up"])
-  assert up["app_links"] == {"hello": "../../staged/bin/hello.sh"}
+  assert up["app_links"] == {"hello": "../../app_bundle/bin/hello.sh"}
 
 
 def test_dev_with_no_app_volumes_is_just_an_interactive_run(kelso_env):
@@ -639,7 +641,7 @@ def test_rm_removes_the_run_dir_volumes_and_routes(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]
 
-  removed = kelso_env.run("uninstall", "--purge", app_id, "-y")
+  removed = kelso_env.run("rm", "--purge", app_id, "-y")
   assert removed.returncode == 0, removed.stderr
 
   assert not (kelso_env.run_root / app_id).exists()
@@ -647,7 +649,7 @@ def test_rm_removes_the_run_dir_volumes_and_routes(kelso_env):
   for kind in ("data", "temp", "bulk", "logs"):
     assert not (kelso_env.volumes_root / kind / app_id).exists()
   assert app_id not in kelso_env.read_db().get("routes", {})
-  # The catalog entry is the reinstall path, so it survives on purpose.
+  # The catalog entry is the reload path, so it survives on purpose.
   assert (kelso_env.local_repo / f"{app_id}.klso").is_dir()
 
 
@@ -655,13 +657,13 @@ def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
-  declined = kelso_env.run("uninstall", "--purge", app_id, input="n\n")
+  declined = kelso_env.run("rm", app_id, input="n\n")
   assert declined.returncode == 0, declined.stderr
   assert "take a snapshot first" in declined.stdout
   assert "Nothing removed" in declined.stdout
   assert (kelso_env.run_root / app_id).is_dir()
 
-  confirmed = kelso_env.run("uninstall", "--purge", app_id, input="y\n")
+  confirmed = kelso_env.run("rm", "--purge", app_id, input="y\n")
   assert confirmed.returncode == 0, confirmed.stderr
   assert not (kelso_env.run_root / app_id).exists()
   assert not kelso_env.app_logtab(app_id).exists()
@@ -673,23 +675,23 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
   host_path.mkdir()
   assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
 
-  removed = kelso_env.run("uninstall", "--purge", app_id, input="y\n")
+  removed = kelso_env.run("rm", "--purge", app_id, input="y\n")
   assert removed.returncode == 0, removed.stderr
   assert str(host_path) in removed.stdout
   assert host_path.is_dir()
 
 
-def test_rm_then_start_is_a_clean_reinstall(kelso_env):
+def test_rm_then_start_is_a_clean_reload(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   minted = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
 
-  assert kelso_env.run("uninstall", "--purge", BASIC, "-y").returncode == 0
+  assert kelso_env.run("rm", "--purge", BASIC, "-y").returncode == 0
 
   restarted = kelso_env.run("start", BASIC, "--set", "admin_user=bob")
   assert restarted.returncode == 0, restarted.stderr
-  assert (kelso_env.run_root / BASIC / "staged" / "manifest.toml").is_file()
+  assert (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").is_file()
 
   # Config and data went together, so a fresh secret is correct here.
   fresh = kelso_env.run(
@@ -698,7 +700,7 @@ def test_rm_then_start_is_a_clean_reinstall(kelso_env):
   assert fresh and fresh != minted
 
 
-def test_install_writes_kelso_cmd_only_where_there_are_commands(kelso_env):
+def test_load_writes_kelso_cmd_only_where_there_are_commands(kelso_env):
   manifest = """\
 [app]
 version = "1"
@@ -713,7 +715,7 @@ image = "alpine:latest"
 cmd = "echo pong"
 """
   _write_bundle(kelso_env, "rc-demo", manifest)
-  assert kelso_env.run("install", "rc-demo").returncode == 0
+  assert kelso_env.run("load", "rc-demo").returncode == 0
   kelso = kelso_env.run_root / "rc-demo" / "kelso"
   script = kelso / "main" / "bin" / "kelso_cmd"
   assert os.access(script, os.X_OK)
@@ -722,5 +724,5 @@ cmd = "echo pong"
 
   # A command that moves takes its script with it.
   _write_bundle(kelso_env, "rc-demo", manifest + 'run_unit = "worker"\n')
-  assert kelso_env.run("install", "rc-demo").returncode == 0
+  assert kelso_env.run("load", "rc-demo").returncode == 0
   assert sorted(p.name for p in kelso.iterdir()) == ["worker"]

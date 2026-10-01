@@ -84,7 +84,7 @@ def test_app_spec_resolves_config():
 
   assert isinstance(secret, AppConfig)
   assert secret.secret is True and secret.default == "auto"
-  # secret-with-default has no usable default (generated at stage time)
+  # secret-with-default has no usable default (generated at load time)
   assert secret.has_default() is False
 
   assert required.secret is False and required.default is None
@@ -149,7 +149,7 @@ def test_store_keeps_binds_and_meta(tmp_path):
 
   assert store.list_binds() == {"media": "nas_media"}
   assert store.get_meta("origin") == "/kelso/apps/io.test.example.klso"
-  assert store.get_meta("installed_at") is None
+  assert store.get_meta("loaded_at") is None
 
 
 @pytest.mark.parametrize(

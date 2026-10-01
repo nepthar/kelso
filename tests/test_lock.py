@@ -61,7 +61,7 @@ def test_the_lock_timeout_message_names_the_holder(kelso_env):
 def test_the_recorded_holder_is_the_command_not_the_argv(kelso_env):
   """`config --set k=secret` must never put the value in the lockfile."""
   app_id = "io.p2net.basic-features"
-  assert kelso_env.run("install", app_id).returncode == 0
+  assert kelso_env.run("load", app_id).returncode == 0
   assert kelso_env.run("config", app_id, "--set", "admin_pass=hunter2").returncode == 0
 
   recorded = kelso_env.kelso_lockfile_path.read_text()
@@ -108,7 +108,7 @@ def test_a_second_kelso_process_waits_on_the_first(kelso_env):
 
 def test_cmd_does_not_hold_the_kelso_lock(kelso_env):
   """A long-running command must not lock other apps out of kelso."""
-  _stage_cmd_demo(kelso_env)
+  _load_cmd_demo(kelso_env)
 
   with FileLock(kelso_env.kelso_lockfile_path):
     ran = kelso_env.run("cmd", "cmd-demo", "ping")
@@ -122,8 +122,8 @@ def test_cmd_does_not_hold_the_kelso_lock(kelso_env):
 
 def test_cmd_holds_the_app_lock(kelso_env):
   """The same app cannot be started while a command is running; others can."""
-  _stage_cmd_demo(kelso_env)
-  assert kelso_env.run("install", "routes-demo").returncode == 0
+  _load_cmd_demo(kelso_env)
+  assert kelso_env.run("load", "routes-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("cmd-demo"))
   with lock:
     blocked = kelso_env.run("cmd", "cmd-demo", "ping")
@@ -134,7 +134,7 @@ def test_cmd_holds_the_app_lock(kelso_env):
   assert other.returncode == 0, other.stderr
 
 
-def _stage_cmd_demo(kelso_env):
+def _load_cmd_demo(kelso_env):
   app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
@@ -150,7 +150,7 @@ cmd = ["/bin/sh", "-c", "sleep infinity"]
 cmd = "echo pong"
 """
   )
-  assert kelso_env.run("install", "cmd-demo").returncode == 0
+  assert kelso_env.run("load", "cmd-demo").returncode == 0
 
 
 def test_logs_does_not_hold_the_kelso_lock(kelso_env):
@@ -174,7 +174,7 @@ def test_logs_does_not_hold_the_kelso_lock(kelso_env):
 
 def test_an_app_lock_does_not_block_another_app(kelso_env):
   """The point of per-app locks: snapshotting A must not stall start B."""
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("ports-demo"))
   with lock:
     started = kelso_env.run("start", "routes-demo")
@@ -200,7 +200,7 @@ def test_snapshot_releases_kelso_while_copying(kelso_env, monkeypatch):
 
   snapshot_mod = importlib.import_module("kelso.lib.lifecycle.snapshot")
 
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
   original = snapshot_mod.snapshot
 
   def during_copy(app, ctx, label=""):

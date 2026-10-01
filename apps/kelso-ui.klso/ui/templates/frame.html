@@ -43,7 +43,7 @@
     {%- block actions %}{% endblock %}</div>
   {% if daemon_api is not none and daemon_api != NEEDS_API %}
   <div class="error"><h2>Version mismatch</h2><p>This page was built for kelso API {{ NEEDS_API }}, but kelsod speaks {{ daemon_api }}. Buttons and status may be wrong until the two match.</p>
-    <p>Reinstall this app and start it again:<br><code>kelso install kelso-ui</code><br><code>kelso start kelso-ui</code></p></div>
+    <p>Reload this app and start it again:<br><code>kelso load kelso-ui</code><br><code>kelso start kelso-ui</code></p></div>
   {% endif %}
   {{ notice_banner(ok, err) }}
   {% block content %}{% endblock %}

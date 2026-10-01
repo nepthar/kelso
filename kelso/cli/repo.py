@@ -69,8 +69,8 @@ def _remove(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   result = repo_lib.remove(ctx, args.name)
   if result.bound:
     conn.err(
-      f"These apps were installed from {result.name}: {', '.join(result.bound)}.\n"
-      f"They keep running -- what is staged under var/run/ is already a copy -- but "
+      f"These apps were loaded from {result.name}: {', '.join(result.bound)}.\n"
+      f"They keep running -- what is loaded under var/run/ is already a copy -- but "
       f"kelso will no longer see updates for them."
     )
   conn.out(f"Removed repo {result.name}")
@@ -79,10 +79,10 @@ def _remove(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
 def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
   with ctx.kelso_lock("repo list"):
     catalog = ctx.app_catalog()
-    staged = ctx.staged_app_ids()
+    loaded = ctx.loaded_app_ids()
     # One read of the activity log for every app, rather than one per row.
     actions = read_app_actions(ctx)
-    origins = {app_id: ctx.staged_origin(app_id) for app_id in staged}
+    origins = {app_id: ctx.loaded_origin(app_id) for app_id in loaded}
 
     blocks = []
     for name, repo in ctx.config.repos.items():
@@ -98,7 +98,7 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx, conn: Conn) -> None:
       block = f"{header}\n{'=' * len(header)}"
       if entries:
         rows = [
-          (e.app_id, _status(e, staged, origins, actions), _relative(e.path, repo.path))
+          (e.app_id, _status(e, loaded, origins, actions), _relative(e.path, repo.path))
           for e in entries
         ]
         block += "\n" + tabulate(
@@ -114,12 +114,12 @@ def _relative(path: Path, root: Path) -> str:
 
 def _status(
   entry: CatalogEntry,
-  staged: set[str],
+  loaded: set[str],
   origins: dict[str, Path | None],
   actions: dict[str, tuple[datetime, str]],
 ) -> str:
   """The last thing kelso did with this bundle, or how it stands if nothing yet."""
-  if entry.app_id not in staged:
+  if entry.app_id not in loaded:
     return "-"
 
   origin = origins.get(entry.app_id)
@@ -127,7 +127,7 @@ def _status(
     return "-"
 
   action = actions.get(entry.app_id)
-  return action[1] if action else "installed"
+  return action[1] if action else "loaded"
 
 
 def _report_contested(ctx: KelsoCtx, conn: Conn) -> None:

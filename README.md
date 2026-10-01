@@ -2,9 +2,9 @@
 
 **Your apps, your hardware. No rack required.**
 
-Immich, Jellyfin, Mealie and more can be installed in one (okay, maybe two) clicks. Apps describe what resources and connections they need and Kelso turns that into a functioning container stack.
+Immich, Jellyfin, Mealie and more can be up and running in one (okay, maybe two) clicks. Apps describe what resources and connections they need and Kelso turns that into a functioning container stack.
 
-Kelso is for folks who want to spend their time *using* their apps instead of *sys-administering* them. Point it at a machine you already have, tell it once where data should live, and every app you install gets wired in automatically. Apps are easy to distribute, inspect, snapshot, and restore.
+Kelso is for folks who want to spend their time *using* their apps instead of *sys-administering* them. Point it at a machine you already have, tell it once where data should live, and every app you load gets wired in automatically. Apps are easy to distribute, inspect, snapshot, and restore.
 
 An app describes *what* it needs rather than *how* it is wired up. It says it "needs a volume to store user data and a master password", rather than "mount /mnt/zxy at this point and read secrets from this .env file".
 
@@ -17,7 +17,7 @@ unifi-network-application.klso/manifest.toml:
 description = "Unifi Network Application from linuxserver.io"
 
 [config]
-# A secret that the user never has to set, generated on install and stored encrypted.
+# A secret that the user never has to set, generated on load and stored encrypted.
 mongo_pass = { secret = true, default = "auto" }
 
 [volumes]
@@ -39,9 +39,9 @@ main = { port = "8443", scheme = "https" }
 ```
 
 
-Install it from the catalog, then start it:
+Load it from the catalog, then start it:
 ```
-$ kelso install unifi-network-application
+$ kelso load unifi-network-application
 $ kelso start unifi-network-application
 ```
 
@@ -92,7 +92,7 @@ rather than re-populate with empty folders.
 
 ## Why kelso?
 
-- **Configure your system layout once, install any app**
+- **Configure your system layout once, load any app**
 Kelso places each app's data where you tell it. Apps describe "what" they need instead of "how" it's wired up.
 
 - **Distributing apps you run yourself is hard today.**

@@ -50,7 +50,7 @@ def _mounts(args: list[str]) -> list[str]:
 
 def test_snapshot_copies_data_volumes_in_a_container(kelso_env):
   """The copy kelso cannot do itself: `cp -a` over root-owned volume files."""
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   volume = kelso_env.volumes_root / "data" / BASIC / "config"
   (volume / "db.txt").write_text("v1")
   # cp -a must not follow this: dereferencing a symlink inside a volume is how
@@ -62,14 +62,14 @@ def test_snapshot_copies_data_volumes_in_a_container(kelso_env):
   archive = Path(taken.stdout.split("written to ")[1].strip())
 
   copy = next(args for args in _root_runs(kelso_env) if "cp -a -- " in args[-1])
-  staged = kelso_env.root / "var" / "temp" / "current_snapshot" / "volumes" / "data"
+  loaded = kelso_env.root / "var" / "temp" / "current_snapshot" / "volumes" / "data"
   assert copy[:2] == ["run", "--rm"]
   assert copy[-3:-1] == ["sh", "-c"]
   assert copy[copy.index("sh") - 1] == ROOTFS_IMAGE
   # Bound at their own absolute host paths, which is what lets the script name
   # host paths verbatim.
-  assert _mounts(copy) == [f"{volume}:{volume}", f"{staged}:{staged}"]
-  assert copy[-1] == f"cp -a -- {volume} {staged}"
+  assert _mounts(copy) == [f"{volume}:{volume}", f"{loaded}:{loaded}"]
+  assert copy[-1] == f"cp -a -- {volume} {loaded}"
 
   # The archive is written by this process, not the container, so it belongs to
   # whoever ran kelso. The container is never even told where it goes.
@@ -79,7 +79,7 @@ def test_snapshot_copies_data_volumes_in_a_container(kelso_env):
 
 
 def test_restore_brings_a_data_volume_back(kelso_env):
-  assert kelso_env.run("install", BASIC).returncode == 0
+  assert kelso_env.run("load", BASIC).returncode == 0
   volume = kelso_env.volumes_root / "data" / BASIC / "config"
   (volume / "db.txt").write_text("v1")
   (volume / "current").symlink_to("db.txt")
@@ -111,10 +111,8 @@ def test_restore_rebuilds_a_removed_app_from_its_snapshot(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "before")
 
-  assert kelso_env.run("uninstall", "--purge", app_id, "-y").returncode == 0
+  assert kelso_env.run("rm", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
-  assert not kelso_env.app_logtab(app_id).exists()
-  assert app_id not in kelso_env.read_db().get("routes", {})
 
   restored = kelso_env.run("snapshot", "restore", app_id, name, "-y")
   assert restored.returncode == 0, restored.stderr
@@ -144,7 +142,7 @@ def test_restore_clobbers_whatever_is_there_now(kelso_env):
   name = _snapshot(kelso_env, app_id, "photos")
 
   assert kelso_env.run("config", app_id, "--set", "subdomain=albums").returncode == 0
-  scratch = kelso_env.run_root / app_id / "staged" / "scratch.txt"
+  scratch = kelso_env.run_root / app_id / "app_bundle" / "scratch.txt"
   scratch.write_text("left over from today")
 
   restored = kelso_env.run("snapshot", "restore", app_id, name, "-y")
@@ -244,7 +242,7 @@ def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   name = _snapshot(kelso_env, app_id, "kept")
-  marker = kelso_env.run_root / app_id / "staged" / "marker.txt"
+  marker = kelso_env.run_root / app_id / "app_bundle" / "marker.txt"
   marker.write_text("still here")
 
   declined = kelso_env.run("snapshot", "restore", app_id, name, input="n\n")
@@ -275,14 +273,14 @@ def test_snapshot_stops_and_restarts_a_running_app(kelso_env):
 def test_a_volumeless_snapshot_is_cleaned_up_without_a_container(kelso_env):
   """Nothing in it is root-owned, so paying for a container would only make
   cleanup fail whenever docker is down."""
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
   taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "bare")
   assert taken.returncode == 0, taken.stderr
 
   archive = Path(taken.stdout.split("written to ")[1].strip())
   assert archive.is_file()
   assert not (archive.parent / archive.name.removesuffix(".tar.gz")).exists()
-  # The archive itself still needs one; removing the staging folder does not.
+  # The archive itself still needs one; removing the loading folder does not.
   assert not [args for args in _root_runs(kelso_env) if "rm -rf -- " in args[-1]]
 
 

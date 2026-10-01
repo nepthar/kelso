@@ -11,26 +11,22 @@ from kelso.lib.lifecycle._common import (
   managed_volume_dirs,
 )
 from kelso.lib.lifecycle.run import stop
-from kelso.lib.lifecycle.stage import stage
 
 # Deleting config while keeping data regenerates an app's secrets against a
 # database initialised with the old ones, and it comes back as an app that no
-# longer starts. PURGE takes both together, so nothing can end up mismatched.
-RemovalMode = Literal["uninstall", "reset", "purge"]
+# longer starts. So config only ever goes with the data, in PURGE.
+RemovalMode = Literal["unload", "rm", "purge"]
 
-# The installation. Data and config stay.
-UNINSTALL: RemovalMode = "uninstall"
-# The data, and the installation with it, then installed again from the bundle.
-# `app`-kind volumes ship inside the bundle, so a reset picks up a changed bundle.
-RESET: RemovalMode = "reset"
-# All three, and the routes and host ports with them.
+# The loaded copy under var/run. Data and config stay.
+UNLOAD: RemovalMode = "unload"
+# That and the data volumes. Config stays, so loading it again starts afresh
+# with the same settings and address.
+RM: RemovalMode = "rm"
+# Everything kelso holds for the app: also its config and secrets, routes and
+# host ports, and snapshots.
 PURGE: RemovalMode = "purge"
 
-_ACTIONS: dict[str, str] = {
-  UNINSTALL: "uninstalled",
-  RESET: "reset",
-  PURGE: "removed",
-}
+_ACTIONS: dict[str, str] = {UNLOAD: "unloaded", RM: "removed", PURGE: "purged"}
 
 
 @dataclass(frozen=True)
@@ -42,11 +38,9 @@ class RemovalPlan:
   run_path: Path | None
   config_path: Path | None
   volume_paths: tuple[Path, ...]
+  snapshot_path: Path | None
   host_paths: tuple[Path, ...]
   stop_first: bool
-  # Resolved while planning, so an app whose catalog entry is gone or ambiguous
-  # fails with everything still on disk.
-  restage_from: Path | None
 
   @property
   def purges(self) -> bool:
@@ -70,8 +64,9 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
     )
 
   volumes: tuple[Path, ...] = ()
-  if mode in (RESET, PURGE):
+  if mode in (RM, PURGE):
     volumes = tuple(d for d in managed_volume_dirs(app_id, ctx) if d.is_dir())
+  snapshots = ctx.config.snapshot_root / app_id
 
   return RemovalPlan(
     app_id=app_id,
@@ -79,14 +74,14 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
     run_path=state.run_path,
     config_path=config_path if mode == PURGE and config_path.is_file() else None,
     volume_paths=volumes,
+    snapshot_path=snapshots if mode == PURGE and snapshots.is_dir() else None,
     host_paths=host_paths,
     stop_first=state.compose_exists,
-    restage_from=ctx.bundle_path(app_id) if mode == RESET else None,
   )
 
 
 def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
-  """Carry out `plan`, and for a reset install the app again afterwards."""
+  """Carry out `plan`."""
   app_id = plan.app_id
   if plan.stop_first:
     logger.info("Stopping %s", app_id)
@@ -105,14 +100,12 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
       shutil.rmtree(path)
       logger.info("removed volume %s", path)
 
+  if plan.snapshot_path is not None and plan.snapshot_path.is_dir():
+    shutil.rmtree(plan.snapshot_path)
+    logger.info("removed snapshots %s", plan.snapshot_path)
+
   if plan.purges:
     ctx.kelso_db.purge_app(app_id)
-
-  if plan.restage_from is not None:
-    # Staging recreates the volume directories the compose file binds to, which is
-    # why a reset can delete them outright.
-    logger.info("Staging %s from %s", app_id, plan.restage_from)
-    stage(app_id, plan.restage_from, ctx)
 
   # The activity log outlives the app on purpose, so close it out rather than
   # leaving the trail ending at whatever happened before the removal.

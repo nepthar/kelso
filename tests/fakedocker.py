@@ -8,7 +8,7 @@ Two ways in, one behaviour:
   interpreter per docker call was most of the suite's run time, and all it
   verified was that `Popen` works. Everything kelso does around the process --
   arguments, streaming into a sink, error tails, JSON parsing -- still runs.
-- As an executable. `kelso_env` also installs `bin/docker`, which calls `main`
+- As an executable. `kelso_env` also loads `bin/docker`, which calls `main`
   here, for the few tests that start kelso as a real child process (the lock
   tests), where no monkeypatch can reach.
 

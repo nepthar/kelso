@@ -367,7 +367,7 @@ def get(ctx, name: str) -> Repo:
 
 
 def bound_apps(ctx, name: str) -> tuple[str, ...]:
-  """Every installed app recorded as coming from this repo."""
+  """Every loaded app recorded as coming from this repo."""
   from kelso.lib.lifecycle import bound_to
 
   return tuple(
@@ -383,6 +383,6 @@ def contested_lines(ctx) -> list[str]:
   """One line per app id that more than one repo carries."""
   return [
     f"{app_id} is in {len(repos)} repos ({', '.join(sorted(repos))}); "
-    f"install it as {app_id}@<repo>."
+    f"load it as {app_id}@<repo>."
     for app_id, repos in sorted(ctx.contested_app_ids().items())
   ]

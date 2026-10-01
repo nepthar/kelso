@@ -7,7 +7,7 @@ import yaml
 
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
-from kelso.lib.kelso import KelsoCtx, StagedAppPaths, ambiguity_message
+from kelso.lib.kelso import KelsoCtx, LoadedAppPaths, ambiguity_message
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.options import validate_option
 from kelso.lib.run_layout import (
@@ -25,10 +25,10 @@ from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import now_ts, same_path
 
-# Scratch names used while swapping in a new staged copy. Both are inside the run
+# Scratch names used while swapping in a new loaded copy. Both are inside the run
 # dir so the swap is a rename on one filesystem rather than a second copy.
-INCOMING = ".staged.incoming"
-OUTGOING = ".staged.outgoing"
+INCOMING = ".app_bundle.incoming"
+OUTGOING = ".app_bundle.outgoing"
 
 
 def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
@@ -41,8 +41,8 @@ def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
   return False
 
 
-def _stage_incoming(source: Path, run_path: Path) -> Path:
-  """Extract the bundle into ``var/run/<id>/.staged.incoming`` (not yet live)."""
+def _load_incoming(source: Path, run_path: Path) -> Path:
+  """Extract the bundle into ``var/run/<id>/.app_bundle.incoming`` (not yet live)."""
   bundle = load_bundle(source)
   incoming = run_path / INCOMING
   outgoing = run_path / OUTGOING
@@ -54,13 +54,13 @@ def _stage_incoming(source: Path, run_path: Path) -> Path:
   return incoming
 
 
-def _commit_incoming(paths: StagedAppPaths, incoming: Path) -> None:
-  """Promote a validated incoming copy to ``staged/``."""
+def _commit_incoming(paths: LoadedAppPaths, incoming: Path) -> None:
+  """Promote a validated incoming copy to ``app_bundle/``."""
   outgoing = paths.run_path / OUTGOING
-  staged = paths.staged_path
-  if staged.exists():
-    os.replace(staged, outgoing)
-  os.replace(incoming, staged)
+  loaded = paths.bundle_path_in_run
+  if loaded.exists():
+    os.replace(loaded, outgoing)
+  os.replace(incoming, loaded)
   if outgoing.exists():
     shutil.rmtree(outgoing)
 
@@ -132,7 +132,7 @@ def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _existing_volume_kinds(volumes_root: Path) -> dict[str, str]:
-  """volume name -> kind, read back from the links a previous stage left."""
+  """volume name -> kind, read back from the links a previous load left."""
   found: dict[str, str] = {}
   if not volumes_root.is_dir():
     return found
@@ -152,7 +152,7 @@ def _make_link(destination: Path, target: Path) -> None:
 def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...]:
   """Point `volumes/<kind>/<name>` at the current manifest's volumes.
 
-  host/ volumes are linked at run time instead: they can change between install
+  host/ volumes are linked at run time instead: they can change between load
   and start.
   """
   volumes_root = run_data.run_path / "volumes"
@@ -164,11 +164,11 @@ def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...
       raise ValueError(
         f"App {spec.app} - volume {name} changed kind from {kind} to "
         f"{volume.kind}, but its data lives under the {kind} root. Move it by "
-        f"hand, or run `kelso uninstall --purge {spec.app}` to delete it."
+        f"hand, or run `kelso rm --purge {spec.app}` to delete it."
       )
 
   # Only links live here; the data they point at is outside the run dir, or (for
-  # app volumes) under staged/. So the whole tree can be torn down and rebuilt.
+  # app volumes) under app_bundle/. So the whole tree can be torn down and rebuilt.
   if volumes_root.exists():
     shutil.rmtree(volumes_root)
 
@@ -203,23 +203,23 @@ def unlink_host_volumes(run_path: Path) -> None:
 
 
 @dataclass(frozen=True)
-class StageSuccess:
+class LoadResult:
   spec: AppSpec
   run_data: AppRunData
   dropped_volumes: tuple[str, ...] = ()
 
 
 def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ...]]:
-  """Rebuild everything derived from the staged copy in the run dir."""
+  """Rebuild everything derived from the loaded copy in the run dir."""
   _clear_and_reallocate_ports(spec, ctx)
 
   run_data = load_run_data(spec, ctx)
-  if run_data.stage_blockers:
-    raise ValueError("\n".join(i.problem for i in run_data.stage_blockers))
+  if run_data.load_blockers:
+    raise ValueError("\n".join(i.problem for i in run_data.load_blockers))
 
   dropped = _rebuild_volume_links(spec, run_data)
   _rebuild_kelso_dirs(spec, run_data.run_path)
-  with open(ctx.staged_paths(spec.app).compose_path, "w") as f:
+  with open(ctx.loaded_paths(spec.app).compose_path, "w") as f:
     yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
   return run_data, dropped
@@ -243,8 +243,8 @@ BOUND_TO_META = "bound_to"
 
 
 @dataclass(frozen=True)
-class StagingTarget:
-  """What a `stage`/`start` argument named, and where it came from."""
+class LoadTarget:
+  """What a `load`/`start` argument named, and where it came from."""
 
   app_id: AppID
   # None when the argument was a bare id; `ctx.bundle_path` answers that.
@@ -261,21 +261,21 @@ class StagingTarget:
 
 
 def bound_to(app: AppID | str, ctx: KelsoCtx) -> str | None:
-  """What an app is recorded as installed from, or None if nothing is."""
+  """What an app is recorded as loaded from, or None if nothing is."""
   if not ctx.config.app_config_path(app).is_file():
     return None
   return ctx.app_store(app).get_meta(BOUND_TO_META)
 
 
-def staging_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> StagingTarget:
-  """Resolve a stage/start argument -- a path, `<id>@<repo>`, or a bare id.
+def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarget:
+  """Resolve a load/start argument -- a path, `<id>@<repo>`, or a bare id.
 
-  Raises ValueError if the target is ambiguous, or if it would install over an
+  Raises ValueError if the target is ambiguous, or if it would load over an
   id already bound to another source and `force` is not set.
   """
   if is_pathlike(target):
     bundle = Path(target).expanduser().resolve()
-    resolved = StagingTarget(app_id_from_path(bundle), bundle, None)
+    resolved = LoadTarget(app_id_from_path(bundle), bundle, None)
   else:
     name, _, repo = target.partition("@")
     resolved = _from_catalog(ctx, name, repo or None)
@@ -284,14 +284,14 @@ def staging_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> Stagin
   return resolved
 
 
-def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> StagingTarget:
+def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
   app = ctx.resolve_app(name)
   entries = ctx.app_catalog().get(str(app), ())
 
   if repo is not None:
     for entry in entries:
       if entry.source == repo:
-        return StagingTarget(app, entry.path, repo)
+        return LoadTarget(app, entry.path, repo)
     carried = ", ".join(sorted(entry.source for entry in entries))
     raise ValueError(
       f"Repo {repo!r} does not carry {app}."
@@ -299,13 +299,13 @@ def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> StagingTarget:
     )
 
   if not entries:
-    # No catalog entry but a staged copy: `start` runs that copy as-is.
-    if ctx.is_staged(app):
-      return StagingTarget(app, None, None)
+    # No catalog entry but a loaded copy: `start` runs that copy as-is.
+    if ctx.is_loaded(app):
+      return LoadTarget(app, None, None)
     raise ValueError(f'No app found for "{app}"')
   if len(entries) > 1:
     raise ValueError(ambiguity_message(app, entries))
-  return StagingTarget(app, entries[0].path, entries[0].source)
+  return LoadTarget(app, entries[0].path, entries[0].source)
 
 
 def _same_source(was: str, now: str) -> bool:
@@ -317,19 +317,19 @@ def _same_source(was: str, now: str) -> bool:
   return False
 
 
-def _check_binding(ctx: KelsoCtx, target: StagingTarget, *, force: bool) -> None:
+def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
   """Refuse an id whose surviving config and secrets were made for another source."""
   was = bound_to(target.app_id, ctx)
   now = target.bound_to
   if force or not was or not now or _same_source(was, now):
     return
   raise ValueError(
-    f"{target.app_id} was previously installed from {was}, and this would "
-    f"install it from {now}.\n"
+    f"{target.app_id} was previously loaded from {was}, and this would "
+    f"load it from {now}.\n"
     f"Its configuration, secrets and volume data were made for the old source "
     f"and would carry over.\n"
     f"Pass --force if you know that is fine. Otherwise remove it completely "
-    f"with `kelso uninstall --purge {target.app_id}` and install again."
+    f"with `kelso rm --purge {target.app_id}` and load again."
   )
 
 
@@ -371,7 +371,7 @@ def _relabel_routes(spec: AppSpec, app_subdomain: str, ctx: KelsoCtx) -> None:
     updated["subdomain"] = route.subdomain(app_subdomain)
     hdb.set_route(spec.app, name, updated)
 
-  compose_path = ctx.staged_paths(spec.app).compose_path
+  compose_path = ctx.loaded_paths(spec.app).compose_path
   if compose_path.is_file():
     run_data = load_run_data(spec, ctx)
     with open(compose_path, "w") as f:
@@ -395,15 +395,15 @@ def assign_route(spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx) -> Non
 
   ctx.app_store(app).set_route_assignment(route_name, tag)
   # The compose file carries ${routes.*} URLs, so the next start needs it rewritten.
-  if ctx.is_staged(app):
-    with open(ctx.staged_paths(app).compose_path, "w") as f:
+  if ctx.is_loaded(app):
+    with open(ctx.loaded_paths(app).compose_path, "w") as f:
       yaml.safe_dump(
         make_compose_dict(spec, load_run_data(spec, ctx)), f, sort_keys=False
       )
 
 
 def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:
-  """Record a host-volume bind against the staged bundle."""
+  """Record a host-volume bind against the loaded bundle."""
   app = spec.app
 
   if volname not in spec.volumes:
@@ -446,7 +446,7 @@ def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> No
   ctx.app_store(app).set_bind(volname, host_volume_tag)
 
 
-def stage(
+def load(
   app: AppID,
   bundle: Path,
   ctx: KelsoCtx,
@@ -454,12 +454,12 @@ def stage(
   sets: list[tuple[str, str]] | None = None,
   binds: list[tuple[str, str]] | None = None,
   bound: str | None = None,
-) -> StageSuccess:
-  """Install `bundle` into `var/run/<id>/` without starting it.
+) -> LoadResult:
+  """Load `bundle` into `var/run/<id>/` without starting it.
 
   `bound` is the source to record; None leaves the recorded one alone.
   """
-  paths = ctx.staged_paths(app)
+  paths = ctx.loaded_paths(app)
 
   try:
     running_count = ctx.run_state(app).running_count
@@ -472,23 +472,23 @@ def stage(
     )
 
   # Config gone while the data it belongs to is still here means someone
-  # deleted the logtab by hand. Staging would generate fresh `auto` secrets
+  # deleted the logtab by hand. Loading would generate fresh `auto` secrets
   # against data expecting the old ones, so refuse instead.
   config_path = ctx.config.app_config_path(app)
   if not config_path.is_file() and _has_volume_data(app, ctx):
     raise ValueError(
       f"App {app} has volume data but no config at {config_path}. "
-      f"Staging would generate new secrets that its existing data does not "
+      f"Loading would generate new secrets that its existing data does not "
       f"expect. Restore from a snapshot, or run "
-      f"`kelso uninstall --purge {app}` to delete its config and data together."
+      f"`kelso rm --purge {app}` to delete its config and data together."
     )
 
   # Extract the bundle under var/run/ first, validate *that* copy, then promote it
-  # to staged/. AppSpec always comes from the run tree, never the source bundle.
+  # to app_bundle/. AppSpec always comes from the run tree, never the source bundle.
   run_path = paths.run_path
   run_path.mkdir(parents=True, exist_ok=True)
   try:
-    incoming = _stage_incoming(bundle, run_path)
+    incoming = _load_incoming(bundle, run_path)
     spec = AppSpec.from_file(incoming / "manifest.toml", app)
   except Exception:
     _discard_incoming(run_path)
@@ -515,9 +515,9 @@ def stage(
   try:
     run_data, dropped = materialize(spec, ctx)
   except Exception:
-    record_app_action("install-failed", app, ctx)
+    record_app_action("load-failed", app, ctx)
     raise
 
-  store.set_meta("installed_at", now_ts())
-  record_app_action("installed", app, ctx)
-  return StageSuccess(spec, run_data, dropped)
+  store.set_meta("loaded_at", now_ts())
+  record_app_action("loaded", app, ctx)
+  return LoadResult(spec, run_data, dropped)

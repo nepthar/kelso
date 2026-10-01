@@ -21,7 +21,7 @@ DEFAULT_ROOT = Path("~/.kelso")
 CONFIG_TEMPLATE = """\
 # Kelso configuration — edit this file to change your setup.
 # Paths are relative to the directory containing this file unless absolute.
-# Installed apps live in var/run/, and the master key, kelsodb and per-app
+# Loaded apps live in var/run/, and the master key, kelsodb and per-app
 # config in conf/; those two are fixed.
 
 repos_root = "repos"
@@ -33,7 +33,7 @@ port_base = 41000
 # GitHub repository that kelso mirrors into repos/<name>.
 #
 # An app id carried by two repos is ambiguous: `kelso system doctor` reports those,
-# and you install one by naming its repo, `kelso install <app>@<repo>`.
+# and you load one by naming its repo, `kelso load <app>@<repo>`.
 #
 # Adding a repo is a standing commitment to whatever appears in it later, not
 # just to what is in it today. These two ship enabled; remove either table to
@@ -58,7 +58,7 @@ url = "github://nepthar/kelso/main/demo-apps"
 # required as soon as one is configured.
 # kelso_address = "10.0.0.5"
 
-# Routes are auto-assigned to this provider tag on first stage (like a config
+# Routes are auto-assigned to this provider tag on first load (like a config
 # default), unless marked private=true in the manifest. The reserved tag
 # "none" is a built-in noop and is the default when this key is omitted.
 # default_route_provider = "web"
@@ -95,7 +95,7 @@ url = "github://nepthar/kelso/main/demo-apps"
 
 # Cloudflare Tunnel publishes each route as an ingress rule on a remotely-managed
 # tunnel plus a proxied CNAME in the zone, so nothing is exposed on your router.
-# Run the connector itself with `kelso install cloudflared`. `account_id` and
+# Run the connector itself with `kelso load cloudflared`. `account_id` and
 # `tunnel_id` are in the Zero Trust dashboard; the API token needs Account >
 # Cloudflare Tunnel: Edit and Zone > DNS: Edit. Store the token with
 # `kelso system secret --stdin route_provider.cf.api_token`.
@@ -136,7 +136,7 @@ def _mirror_default_repos(config, conn) -> None:
   """Fetch the repos the template ships with, so day one is not an empty store.
 
   Best-effort on purpose: `init` otherwise touches nothing but the filesystem,
-  and an install on a plane should still produce a working kelso root. A repo
+  and an load on a plane should still produce a working kelso root. A repo
   that does not mirror now is still configured, and `kelso repo update` picks
   it up later.
   """
@@ -230,10 +230,10 @@ def run(args: argparse.Namespace, _ctx, conn) -> None:
   conn.out(f"\nTo change your configuration, edit {config_path}")
   conn.out(
     "\nNext: pick something from `kelso repo list`, then\n"
-    "  kelso install <app>   install it without starting it\n"
-    "  kelso start <app>     start it (installing first if needed)\n"
+    "  kelso load <app>   load it without starting it\n"
+    "  kelso start <app>     start it (loading first if needed)\n"
     "  kelso stop <app>      stop it\n"
-    "  kelso uninstall <app> remove the installation, keeping data and config"
+    "  kelso unload <app> remove the installation, keeping data and config"
   )
   conn.out(
     "\nThe `demos` repo is there to explore what an app can do. You may wish "

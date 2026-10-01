@@ -5,7 +5,7 @@ from kelso.lib.lifecycle.updown import DEFAULT_WAIT, down, up
 
 class UpJob(Job):
   name = "up"
-  description = "Start every installed app in start_order groups 1 to 9"
+  description = "Start every loaded app in start_order groups 1 to 9"
   optional_args = ("timeout", "resume")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:

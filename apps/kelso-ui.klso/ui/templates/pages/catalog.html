@@ -3,7 +3,7 @@
 
 {% block actions %}
 <span class="head-actions">{{ job_button('+ Add Repo', 'repo-add', title='Add a repo', done='/catalog',
-    desc='Kelso mirrors the folder and every app in it becomes part of your catalog. Nothing is installed or started.',
+    desc='Kelso mirrors the folder and every app in it becomes part of your catalog. Nothing is loaded or started.',
     fields=[{'name': 'url', 'placeholder': 'github://user/repo/branch/folder'},
             {'name': 'name', 'placeholder': 'name (optional)'}]) }}</span>
 {% endblock %}
@@ -15,17 +15,17 @@
 {% set bound = repo.get('bound_apps') or [] %}
 <span class="act">
   {%- if repo.get('url') %}{{ job_button('Update', 'repo-update', title='Update ' ~ name, args={'name': name}, autorun=true, done='/catalog',
-      desc='Re-reads ' ~ repo.url ~ ' and replaces the local copy with what it holds now. Installed apps keep running until you re-install them.') }}{% endif -%}
+      desc='Re-reads ' ~ repo.url ~ ' and replaces the local copy with what it holds now. Loaded apps keep running until you re-load them.') }}{% endif -%}
   {{- job_button('Remove', 'repo-remove', title='Remove ' ~ name, args={'name': name}, danger=true, done='/catalog',
       desc='Drops ' ~ name ~ ' from the catalog and deletes its mirrored copy.'
-        ~ (' ' ~ bound|length ~ ' installed app(s) came from it (' ~ bound|join(', ') ~ '); they keep running, but kelso will stop seeing updates for them.' if bound else '')) -}}
+        ~ (' ' ~ bound|length ~ ' loaded app(s) came from it (' ~ bound|join(', ') ~ '); they keep running, but kelso will stop seeing updates for them.' if bound else '')) -}}
 </span>
 {%- endif %}
 {%- endmacro %}
 
 {% macro status_pill(app) -%}
-{% if app.get('state') == 'available' %}<span class="pill"><span class="dot"></span>not installed</span>
-{%- elif app.get('state') == 'uninstalled' %}<span class="pill"><span class="dot exited"></span>uninstalled</span>
+{% if app.get('state') == 'available' %}<span class="pill"><span class="dot"></span>not loaded</span>
+{%- elif app.get('state') == 'unloaded' %}<span class="pill"><span class="dot exited"></span>unloaded</span>
 {%- elif app.configured == 'missing' %}<span class="pill"><span class="dot exited"></span>needs config</span>
 {%- else %}<span class="pill"><span class="dot running"></span>ready</span>{% endif %}
 {%- endmacro %}
@@ -54,8 +54,8 @@
   <p class="lede">This app's manifest could not be read.</p>
   {% endif %}
   {% set others = app.contested|reject('equalto', app.get('repo'))|list %}
-  {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Installing from here binds it to {{ app.get('repo') }}.</p>{% endif %}
-  {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was installed. Reinstall to pick up the new one.</p>{% endif %}
+  {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Loading from here binds it to {{ app.get('repo') }}.</p>{% endif %}
+  {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was loaded. Reload to pick up the new one.</p>{% endif %}
   {#- Kelso cannot say what an arbitrary compose key does, so it says that it
     does not know and shows exactly what was asked for. -#}
   {% for w in app.get('warnings') or [] %}
@@ -67,12 +67,12 @@
 {% set repo = app.get('repo') or '' %}
 {% set target = app_id ~ '@' ~ repo if repo else app_id %}
 <div class="row actions">
-{% if app.get('state') == 'installed' %}
-  {{ job_button('Reinstall', 'install', title='Reinstall ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+{% if app.get('state') == 'loaded' %}
+  {{ job_button('Reload', 'load', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
       desc='Rebuilds ' ~ app_id ~ ' from ' ~ repo ~ ', restarting it if it is running. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% else %}
-  {{ job_button('Install', 'install', title='Install ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
-      desc='Installs ' ~ app_id ~ ' from ' ~ repo ~ ' so it can be started. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
+  {{ job_button('Load', 'load', title='Load ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+      desc='Loads ' ~ app_id ~ ' from ' ~ repo ~ ' so it can be started. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% endif %}
 </div>
 {% endif %}
@@ -86,7 +86,7 @@
 {% if contested %}
 <div class="notice contested"><b>Some app ids are in more than one repo.</b><ul>
 {% for app_id, repos in contested|dictsort(true) %}
-<li><span class="mono">{{ app_id }}</span> is in {{ repos|join(', ') }} — install it as <span class="mono">{{ app_id }}@&lt;repo&gt;</span></li>
+<li><span class="mono">{{ app_id }}</span> is in {{ repos|join(', ') }} — load it as <span class="mono">{{ app_id }}@&lt;repo&gt;</span></li>
 {% endfor %}
 </ul></div>
 {% endif %}

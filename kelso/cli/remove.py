@@ -1,6 +1,6 @@
-"""The removal verbs -- uninstall, uninstall --purge, and reset -- which differ
-only in how much they take: an app's installation under `var/run/`, its data
-under the volume roots, and its config under `config/`.
+"""The removal verbs -- unload, rm, and rm --purge -- which differ only in how
+much they take: an app's loaded copy under `var/run/`, its data under the volume
+roots, and its config, snapshots and routes.
 """
 
 import argparse
@@ -8,8 +8,8 @@ import argparse
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   PURGE,
-  RESET,
-  UNINSTALL,
+  RM,
+  UNLOAD,
   RemovalMode,
   RemovalPlan,
   removal_plan,
@@ -19,26 +19,26 @@ from kelso.lib.util import Conn
 
 
 def register(subparsers) -> None:
-  uninstall = subparsers.add_parser(
-    "uninstall",
-    help="Uninstall an app, keeping its data and config unless --purge",
+  unload = subparsers.add_parser(
+    "unload",
+    help="Stop an app and remove its loaded copy, keeping its data and config",
   )
-  uninstall.add_argument("app_id", help="App ID to uninstall")
-  uninstall.add_argument(
+  unload.add_argument("app_id", help="App ID to unload")
+  _add_yes(unload)
+  unload.set_defaults(func=_run(UNLOAD))
+
+  remove = subparsers.add_parser(
+    "rm",
+    help="Unload an app and delete its data, keeping its config unless --purge",
+  )
+  remove.add_argument("app_id", help="App ID to remove")
+  remove.add_argument(
     "--purge",
     action="store_true",
-    help="Also delete its data volumes, config, secrets, and route allocations",
+    help="Also delete its config, secrets, snapshots, and route allocations",
   )
-  _add_yes(uninstall)
-  uninstall.set_defaults(func=_run(UNINSTALL))
-
-  reset = subparsers.add_parser(
-    "reset",
-    help="Stop an app and delete its data, keeping its config and settings",
-  )
-  reset.add_argument("app_id", help="App ID to reset")
-  _add_yes(reset)
-  reset.set_defaults(func=_run(RESET))
+  _add_yes(remove)
+  remove.set_defaults(func=_run(RM))
 
 
 def _add_yes(parser: argparse.ArgumentParser) -> None:
@@ -51,7 +51,7 @@ def _run(mode: RemovalMode):
     state = ctx.run_state(args.app_id)
     plan = removal_plan(state.app_id, ctx, mode=resolved)
 
-    if not args.yes and not _confirmed(plan, ctx, conn):
+    if not args.yes and not _confirmed(plan, conn):
       conn.out("Nothing removed.")
       return
 
@@ -64,30 +64,28 @@ def _run(mode: RemovalMode):
 
 def _done(plan: RemovalPlan) -> str:
   app = plan.app_id
-  if plan.mode == UNINSTALL:
+  if plan.mode == UNLOAD:
     return (
-      f"Uninstalled {app}. Configuration and volume data were kept.\n"
-      f"To remove those too, run `kelso uninstall --purge {app}`."
+      f"Unloaded {app}. Configuration and volume data were kept.\n"
+      f"Load it again with `kelso load {app}`."
     )
-  if plan.mode == RESET:
+  if plan.mode == RM:
     return (
-      f"Reset {app}. Its settings and address are unchanged; "
-      f"start it fresh with `kelso start {app}`."
+      f"Removed {app}. Its configuration and address are unchanged; "
+      f"`kelso load {app}` starts it fresh with them."
     )
-  return f"Removed {app}"
+  return f"Purged {app}"
 
 
-def _confirmed(plan: RemovalPlan, ctx: KelsoCtx, conn: Conn) -> bool:
+def _confirmed(plan: RemovalPlan, conn: Conn) -> bool:
   """Say what the operator is deciding, and nothing else."""
-  if plan.mode == RESET:
-    _describe_reset(plan, conn)
-  elif plan.purges:
-    _describe_purge(plan, ctx, conn)
-  else:
+  if plan.mode == UNLOAD:
     conn.out(
-      f"Configuration and volume data will be kept. Use "
-      f"`kelso uninstall --purge {plan.app_id}` to also remove those."
+      f"Configuration and volume data will be kept. Use `kelso rm {plan.app_id}` "
+      f"to delete the data too."
     )
+  else:
+    _describe_removal(plan, conn)
   try:
     answer = conn.read(f"{_ASKED[plan.mode]} {plan.app_id}? [y/N] ")
   except EOFError:
@@ -96,39 +94,27 @@ def _confirmed(plan: RemovalPlan, ctx: KelsoCtx, conn: Conn) -> bool:
 
 
 # How each removal asks.
-_ASKED = {UNINSTALL: "Uninstall", RESET: "Reset", PURGE: "Remove"}
+_ASKED = {UNLOAD: "Unload", RM: "Remove", PURGE: "Purge"}
 
 
-def _describe_purge(plan: RemovalPlan, ctx: KelsoCtx, conn: Conn) -> None:
-  """Describe a purge, naming the data it destroys."""
-  volumes = _volume_lines(plan)
-  if plan.volume_paths:
-    conn.out(f"Removing {plan.app_id} deletes its data volumes:")
-    for line in volumes:
-      conn.out(f"  {line}")
-    conn.out("along with its configuration, secrets, and route allocations.")
-  else:
-    conn.out(
-      f"Removing {plan.app_id} deletes its configuration, secrets, and route "
-      f"allocations. It has no data volumes on disk."
-    )
-
-  for path in plan.host_paths:
-    conn.out(f"The host volume at {path} is left alone.")
-
-  conn.out("If you want this data back, take a snapshot first.")
-
-
-def _describe_reset(plan: RemovalPlan, conn: Conn) -> None:
-  """Describe a reset: what data goes, and that the app is installed again."""
-  conn.out(
-    f"Resetting {plan.app_id} will preserve configuration and routing, "
-    f"but will remove the following volumes:"
-  )
+def _describe_removal(plan: RemovalPlan, conn: Conn) -> None:
+  """Describe rm or rm --purge, naming the data it destroys."""
+  conn.out(f"This deletes {plan.app_id}'s data volumes:")
   for line in _volume_lines(plan):
     conn.out(f"  {line}")
-  if plan.restage_from is not None:
-    conn.out(f"{plan.app_id} is then installed again from {plan.restage_from}.")
+  if plan.purges:
+    conn.out("along with its configuration, secrets, and route allocations.")
+    if plan.snapshot_path is not None:
+      conn.out(f"Its snapshots under {plan.snapshot_path} are deleted too.")
+  else:
+    conn.out(
+      f"Its configuration and address are kept. Use `kelso rm --purge "
+      f"{plan.app_id}` to delete those too."
+    )
+  for path in plan.host_paths:
+    conn.out(f"The host volume at {path} is left alone.")
+  if not plan.purges:
+    conn.out("If you want this data back, take a snapshot first.")
 
 
 def _volume_lines(plan: RemovalPlan) -> list[str]:

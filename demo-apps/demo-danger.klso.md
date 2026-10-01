@@ -16,7 +16,7 @@ guaranteed to be safe. Please review them before continuing:
   privileged = true
 ```
 
-`kelso install` prints that and asks before installing (`-y` skips it),
+`kelso load` prints that and asks before loading (`-y` skips it),
 `kelso inspect` lists it under `Danger:`, and the Repos page in the web UI
 prints it on the app card beside the manifest asking for it.
 

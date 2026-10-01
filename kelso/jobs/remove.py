@@ -1,45 +1,39 @@
 from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import PURGE, RESET, UNINSTALL, removal_plan, rm
+from kelso.lib.lifecycle import PURGE, RM, UNLOAD, removal_plan, rm
 
 
-class UninstallJob(Job):
-  name = "uninstall"
-  description = "Uninstall an app, keeping its data and config unless purged"
+class _RemovalJob(Job):
   required_args = ("app",)
-  optional_args = ("purge",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
     app = ctx.resolve_app(kwargs["app"])
     self.app = str(app)
     self.app_id = app
-    self.mode = PURGE if self._bool_arg(kwargs, "purge") else UNINSTALL
+    self.mode = self.mode_for(kwargs)
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
     with ctx.locked(f"{self.mode} {app}", app):
       # Planning resolves what is about to go before anything is deleted.
-      plan = removal_plan(app, ctx, mode=self.mode)
-      rm(plan, ctx)
-    if self.mode == PURGE:
-      logger.info("Removed %s, including its data and configuration", app)
-    else:
-      logger.info("Uninstalled %s. Configuration and volume data were kept", app)
+      rm(removal_plan(app, ctx, mode=self.mode), ctx)
+    logger.info(self.done, app)
 
 
-class ResetJob(Job):
-  name = "reset"
-  description = "Delete an app's data and install it again from its bundle"
-  required_args = ("app",)
+class UnloadJob(_RemovalJob):
+  name = "unload"
+  description = "Stop an app and remove its loaded copy, keeping data and config"
+  done = "Unloaded %s. Configuration and volume data were kept"
 
-  def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    app = ctx.resolve_app(kwargs["app"])
-    self.app = str(app)
-    self.app_id = app
+  def mode_for(self, kwargs: dict[str, str]) -> str:
+    return UNLOAD
 
-  def run(self, ctx: KelsoCtx) -> None:
-    app = self.app_id
-    with ctx.locked(f"reset {app}", app):
-      plan = removal_plan(app, ctx, mode=RESET)
-      rm(plan, ctx)
-    logger.info("Reset %s. Its configuration and address are unchanged", app)
+
+class RmJob(_RemovalJob):
+  name = "rm"
+  description = "Unload an app and delete its data, keeping its config unless purged"
+  optional_args = ("purge",)
+  done = "Removed %s"
+
+  def mode_for(self, kwargs: dict[str, str]) -> str:
+    return PURGE if self._bool_arg(kwargs, "purge") else RM

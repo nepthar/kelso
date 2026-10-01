@@ -3,9 +3,9 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import reload_app
 
 
-class InstallJob(Job):
-  name = "install"
-  description = "Install or re-install an app from its bundle, restarting it if running"
+class LoadJob(Job):
+  name = "load"
+  description = "Load or re-load an app from its bundle, restarting it if running"
   required_args = ("app",)
   optional_args = ("force",)
 
@@ -16,19 +16,19 @@ class InstallJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.locked(f"install {app}", app):
+    with ctx.locked(f"load {app}", app):
       result = reload_app(
         app,
         self.target.bundle or ctx.bundle_path(app),
         ctx,
         bound=self.target.bound_to,
       )
-    lines = [f"Installed {app} at {ctx.run_path(app)}"]
+    lines = [f"Loaded {app} at {ctx.run_path(app)}"]
     if result.was_running:
       lines.append(f"Restarted {app}")
     lines += [
       f"  volume {name} is no longer declared in the manifest; its link is gone "
       f"but its data was left in place"
-      for name in result.stage.dropped_volumes
+      for name in result.load.dropped_volumes
     ]
     logger.info("\n".join(lines))

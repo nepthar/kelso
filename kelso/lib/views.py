@@ -27,14 +27,14 @@ from kelso.lib.store import AppStore
 
 
 def apps_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every installed app, in the shape a dashboard list wants.
+  """Every loaded app, in the shape a dashboard list wants.
 
-  Uninstalled apps belong to the catalog listing, which reports their state.
+  Unloaded apps belong to the catalog listing, which reports their state.
   """
   return [
     _summary(observation, ctx)
     for observation in ctx.observations()
-    if observation.installed
+    if observation.loaded
   ]
 
 
@@ -86,8 +86,8 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
 def compose_warnings_view(spec: AppSpec) -> list[dict[str, Any]]:
   """`[run.<unit>.compose]` keys kelso does not model, for the UI to show.
 
-  Sent whether or not the app is installed: it is a property of the manifest,
-  and the point is to be readable *before* deciding to install.
+  Sent whether or not the app is loaded: it is a property of the manifest,
+  and the point is to be readable *before* deciding to load.
   """
   return [
     {
@@ -104,19 +104,19 @@ def _manifest_diff(current: str, remote: str) -> str:
     difflib.unified_diff(
       current.splitlines(keepends=True),
       remote.splitlines(keepends=True),
-      fromfile="installed",
+      fromfile="loaded",
       tofile="remote",
     )
   )
 
 
 def _catalog_manifest_stale(entry: CatalogEntry, manifest: str, ctx: KelsoCtx) -> bool:
-  """Whether the catalog's manifest has moved on from the staged copy."""
-  staged = ctx.staged_paths(entry.app_id).manifest_path
-  if not manifest or not staged.is_file():
+  """Whether the catalog's manifest has moved on from the loaded copy."""
+  loaded = ctx.loaded_paths(entry.app_id).manifest_path
+  if not manifest or not loaded.is_file():
     return False
   try:
-    return staged.read_text() != manifest
+    return loaded.read_text() != manifest
   except OSError:
     return False
 
@@ -200,7 +200,7 @@ def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         continue
       app_id = app_dir.name
       if app_id not in declared:
-        spec = ctx.staged_spec(app_id)
+        spec = ctx.loaded_spec(app_id)
         declared[app_id] = set(spec.volumes) if spec else set()
       for volume_dir in sorted(app_dir.iterdir()):
         if not volume_dir.is_dir():
@@ -320,7 +320,7 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   """One app in full: what `kelso inspect` shows, as data."""
   observation = _observation(app_id, ctx)
-  spec = ctx.staged_spec(app_id)
+  spec = ctx.loaded_spec(app_id)
   view = _summary(observation, ctx, spec=spec)
 
   if spec is None:
@@ -340,7 +340,7 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       },
       "subdomain": resolved_subdomain(spec, ctx),
       "network_mode": spec.network_mode,
-      "run_path": str(ctx.staged_paths(app_id).run_path),
+      "run_path": str(ctx.loaded_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),
       "units": _units(spec, observation),
       "routes": _routes(spec, run_data, ctx),
@@ -373,7 +373,7 @@ def _summary(
   spec: AppSpec | None = None,
 ) -> dict[str, Any]:
   if spec is None:
-    spec = ctx.staged_spec(observation.app_id)
+    spec = ctx.loaded_spec(observation.app_id)
   return {
     "app_id": str(observation.app_id),
     "display_name": spec.display_name if spec else "",

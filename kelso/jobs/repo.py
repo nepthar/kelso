@@ -85,8 +85,8 @@ class RepoRemoveJob(Job):
     lines = [f"Removed repo {result.name}"]
     if result.bound:
       lines.append(
-        f"These apps were installed from it: {', '.join(result.bound)}. They keep "
-        f"running -- what is staged under var/run/ is already a copy -- but kelso "
+        f"These apps were loaded from it: {', '.join(result.bound)}. They keep "
+        f"running -- what is loaded under var/run/ is already a copy -- but kelso "
         f"will no longer see updates for them."
       )
     logger.info("\n".join(lines))

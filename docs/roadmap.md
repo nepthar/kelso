@@ -37,7 +37,7 @@ Allow bundle developers to better focus on their own app by saying "Just give me
 
 ## Other issues the LLMs find:
 - **A `cmd` job holds the app lock for the command's whole run.** Kelso-wide
-  ops can proceed; the same app cannot be staged, started, or stopped until it
+  ops can proceed; the same app cannot be loaded, started, or stopped until it
   exits. Fine for the batch-style commands the UI is for; a long-runner still
   wedges that app. The runner also allocates no TTY, so a command that waits
   on stdin hangs rather than prompting.

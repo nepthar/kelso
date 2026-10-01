@@ -2,12 +2,12 @@
 
 > Mealie is a self hosted recipe manager, meal planner and shopping list with a RestAPI backend and a reactive frontend built in Vue for a pleasant user experience for the whole family. Easily add recipes into your database by providing the URL and Mealie will automatically import the relevant data, or add a family recipe with the UI editor. Mealie also provides an API for interactions from 3rd party applications. ~ https://github.com/mealie-recipes/mealie/
 
-This kelso app installs mealie v3.22.0 with the sqlite backend.
+This kelso app runs mealie v3.22.0 with the sqlite backend.
 
 Mealie builds absolute links (password resets, shared recipes) from `BASE_URL`,
 so it has to be told the address it answers on. `${routes.main}` is that
 address: the URL kelso publishes the `main` route at, which is only knowable
-once the app is staged and the route is allocated.
+once the app is loaded and the route is allocated.
 
 Upstream's compose sets `TZ`; this one does not. Kelso mounts the host's
 `/etc/localtime` into every container, so mealie keeps the host's time without

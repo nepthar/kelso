@@ -8,6 +8,7 @@ from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.load import materialize
 from kelso.lib.lifecycle.rootfs import run_as_root
 from kelso.lib.lifecycle.snapshot import (
   SNAPSHOT_TAR_SUFFIX,
@@ -16,7 +17,6 @@ from kelso.lib.lifecycle.snapshot import (
   snapshot,
   snapshot_archive,
 )
-from kelso.lib.lifecycle.stage import materialize
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import validate_identifier
@@ -105,7 +105,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
     for rel in (
       f"{prefix}snapshot.toml",
       f"{prefix}config.logtab",
-      f"{prefix}staged/manifest.toml",
+      f"{prefix}app_bundle/manifest.toml",
     ):
       if rel not in infos:
         raise ValueError(
@@ -156,7 +156,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
     app_id=app,
     snapshot_path=snapshot_path,
     app_version=str(meta.get("app_version", "")),
-    run_path=ctx.staged_paths(app).run_path,
+    run_path=ctx.loaded_paths(app).run_path,
     config_path=ctx.config.app_config_path(app),
     data_volumes=tuple(data_volumes),
     is_latest_pre_restore=bool(pre_restores) and snapshot_name == pre_restores[-1],
@@ -168,7 +168,7 @@ def _rebuild_run_dir(plan: RestorePlan) -> None:
   if plan.run_path.exists():
     shutil.rmtree(plan.run_path)
   plan.run_path.mkdir(parents=True, mode=0o700)
-  shutil.copytree(plan.snapshot_path / "staged", plan.run_path / "staged")
+  shutil.copytree(plan.snapshot_path / "app_bundle", plan.run_path / "app_bundle")
   plan.config_path.parent.mkdir(parents=True, exist_ok=True)
   shutil.copy2(plan.snapshot_path / "config.logtab", plan.config_path)
 
@@ -226,9 +226,9 @@ def _restore_extracted(
 ) -> AppRunData:
   app = plan.app_id
 
-  # Parse the snapshot's staged copy before touching anything; a corrupt snapshot
+  # Parse the snapshot's loaded copy before touching anything; a corrupt snapshot
   # fails here with the current state intact.
-  spec = AppSpec.from_file(plan.snapshot_path / "staged" / "manifest.toml", app)
+  spec = AppSpec.from_file(plan.snapshot_path / "app_bundle" / "manifest.toml", app)
 
   take_snapshot = snapshot_first and plan.run_path.exists()
   if take_snapshot and plan.is_latest_pre_restore:
@@ -257,12 +257,12 @@ def _restore_extracted(
     run_data, _ = materialize(spec, ctx)
   except Exception as e:
     # The run dir and volumes are already the snapshot's; only the generated
-    # half is missing, which is what re-staging rebuilds.
+    # half is missing, which is what re-loading rebuilds.
     record_app_action("restore-failed", app, ctx)
     raise ValueError(
       f"App {app} was restored from {plan.snapshot_path}, but its compose.yml "
       f"and routes could not be rebuilt; fix the problem below and run "
-      f"`kelso install {app}`.\n{e}"
+      f"`kelso load {app}`.\n{e}"
     ) from e
 
   record_app_action(f"restored - {plan.snapshot_path.name}", app, ctx)

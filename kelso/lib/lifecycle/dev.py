@@ -7,6 +7,7 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.docker import DockerError, docker_run_command
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import logger
+from kelso.lib.lifecycle.load import link_host_volumes, unlink_host_volumes
 from kelso.lib.lifecycle.routes import (
   assigned_routes,
   preflight_app_routes,
@@ -14,7 +15,6 @@ from kelso.lib.lifecycle.routes import (
   unregister_app_routes,
 )
 from kelso.lib.lifecycle.run import recovery_lines
-from kelso.lib.lifecycle.stage import link_host_volumes, unlink_host_volumes
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import AppRunData, load_run_data
 from kelso.lib.spec import AppSpec
@@ -23,7 +23,7 @@ from kelso.lib.util import same_path
 
 @dataclass(frozen=True)
 class DevPlan:
-  """A validated foreground run of a staged app against its source bundle."""
+  """A validated foreground run of a loaded app against its source bundle."""
 
   app_id: AppID
   run_path: Path
@@ -40,23 +40,23 @@ class DevPlan:
 
 def refuse_other_origin(app: AppID, source: Path, ctx: KelsoCtx) -> None:
   """Refuse an app id whose config and data belong to a bundle other than `source`."""
-  origin = ctx.staged_origin(app)
+  origin = ctx.loaded_origin(app)
   if origin is not None and not same_path(origin, source):
     raise ValueError(
       f"App {app}'s config and data were made for {origin}, not {source}. "
       f"Run `kelso dev` against that bundle, or remove them with "
-      f"`kelso uninstall --purge {app}`."
+      f"`kelso rm --purge {app}`."
     )
 
 
 def dev_plan(
   app: AppID, source: Path, ctx: KelsoCtx, *, publish_routes: bool = False
 ) -> DevPlan:
-  """Work out what a dev run of the staged `app` would mount from `source`.
+  """Work out what a dev run of the loaded `app` would mount from `source`.
 
-  Assumes `app` was just staged from `source`; refuses if it cannot run.
+  Assumes `app` was just loaded from `source`; refuses if it cannot run.
   """
-  paths = ctx.staged_paths(app)
+  paths = ctx.loaded_paths(app)
   spec = AppSpec.from_file(paths.manifest_path, app)
 
   mounts: dict[str, Path] = {}
@@ -104,7 +104,7 @@ def source_volume_links(plan: DevPlan) -> Iterator[None]:
     if not link.is_symlink():
       raise ValueError(
         f"App {plan.app_id} - volume {name}: {link} is not a link; "
-        f"reinstall with `kelso install {plan.app_id}`"
+        f"reload with `kelso load {plan.app_id}`"
       )
     saved.append((link, link.readlink(), target))
 

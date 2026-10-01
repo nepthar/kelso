@@ -1,8 +1,8 @@
-{#- An app's containers, unless there is no installation for them to belong
+{#- An app's containers, unless nothing is loaded for them to belong
   to. Expects `app`; shared by the dashboard table and the app page. -#}
 {% from "macros.html" import pill, sub %}
-{% if app.get('state') == 'uninstalled' %}
-{{- pill('uninstalled', 'exited') }}{{ sub('data and config kept') -}}
+{% if app.get('state') == 'unloaded' %}
+{{- pill('unloaded', 'exited') }}{{ sub('data and config kept') -}}
 {% else %}
 {% set status = app.get('status') or 'unknown' %}
 {% set containers = app.get('containers') or {} %}

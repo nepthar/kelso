@@ -23,13 +23,13 @@ def _compose(kelso_env, verb: str) -> list[str]:
   return [Path(c["cwd"]).name for c in calls if c["args"][:2] == ["compose", verb]]
 
 
-def _install(kelso_env, *apps):
+def _load(kelso_env, *apps):
   for app in apps:
-    assert kelso_env.run("install", app).returncode == 0
+    assert kelso_env.run("load", app).returncode == 0
 
 
 def test_up_starts_each_start_order_group_before_the_next(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo")
+  _load(kelso_env, "ports-demo", "routes-demo")
   set_ = kelso_env.run("config", "routes-demo", "--set", "start_order=4")
   assert set_.returncode == 0, set_.stderr
 
@@ -43,7 +43,7 @@ def test_up_starts_each_start_order_group_before_the_next(kelso_env):
 
 
 def test_down_stops_in_reverse_and_up_brings_it_back(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo")
+  _load(kelso_env, "ports-demo", "routes-demo")
   kelso_env.run("config", "routes-demo", "--set", "start_order=4")
   assert kelso_env.run("up").returncode == 0
 
@@ -67,7 +67,7 @@ def test_up_leaves_an_app_stopped_with_kelso_stop_alone(kelso_env):
 
 
 def test_a_group_not_ready_in_time_is_reported_and_the_next_still_starts(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo")
+  _load(kelso_env, "ports-demo", "routes-demo")
   kelso_env.run("config", "routes-demo", "--set", "start_order=4")
   assert kelso_env.run("start", "routes-demo").returncode == 0
   containers = json.loads(kelso_env.docker_state.read_text())
@@ -82,7 +82,7 @@ def test_a_group_not_ready_in_time_is_reported_and_the_next_still_starts(kelso_e
 
 
 def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo")
+  _load(kelso_env, "ports-demo", "routes-demo")
   kelso_env.run("config", "routes-demo", "--set", "start_order=0")
   assert kelso_env.run("start", "routes-demo").returncode == 0
 
@@ -96,7 +96,7 @@ def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
 
 
 def test_kelsods_groups_come_up_and_go_down_with_it(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo")
+  _load(kelso_env, "ports-demo", "routes-demo")
   kelso_env.run("config", "routes-demo", "--set", "start_order=0")
   ctx = KelsoCtx(load_config_file(kelso_env.config))
 
@@ -110,7 +110,7 @@ def test_kelsods_groups_come_up_and_go_down_with_it(kelso_env):
 def test_up_without_waiting_does_not_ask_docker_whether_anything_is_ready(
   kelso_env,
 ):
-  _install(kelso_env, "routes-demo")
+  _load(kelso_env, "routes-demo")
   kelso_env.run("config", "routes-demo", "--set", "start_order=0")
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(kelso_env.docker_log.read_text().splitlines())
@@ -122,7 +122,7 @@ def test_up_without_waiting_does_not_ask_docker_whether_anything_is_ready(
 
 
 def test_an_odd_group_is_named_by_its_number(kelso_env):
-  _install(kelso_env, "ports-demo")
+  _load(kelso_env, "ports-demo")
   kelso_env.run("config", "ports-demo", "--set", "start_order=3")
 
   assert "Starting run group 3\n" in kelso_env.run("up").stdout
@@ -154,7 +154,7 @@ def test_what_counts_as_ready(state, status, settled, ready):
 
 
 def test_resume_brings_back_only_what_was_running(kelso_env):
-  _install(kelso_env, "ports-demo", "routes-demo", "io.p2net.basic-features")
+  _load(kelso_env, "ports-demo", "routes-demo", "io.p2net.basic-features")
   assert kelso_env.run("start", "ports-demo").returncode == 0
   assert kelso_env.run("start", "routes-demo").returncode == 0
   assert kelso_env.run("stop", "routes-demo").returncode == 0

@@ -79,31 +79,31 @@ def test_catalog_lists_available_apps_grouped_by_source(kelso_env, client):
   assert apps["routes-demo"]["configured"] == "ready"
 
 
-def test_catalog_reports_installed_and_manifest_drift(kelso_env, client, jobs):
-  """Installed-ness is the logtab; drift is the staged manifest vs the bundle's."""
+def test_catalog_reports_loaded_and_manifest_drift(kelso_env, client, jobs):
+  """Loaded-ness is the logtab; drift is the loaded manifest vs the bundle's."""
 
   def entry():
     catalogs = client.get("/catalog").json()["catalogs"]
     return {app["app_id"]: app for app in catalogs[0]["apps"]}[APP]
 
-  # A catalog entry alone is not an installation, and nothing is staged to
+  # A catalog entry alone is not a loaded app, and nothing is loaded to
   # have drifted from.
   assert entry()["state"] == "available"
   assert entry()["manifest_stale"] is False
 
-  assert submit(client, jobs, "install", {"app": APP})["state"] == "done"
-  assert entry()["state"] == "installed"
+  assert submit(client, jobs, "load", {"app": APP})["state"] == "done"
+  assert entry()["state"] == "loaded"
   assert entry()["manifest_stale"] is False
 
-  # Editing the bundle leaves the staged copy behind: that is the drift the
-  # catalog card offers to close with a re-install.
+  # Editing the bundle leaves the loaded copy behind: that is the drift the
+  # catalog card offers to close with a re-load.
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(
-    manifest.read_text() + "\n# a comment the staged copy has not seen\n"
+    manifest.read_text() + "\n# a comment the loaded copy has not seen\n"
   )
   assert entry()["manifest_stale"] is True
 
-  assert submit(client, jobs, "install", {"app": APP})["state"] == "done"
+  assert submit(client, jobs, "load", {"app": APP})["state"] == "done"
   assert entry()["manifest_stale"] is False
 
 
@@ -161,7 +161,7 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
 
 
 def test_catalog_listing_does_not_create_config_stores(kelso_env, client):
-  """Opening AppStore writes a logtab; a GET must not invent install state."""
+  """Opening AppStore writes a logtab; a GET must not invent load state."""
   client.get("/catalog")
   assert not kelso_env.app_logtab(APP).exists()
 
@@ -177,18 +177,18 @@ def test_catalog_config_turns_ready_once_required_values_are_set(kelso_env, clie
   assert apps[APP]["configured"] == "ready"
 
 
-def test_apps_lists_only_installed(kelso_env, client):
-  # Every fixture is in the catalog; none is installed until it is staged.
+def test_apps_lists_only_loaded(kelso_env, client):
+  # Every fixture is in the catalog; none is loaded until it is loaded.
   assert client.get("/apps").json()["apps"] == []
 
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
   apps = client.get("/apps").json()["apps"]
   assert [app["app_id"] for app in apps] == [APP]
 
   app = apps[0]
   assert app["display_name"] == "Basic Features"
   assert app["status"] == "stopped"
-  assert app["state"] == "installed"
+  assert app["state"] == "loaded"
   assert app["volume_count"] == 3
   assert app["containers"] == {"running": 0, "total": 0}
   # admin_user has no default and was never set, so the app cannot start yet.
@@ -206,7 +206,7 @@ def test_apps_reflects_running_containers(kelso_env, client):
 
 
 def test_app_detail(kelso_env, client):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
   response = client.get(f"/apps/{APP}")
   assert response.status_code == 200
 
@@ -248,17 +248,17 @@ def test_app_logs_returns_a_tail(kelso_env, client):
 
 
 def test_app_logs_refuses_an_out_of_range_tail(kelso_env, client):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
   assert client.get(f"/apps/{APP}/logs?tail=0").status_code == 400
   assert client.get(f"/apps/{APP}/logs?tail=99999").status_code == 400
 
 
-def test_app_logs_for_an_uninstalled_app_is_404(kelso_env, client):
+def test_app_logs_for_an_unloaded_app_is_404(kelso_env, client):
   assert client.get("/apps/basic-features/logs").status_code == 404
 
 
 def test_app_config_request_describes_every_field(kelso_env, client):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
 
   body = client.get(f"/apps/{APP}/config-request").json()
   fields = {f["name"]: f for f in body["fields"]}
@@ -323,17 +323,17 @@ def _compose_calls(kelso_env) -> list[list[str]]:
   ]
 
 
-def test_install_stops_reinstalls_and_starts_a_running_app(kelso_env, client, jobs):
+def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=root")
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
-  job = submit(client, jobs, "install", {"app": APP})
+  job = submit(client, jobs, "load", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert f"Restarted {APP}" in read_log(job)
   assert client.get(f"/apps/{APP}").json()["status"] == "running"
-  staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
-  assert 'version      = "0.2.0"' in staged
+  loaded = (kelso_env.run_root / APP / "app_bundle" / "manifest.toml").read_text()
+  assert 'version      = "0.2.0"' in loaded
   assert _compose_calls(kelso_env) == [
     ["compose", "up", "-d"],
     ["compose", "down"],
@@ -341,28 +341,28 @@ def test_install_stops_reinstalls_and_starts_a_running_app(kelso_env, client, jo
   ]
 
 
-def test_install_reinstalls_a_stopped_app_without_starting(kelso_env, client, jobs):
-  kelso_env.run("install", APP)
+def test_load_reloads_a_stopped_app_without_starting(kelso_env, client, jobs):
+  kelso_env.run("load", APP)
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
 
-  job = submit(client, jobs, "install", {"app": APP})
+  job = submit(client, jobs, "load", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert "Restarted" not in read_log(job)
   assert client.get("/apps").json()["apps"][0]["status"] == "stopped"
-  staged = (kelso_env.run_root / APP / "staged" / "manifest.toml").read_text()
-  assert 'version      = "0.2.0"' in staged
+  loaded = (kelso_env.run_root / APP / "app_bundle" / "manifest.toml").read_text()
+  assert 'version      = "0.2.0"' in loaded
   assert _compose_calls(kelso_env) == []
 
 
-def test_install_unknown_app_is_refused(kelso_env, client):
-  response = client.post("/jobs", json={"verb": "install", "args": {"app": "nope"}})
+def test_load_unknown_app_is_refused(kelso_env, client):
+  response = client.post("/jobs", json={"verb": "load", "args": {"app": "nope"}})
   assert response.status_code == 400
   assert "No app found" in response.json()["error"]
 
 
 def test_failed_job_carries_the_error(kelso_env, client, jobs):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
 
   job = submit(client, jobs, "start", {"app": "basic-features"})
   assert job["state"] == "failed"
@@ -371,12 +371,12 @@ def test_failed_job_carries_the_error(kelso_env, client, jobs):
 
 
 def test_jobs_are_listed_newest_first(kelso_env, client, jobs):
-  kelso_env.run("install", "basic-features")
-  submit(client, jobs, "install", {"app": "basic-features"})
+  kelso_env.run("load", "basic-features")
+  submit(client, jobs, "load", {"app": "basic-features"})
   submit(client, jobs, "stop", {"app": "basic-features"})
 
   listed = client.get("/jobs").json()["jobs"]
-  assert [job["verb"] for job in listed] == ["stop", "install"]
+  assert [job["verb"] for job in listed] == ["stop", "load"]
 
 
 def test_unknown_job_is_404(kelso_env, client):
@@ -384,24 +384,24 @@ def test_unknown_job_is_404(kelso_env, client):
 
 
 def test_a_job_files_activity_that_the_api_serves(kelso_env, client, jobs):
-  job = submit(client, jobs, "install", {"app": "basic-features"})
+  job = submit(client, jobs, "load", {"app": "basic-features"})
   assert job["state"] == "done"
   # The finished job points at its own output file...
-  assert job["log"] and job["log"].endswith(f".{APP}.install.log")
+  assert job["log"] and job["log"].endswith(f".{APP}.load.log")
 
   runs = client.get("/activity").json()["activity"]
-  assert runs[0]["verb"] == "install"
+  assert runs[0]["verb"] == "load"
   assert runs[0]["app_id"] == APP
   assert runs[0]["status"] == "ok"
   assert runs[0]["log"] == job["log"]
 
   body = client.get(f"/activity/{job['log']}").json()
   assert body["app_id"] == APP
-  assert f"Installed {APP}" in body["text"]
+  assert f"Loaded {APP}" in body["text"]
 
 
 def test_a_failed_job_still_files_activity_with_its_error(kelso_env, client, jobs):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
   job = submit(client, jobs, "start", {"app": "basic-features"})
   assert job["state"] == "failed"
 
@@ -419,7 +419,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
   from kelso.jobs import JOBS, Job
 
   class LiveJob(Job):
-    name = "install"
+    name = "load"
     required_args = ("app",)
 
     def init(self, ctx, kwargs):
@@ -431,12 +431,12 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
       assert len(running) == 1
       assert running[0]["log"]
       text = (ctx.config.activity_root / running[0]["log"]).read_text()
-      assert "# kelso install" in text
+      assert "# kelso load" in text
       assert "live line" in text
       logging.getLogger("kelso").info("done")
 
-  monkeypatch.setitem(JOBS, "install", LiveJob)
-  job = jobs.submit("install", {"app": "basic-features"}, ctx())
+  monkeypatch.setitem(JOBS, "load", LiveJob)
+  job = jobs.submit("load", {"app": "basic-features"}, ctx())
   jobs.run_pending()
   finished = jobs.get(job["id"])
   assert finished is not None
@@ -452,7 +452,7 @@ def test_activity_log_rejects_a_bad_name(kelso_env, client):
   assert client.get("/activity/..%2F..%2Fetc%2Fpasswd").status_code == 404
 
 
-def _install_cmd_demo(kelso_env):
+def _load_cmd_demo(kelso_env):
   app_dir = kelso_env.local_repo / "cmd-demo.klso"
   app_dir.mkdir()
   (app_dir / "manifest.toml").write_text(
@@ -464,7 +464,7 @@ def _install_cmd_demo(kelso_env):
 
 
 def test_cmd_verb_runs_a_manifest_command_as_a_job(kelso_env, client, jobs):
-  _install_cmd_demo(kelso_env)
+  _load_cmd_demo(kelso_env)
   kelso_env.run("start", "cmd-demo")
 
   job = submit(client, jobs, "cmd", {"app": "cmd-demo", "command": "ping"})
@@ -485,7 +485,7 @@ def test_cmd_verb_runs_a_manifest_command_as_a_job(kelso_env, client, jobs):
 
 
 def test_cmd_verb_forwards_extra_arguments(kelso_env, client, jobs):
-  _install_cmd_demo(kelso_env)
+  _load_cmd_demo(kelso_env)
   kelso_env.run("start", "cmd-demo")
 
   job = submit(
@@ -556,7 +556,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
 
 
 def test_restore_verb(kelso_env, client, jobs):
-  assert kelso_env.run("install", "ports-demo").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
   taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "back")
   assert taken.returncode == 0, taken.stderr
   name = Path(taken.stdout.split("written to ")[1].strip()).name.removesuffix(".tar.gz")
@@ -646,7 +646,7 @@ def test_snapshot_delete_unknown_snapshot_is_refused(kelso_env, client):
     ({"verb": "stop", "args": {"app": 3}}, "args.app: Input should be a valid str"),
     ({"verb": "stop", "app": "basic-features"}, "app: Extra inputs"),
     # ...and meaning, which only a live context can judge.
-    ({"verb": "rm", "args": {"app": "basic-features"}}, "Unknown verb"),
+    ({"verb": "explode", "args": {"app": "basic-features"}}, "Unknown verb"),
     ({"verb": "stop", "args": {}}, "requires argument"),
   ],
 )
@@ -696,14 +696,14 @@ def test_openapi_documents_the_surface(kelso_env, client):
   "app",
   ["nope", "/etc/passwd", "../../etc", "tests/fixtures/apps/ports-demo.klso"],
 )
-def test_verbs_take_ids_of_installed_apps_and_nothing_else(kelso_env, client, app):
+def test_verbs_take_ids_of_loaded_apps_and_nothing_else(kelso_env, client, app):
   """The rule that bounds the blast radius: no path ever reaches a verb.
 
   A path argument is how a caller defines what an app *is* -- which volumes it
-  binds, which image it runs -- and that is root. `kelso stage <path>` stays
+  binds, which image it runs -- and that is root. `kelso load <path>` stays
   a CLI-only capability.
   """
-  response = client.post("/jobs", json={"verb": "install", "args": {"app": app}})
+  response = client.post("/jobs", json={"verb": "load", "args": {"app": app}})
   assert response.status_code == 400
   assert "No app found" in response.json()["error"]
 
@@ -826,7 +826,7 @@ def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
 
 
 def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
-  """Re-staging drops the link of a volume the manifest stopped declaring and
+  """Re-loading drops the link of a volume the manifest stopped declaring and
   leaves the data. Nothing else would ever tell you it is still on disk."""
   assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
   assert kelso_env.run("stop", APP).returncode == 0
@@ -837,12 +837,12 @@ def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
 
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   # Dropped from [volumes] *and* from the unit that mounted it -- a manifest
-  # that declares neither is what re-staging leaves data behind for.
+  # that declares neither is what re-loading leaves data behind for.
   text = manifest.read_text().replace(
     'config = { kind = "data", desc = "persistent app data" }', ""
   )
   manifest.write_text(text.replace('config = "/myapp/config", ', ""))
-  assert kelso_env.run("install", APP).returncode == 0
+  assert kelso_env.run("load", APP).returncode == 0
 
   volumes = {v["name"]: v for v in client.get("/volumes").json()["volumes"]}
   assert volumes["config"]["declared"] is False, "data left behind, flagged"
@@ -853,7 +853,7 @@ def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
 
 
 def test_app_view_carries_what_a_detail_page_needs(kelso_env, client):
-  assert kelso_env.run("install", APP).returncode == 0
+  assert kelso_env.run("load", APP).returncode == 0
   body = client.get(f"/apps/{APP}").json()
 
   unit = body["units"][0]
@@ -873,7 +873,7 @@ def test_app_view_never_leaks_a_secret_through_the_environment(kelso_env, client
 
 
 def test_setting_config_through_the_api(kelso_env, client):
-  assert kelso_env.run("install", APP).returncode == 0
+  assert kelso_env.run("load", APP).returncode == 0
 
   updated = client.post(
     f"/apps/{APP}/config-response", json={"values": {"admin_user": "alice"}}
@@ -938,7 +938,7 @@ def test_route_providers_lists_what_can_be_added_but_not_noop(kelso_env, client)
 
 def test_binding_a_host_volume_through_the_api(kelso_env, client):
   (kelso_env.root / "external-data").mkdir()
-  assert kelso_env.run("install", "host-volumes").returncode == 0
+  assert kelso_env.run("load", "host-volumes").returncode == 0
 
   bound = client.post(
     "/apps/host-volumes/config-response",
@@ -950,7 +950,7 @@ def test_binding_a_host_volume_through_the_api(kelso_env, client):
 
 
 def test_config_changes_are_refused_with_a_reason(kelso_env, client):
-  assert kelso_env.run("install", APP).returncode == 0
+  assert kelso_env.run("load", APP).returncode == 0
 
   for values, expected in (
     ({"nope": "x"}, "no config named 'nope'"),
@@ -964,7 +964,7 @@ def test_config_changes_are_refused_with_a_reason(kelso_env, client):
 
 
 def test_apps_and_catalog_agree_on_state(kelso_env, client, jobs):
-  """One vocabulary across both views: no `staged`/`installed` booleans."""
+  """One vocabulary across both views: no `loaded`/`loaded` booleans."""
 
   def catalog_entry():
     catalogs = client.get("/catalog").json()["catalogs"]
@@ -973,58 +973,56 @@ def test_apps_and_catalog_agree_on_state(kelso_env, client, jobs):
   assert catalog_entry()["state"] == "available"
   assert client.get("/apps").json()["apps"] == []
 
-  assert submit(client, jobs, "install", {"app": APP})["state"] == "done"
+  assert submit(client, jobs, "load", {"app": APP})["state"] == "done"
   app = client.get("/apps").json()["apps"][0]
-  assert app["state"] == "installed"
-  assert "staged" not in app
-  assert catalog_entry()["state"] == "installed"
+  assert app["state"] == "loaded"
+  assert "app_bundle" not in app
+  assert catalog_entry()["state"] == "loaded"
   # `status` is about containers and stays its own axis.
   assert app["status"] == "stopped"
 
-  # /apps is the installed list; an uninstalled app is the catalog's to report.
-  kelso_env.run("uninstall", APP, "-y")
+  # /apps is the loaded list; an unloaded app is the catalog's to report.
+  kelso_env.run("unload", APP, "-y")
   assert client.get("/apps").json()["apps"] == []
-  assert catalog_entry()["state"] == "uninstalled"
+  assert catalog_entry()["state"] == "unloaded"
 
-  kelso_env.run("uninstall", "--purge", APP, "-y")
+  kelso_env.run("rm", "--purge", APP, "-y")
   assert client.get("/apps").json()["apps"] == []
   assert catalog_entry()["state"] == "available"
 
 
-def test_uninstall_verb_keeps_data_and_config(kelso_env, client, jobs):
+def test_unload_verb_keeps_data_and_config(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
   data = kelso_env.volumes_root / "data" / APP / "config"
   (data / "app.db").write_text("rows")
 
-  job = submit(client, jobs, "uninstall", {"app": APP})
+  job = submit(client, jobs, "unload", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert (data / "app.db").read_text() == "rows"
   assert kelso_env.app_logtab(APP).exists()
   assert client.get("/apps").json()["apps"] == []
 
 
-def test_uninstall_purge_takes_everything(kelso_env, client, jobs):
+def test_rm_purge_takes_everything(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
-  job = submit(client, jobs, "uninstall", {"app": APP, "purge": "1"})
+  job = submit(client, jobs, "rm", {"app": APP, "purge": "1"})
   assert job["state"] == "done", job["error"]
   assert not (kelso_env.volumes_root / "data" / APP).exists()
   assert not kelso_env.app_logtab(APP).exists()
 
 
-def test_reset_verb_clears_data_and_reinstalls(kelso_env, client, jobs):
+def test_rm_verb_deletes_data_and_keeps_config(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
-  data = kelso_env.volumes_root / "data" / APP / "config"
-  (data / "app.db").write_text("rows")
 
-  job = submit(client, jobs, "reset", {"app": APP})
+  job = submit(client, jobs, "rm", {"app": APP})
   assert job["state"] == "done", job["error"]
-  assert list(data.iterdir()) == []
-  assert (kelso_env.run_root / APP).is_dir()
+  assert not (kelso_env.volumes_root / "data" / APP).exists()
+  assert not (kelso_env.run_root / APP).exists()
   assert kelso_env.app_logtab(APP).exists()
 
 
 def test_removal_verbs_refuse_an_unknown_app(kelso_env, client):
-  for verb in ("uninstall", "reset"):
+  for verb in ("unload", "rm"):
     response = client.post("/jobs", json={"verb": verb, "args": {"app": "nope"}})
     assert response.status_code == 400, verb
 
@@ -1036,7 +1034,7 @@ def test_a_freshly_started_app_has_nothing_pending(kelso_env, client):
 
 def test_config_pending_is_false_when_not_running(kelso_env, client):
   """Nothing is pending on a stopped app: the next start reads config fresh."""
-  kelso_env.run("install", APP)
+  kelso_env.run("load", APP)
   kelso_env.run("config", APP, "--set", "admin_user=alice")
   assert client.get(f"/apps/{APP}").json()["config_pending"] is False
 
@@ -1044,7 +1042,7 @@ def test_config_pending_is_false_when_not_running(kelso_env, client):
 def test_route_assignment_is_recorded_without_calling_the_provider(
   kelso_env, client, jobs
 ):
-  submit(client, jobs, "install", {"app": "routes-demo"})
+  submit(client, jobs, "load", {"app": "routes-demo"})
   response = client.post(
     "/apps/routes-demo/config-response", json={"values": {"route.main": "web"}}
   )

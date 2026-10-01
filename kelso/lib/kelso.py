@@ -102,7 +102,7 @@ def ambiguity_message(app: AppID | str, entries: tuple[CatalogEntry, ...]) -> st
 
 
 @dataclass(frozen=True)
-class StagedAppPaths:
+class LoadedAppPaths:
   app_id: AppID
   run_path: Path
 
@@ -114,12 +114,12 @@ class StagedAppPaths:
     return self.run_path / "compose.yml"
 
   @property
-  def staged_path(self) -> Path:
-    return self.run_path / "staged"
+  def bundle_path_in_run(self) -> Path:
+    return self.run_path / "app_bundle"
 
   @property
   def manifest_path(self) -> Path:
-    return self.staged_path / "manifest.toml"
+    return self.bundle_path_in_run / "manifest.toml"
 
 
 class KelsoCtx:
@@ -197,12 +197,12 @@ class KelsoCtx:
     app_id = str(app)
     return self.config.run_root / app_id
 
-  def staged_paths(self, app: AppID | str) -> StagedAppPaths:
+  def loaded_paths(self, app: AppID | str) -> LoadedAppPaths:
     app_id = AppID(app)
-    return StagedAppPaths(app_id, self.config.app_run_path(app_id))
+    return LoadedAppPaths(app_id, self.config.app_run_path(app_id))
 
   def bundle_path(self, app: AppID | str) -> Path:
-    """The catalog entry `stage` copies from. Exactly one, or an error."""
+    """The catalog entry `load` copies from. Exactly one, or an error."""
     entries = self.app_catalog().get(str(app), ())
     if len(entries) == 1:
       return entries[0].path
@@ -211,16 +211,16 @@ class KelsoCtx:
     else:
       raise ValueError(ambiguity_message(app, entries))
 
-  def is_staged(self, app: AppID | str) -> bool:
-    return self.staged_paths(app).exists()
+  def is_loaded(self, app: AppID | str) -> bool:
+    return self.loaded_paths(app).exists()
 
-  def staged_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The installed app's spec, or None when it is not installed.
+  def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
+    """The loaded app's spec, or None when it is not loaded.
 
     A manifest that no longer parses also reads as None, so one broken app cannot
     take a whole listing down.
     """
-    paths = self.staged_paths(app)
+    paths = self.loaded_paths(app)
     if not paths.manifest_path.is_file():
       return None
     try:
@@ -232,7 +232,7 @@ class KelsoCtx:
     """Where one app stands, from the filesystem alone."""
     app_id = str(app)
     return app_state(
-      run_dir_exists=self.staged_paths(app_id).run_path.is_dir(),
+      run_dir_exists=self.loaded_paths(app_id).run_path.is_dir(),
       config_exists=self.config.app_config_path(app_id).is_file(),
       volumes_exist=any(
         (root / app_id).is_dir() for root in self.config.volume_roots.values()
@@ -266,17 +266,17 @@ class KelsoCtx:
         )
     return {app_id: tuple(entries) for app_id, entries in found.items()}
 
-  def staged_origin(self, app: AppID | str) -> Path | None:
-    """The bundle an installed app was staged from, as `stage` recorded it."""
+  def loaded_origin(self, app: AppID | str) -> Path | None:
+    """The bundle an loaded app was loaded from, as `load` recorded it."""
     if not self.config.app_config_path(app).is_file():
       return None
     origin = self.app_store(app).get_meta("origin")
     return Path(origin) if origin else None
 
   def manifest_stale(self, app: AppID | str) -> bool:
-    """Whether the source bundle's manifest no longer matches the staged copy."""
-    paths = self.staged_paths(app)
-    origin = self.staged_origin(app)
+    """Whether the source bundle's manifest no longer matches the loaded copy."""
+    paths = self.loaded_paths(app)
+    origin = self.loaded_origin(app)
     if origin is None or not paths.manifest_path.is_file():
       return False
     source = origin / "manifest.toml"
@@ -303,15 +303,15 @@ class KelsoCtx:
       if len(entries) > 1
     }
 
-  def staged_app_ids(self) -> set[str]:
-    """Every app id with a staged copy under var/run/."""
+  def loaded_app_ids(self) -> set[str]:
+    """Every app id with a loaded copy under var/run/."""
     run_root = self.config.run_root
     if not run_root.is_dir():
       return set()
     found: set[str] = set()
     for entry in run_root.iterdir():
       try:
-        paths = StagedAppPaths(AppID(entry.name), entry)
+        paths = LoadedAppPaths(AppID(entry.name), entry)
       except ValueError:
         continue
       if paths.exists():
@@ -319,10 +319,10 @@ class KelsoCtx:
     return found
 
   def known_apps(self) -> list[AppID]:
-    # Staged apps stay resolvable by id even with no catalog entry, so an app
+    # Loaded apps stay resolvable by id even with no catalog entry, so an app
     # whose `apps/` folder was deleted can still be stopped and removed.
     ids = dict.fromkeys(self.app_catalog())
-    ids.update(dict.fromkeys(sorted(self.staged_app_ids())))
+    ids.update(dict.fromkeys(sorted(self.loaded_app_ids())))
     return [AppID(app_id) for app_id in ids]
 
   def resolve_app(self, query_app_id: str) -> AppID:
@@ -365,7 +365,7 @@ class KelsoCtx:
   def run_state(self, app_id: AppID | str) -> RunState:
     """ "Light" run-state of an app"""
     resolved = AppID(self._resolve_state_id(str(app_id)))
-    paths = self.staged_paths(resolved)
+    paths = self.loaded_paths(resolved)
     return RunState(
       app_id=resolved,
       run_path=paths.run_path,

@@ -1,7 +1,7 @@
 """Manifest bytes in, `AppSpec` out.
 
 `app_spec` is the whole path: parse the TOML, validate it against the app id,
-resolve it into an installation-independent definition. What a manifest *means*
+resolve it into a definition independent of any loaded copy. What a manifest *means*
 -- which defaults appear, how config interpolates into env, how a port string
 becomes a route -- was previously only observable through generated compose
 files in the CLI tests.
@@ -66,7 +66,7 @@ image = "alpine:latest"
 
 
 def test_config_stays_as_placeholders_on_the_spec(tmp_path):
-  """A spec is installation-independent; compose rewrites config later.
+  """A spec is independent of any loaded copy; compose rewrites config later.
 
   `${admin_user}` survives until `make_compose_dict`, which turns it into
   `${__KELSO_CONFIG__admin_user}` so the value (and secrets) never land in
@@ -99,7 +99,7 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
 
   assert spec.config["port"].has_default() is True
   assert spec.config["admin_pass"].secret is True
-  # A secret with a default is still generated per installation, never taken
+  # A secret with a default is still generated per loaded app, never taken
   # from the manifest -- so it does not count as having one.
   assert spec.config["mongo_pass"].default == "auto"
   assert spec.config["mongo_pass"].has_default() is False
@@ -286,7 +286,7 @@ volumes = { bin = "/opt/bin", app_config = "/config", media = "/media" }
   assert spec.volumes["media"].readonly is True
   assert spec.volumes["hostvol"].run_rel_path == "./volumes/host/hostvol"
 
-  # Declared but unmounted volumes still belong to the spec -- staging links
+  # Declared but unmounted volumes still belong to the spec -- loading links
   # them regardless of whether a run unit asked for one.
   assert set(spec.volumes) == {"bin", "app_config", "cache", "media", "hostvol"}
 

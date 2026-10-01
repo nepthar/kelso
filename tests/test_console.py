@@ -93,7 +93,7 @@ def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):
-  kelso_env.run("install", "basic-features")
+  kelso_env.run("load", "basic-features")
   result = kelso_env.run("shell", "basic-features")
   assert result.returncode == 1
   assert f"run `kelso start {APP}` first" in result.stderr
