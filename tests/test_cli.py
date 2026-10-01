@@ -1178,7 +1178,7 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
 # --- doctor ----------------------------------------------------------------
 
 
-def test_doctor_shows_where_volume_kinds_resolve(kelso_env):
+def test_doctor_reports_a_dangling_volume_root_and_lists_no_others(kelso_env):
   bulk = kelso_env.root.parent / "nas" / "bulk"
   bulk.mkdir(parents=True)
   (kelso_env.volumes_root / "bulk").symlink_to(bulk)
@@ -1186,10 +1186,14 @@ def test_doctor_shows_where_volume_kinds_resolve(kelso_env):
 
   result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
-  assert f"bulk:  {kelso_env.volumes_root / 'bulk'} -> {bulk}\n" in result.stdout
-  assert "(missing)" in result.stdout
   assert "volumes logs:" in result.stdout
-  assert f"data:  {kelso_env.volumes_root / 'data'}\n" in result.stdout
+  assert "bulk" not in result.stdout
+
+
+def test_doctor_says_only_that_all_is_well(kelso_env):
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 0, result.stdout
+  assert result.stdout == "No problems found\n"
 
 
 def test_doctor_reports_orphaned_routes(kelso_env):

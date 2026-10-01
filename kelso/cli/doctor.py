@@ -2,7 +2,6 @@ import argparse
 
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
 from kelso.lib.observations import AppObservation
-from kelso.lib.receipt import volume_root_lines
 
 
 def register(subparsers) -> None:
@@ -14,11 +13,6 @@ def register(subparsers) -> None:
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("doctor"):
-    print("Volume roots:")
-    for line in volume_root_lines(ctx.config):
-      print(f"  {line}")
-    print("")
-
     problems: list[str] = [*_volume_notes(ctx), *_catalog_notes(ctx)]
     for observation in ctx.observations():
       for note in _notes(observation, ctx):
