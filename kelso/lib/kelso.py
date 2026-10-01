@@ -34,6 +34,8 @@ LOCK_TIMEOUT = 5.0
 
 ACTIVITY_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
 ACTIVITY_LOG_HISTORY = 2000  # records
+METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
+METRICS_LOG_HISTORY = 50_000  # records, days of readings
 
 LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2  # 2 hours
 
@@ -137,8 +139,11 @@ class KelsoCtx:
       auto_compact_history=ACTIVITY_LOG_HISTORY,
     )
 
+    # Only kelsod's job thread writes this, so compacting in place is safe.
     self.metrics_log = LogTab(
       config.metrics_log,
+      auto_compact_size_bytes=METRICS_LOG_MAX_BYTES,
+      auto_compact_history=METRICS_LOG_HISTORY,
     )
 
   def _app_filelock(self, app: AppID | str) -> FileLock:
