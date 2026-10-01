@@ -119,13 +119,15 @@ def serve(
     return KelsoCtx(loaded)
 
   # Group 0 lives and dies with kelsod, started without waiting so nothing
-  # holds up the socket. Containers restart on failure but not at boot, so
-  # bringing up the rest of the box in start_order is kelsod's job too.
+  # holds up the socket. Containers restart on failure but not at boot, so if
+  # the box was up when kelsod last ran, bringing the rest back is kelsod's job.
   updown.logger.setLevel(logging.INFO)
-  updown.up(ctx_factory(), updown.KELSOD_GROUPS, wait=None)
+  ctx = ctx_factory()
+  updown.start_kelsod_group(ctx)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  jobs.submit("up", {}, ctx_factory())
+  if updown.was_up(ctx):
+    jobs.submit("up", {}, ctx)
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)
@@ -145,7 +147,7 @@ def serve(
     server.run(sockets=sockets)
   finally:
     socket_path.unlink(missing_ok=True)
-    updown.down(ctx_factory(), updown.KELSOD_GROUPS)
+    updown.stop_kelsod_group(ctx_factory())
 
 
 def build_parser() -> argparse.ArgumentParser:

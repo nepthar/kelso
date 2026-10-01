@@ -100,8 +100,8 @@ def test_kelsods_groups_come_up_and_go_down_with_it(kelso_env):
   kelso_env.run("config", "routes-demo", "--set", "start_order=0")
   ctx = KelsoCtx(load_config_file(kelso_env.config))
 
-  assert updown.up(ctx, updown.KELSOD_GROUPS, wait=None) == []
-  assert updown.down(ctx, updown.KELSOD_GROUPS) == []
+  assert updown.start_kelsod_group(ctx) == []
+  assert updown.stop_kelsod_group(ctx) == []
 
   assert _compose(kelso_env, "up") == ["routes-demo"]
   assert _compose(kelso_env, "down") == ["routes-demo"]
@@ -115,7 +115,7 @@ def test_up_without_waiting_does_not_ask_docker_whether_anything_is_ready(
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(kelso_env.docker_log.read_text().splitlines())
 
-  assert updown.up(ctx, updown.KELSOD_GROUPS, wait=None) == []
+  assert updown.start_kelsod_group(ctx) == []
 
   calls = kelso_env.docker_log.read_text().splitlines()[before:]
   assert json.loads(calls[-1])["args"][:2] == ["compose", "up"]
@@ -151,3 +151,24 @@ def test_down_records_its_own_action_so_up_does_not_skip(kelso_env):
 def test_what_counts_as_ready(state, status, settled, ready):
   unit = KelsoRunUnitStatus("a", "main", "id", "a-main-1", state, status)
   assert updown._unit_ready(unit, settled) is ready
+
+
+def test_the_box_remembers_whether_it_was_last_brought_up_or_down(kelso_env):
+  _install(kelso_env, "ports-demo")
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  assert not updown.was_up(ctx)
+
+  assert kelso_env.run("up").returncode == 0
+  assert updown.was_up(ctx)
+  assert kelso_env.run("down").returncode == 0
+  assert not updown.was_up(ctx)
+
+
+def test_kelsods_own_group_does_not_count_as_bringing_the_box_up(kelso_env):
+  _install(kelso_env, "routes-demo")
+  kelso_env.run("config", "routes-demo", "--set", "start_order=0")
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+
+  updown.start_kelsod_group(ctx)
+
+  assert not updown.was_up(ctx)
