@@ -119,15 +119,14 @@ def serve(
     return KelsoCtx(loaded)
 
   # Group 0 lives and dies with kelsod, started without waiting so nothing
-  # holds up the socket. Containers restart on failure but not at boot, so if
-  # the box was up when kelsod last ran, bringing the rest back is kelsod's job.
+  # holds up the socket. Containers restart on failure but not at boot, so
+  # bringing back whatever else was running is kelsod's job too.
   updown.logger.setLevel(logging.INFO)
   ctx = ctx_factory()
   updown.start_kelsod_group(ctx)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  if updown.was_up(ctx):
-    jobs.submit("up", {}, ctx)
+  jobs.submit("up", {"resume": "yes"}, ctx)
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)

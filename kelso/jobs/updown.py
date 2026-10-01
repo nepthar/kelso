@@ -6,7 +6,7 @@ from kelso.lib.lifecycle.updown import DEFAULT_WAIT, down, up
 class UpJob(Job):
   name = "up"
   description = "Start every installed app in start_order groups 1 to 9"
-  optional_args = ("timeout",)
+  optional_args = ("timeout", "resume")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
     raw = kwargs.get("timeout", "")
@@ -14,9 +14,10 @@ class UpJob(Job):
       self.wait = float(raw) if raw else DEFAULT_WAIT
     except ValueError:
       raise ValueError(f"timeout {raw!r} is not a number of seconds") from None
+    self.resume = self._bool_arg(kwargs, "resume")
 
   def run(self, ctx: KelsoCtx) -> None:
-    _finish(up(ctx, wait=self.wait))
+    _finish(up(ctx, wait=self.wait, resume=self.resume))
 
 
 class DownJob(Job):

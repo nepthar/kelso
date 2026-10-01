@@ -5,10 +5,10 @@ healthy where a container's image has a healthcheck, and otherwise still
 running `SETTLE` seconds in. A group that is not ready in time is reported and
 the next one starts anyway.
 
-`up` and `down` act on groups 1-9 and record which was last, so kelsod can
-bring the box back up after a restart only if it was up. Group 0 belongs to
-kelsod: it starts it, without waiting, as it starts, and takes it down as it
-exits. Progress is logged to `kelso.lifecycle.updown`.
+`up` and `down` act on groups 1-9. When kelsod starts it resumes them: the
+same ordered start, but only of apps whose last action was "started", so
+whatever was running before a restart runs again. Group 0 belongs to kelsod:
+it starts it, without waiting, as it starts, and takes it down as it exits. Progress is logged to `kelso.lifecycle.updown`.
 """
 
 import time
@@ -29,7 +29,6 @@ KELSOD_GROUPS = range(0, 1)
 BOX_GROUPS = range(1, 10)
 # What `down` records for each app, so the `up` after it starts them again.
 DOWN_ACTION = "down"
-_BOX_STATUS = "box/status"
 
 
 def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[AppID]]]:
@@ -54,22 +53,17 @@ def _start_order(app: AppID, ctx: KelsoCtx) -> int:
   return int(value or APP_OPTIONS["start_order"].default(app))
 
 
-def up(ctx: KelsoCtx, *, wait: float = DEFAULT_WAIT) -> list[str]:
-  """Bring up groups 1-9 in order and record it; what went wrong."""
-  ctx.activity_log.write(_BOX_STATUS, "up")
-  return _up(ctx, BOX_GROUPS, wait)
+def up(ctx: KelsoCtx, *, wait: float = DEFAULT_WAIT, resume: bool = False) -> list[str]:
+  """Bring up groups 1-9 in order; what went wrong.
+
+  With `resume`, only apps whose last action was "started".
+  """
+  return _up(ctx, BOX_GROUPS, wait, resume=resume)
 
 
 def down(ctx: KelsoCtx) -> list[str]:
-  """Take down groups 9-1 in order and record it; what went wrong."""
-  ctx.activity_log.write(_BOX_STATUS, "down")
+  """Take down groups 9-1 in order; what went wrong."""
   return _down(ctx, BOX_GROUPS)
-
-
-def was_up(ctx: KelsoCtx) -> bool:
-  """Whether `up` came after the last `down`."""
-  entry = ctx.activity_log.read(_BOX_STATUS)
-  return entry is not None and entry.value == "up"
 
 
 def start_kelsod_group(ctx: KelsoCtx) -> list[str]:
@@ -81,7 +75,9 @@ def stop_kelsod_group(ctx: KelsoCtx) -> list[str]:
   return _down(ctx, KELSOD_GROUPS)
 
 
-def _up(ctx: KelsoCtx, groups: Iterable[int], wait: float | None) -> list[str]:
+def _up(
+  ctx: KelsoCtx, groups: Iterable[int], wait: float | None, *, resume: bool = False
+) -> list[str]:
   """Start the groups' apps, except those stopped on purpose; what went wrong.
 
   With `wait` None, a group's apps are started and nothing waits for them.
@@ -91,8 +87,12 @@ def _up(ctx: KelsoCtx, groups: Iterable[int], wait: float | None) -> list[str]:
     logger.info("Starting run group %s", start_group_name(order))
     waiting = []
     for app in apps:
-      if read_last_app_action(app, ctx) == "stopped":
+      last = read_last_app_action(app, ctx)
+      if last == "stopped":
         logger.info("  %s: stopped with `kelso stop`, left stopped", app)
+        continue
+      if resume and last != "started":
+        logger.info("  %s: not running before, left alone", app)
         continue
       try:
         with ctx.locked(f"up {app}", app):

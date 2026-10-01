@@ -153,22 +153,16 @@ def test_what_counts_as_ready(state, status, settled, ready):
   assert updown._unit_ready(unit, settled) is ready
 
 
-def test_the_box_remembers_whether_it_was_last_brought_up_or_down(kelso_env):
-  _install(kelso_env, "ports-demo")
+def test_resume_brings_back_only_what_was_running(kelso_env):
+  _install(kelso_env, "ports-demo", "routes-demo", "io.p2net.basic-features")
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  assert kelso_env.run("start", "routes-demo").returncode == 0
+  assert kelso_env.run("stop", "routes-demo").returncode == 0
+  # A reboot: the containers are gone, the recorded last actions are not.
+  kelso_env.docker_state.unlink()
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert not updown.was_up(ctx)
+  before = len(_compose(kelso_env, "up"))
 
-  assert kelso_env.run("up").returncode == 0
-  assert updown.was_up(ctx)
-  assert kelso_env.run("down").returncode == 0
-  assert not updown.was_up(ctx)
+  assert updown.up(ctx, resume=True) == []
 
-
-def test_kelsods_own_group_does_not_count_as_bringing_the_box_up(kelso_env):
-  _install(kelso_env, "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_order=0")
-  ctx = KelsoCtx(load_config_file(kelso_env.config))
-
-  updown.start_kelsod_group(ctx)
-
-  assert not updown.was_up(ctx)
+  assert _compose(kelso_env, "up")[before:] == ["ports-demo"]
