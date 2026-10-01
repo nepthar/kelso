@@ -19,7 +19,7 @@ from kelso.lib.apps import AppID, read_last_app_action
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import start, stop
-from kelso.lib.options import APP_OPTIONS, start_group_name
+from kelso.lib.options import start_group_name
 
 logger = getLogger("kelso.lifecycle.updown")
 
@@ -44,13 +44,9 @@ def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[Ap
 
 
 def _start_order(app: AppID, ctx: KelsoCtx) -> int:
-  _, value = ctx.app_store(app).get_config("start_order")
-  if value is None:
-    spec = ctx.loaded_spec(app)
-    value = spec.config["start_order"].default if spec else None
   # A bundle may make start_order required; unset, it waits with the default
   # group, and `start` is what says it needs setting.
-  return int(value or APP_OPTIONS["start_order"].default(app))
+  return int(ctx.app_option(app, "start_order"))
 
 
 def up(ctx: KelsoCtx, *, wait: float = DEFAULT_WAIT, resume: bool = False) -> list[str]:

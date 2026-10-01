@@ -98,11 +98,6 @@ def _app_warnings(observation: AppObservation) -> list[str]:
   notes = []
   if 0 < observation.running_count < len(observation.containers):
     notes.append("mixed container states")
-  if (
-    observation.db_present
-    and observation.bundle_path is None
-    and not observation.run_dir_exists
-    and not observation.containers
-  ):
-    notes.append("orphaned route allocation")
+  if observation.orphaned_routes:
+    notes.append("orphaned route allocation; `kelso cleanup` releases it")
   return notes

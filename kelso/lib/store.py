@@ -14,7 +14,7 @@ logger = logging.getLogger("kelso.store")
 
 PORT_RANGE_SIZE = 1000
 
-STORE_MAX_BYTES = 1 * 1024 * 1024  # 10mb
+STORE_MAX_BYTES = 1 * 1024 * 1024  # 1mb
 
 
 class ConfigStore(Protocol):

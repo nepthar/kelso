@@ -23,6 +23,7 @@ from kelso.lib.observations import (
   app_state,
   collect_observations,
 )
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore, KelsoStore
 
@@ -218,6 +219,14 @@ class KelsoCtx:
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
+
+  def app_option(self, app: AppID | str, name: str) -> str:
+    """An app option: as configured, else the manifest's default, else kelso's."""
+    _, value = self.app_store(app).get_config(name)
+    if value is None:
+      spec = self.loaded_spec(app)
+      value = spec.config[name].default if spec else None
+    return value or APP_OPTIONS[name].default(AppID(app))
 
   def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
     """The loaded app's spec, or None when it is not loaded.

@@ -108,6 +108,50 @@ def load_kelso_run_unit_status() -> dict[str, tuple[KelsoRunUnitStatus, ...]]:
   return {app_id: tuple(app_units) for app_id, app_units in statuses.items()}
 
 
+@dataclass(frozen=True)
+class DockerImage:
+  id: str
+  # Every repo:tag naming it; empty for a dangling image.
+  refs: tuple[str, ...]
+  size: int
+
+
+_SIZE_UNITS = {"B": 1, "kB": 10**3, "KB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12}
+
+
+def _size_bytes(human: str) -> int:
+  """docker's decimal `Size` column, e.g. "187MB", as bytes."""
+  number = human.rstrip("kKMGTB")
+  return int(float(number or 0) * _SIZE_UNITS.get(human[len(number) :], 1))
+
+
+def list_images() -> list[DockerImage]:
+  """Every local image, one entry per image id."""
+  refs: dict[str, list[str]] = {}
+  sizes: dict[str, int] = {}
+  for row in docker_run_command(["image", "ls"]).data:
+    image_id = row.get("ID", "")
+    repo, tag = row.get("Repository", ""), row.get("Tag", "")
+    refs.setdefault(image_id, [])
+    if "<none>" not in (repo, tag):
+      refs[image_id].append(f"{repo}:{tag}")
+    sizes[image_id] = _size_bytes(row.get("Size", ""))
+  return [DockerImage(i, tuple(refs[i]), sizes[i]) for i in refs]
+
+
+def container_images() -> set[str]:
+  """The image each container, kelso's or not, was created from, as docker shows it."""
+  return {row.get("Image", "") for row in docker_run_command(["ps", "-a"]).data}
+
+
+def remove_image(image: DockerImage) -> None:
+  """Delete an image by every name it has. Raises DockerError if docker refuses."""
+  cmd = ["image", "rm", *(image.refs or (image.id,))]
+  result = subprocess.run([DOCKER, *cmd], capture_output=True, text=True)
+  if result.returncode != 0:
+    raise DockerError(cmd, result.returncode, result.stderr)
+
+
 class DockerError(RuntimeError):
   """A docker invocation exited non-zero."""
 

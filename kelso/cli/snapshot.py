@@ -3,6 +3,7 @@ import argparse
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   RestorePlan,
+  prune_snapshots,
   resolve_snapshot_app,
   restore,
   restore_plan,
@@ -68,6 +69,7 @@ def run_take(args: argparse.Namespace, ctx: KelsoCtx) -> None:
         stop(app, ctx)
     try:
       path = snapshot(app, ctx, label=args.label)
+      prune_snapshots(app, ctx)
     finally:
       if running:
         with ctx.kelso_lock(by):
