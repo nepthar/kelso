@@ -8,6 +8,8 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+import psutil
+
 from kelso.lib import activity
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle, manifest_text
@@ -18,7 +20,7 @@ from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
 from kelso.lib.lifecycle.volumes import volumes_on_disk
-from kelso.lib.metric import KELSO_DIRS
+from kelso.lib.metric import KELSO_DIRS, filesystem_of
 from kelso.lib.observations import AppObservation, observe
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
@@ -243,6 +245,33 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
     }
     for entry in KELSO_DIRS
   ]
+
+
+def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
+  """Each volume root's recorded size, and the filesystem it shares."""
+  gauges = ctx.read_gauges("volume_root_size_bytes/")
+  roots = []
+  for kind, root in sorted(ctx.config.volume_roots.items()):
+    row: dict[str, Any] = {
+      "kind": kind,
+      "path": str(root),
+      "bytes": _gauge_bytes(gauges, f"volume_root_size_bytes/{kind}"),
+      "device": None,
+      "mountpoint": None,
+      "used": None,
+      "available": None,
+    }
+    filesystem = filesystem_of(root)
+    if filesystem is not None:
+      usage = psutil.disk_usage(str(root))
+      row |= {
+        "device": filesystem[0],
+        "mountpoint": str(filesystem[1]),
+        "used": usage.used,
+        "available": usage.free,
+      }
+    roots.append(row)
+  return roots
 
 
 def snapshots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:

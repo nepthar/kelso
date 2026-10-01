@@ -71,7 +71,8 @@ from kelso.lib.spec import AppSpec
 #     app states are loaded/unloaded/available.
 # 27: rm takes `tier` (temp, data, purge) in place of `purge`.
 # 28: /volumes carry `use` (in use/idle/unloaded/orphaned/unknown) in place of
-#     `in_use` and `declared`; DELETE /volumes/{app_id}/{name} (orphans only).
+#     `in_use` and `declared`; DELETE /volumes/{app_id}/{name} (orphans only);
+#     /volumes carries `volume_roots` (size, device, used, available).
 API_VERSION = 28
 
 CtxFactory = Callable[[], KelsoCtx]
@@ -283,6 +284,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     return {
       "volumes": views.volumes_view(ctx),
       "kelso_dirs": views.kelso_dirs_view(ctx),
+      "volume_roots": views.volume_roots_view(ctx),
     }
 
   @app.delete("/volumes/{app_id}/{name}", tags=["volumes"])

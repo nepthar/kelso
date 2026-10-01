@@ -80,17 +80,21 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
   for kind, root in ctx.config.volume_roots.items():
     if not root.is_dir():
       continue
+    total = 0
     for app_dir in root.iterdir():
       if not app_dir.is_dir():
         continue
       for volume_dir in app_dir.iterdir():
         if not volume_dir.is_dir():
           continue
+        size = path_size(volume_dir)
         ctx.record_gauge(
-          f"volume_size_bytes/{app_dir.name}/{kind}/{volume_dir.name}",
-          path_size(volume_dir),
+          f"volume_size_bytes/{app_dir.name}/{kind}/{volume_dir.name}", size
         )
+        total += size
         n += 1
+    ctx.record_gauge(f"volume_root_size_bytes/{kind}", total)
+    n += 1
   # `app` volumes are not under a volume root: they are the loaded bundle's own
   # files, symlinked into `var/run/<app>/volumes/app/`. Gauged here so that every
   # volume a manifest declares has a size a reader can look up, rather than the
@@ -176,6 +180,28 @@ def mounted_disks() -> list[tuple[str, Path]]:
     if name not in seen:
       seen[name] = Path(part.mountpoint)
   return list(seen.items()) or [("root", Path("/"))]
+
+
+def filesystem_of(path: Path) -> tuple[str, Path] | None:
+  """`(device, mountpoint)` of the filesystem holding `path`, or None if missing."""
+  try:
+    device = path.stat().st_dev
+  except OSError:
+    return None
+  matches = []
+  for part in psutil.disk_partitions(all=True):
+    try:
+      if Path(part.mountpoint).stat().st_dev == device:
+        matches.append(part)
+    except OSError:
+      continue
+  if not matches:
+    return None
+  # By device id, since a path prefix can lie (macOS firmlinks /Users onto the
+  # data volume). APFS also gives `/` the data volume's id; the deeper mount is
+  # the real one.
+  part = max(matches, key=lambda p: len(p.mountpoint))
+  return part.device, Path(part.mountpoint)
 
 
 def drive_used_ratio(mount: Path) -> float | None:

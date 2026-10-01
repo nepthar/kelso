@@ -803,6 +803,12 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
   assert dirs["repos"]["bytes"] > 0
   media = {v["tag"]: v for v in client.get("/host-volumes").json()["host_volumes"]}
   assert media["media"]["bytes"] == 4
+  roots = {r["kind"]: r for r in body["volume_roots"]}
+  assert set(roots) == {"bulk", "data", "logs", "temp"}
+  assert roots["data"]["bytes"] == 2
+  assert roots["data"]["device"]
+  assert roots["data"]["used"] > 0
+  assert roots["data"]["available"] > 0
 
 
 def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):

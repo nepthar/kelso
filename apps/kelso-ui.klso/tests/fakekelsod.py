@@ -337,6 +337,26 @@ VOLUMES = {
   "kelso_dirs": [
     {"name": "run", "description": f"Loaded apps {EVIL}", "bytes": 1024**3},
   ],
+  "volume_roots": [
+    {
+      "kind": "data",
+      "path": "/k/volumes/data",
+      "bytes": 25,
+      "device": f"/dev/sda1 {EVIL}",
+      "mountpoint": "/",
+      "used": 75,
+      "available": 25,
+    },
+    {
+      "kind": "bulk",
+      "path": "/mnt/gone",
+      "bytes": None,
+      "device": None,
+      "mountpoint": None,
+      "used": None,
+      "available": None,
+    },
+  ],
 }
 
 HOST_VOLUMES = {

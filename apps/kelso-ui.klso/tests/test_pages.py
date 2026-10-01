@@ -258,3 +258,13 @@ def test_only_an_orphaned_volume_is_flagged_and_deletable(client, fake):
   assert 'value="delete-volume"' in orphaned[0]
   assert 'name="app_id" value="mealie"' in orphaned[0]
   assert not [row for row in rows if row not in orphaned and "delete-volume" in row]
+
+
+def test_volume_disks_split_the_disk_into_volume_other_and_free(client, fake):
+  text = client.get("/volumes").text
+  section = text.split("<h2>Volume disks</h2>")[1].split("<h2>")[0]
+  data, bulk = section.split("<tr>")[2:4]
+  assert '<rect class="mine" x="0" width="25.0"' in data
+  assert '<rect class="other" x="25.0" width="50.0"' in data
+  assert "/dev/sda1" in data
+  assert "path is missing" in bulk

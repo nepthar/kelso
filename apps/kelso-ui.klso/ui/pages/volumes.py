@@ -25,6 +25,7 @@ def volumes(page: PageDep):
     host_volumes=api("/host-volumes")["host_volumes"],
     volumes=by_size,
     kelso_dirs=managed.get("kelso_dirs") or [],
+    volume_roots=managed.get("volume_roots") or [],
   )
 
 
