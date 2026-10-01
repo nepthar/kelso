@@ -54,7 +54,7 @@ def _incomplete(scratch: Path, message: str) -> RuntimeError:
   return RuntimeError(
     f"{message}\n"
     f"Incomplete snapshot left at {scratch}; "
-    f"remove it with `rm -rf {scratch}` before retrying."
+    f"remove it with `kelso cleanup --apply` before retrying."
   )
 
 
@@ -112,7 +112,7 @@ def extract_snapshot(archive: Path) -> Path:
   if folder.exists():
     raise ValueError(
       f"Incomplete snapshot extract left at {folder}; "
-      f"remove it with `rm -rf {folder}` before retrying."
+      f"remove it with `kelso cleanup --apply` before retrying."
     )
   try:
     _tar_extract(archive, archive.parent)
@@ -177,14 +177,14 @@ def snapshot(
   if snapshot_folder.exists():
     raise ValueError(
       f"Incomplete snapshot left at {snapshot_folder}; "
-      f"remove it with `rm -rf {snapshot_folder}` before retrying."
+      f"remove it with `kelso cleanup --apply` before retrying."
     )
 
   scratch = ctx.config.temp_root / "current_snapshot"
   if scratch.exists():
     raise ValueError(
       f"Incomplete snapshot left at {scratch}; "
-      f"remove it with `rm -rf {scratch}` before retrying."
+      f"remove it with `kelso cleanup --apply` before retrying."
     )
 
   scratch.mkdir(parents=True, mode=0o700)
@@ -259,7 +259,7 @@ def snapshot(
     raise RuntimeError(
       f"{e}\n"
       f"Uncompressed snapshot left at {snapshot_folder}; "
-      f"remove it with `rm -rf {snapshot_folder}` before retrying."
+      f"remove it with `kelso cleanup --apply` before retrying."
     ) from e
 
   return archive
