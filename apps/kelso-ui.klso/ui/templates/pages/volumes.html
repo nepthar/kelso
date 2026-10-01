@@ -48,15 +48,22 @@
 <p class="empty">No app volumes on disk yet.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>Volume</th><th>App</th><th>Kind</th><th>Use</th><th>Size</th>
+  <th>Volume</th><th>App</th><th>Kind</th><th>Use</th><th>Size</th><th class="act"></th>
 </tr></thead><tbody>
 {% for v in volumes %}
+{% set orphaned = v.use == 'orphaned' %}
 <tr>
-  <td class="name">{{ v.name }}{% if not v.declared %}{{ sub('not in the manifest') }}{% endif %}</td>
+  <td class="name">{{ v.name }}{% if orphaned %}{{ sub('not in the manifest') }}{% endif %}</td>
   <td class="muted">{{ v.app_id }}</td>
   <td class="muted">{{ v.kind }}</td>
-  <td>{{ pill('in use', 'running') if v.in_use else pill('idle') }}</td>
+  <td>{{ pill(v.use, {'in use': 'running', 'orphaned': 'bad'}.get(v.use, '')) }}</td>
   <td class="muted">{{ v.get('bytes')|size }}</td>
+  <td class="act">{% if orphaned %}<form method="post" action="/volumes" data-confirm="Are you sure you want to delete the orphaned volume {{ v.name }} of {{ v.app_id }}? Everything in it is deleted, and this cannot be undone.">
+    <input type="hidden" name="action" value="delete-volume">
+    <input type="hidden" name="app_id" value="{{ v.app_id }}">
+    <input type="hidden" name="name" value="{{ v.name }}">
+    {{- icon_button('delete', 'delete-outline', submit=true, danger=true) -}}
+  </form>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>

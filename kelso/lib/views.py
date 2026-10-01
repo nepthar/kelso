@@ -17,6 +17,7 @@ from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
+from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS
 from kelso.lib.observations import AppObservation, observe
 from kelso.lib.receipt import published_route_urls
@@ -183,44 +184,18 @@ def _gauge_bytes(gauges: dict[str, Any], name: str) -> int | None:
 
 def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every kelso-managed volume on disk, whatever declared it."""
-  running = {
-    observation.app_id
-    for observation in ctx.observations()
-    if observation.running_count
-  }
-  declared: dict[str, set[str]] = {}
-  volumes = []
   gauges = ctx.read_gauges("volume_size_bytes/")
-
-  for kind, root in sorted(ctx.config.volume_roots.items()):
-    if not root.is_dir():
-      continue
-    for app_dir in sorted(root.iterdir()):
-      if not app_dir.is_dir():
-        continue
-      app_id = app_dir.name
-      if app_id not in declared:
-        spec = ctx.loaded_spec(app_id)
-        declared[app_id] = set(spec.volumes) if spec else set()
-      for volume_dir in sorted(app_dir.iterdir()):
-        if not volume_dir.is_dir():
-          continue
-        volumes.append(
-          {
-            "app_id": app_id,
-            "name": volume_dir.name,
-            "kind": kind,
-            "path": str(volume_dir),
-            "in_use": app_id in running,
-            # False means the data outlived whatever declared it: either the
-            # app is gone, or its manifest stopped naming this volume.
-            "declared": volume_dir.name in declared[app_id],
-            "bytes": _gauge_bytes(
-              gauges, f"volume_size_bytes/{app_id}/{kind}/{volume_dir.name}"
-            ),
-          }
-        )
-  return volumes
+  return [
+    {
+      "app_id": str(v.app_id),
+      "name": v.name,
+      "kind": v.kind,
+      "path": str(v.path),
+      "use": v.use,
+      "bytes": _gauge_bytes(gauges, f"volume_size_bytes/{v.app_id}/{v.kind}/{v.name}"),
+    }
+    for v in volumes_on_disk(ctx)
+  ]
 
 
 def host_volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:

@@ -244,6 +244,17 @@ def test_config_form(client, fake):
 def test_app_volumes_biggest_first(client, fake):
   text = client.get("/volumes").text
   table = text.split("<h2>App volumes</h2>")[1].split("<h2>")[0]
-  sizes = re.findall(r'<td class="muted">([^<]*)</td>\s*</tr>', table)
+  sizes = re.findall(r'<td class="muted">([^<]*)</td>\s*<td class="act">', table)
   # 601653 B, 864 B, 0 B, then the one not measured yet.
   assert sizes == ["587.6 KB", "864.0 B", "0.0 B", "—"]
+
+
+def test_only_an_orphaned_volume_is_flagged_and_deletable(client, fake):
+  table = client.get("/volumes").text.split("<h2>App volumes</h2>")[1].split("<h2>")[0]
+  rows = table.split("<tr>")[2:]
+  orphaned = [row for row in rows if "orphaned" in row]
+  assert len(orphaned) == 1
+  assert 'class="dot bad"' in orphaned[0]
+  assert 'value="delete-volume"' in orphaned[0]
+  assert 'name="app_id" value="mealie"' in orphaned[0]
+  assert not [row for row in rows if row not in orphaned and "delete-volume" in row]

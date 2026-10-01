@@ -38,6 +38,7 @@ from kelso.lib.configflow.route_provider import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
+from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
 
 # Bumped when a response shape changes in a way a client would notice. The web
@@ -69,7 +70,9 @@ from kelso.lib.spec import AppSpec
 # 26: install/uninstall are load/unload, reset is gone and rm is a job verb;
 #     app states are loaded/unloaded/available.
 # 27: rm takes `tier` (temp, data, purge) in place of `purge`.
-API_VERSION = 27
+# 28: /volumes carry `use` (in use/idle/unloaded/orphaned/unknown) in place of
+#     `in_use` and `declared`; DELETE /volumes/{app_id}/{name} (orphans only).
+API_VERSION = 28
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -281,6 +284,17 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       "volumes": views.volumes_view(ctx),
       "kelso_dirs": views.kelso_dirs_view(ctx),
     }
+
+  @app.delete("/volumes/{app_id}/{name}", tags=["volumes"])
+  def delete_orphaned_volume(app_id: str, name: str, ctx: Ctx) -> dict:
+    """Delete a volume the app's manifest no longer names; nothing else."""
+    try:
+      app = AppID(app_id)
+      with ctx.locked(f"volume rm {app} {name}", app):
+        remove_orphaned_volume(app, name, ctx)
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(400, str(e)) from e
+    return {"volumes": views.volumes_view(ctx)}
 
   @app.get("/host-volumes", tags=["host volumes"])
   def list_host_volumes(ctx: Ctx) -> dict:
