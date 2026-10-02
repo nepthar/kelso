@@ -131,7 +131,7 @@
     else if (days < 30) span = days + "d";
     else return then.toLocaleDateString(undefined,
       { year: "numeric", month: "short", day: "numeric" });
-    return future ? span + " from now" : span + " ago";
+    return future ? "in " + span : span + " ago";
   }
   document.querySelectorAll("time[datetime]").forEach(function (el) {
     var then = new Date(el.getAttribute("datetime"));

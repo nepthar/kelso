@@ -10,6 +10,7 @@ is best effort.
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TextIO
 
 from filelock import FileLock, Timeout
@@ -17,7 +18,7 @@ from filelock import FileLock, Timeout
 from kelso.lib.activity import Activity
 from kelso.lib.apps import AppID
 from kelso.lib.cronexpr import CronSchedule
-from kelso.lib.kelso import KelsoCtx
+from kelso.lib.kelso import KelsoCtx, write_lock_holder
 from kelso.lib.lifecycle._common import logger
 from kelso.lib.lifecycle.run import run_command
 
@@ -78,14 +79,16 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
   return sorted(runs, key=lambda run: (run.next_at, run.app_id, run.name))
 
 
-def tick(ctx: KelsoCtx, *, echo: TextIO | None = None) -> list[CronRun] | None:
+def tick(ctx: KelsoCtx, *, by: str, echo: TextIO | None = None) -> list[CronRun] | None:
   """Run every due job of a running app, in turn. None if a tick is already running."""
-  lock = FileLock(ctx.config.lock_root / "cron.lock")
+  path = cron_lock_path(ctx)
+  lock = FileLock(path)
   try:
     lock.acquire(timeout=0)
   except Timeout:
     return None
   try:
+    write_lock_holder(path, by)
     now = datetime.now(UTC)
     ran = []
     for run in cron_runs(ctx):
@@ -99,6 +102,10 @@ def tick(ctx: KelsoCtx, *, echo: TextIO | None = None) -> list[CronRun] | None:
     return ran
   finally:
     lock.release()
+
+
+def cron_lock_path(ctx: KelsoCtx) -> Path:
+  return ctx.config.lock_root / "cron.lock"
 
 
 def _run(run: CronRun, ctx: KelsoCtx, echo: TextIO | None) -> None:

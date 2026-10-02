@@ -243,6 +243,9 @@ class CommandEntry(BaseModel):
   desc: str = ""
 
 
+MAX_CRON_TIMEOUT = 30 * 60
+
+
 class CronEntry(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
@@ -252,7 +255,17 @@ class CronEntry(BaseModel):
   command: Identifier
   args: str = ""
   # Seconds before kelso stops waiting and records the run as failed.
-  timeout: int = Field(default=3600, gt=0)
+  timeout: int = 600
+
+  @field_validator("timeout")
+  @classmethod
+  def check_timeout(cls, value: int) -> int:
+    if not 0 < value <= MAX_CRON_TIMEOUT:
+      raise ValueError(
+        f"must be 1 to {MAX_CRON_TIMEOUT} seconds; a job that needs longer "
+        f"belongs in a background process in the app itself"
+      )
+    return value
 
 
 class Manifest(BaseModel):

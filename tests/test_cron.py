@@ -13,7 +13,8 @@ from kelso.jobs import JobRunner
 from kelso.lib import activity
 from kelso.lib.config import load_config
 from kelso.lib.cronexpr import CronSchedule
-from kelso.lib.kelso import KelsoCtx
+from kelso.lib.kelso import KelsoCtx, write_lock_holder
+from kelso.lib.lifecycle.cron import cron_lock_path
 
 APP = "cron-demo"
 
@@ -111,6 +112,10 @@ def test_in_words_switches_units_past_two_of_the_next(seconds, words):
     ('nope = { schedule = "* * * * *", command = "missing" }', "not declared"),
     ('nope = { schedule = "0 0 30 2 *", command = "hello" }', "never matches"),
     ('nope = { schedule = "* * * * *", command = "hello", args = "\'" }', "args"),
+    (
+      'nope = { schedule = "* * * * *", command = "hello", timeout = 1801 }',
+      "background process",
+    ),
   ],
 )
 def test_a_cron_entry_is_checked_against_the_manifest(kelso_env, cron, message):
@@ -164,14 +169,18 @@ def test_a_job_never_run_counts_from_when_its_app_was_loaded(kelso_env):
   assert row.split()[2] == "in"
 
 
-def test_a_tick_does_nothing_while_another_holds_the_cron_lock(kelso_env):
+def test_a_tick_refuses_and_names_whoever_holds_the_cron_lock(kelso_env):
   a_cron_app(kelso_env)
   assert kelso_env.run("start", APP).returncode == 0
   last_ran_long_ago()
 
-  with FileLock(ctx().config.lock_root / "cron.lock"):
+  path = cron_lock_path(ctx())
+  with FileLock(path):
+    write_lock_holder(path, "cron tick (kelsod)")
     ticked = kelso_env.run("cron", "tick")
-  assert ticked.stdout == "A cron tick is already running; nothing was started.\n"
+  assert ticked.returncode == 1
+  assert "A cron tick is already running" in ticked.stderr
+  assert "Held by `kelso cron tick (kelsod)`" in ticked.stderr
   assert activity.list_runs(ctx(), verb="cron") == []
 
 

@@ -153,9 +153,9 @@ class JobRunner:
 
   def _cron_tick(self) -> None:
     try:
-      tick(self._ctx_factory())
-    except Exception:  # noqa: BLE001 - a failed tick must not kill the thread
-      logger.exception("cron tick failed")
+      tick(self._ctx_factory(), by="cron tick (kelsod)")
+    except Exception as e:  # noqa: BLE001 - a failed tick must not kill the thread
+      logger.exception("cron tick failed: %s", e)
 
   def _submit_scheduled(self, verb: str) -> None:
     if self._busy_with(verb):
