@@ -20,6 +20,7 @@ from kelso.cli import (
   shell,
   snapshot,
   start,
+  status,
   stop,
   system,
   updown,
@@ -32,6 +33,7 @@ logger = logging.getLogger("kelso.cli")
 
 COMMANDS = [
   updown,
+  status,
   cleanup,
   ps,
   start,
@@ -69,6 +71,7 @@ Apps
   dev         Run an app bundle in this terminal
 
 This box
+  status      Show the host, apps, routes, and storage at a glance
   up          Start all apps in start_order groups
   down        Stop all apps in start_order groups
   cleanup     List what kelso no longer needs; --apply deletes it

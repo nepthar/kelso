@@ -268,3 +268,8 @@ def test_volume_disks_split_the_disk_into_volume_other_and_free(client, fake):
   assert '<rect class="other" x="25.0" width="50.0"' in data
   assert "/dev/sda1" in data
   assert "path is missing" in bulk
+
+
+def test_snapshots_page_totals_every_archive(client, fake):
+  # 4851 B plus one archive with no size, which counts as nothing.
+  assert "Application snapshots · 4.7 KB in total" in client.get("/snapshots").text

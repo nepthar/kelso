@@ -1819,3 +1819,41 @@ def test_system_volumes_says_which_volume_is_orphaned(kelso_env):
   assert listed.returncode == 0, listed.stderr
   uses = {line.split()[1]: line.split()[3] for line in listed.stdout.splitlines()[2:]}
   assert uses == {"config": "idle", "cache": "idle", "retired": "orphaned"}
+
+
+def test_inspect_says_each_volumes_kind_and_when_nothing_runs(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+
+  inspected = kelso_env.run("inspect", BASIC)
+  assert inspected.returncode == 0, inspected.stderr
+  assert "State:       not running" in inspected.stdout
+  assert "bin (app, read-only): " in inspected.stdout
+  assert f"config (data): {kelso_env.volumes_root / 'data' / BASIC / 'config'}" in (
+    inspected.stdout
+  )
+
+
+def test_status_shows_each_section(kelso_env):
+  assert kelso_env.run("start", BASIC, "--set", "admin_user=root").returncode == 0
+
+  shown = kelso_env.run("status")
+  assert shown.returncode == 0, shown.stderr
+  sections = [block.splitlines()[0] for block in shown.stdout.split("\n\n")]
+  assert sections[1:] == [
+    "Apps",
+    "Routes",
+    "Volumes",
+    "Snapshots  0, 0.0 B in total",
+    "Doctor     0 problems, 0 warnings",
+  ]
+  apps = shown.stdout.split("\n\n")[1]
+  assert any(
+    line.split()[:3] == [BASIC, "running", "1/1"] for line in apps.splitlines()
+  )
+  volumes = shown.stdout.split("\n\n")[3]
+  assert [line.split()[0] for line in volumes.splitlines()[3:]] == [
+    "bulk",
+    "data",
+    "logs",
+    "temp",
+  ]

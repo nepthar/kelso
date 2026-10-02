@@ -2,7 +2,7 @@
 {% from "macros.html" import job_button, when %}
 
 {% block content %}
-<p class="lede">Application snapshots</p>
+<p class="lede">Application snapshots{% if snapshots %} · {{ total_bytes|size }} in total{% endif %}</p>
 <div class="card">
 {% if not snapshots %}
 <p class="empty">No snapshots yet. Take one from an app's page.</p>

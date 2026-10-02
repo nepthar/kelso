@@ -9,6 +9,10 @@ router = APIRouter()
 
 @router.get("/snapshots")
 def snapshots(page: PageDep):
+  snapshots = api("/snapshots")["snapshots"]
   return page.render(
-    "pages/snapshots.html", "Snapshots", snapshots=api("/snapshots")["snapshots"]
+    "pages/snapshots.html",
+    "Snapshots",
+    snapshots=snapshots,
+    total_bytes=sum(snap.get("bytes") or 0 for snap in snapshots),
   )

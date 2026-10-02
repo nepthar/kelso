@@ -95,25 +95,32 @@ def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
   return lines
 
 
+def _volume_paths(
+  spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
+) -> list[tuple[str, str, str]]:
+  """`(name, kind, where)` for each volume with a place on the host."""
+  paths: list[tuple[str, str, str]] = []
+  for name, volume in spec.volumes.items():
+    kind = f"{volume.kind}, read-only" if volume.readonly else volume.kind
+    if run_data is not None and name in run_data.volume_links:
+      paths.append((name, kind, str(run_data.volume_links[name].source)))
+    elif volume.kind == "host":
+      paths.append((name, kind, "(unbound)"))
+    elif volume.kind != "app":
+      root = ctx.config.volume_roots.get(volume.kind)
+      if root is not None:
+        paths.append((name, kind, str(root / spec.app / name)))
+  return paths
+
+
 def volume_lines(
   spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
 ) -> list[str]:
-  """Managed volume dirs and host-volume bind paths."""
-  lines: list[str] = []
-  app_id = spec.app
-  for name, volume in spec.volumes.items():
-    if run_data is not None and name in run_data.volume_links:
-      lines.append(f"{name}: {run_data.volume_links[name].source}")
-      continue
-    if volume.kind == "host":
-      lines.append(f"{name}: (unbound)")
-    elif volume.kind == "app":
-      continue
-    else:
-      root = ctx.config.volume_roots.get(volume.kind)
-      if root is not None:
-        lines.append(f"{name}: {root / app_id / name}")
-  return lines
+  """Managed volume dirs and host-volume bind paths, each with its kind."""
+  return [
+    f"{name} ({kind}): {where}"
+    for name, kind, where in _volume_paths(spec, run_data, ctx)
+  ]
 
 
 def volume_root_lines(config: Config) -> list[str]:
@@ -150,12 +157,9 @@ def location_receipt(
   for i, line in enumerate(routes):
     rows.append(("Routes:" if i == 0 else "", line))
 
-  vols = volume_lines(spec, run_data, ctx)
-  data_line = next((line for line in vols if line.startswith("data:")), None)
-  if data_line is not None:
-    rows.append(("Data:", data_line.split(": ", 1)[1]))
-  elif vols:
-    rows.append(("Data:", vols[0].split(": ", 1)[1] if ": " in vols[0] else vols[0]))
+  places = {name: where for name, _, where in _volume_paths(spec, run_data, ctx)}
+  if places:
+    rows.append(("Data:", places.get("data", next(iter(places.values())))))
 
   rows.append(("Logs:", f"kelso logs -f {app_id}"))
 

@@ -132,6 +132,9 @@ class JobRunner:
 
   def _schedule(self) -> None:
     sched = metric_schedule(self._submit_scheduled)
+    # Readers ignore readings over two hours old, so waiting a full interval
+    # after a restart leaves sizes blank for up to an hour.
+    sched.run_all()
     while True:
       sched.run_pending()
       time.sleep(1)
