@@ -1,0 +1,40 @@
+{% extends "frame.html" %}
+{% from "macros.html" import pill, when, log_button %}
+
+{% block content %}
+<p class="lede">Scheduled commands from each app's manifest, checked every five minutes</p>
+<div class="card">
+{% if not upcoming and not runs %}
+<p class="empty">No cron jobs. An app declares them under <code>[cron]</code> in its manifest.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>When</th><th>App</th><th>Job</th><th>Status</th><th>Took</th><th>Output</th>
+</tr></thead><tbody>
+{% for job in upcoming %}
+<tr>
+  <td class="muted">{{ when(job.next_at) }}</td>
+  <td>{{ job.app_id }}</td>
+  <td class="name">{{ job.job }}</td>
+  <td>{{ pill('scheduled', 'running') if job.status == 'scheduled' else pill('skip', 'exited') }}</td>
+  <td></td>
+  <td></td>
+</tr>
+{% endfor %}
+<tr class="now-cursor"><td colspan="6"><span>now</span></td></tr>
+{% for run in runs %}
+<tr>
+  <td class="muted">{{ when(run.ts) }}</td>
+  <td>{{ run.app_id }}</td>
+  <td class="name">{{ run.args.get('job', '') }}</td>
+  <td>{{ pill(run.status, 'running' if run.status == 'ok' else 'bad') }}</td>
+  <td class="muted">{{ '%.1fs'|format(run.duration_ms / 1000) if run.duration_ms is not none else '—' }}</td>
+  <td>
+    {%- if run.available %}{{ log_button('view', run.log, run.status, title='cron ' ~ run.app_id ~ ' ' ~ run.args.get('job', '')) }}
+    {%- else %}<span class="muted">pruned</span>{% endif -%}
+  </td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+{% endblock %}

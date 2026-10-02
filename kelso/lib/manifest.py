@@ -1,9 +1,11 @@
 """Pydantic models for kelso TOML (bundle manifests and catalog service definitions)."""
 
 import posixpath
+import shlex
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -17,6 +19,7 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
+from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
@@ -240,6 +243,31 @@ class CommandEntry(BaseModel):
   desc: str = ""
 
 
+MAX_CRON_TIMEOUT = 30 * 60
+
+
+class CronEntry(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  # Five-field cron, in the host's local time.
+  schedule: str
+  # A [commands] entry; cron says when, the command says what.
+  command: Identifier
+  args: str = ""
+  # Seconds before kelso stops waiting and records the run as failed.
+  timeout: int = 600
+
+  @field_validator("timeout")
+  @classmethod
+  def check_timeout(cls, value: int) -> int:
+    if not 0 < value <= MAX_CRON_TIMEOUT:
+      raise ValueError(
+        f"must be 1 to {MAX_CRON_TIMEOUT} seconds; a job that needs longer "
+        f"belongs in a background process in the app itself"
+      )
+    return value
+
+
 class Manifest(BaseModel):
   """Parsed kelso TOML for a bundle or catalog service definition."""
 
@@ -254,9 +282,7 @@ class Manifest(BaseModel):
   adv_config: dict[Identifier, ConfigEntry] = Field(default_factory=dict)
   volumes: dict[Identifier, VolumeEntry] = Field(default_factory=dict)
   commands: dict[Identifier, CommandEntry] = Field(default_factory=dict)
-
-  # Reserved:
-  cron: dict[Identifier, Any] = Field(default_factory=dict)
+  cron: dict[Identifier, CronEntry] = Field(default_factory=dict)
 
 
 def parse_manifest(data: bytes, app: AppID, source: Path) -> Manifest:
@@ -309,6 +335,7 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_routes(manifest))
   errors.extend(_validate_env_refs(manifest))
   errors.extend(_validate_commands(manifest))
+  errors.extend(_validate_cron(manifest))
   return errors
 
 
@@ -348,6 +375,24 @@ def _validate_commands(manifest: Manifest) -> list[str]:
       errors.append(
         f"[commands.{name}]: run_unit {entry.run_unit!r} is not declared in [run]"
       )
+  return errors
+
+
+def _validate_cron(manifest: Manifest) -> list[str]:
+  errors: list[str] = []
+  for name, entry in manifest.cron.items():
+    if entry.command not in manifest.commands:
+      errors.append(
+        f"[cron.{name}]: command {entry.command!r} is not declared in [commands]"
+      )
+    try:
+      CronSchedule.parse(entry.schedule).next_after(datetime(2000, 1, 1))
+    except ValueError as e:
+      errors.append(f"[cron.{name}]: {e}")
+    try:
+      shlex.split(entry.args)
+    except ValueError as e:
+      errors.append(f"[cron.{name}]: args do not parse: {e}")
   return errors
 
 

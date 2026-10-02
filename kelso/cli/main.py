@@ -8,6 +8,7 @@ from kelso.cli import (
   cleanup,
   cmd,
   config,
+  cron,
   dev,
   init,
   inspect,
@@ -47,6 +48,7 @@ COMMANDS = [
   shell,
   dev,
   snapshot,
+  cron,
   repo,
   routes,
   system,
@@ -78,6 +80,7 @@ This box
               (old snapshots, unused images, orphaned routes; --temp)
 
 Snapshots     kelso snapshot take | list | restore
+Cron          kelso cron | cron tick
 Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
 System        kelso system doctor | activity | volumes | secret | host-volume

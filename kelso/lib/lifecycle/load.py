@@ -520,5 +520,5 @@ def load(
 
   store.set_meta("loaded_at", now_ts())
   store.set_meta("loaded_version", spec.version)
-  record_app_action(f"loaded - {spec.version}", app, ctx)
+  record_app_action("loaded", app, ctx, version=spec.version)
   return LoadResult(spec, run_data, dropped)

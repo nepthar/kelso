@@ -16,6 +16,7 @@ from kelso.lib.bundle import load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
+from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
@@ -300,11 +301,30 @@ def snapshots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   return rows
 
 
+def cron_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
+  """Each cron job's next run, soonest first."""
+  return [
+    {
+      "app_id": str(run.app_id),
+      "job": run.name,
+      "command": run.command,
+      "schedule": run.schedule,
+      "next_at": run.next_at.astimezone(UTC).isoformat(timespec="seconds"),
+      "status": run.status,
+    }
+    for run in cron_runs(ctx)
+  ]
+
+
 def activity_view(
-  ctx: KelsoCtx, *, app: str | None = None, limit: int = 20
+  ctx: KelsoCtx,
+  *,
+  app: str | None = None,
+  verb: str | None = None,
+  limit: int = 20,
 ) -> list[dict[str, Any]]:
   """Recorded unattended runs, newest first; see `lib/activity.py`."""
-  return activity.list_runs(ctx, app=app, limit=limit)
+  return activity.list_runs(ctx, app=app, verb=verb, limit=limit)
 
 
 def activity_log_view(ctx: KelsoCtx, filename: str) -> dict[str, Any]:

@@ -181,6 +181,9 @@ class _Finished:
   def poll(self) -> int:
     return self.wait()
 
+  def kill(self) -> None:
+    pass
+
 
 class FakeSubprocess:
   """Stands in for the `subprocess` module where kelso starts docker.
@@ -193,6 +196,7 @@ class FakeSubprocess:
   STDOUT = subprocess.STDOUT
   DEVNULL = subprocess.DEVNULL
   CompletedProcess = subprocess.CompletedProcess
+  TimeoutExpired = subprocess.TimeoutExpired
 
   def __init__(self, docker):
     self.docker = docker

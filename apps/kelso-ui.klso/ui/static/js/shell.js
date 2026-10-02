@@ -119,16 +119,19 @@
   // zone, so the friendly text is filled in here. Absolute local time stays on
   // the tooltip, and the ISO fallback survives with no JS.
   function relTime(then, now) {
-    var secs = Math.round((now - then) / 1000);
-    if (secs < 45) return "just now";
+    var future = then > now;
+    var secs = Math.round(Math.abs(now - then) / 1000);
+    if (secs < 45) return future ? "in a moment" : "just now";
+    var span;
     var mins = Math.round(secs / 60);
-    if (mins < 60) return mins + "m ago";
     var hours = Math.round(mins / 60);
-    if (hours < 24) return hours + "h ago";
     var days = Math.round(hours / 24);
-    if (days < 30) return days + "d ago";
-    return then.toLocaleDateString(undefined,
+    if (mins < 60) span = mins + "m";
+    else if (hours < 24) span = hours + "h";
+    else if (days < 30) span = days + "d";
+    else return then.toLocaleDateString(undefined,
       { year: "numeric", month: "short", day: "numeric" });
+    return future ? "in " + span : span + " ago";
   }
   document.querySelectorAll("time[datetime]").forEach(function (el) {
     var then = new Date(el.getAttribute("datetime"));
@@ -136,4 +139,8 @@
     el.textContent = relTime(then, new Date());
     el.title = then.toLocaleString();
   });
+
+  // A timeline page (cron) opens with its "now" line mid-screen.
+  var cursor = document.querySelector(".now-cursor");
+  if (cursor) cursor.scrollIntoView({ block: "center" });
 })();

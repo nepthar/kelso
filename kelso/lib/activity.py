@@ -121,6 +121,7 @@ def finish_run(
   status: str,
   started: datetime,
   finished: datetime,
+  args: dict[str, str] | None = None,
 ) -> None:
   """Append the closing trailer to ``relpath`` and index the run."""
   path = ctx.config.activity_root / relpath
@@ -131,7 +132,13 @@ def finish_run(
   ctx.activity_log.write(
     _index_key(app_id),
     json.dumps(
-      {"verb": verb, "status": status, "ms": duration_ms, "log": relpath},
+      {
+        "verb": verb,
+        "args": args or {},
+        "status": status,
+        "ms": duration_ms,
+        "log": relpath,
+      },
       separators=(",", ":"),
     ),
   )
@@ -163,6 +170,7 @@ def record_run(
     status=status,
     started=started,
     finished=finished,
+    args=args,
   )
   return relpath
 
@@ -284,6 +292,7 @@ class Activity:
           self.verb,
           app_id=self.app,
           status=OK if exc is None else ERROR,
+          args=self.args,
           started=self._started,
           finished=datetime.now(UTC),
         )
@@ -375,7 +384,11 @@ def _prune(directory: Path) -> None:
 
 
 def list_runs(
-  ctx: KelsoCtx, *, app: str | None = None, limit: int = 20
+  ctx: KelsoCtx,
+  *,
+  app: str | None = None,
+  verb: str | None = None,
+  limit: int = 20,
 ) -> list[dict[str, Any]]:
   """Recorded runs, newest first. `app` narrows to one app's (full) id."""
   key = _index_key(AppID(app)) if app and app != KELSO_DIR else None
@@ -389,6 +402,8 @@ def list_runs(
       record = json.loads(entry.value)
     except json.JSONDecodeError:
       continue
+    if verb is not None and record.get("verb") != verb:
+      continue
     relpath = record.get("log", "")
     app_id = record_key.removeprefix("apps/").removesuffix("/run")
     runs.append(
@@ -396,6 +411,7 @@ def list_runs(
         "ts": entry.ts,
         "app_id": None if record_key == _index_key(None) else app_id,
         "verb": record.get("verb", ""),
+        "args": record.get("args", {}),
         "status": record.get("status", ""),
         "duration_ms": record.get("ms"),
         "log": relpath,
