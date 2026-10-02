@@ -581,9 +581,9 @@ td.trend span { margin-left: 10px; font-variant-numeric: tabular-nums; }
   width: 200px; height: 40px; vertical-align: middle;
   background: var(--void); border: 1px solid var(--line);
 }
-.spark line { stroke: var(--hair); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.spark line { stroke: var(--hair); stroke-width: 0.5; vector-effect: non-scaling-stroke; }
 .spark polyline {
-  fill: none; stroke: var(--coral); stroke-width: 1.5;
+  fill: none; stroke: var(--coral); stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 .host-line .timeframe { margin-left: auto; }
