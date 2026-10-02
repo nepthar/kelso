@@ -26,6 +26,7 @@ from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
 from kelso.jobs.updown import DownJob, UpJob
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.cron import tick
 
 logger = logging.getLogger("kelso.jobs")
 
@@ -76,6 +77,7 @@ class JobRunner:
     self._lock = threading.Lock()
     self._thread: threading.Thread | None = None
     self._sched: threading.Thread | None = None
+    self._cron: threading.Thread | None = None
 
   def start(self) -> None:
     if self._thread is not None:
@@ -132,12 +134,28 @@ class JobRunner:
 
   def _schedule(self) -> None:
     sched = metric_schedule(self._submit_scheduled)
+    sched.every(5).minutes.do(self._start_cron_tick)
     # Readers ignore readings over two hours old, so waiting a full interval
     # after a restart leaves sizes blank for up to an hour.
     sched.run_all()
     while True:
       sched.run_pending()
       time.sleep(1)
+
+  def _start_cron_tick(self) -> None:
+    """On its own thread, so a long cron job never holds up queued jobs."""
+    if self._cron is not None and self._cron.is_alive():
+      return
+    self._cron = threading.Thread(
+      target=self._cron_tick, name="kelso-cron", daemon=True
+    )
+    self._cron.start()
+
+  def _cron_tick(self) -> None:
+    try:
+      tick(self._ctx_factory())
+    except Exception:  # noqa: BLE001 - a failed tick must not kill the thread
+      logger.exception("cron tick failed")
 
   def _submit_scheduled(self, verb: str) -> None:
     if self._busy_with(verb):

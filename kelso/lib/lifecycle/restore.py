@@ -265,6 +265,6 @@ def _restore_extracted(
       f"`kelso load {app}`.\n{e}"
     ) from e
 
-  record_app_action(f"restored - {plan.snapshot_path.name}", app, ctx)
+  record_app_action("restored", app, ctx, snapshot=plan.snapshot_path.name)
   logger.info("restored %s from %s", app, plan.snapshot_path)
   return run_data

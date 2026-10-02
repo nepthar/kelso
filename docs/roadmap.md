@@ -65,10 +65,6 @@ already in `KelsoRunUnitStatus.health`; `ps`, `status`, and the UI should show i
 `kelso init` installs `kelsod` as a systemd user service. Installing kelso itself
 still takes `uv` and a separate `kelso init`.
 
-### Cron jobs
-`[commands]` and `kelso cmd` exist. The manifest accepts a `cron` table, but
-nothing runs it yet.
-
 ### Alerts
 Nothing says when an app crashes, the disk fills, or a snapshot fails; you find
 out by opening the dashboard. For v1, one configurable webhook and two levels:

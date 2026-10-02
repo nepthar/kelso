@@ -73,7 +73,9 @@ from kelso.lib.spec import AppSpec
 # 28: /volumes carry `use` (in use/idle/unloaded/orphaned/unknown) in place of
 #     `in_use` and `declared`; DELETE /volumes/{app_id}/{name} (orphans only);
 #     /volumes carries `volume_roots` (size, device, used, available).
-API_VERSION = 28
+# 29: GET /cron (each cron job's next run); activity runs carry `args`, and
+#     /activity takes `verb`.
+API_VERSION = 29
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -349,11 +351,18 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       raise HTTPException(400, str(e)) from e
     return {"host_volumes": views.host_volumes_view(_ctx_again(ctx))}
 
+  @app.get("/cron", tags=["cron"])
+  def list_cron(ctx: Ctx) -> dict:
+    """Each cron job's next run, soonest first."""
+    return {"cron": views.cron_view(ctx)}
+
   @app.get("/activity", tags=["activity"])
-  def list_activity(ctx: Ctx, app: str | None = None, limit: int = 20) -> dict:
+  def list_activity(
+    ctx: Ctx, app: str | None = None, verb: str | None = None, limit: int = 20
+  ) -> dict:
     """Recorded unattended runs."""
     try:
-      return {"activity": views.activity_view(ctx, app=app, limit=limit)}
+      return {"activity": views.activity_view(ctx, app=app, verb=verb, limit=limit)}
     except ValueError as e:
       raise HTTPException(400, str(e)) from e
 

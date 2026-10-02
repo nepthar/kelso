@@ -27,7 +27,7 @@ NO_STORE = {"Cache-Control": "no-store"}
 # The kelsod API this UI is written against. kelsod bumps its own number
 # when a response shape changes, so a mismatch means one of the two was
 # loaded without the other and fields this UI reads may be missing.
-NEEDS_API = 28
+NEEDS_API = 29
 
 # Random per load (kelso-ui's `instance_id`), so two kelso-ui tabs can be
 # told apart even when neither can reach its kelsod.
@@ -67,6 +67,7 @@ NAV = (
   NavItem("/volumes", "Volumes", "database-outline"),
   NavItem("/snapshots", "Snapshots", "camera-outline"),
   NavItem("/routes", "Routes", "network-outline"),
+  NavItem("/cron", "Cron", "clock-outline"),
   NavItem("/activity", "Activity", "file-document-multiple-outline"),
 )
 

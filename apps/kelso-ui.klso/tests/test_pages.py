@@ -23,6 +23,7 @@ PAGES = [
   "/routes",
   "/routes/web",
   "/routes/fresh?kind=pangolin",
+  "/cron",
   "/activity",
   "/login",
 ]
@@ -273,3 +274,14 @@ def test_volume_disks_split_the_disk_into_volume_other_and_free(client, fake):
 def test_snapshots_page_totals_every_archive(client, fake):
   # 4851 B plus one archive with no size, which counts as nothing.
   assert "Application snapshots · 4.7 KB in total" in client.get("/snapshots").text
+
+
+def test_cron_page_puts_upcoming_runs_above_now_and_finished_ones_below(client, fake):
+  table = client.get("/cron").text.split("<tbody>")[1].split("</tbody>")[0]
+  above, below = table.split('<tr class="now-cursor">')
+  # Furthest first above the line, so time runs down the page.
+  assert above.index("jellyfin") < above.index("mealie")
+  assert 'class="dot running"></span>scheduled' in above
+  assert 'class="dot exited"></span>skip' in above
+  assert "nightly" in below and 'class="dot running"></span>ok' in below
+  assert "2.1s" in below

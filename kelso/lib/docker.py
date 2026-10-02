@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -178,6 +179,15 @@ def _parse_json_output(stdout: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
+def _timed_out(cmd: list[str], timeout: float | None) -> RuntimeError:
+  # Killing the client does not stop what `compose exec` started in the
+  # container; that runs on until it finishes or the container stops.
+  return RuntimeError(
+    f"docker {' '.join(cmd)} was still running after {timeout:g} seconds; "
+    f"kelso stopped waiting for it"
+  )
+
+
 def docker_run_command(
   cmd: list[str],
   *,
@@ -185,13 +195,15 @@ def docker_run_command(
   json_output: bool = True,
   check: bool = True,
   env: dict[str, str] | None = None,
+  timeout: float | None = None,
 ) -> DockerReturn:
   """Run `docker <cmd>`.
 
   `json_output` decides both the format and who sees it: True captures and
   parses into `DockerReturn.data`, False lets the child write straight to the
   terminal, because swallowing a minutes-long `compose up` is indistinguishable
-  from a hang.
+  from a hang. Past `timeout` seconds the docker client is killed and this
+  raises RuntimeError.
   """
   full = [DOCKER, *cmd]
   if json_output:
@@ -213,6 +225,15 @@ def docker_run_command(
     )
     stdout = proc.stdout
     assert stdout is not None
+    timed_out = threading.Event()
+
+    def stop() -> None:
+      timed_out.set()
+      proc.kill()
+
+    timer = threading.Timer(timeout, stop) if timeout else None
+    if timer is not None:
+      timer.start()
     chunks: list[str] = []
     try:
       while True:
@@ -223,8 +244,12 @@ def docker_run_command(
         sink.flush()
         chunks.append(chunk)
     finally:
+      if timer is not None:
+        timer.cancel()
       stdout.close()
       proc.wait()
+    if timed_out.is_set():
+      raise _timed_out(cmd, timeout)
     text = "".join(chunks)
     if check and proc.returncode != 0:
       raise DockerError(cmd, proc.returncode, text[-_ERROR_TAIL:])
@@ -235,9 +260,17 @@ def docker_run_command(
     # into. Without this, a piped `kelso dev` prints its receipt *after* the
     # compose output it was meant to introduce.
     sys.stdout.flush()
-  result = subprocess.run(
-    full, cwd=cwd, capture_output=json_output, text=True, env=run_env
-  )
+  try:
+    result = subprocess.run(
+      full,
+      cwd=cwd,
+      capture_output=json_output,
+      text=True,
+      env=run_env,
+      timeout=timeout,
+    )
+  except subprocess.TimeoutExpired:
+    raise _timed_out(cmd, timeout) from None
 
   if check and result.returncode != 0:
     raise DockerError(cmd, result.returncode, result.stderr if json_output else "")

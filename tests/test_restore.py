@@ -127,7 +127,7 @@ def test_restore_rebuilds_a_removed_app_from_its_snapshot(kelso_env):
   assert kelso_env.read_db()["routes"][app_id]["web"]["host_port"] == 41000
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert read_last_app_action(app_id, ctx) == f"restored - {name}"
+  assert read_last_app_action(app_id, ctx) == "restored"
 
   assert kelso_env.run("start", app_id).returncode == 0
 

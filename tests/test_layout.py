@@ -326,7 +326,7 @@ def test_config_round_trips_through_config_dir(kelso_env):
   assert "meta/loaded_at" in logtab
   assert 'meta/loaded_version\t"0.1.0"' in logtab
   activity = (kelso_env.root / "var" / "activity.logtab").read_text()
-  assert f"apps/{BASIC}/status\tloaded - 0.1.0" in activity
+  assert f'apps/{BASIC}/status\t{{"verb":"loaded","version":"0.1.0"}}' in activity
 
   # ...and nothing about this app is left in the central db.
   assert BASIC not in kelso_env.read_db().get("apps", {})

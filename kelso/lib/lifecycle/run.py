@@ -142,8 +142,13 @@ def run_command(
   cmd_name: str,
   args: list[str],
   ctx: KelsoCtx,
+  *,
+  timeout: float | None = None,
 ) -> int:
-  """Run a manifest `[commands]` entry in its target unit."""
+  """Run a manifest `[commands]` entry in its target unit.
+
+  Raises RuntimeError if it is still running after `timeout` seconds.
+  """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
@@ -168,6 +173,7 @@ def run_command(
       json_output=False,
       check=False,
       env=env,
+      timeout=timeout,
     ).returncode
 
   # Host binds are only linked while an app runs; restore them for the one-off
@@ -182,6 +188,7 @@ def run_command(
       json_output=False,
       check=False,
       env=env,
+      timeout=timeout,
     ).returncode
   finally:
     if was_fully_stopped:

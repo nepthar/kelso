@@ -14,6 +14,7 @@ from pages import (
   apps,
   catalog,
   console,
+  cron,
   dashboard,
   jobs,
   routes,
@@ -38,6 +39,7 @@ for feature in (
   volumes,
   snapshots,
   routes,
+  cron,
   activity,
   jobs,
 ):

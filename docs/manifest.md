@@ -204,6 +204,31 @@ run_unit = "database"
 desc     = "Open a database shell"
 ```
 
+## `[cron.<name>]`
+
+Runs one of the app's `[commands]` on a schedule. kelsod checks every five
+minutes and runs what is due, one job at a time, so a schedule is best effort
+to within a few minutes and a long job delays the ones after it. A job whose
+unit is not running is skipped and stays due until it is. If kelsod was down
+through several scheduled times, the job runs once, not once per miss; a job
+that has never run counts from when its app was loaded. Each run is recorded
+on the Activity and Cron pages, with its output and whether it exited 0.
+`kelso cron` lists what is next and `kelso cron tick` runs what is due now.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `schedule` | string | **required** | Five-field cron: minute, hour, day of month, month, day of week, in the host's local time. Each field is `*` or a comma list of `n`, `a-b`, `*/s`, `a-b/s`. Day of week is 0-7, both 0 and 7 Sunday. |
+| `command` | identifier | **required** | A `[commands]` entry. |
+| `args` | string | `""` | Added to the command, as an operator's arguments would be. |
+| `timeout` | integer | `3600` | Seconds before kelso stops waiting and records the run as failed. A command started with `compose exec` keeps running in its container until it finishes. |
+
+```toml
+[cron.nightly-backup]
+schedule = "0 3 * * *"
+command  = "backup"
+args     = "--keep 7"
+```
+
 ## Substitution in `env`
 
 `${…}` in `[run.<unit>.env]` is resolved against one flat keyspace, at load

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -30,15 +31,21 @@ class AppID(str):
     return self.parts[-1]
 
 
-def record_app_action(action: str, app_id: AppID, ctx: KelsoCtx) -> None:
-  """Record informational last-action metadata."""
-  ctx.activity_log.write(f"apps/{app_id}/status", action)
+def record_app_action(verb: str, app_id: AppID, ctx: KelsoCtx, **meta: str) -> None:
+  """Record what kelso last did to an app, with whatever else is worth keeping."""
+  ctx.activity_log.write(
+    f"apps/{app_id}/status", json.dumps({"verb": verb, **meta}, separators=(",", ":"))
+  )
+
+
+def _verb(value: str) -> str:
+  return json.loads(value)["verb"]
 
 
 def read_last_app_action(app_id: AppID, ctx: KelsoCtx) -> str | None:
-  """Read informational last-action metadata."""
+  """The verb of what kelso last did to an app."""
   entry = ctx.activity_log.read(f"apps/{app_id}/status")
-  return entry.value if entry else None
+  return _verb(entry.value) if entry else None
 
 
 def read_app_starts(ctx: KelsoCtx) -> dict[str, str]:
@@ -49,7 +56,7 @@ def read_app_starts(ctx: KelsoCtx) -> dict[str, str]:
   """
   starts: dict[str, str] = {}
   for key, entry in ctx.activity_log.history(prefix="apps/", suffix="/status"):
-    if entry.value != "started":
+    if _verb(entry.value) != "started":
       continue
     app_id = key.removeprefix("apps/").removesuffix("/status")
     if app_id:
@@ -63,5 +70,5 @@ def read_app_actions(ctx: KelsoCtx) -> dict[str, tuple[datetime, str]]:
   for key, entry in ctx.activity_log.scan(prefix="apps/", suffix="/status").items():
     app_id = key.removeprefix("apps/").removesuffix("/status")
     if app_id:
-      actions[app_id] = (entry.datetime, entry.value)
+      actions[app_id] = (entry.datetime, _verb(entry.value))
   return actions

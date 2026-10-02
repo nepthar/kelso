@@ -424,6 +424,42 @@ NEW_PROVIDER_CONFIG = {
   "fields": [],
 }
 
+CRON = {
+  "cron": [
+    {
+      "app_id": "mealie",
+      "job": "nightly",
+      "command": "cleanup",
+      "schedule": "0 3 * * *",
+      "next_at": "2026-09-24T03:00:00+00:00",
+      "status": "scheduled",
+    },
+    {
+      "app_id": "jellyfin",
+      "job": EVIL,
+      "command": "scan",
+      "schedule": "0 4 * * *",
+      "next_at": "2026-09-24T04:00:00+00:00",
+      "status": "skip",
+    },
+  ]
+}
+
+CRON_RUNS = {
+  "activity": [
+    {
+      "ts": "2026-09-23T03:00:04Z",
+      "app_id": "mealie",
+      "verb": "cron",
+      "args": {"job": "nightly", "command": "cleanup"},
+      "status": "ok",
+      "duration_ms": 2100,
+      "log": "2026-09-23T030002Z.mealie.cron.log",
+      "available": True,
+    },
+  ]
+}
+
 ACTIVITY = {
   "activity": [
     {
@@ -468,7 +504,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 28, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 29, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -484,6 +520,8 @@ GET = {
   "/route-providers/web/config-request": PROVIDER_CONFIG,
   "/route-providers/fresh/config-request?kind=pangolin": NEW_PROVIDER_CONFIG,
   "/activity?limit=100": ACTIVITY,
+  "/cron": CRON,
+  "/activity?verb=cron&limit=100": CRON_RUNS,
   "/activity/x.log": {"text": "log text"},
   "/metrics?prefix=host_&hours=1": METRICS,
   "/jobs/j1": {"id": "j1", "state": "done", "log": "x.log"},
@@ -500,7 +538,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 28
+    self.api = 29
     fake = self
 
     class Handler(BaseHTTPRequestHandler):
