@@ -34,7 +34,7 @@
   }
   // A token as rgba(), resolved by the browser so a theme may write any CSS
   // colour. Drawn to a pixel because computed style reports color-mix() as
-  // color(srgb ...), which neither uPlot nor xterm reads.
+  // color(srgb ...), which xterm does not read.
   var pixel = null;
   function color(name) {
     var probe = document.createElement("span");

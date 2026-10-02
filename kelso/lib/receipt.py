@@ -37,6 +37,21 @@ def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[s
   return list(published_route_urls(spec, run_data, ctx).values())
 
 
+def host_url(
+  spec: AppSpec, run_data: AppRunData | None, name: str, host: str
+) -> str | None:
+  """Where a route answers on the host itself, or None with no port allocated."""
+  route = spec.routes[name]
+  assigned = run_data.routes.get(name) if run_data else None
+  if assigned is not None and assigned.host_port > 0:
+    return f"{route.scheme}://{host}:{assigned.host_port}"
+  if spec.network_mode == "host":
+    # Host networking maps nothing, so the container port is the host port
+    # and kelso never allocated one.
+    return f"{route.scheme}://{host}:{route.container_port}"
+  return None
+
+
 def route_lines(
   spec: AppSpec,
   run_data: AppRunData | None,
@@ -47,15 +62,7 @@ def route_lines(
   """Every declared route, read right to left: where you reach it, then what answers."""
   lines: list[str] = []
   for name, route in spec.routes.items():
-    assigned = run_data.routes.get(name) if run_data else None
-    if assigned is not None and assigned.host_port > 0:
-      where = f"{route.scheme}://{host}:{assigned.host_port}"
-    elif spec.network_mode == "host":
-      # Host networking maps nothing, so the container port is the host port
-      # and kelso never allocated one.
-      where = f"{route.scheme}://{host}:{route.container_port}"
-    else:
-      where = "(no host port allocated)"
+    where = host_url(spec, run_data, name, host) or "(no host port allocated)"
 
     line = f"{route.run_unit_name}:{route.container_port}/{route.proto} <- {where}"
     if name in published:
@@ -102,11 +109,13 @@ def _volume_paths(
   paths: list[tuple[str, str, str]] = []
   for name, volume in spec.volumes.items():
     kind = f"{volume.kind}, read-only" if volume.readonly else volume.kind
-    if run_data is not None and name in run_data.volume_links:
+    if volume.kind == "app":
+      paths.append((name, kind, volume.in_bundle))
+    elif run_data is not None and name in run_data.volume_links:
       paths.append((name, kind, str(run_data.volume_links[name].source)))
     elif volume.kind == "host":
       paths.append((name, kind, "(unbound)"))
-    elif volume.kind != "app":
+    else:
       root = ctx.config.volume_roots.get(volume.kind)
       if root is not None:
         paths.append((name, kind, str(root / spec.app / name)))

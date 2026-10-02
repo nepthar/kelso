@@ -467,6 +467,25 @@ def _env_substitutions(
   }
 
 
+SECRET_SHOWN = "<secret>"
+
+
+def shown_environment(
+  spec: AppSpec, run_unit: AppRunUnit, data: AppRunData
+) -> dict[str, str]:
+  """A unit's environment as its container gets it, each secret as `<secret>`."""
+  substitutions = _env_substitutions(spec, run_unit, data)
+  for name, config in spec.config.items():
+    value = data.config_values.get(name)
+    substitutions[name] = (
+      SECRET_SHOWN if config.secret else value.env_val() if value else ""
+    )
+  return {
+    str(k): EnvTemplate(str(v)).safe_substitute(substitutions)
+    for k, v in run_unit.environment.items()
+  }
+
+
 def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
   services: dict[str, Any] = {}
   for run_name, run_unit in spec.run_units.items():

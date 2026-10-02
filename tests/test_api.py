@@ -1139,3 +1139,41 @@ def test_a_loaded_app_whose_manifest_no_longer_parses_has_no_orphans(kelso_env, 
   uses = {v["use"] for v in client.get("/volumes").json()["volumes"]}
   assert uses == {"unknown"}
   assert client.delete(f"/volumes/{APP}/config").status_code == 400
+
+
+def test_app_routes_say_where_they_answer_on_the_host(kelso_env, client):
+  assert kelso_env.run("load", "routes-demo").returncode == 0
+  routes = client.get("/apps/routes-demo").json()["routes"]
+  assert routes
+  for route in routes:
+    assert route["host_url"] == f"{route['scheme']}://localhost:{route['host_port']}"
+
+
+def test_app_view_resolves_the_environment_but_never_a_secret(kelso_env, client):
+  assert kelso_env.run("load", APP).returncode == 0
+  assert kelso_env.run("config", APP, "--set", "admin_user=alice").returncode == 0
+  _, secret = ctx().app_store(APP).get_config("admin_pass")
+  body = client.get(f"/apps/{APP}").json()
+
+  [unit] = body["units"]
+  assert unit["environment"]["ADMIN_USER"] == "${admin_user}"
+  assert unit["resolved_environment"]["ADMIN_USER"] == "alice"
+  assert unit["resolved_environment"]["ADMIN_PASS"] == "<secret>"
+  assert secret not in json.dumps(body)
+
+
+def test_app_volumes_show_as_their_place_in_the_bundle(kelso_env, client):
+  assert kelso_env.run("load", APP).returncode == 0
+  volumes = {v["name"]: v for v in client.get(f"/apps/{APP}").json()["volumes"]}
+  assert volumes["bin"]["path"] == "$app/bin"
+
+
+def test_host_reports_its_size_and_the_disks_kelso_uses(kelso_env, client):
+  assert kelso_env.run("load", APP).returncode == 0
+  body = client.get("/host").json()
+  assert body["cpus"] > 0
+  assert body["memory_bytes"] > 0
+  [disk] = body["disks"]
+  assert disk["total_bytes"] > 0
+  assert "data" in disk["holds"]
+  assert disk["gauge"].startswith("host_drive_used_ratio/")
