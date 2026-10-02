@@ -519,5 +519,6 @@ def load(
     raise
 
   store.set_meta("loaded_at", now_ts())
-  record_app_action("loaded", app, ctx)
+  store.set_meta("loaded_version", spec.version)
+  record_app_action(f"loaded - {spec.version}", app, ctx)
   return LoadResult(spec, run_data, dropped)
