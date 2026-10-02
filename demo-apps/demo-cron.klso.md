@@ -39,6 +39,8 @@ image   = "alpine:latest"
 # Idles until stopped; the TERM trap lets `kelso stop` finish within a second.
 cmd     = ["/bin/sh", "-c", "trap 'exit 0' TERM; while :; do sleep 1; done"]
 volumes = { script = "/demo/demo.sh", stamps = "/data" }
+# Healthy while the log's volume can be written to.
+healthcheck = "test -w /data"
 
 [commands]
 stamp = { cmd = "/demo/demo.sh stamp", desc = "Append a timestamp, and any note given, to the log" }

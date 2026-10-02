@@ -21,6 +21,8 @@ init_script = { kind = "app", src = "init-mongo.sh", desc = "First run initializ
 [run.unifi-db]
 image = "docker.io/mongo:8.0.11"
 volumes = { db_data = "/data/db", init_script = "/docker-entrypoint-initdb.d/init-mongo.sh" }
+# `ping` needs no credentials.
+healthcheck = ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
 
 [run.unifi-db.env]
 # The INITDB vars are consumed by the mongo image itself: they create the root
@@ -35,6 +37,7 @@ MONGO_AUTHSOURCE = "admin"
 [run.main]
 image = "lscr.io/linuxserver/unifi-network-application:10.0.162"
 volumes = { app_data = "/config/data", app_logs = "/config/logs" }
+healthcheck = "curl -fsk https://localhost:8443/status || exit 1"
 
 [run.main.routes]
 # All private: the operator chooses which (if any) to publish via --route.

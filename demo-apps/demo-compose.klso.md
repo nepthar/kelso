@@ -13,13 +13,15 @@ services:
     image: redis:7-alpine
     # ...
     mem_limit: 256m
-    healthcheck:
-      test: redis-cli ping || exit 1
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+    stop_grace_period: 30s
+    ulimits:
+      nofile:
+        soft: 10032
+        hard: 10032
 ```
+
+Its healthcheck is not passthrough: `healthcheck` is a run-unit field, and
+kelso writes it into compose with its own timing.
 
 ```toml klso_path="manifest.toml"
 [app]
@@ -28,15 +30,14 @@ display_name = "Compose Passthrough Demo"
 description  = "Uses [run.<unit>.compose] to set compose options kelso doesn't model"
 
 [run.main]
-image   = "redis:7-alpine"
+image       = "redis:7-alpine"
+healthcheck = "redis-cli ping || exit 1"
 
 [run.main.compose]
-mem_limit = "256m"
+mem_limit         = "256m"
+stop_grace_period = "30s"
 
-[run.main.compose.healthcheck]
-test         = "redis-cli ping || exit 1"
-interval     = "10s"
-timeout      = "3s"
-retries      = 3 # This remains an integer all the way to compose.yml.
-start_period = "5s"
+[run.main.compose.ulimits.nofile]
+soft = 10032 # Integers stay integers all the way to compose.yml.
+hard = 10032
 ```

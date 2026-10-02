@@ -151,6 +151,7 @@ _COMPOSE_MANAGED_KEYS = frozenset(
     "labels",
     "restart",
     "network_mode",
+    "healthcheck",
   }
 )
 
@@ -161,8 +162,7 @@ _COMPOSE_MANAGED_KEYS = frozenset(
 # silently ignored by compose today.
 _COMPOSE_ALLOWED_KEYS = frozenset(
   {
-    # Lifecycle and health.
-    "healthcheck",
+    # Lifecycle.
     "depends_on",
     "stop_grace_period",
     "stop_signal",
@@ -219,8 +219,11 @@ class RunEntry(BaseModel):
   # How kelso runs anything in this unit: `[*shell, script]`. The unit's commands
   # and its console need it to exist in the image.
   shell: list[str] = Field(default_factory=lambda: ["/bin/sh", "-c"], min_length=1)
+  # Run in the container to say it is healthy: a list as it is, a string by
+  # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
+  healthcheck: str | list[str] | None = Field(default=None, min_length=1)
   # Escape hatch: copied verbatim into this unit's compose service for
-  # anything kelso doesn't model (healthcheck, ulimits, ...).
+  # anything kelso doesn't model (ulimits, mem_limit, ...).
   compose: dict[str, Any] = Field(default_factory=dict)
 
   @model_validator(mode="after")

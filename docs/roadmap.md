@@ -10,23 +10,18 @@ Kubernetes and similar can be overkill, while raw Docker Compose files alone sti
 ## v1
 What has to be true before v1, roughly in order of priority.
 
-### Upgrading kelso keeps apps loading
-Upgrading den and harbor from #31 to #38 took moving files by hand and editing
-manifests that no longer parsed. Once people run kelso, `uv tool upgrade kelso`
-has to leave their apps working, or say exactly what to do:
-- A manifest format version, so a format change is a known event rather than a
-  parse error.
-- `doctor` reports a loaded app whose saved manifest no longer parses, with
-  `kelso load <app>` as the fix. Today it only shows as "unknown" on the
-  volumes page.
-- A release note for each on-disk or manifest format change.
-
 ### Updating apps
 Nothing pulls a newer image: `load` re-reads the bundle, and compose only pulls
 an image it does not have. Wanted: `kelso update <app>` (pull, recreate, roll
 back if it does not come up healthy), and the UI showing that an update exists.
 A load that changes an app's version snapshots it first, as restore already
 does, unless passed `--no-snapshot`.
+
+### One-command installer
+`kelso init` installs `kelsod` as a systemd user service. Installing kelso itself
+still takes `uv` and a separate `kelso init`.
+
+## After v1
 
 ### App upgrade paths
 A manifest says which versions it can upgrade from (`upgrade_from`); without it,
@@ -46,7 +41,7 @@ leading numbers, as in `1.0.0-beta`, is not compared.
 `load` records the version as `loaded_version` in the app's config store, the
 record upgrades act on: it survives `unload`, goes with `rm --purge`, and comes
 back with a snapshot on `restore`. The activity log carries it too, on the load
-itself (`loaded - 1.0.1`), for the history only. Apps loaded before this have no
+itself (`{"verb": "loaded", "version": "1.0.1"}`), for the history only. Apps loaded before this have no
 `loaded_version`, and upgrade as if from any version. `kelso dev` runs a
 working copy whose version is "dev": it skips these checks and records nothing.
 
@@ -57,14 +52,6 @@ supported way to drop a volume: version N moves the data off it, N+1 removes it
 in `migrations.toml`, and N+2 can drop that migration with `upgrade_from = N+1`,
 so every install passed through the version that removed it.
 
-### Use and surface docker health checks
-`up` waits for healthy containers, but health shows nowhere else. The data is
-already in `KelsoRunUnitStatus.health`; `ps`, `status`, and the UI should show it.
-
-### One-command installer
-`kelso init` installs `kelsod` as a systemd user service. Installing kelso itself
-still takes `uv` and a separate `kelso init`.
-
 ### Alerts
 Nothing says when an app crashes, the disk fills, or a snapshot fails; you find
 out by opening the dashboard. For v1, one configurable webhook and two levels:
@@ -74,7 +61,16 @@ out by opening the dashboard. For v1, one configurable webhook and two levels:
 
 Alerts queue in a logtab spool, so a webhook that is down gets them later.
 
-## After v1
+### Upgrading kelso keeps apps loading
+Upgrading den and harbor from #31 to #38 took moving files by hand and editing
+manifests that no longer parsed. Once people run kelso, `uv tool upgrade kelso`
+has to leave their apps working, or say exactly what to do:
+- A manifest format version, so a format change is a known event rather than a
+  parse error.
+- `doctor` reports a loaded app whose saved manifest no longer parses, with
+  `kelso load <app>` as the fix. Today it only shows as "unknown" on the
+  volumes page.
+- A release note for each on-disk or manifest format change.
 
 ### Off-host snapshots
 Snapshots stay on the box. Copying them elsewhere also needs a plan for

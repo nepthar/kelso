@@ -27,6 +27,9 @@ image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
 volumes = { ui = "/app", venv = "/venv", tls = "/tls", conn = "/run/kelso-admin" }
 routes  = { main = { port = "8080", scheme = "https" } }
+# A connection is enough: every page sits behind the sign-in and a self-signed
+# certificate.
+healthcheck = ["python", "-c", "import socket; socket.create_connection(('localhost', 8080), 3)"]
 
 [run.main.env]
 KELSO_SOCKET            = "/run/kelso-admin/admin.sock"

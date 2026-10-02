@@ -265,7 +265,7 @@ def test_snapshot_stops_and_restarts_a_running_app(kelso_env):
   ps = kelso_env.run("ps")
   assert ps.returncode == 0, ps.stderr
   assert app_id in ps.stdout
-  assert "running" in ps.stdout
+  assert " ok " in ps.stdout
 
 
 # --- what does and does not need a container -------------------------------

@@ -38,7 +38,7 @@ APPS = [
     "app_id": "kelso-ui",
     "display_name": "Kelso UI",
     "version": "0.6.0",
-    "status": "running",
+    "status": "healthy",
     "state": "loaded",
     "containers": {"running": 1, "total": 1},
     "configured": "ready",
@@ -62,13 +62,25 @@ APPS = [
     "app_id": "mealie",
     "display_name": "Mealie",
     "version": "1.2.0",
-    "status": "exited",
+    "status": "stopped",
     "state": "unloaded",
     "containers": {"running": 0, "total": 2},
     "configured": None,
     "config_pending": False,
     "volume_count": 1,
     "last_action": "unloaded",
+  },
+  {
+    "app_id": "immich",
+    "display_name": "Immich",
+    "version": "3.1.0",
+    "status": "degraded",
+    "state": "loaded",
+    "containers": {"running": 3, "total": 4},
+    "configured": "ready",
+    "config_pending": False,
+    "volume_count": 3,
+    "last_action": "started",
   },
 ]
 
@@ -192,7 +204,7 @@ APP_CONFIG = {
     _field("admin_pass", secret=True, secret_set=False, desc="password"),
     _field("token", secret=True, secret_set=True),
     _field("subdomain", value="kelso", default="kelso", section="option"),
-    _field("volume.conn", value="harbor_conn", choices=["harbor_conn", EVIL]),
+    _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
     _field("route.none", choices=[]),
     _field("tuning", section="advanced"),
     _field("debug", section="advanced", default="0"),
@@ -365,7 +377,7 @@ VOLUMES = {
 HOST_VOLUMES = {
   "host_volumes": [
     {
-      "tag": "harbor_conn",
+      "tag": "kelso_conn",
       "path": "/k/var/conn",
       "readonly": False,
       "require_mount": False,

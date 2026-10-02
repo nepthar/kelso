@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,20 @@ class RunState:
   @property
   def running_count(self) -> int:
     return sum(container.state.lower() == "running" for container in self.containers)
+
+
+# How a loaded app is doing, as one word.
+HEALTHY = "healthy"  # everything up, and every healthcheck passes
+OK = "ok"  # everything up, with no healthcheck to say more
+DEGRADED = "degraded"  # some unit is down, failed, or failing its healthcheck
+STOPPED = "stopped"
+
+
+def _active(unit: KelsoRunUnitStatus) -> bool:
+  """Up and not failing its healthcheck, or a one-shot that finished cleanly."""
+  if unit.state.lower() == "running":
+    return unit.health != "unhealthy"
+  return unit.state.lower() == "exited" and unit.status.startswith("Exited (0)")
 
 
 # Where an app stands, as one word.
@@ -115,14 +130,20 @@ class AppObservation:
       and not self.containers
     )
 
-  @property
-  def status(self) -> str:
-    """Container state as one word: what an operator scanning a list wants."""
-    if self.running_count:
-      return "running"
-    if self.containers:
-      return "exited"
-    return "stopped"
+  def status(self, units: Iterable[str] = ()) -> str:
+    """`healthy`, `ok`, `degraded` or `stopped`. `units` are the run units the
+    manifest declares; without them, only the containers that exist count."""
+    if not self.running_count:
+      return STOPPED
+    containers = {c.run_unit: c for c in self.containers}
+    if any(
+      unit not in containers or not _active(containers[unit])
+      for unit in {*units, *containers}
+    ):
+      return DEGRADED
+    checked = [c.health for c in containers.values() if c.state.lower() == "running"]
+    checked = [health for health in checked if health]
+    return HEALTHY if checked and all(h == "healthy" for h in checked) else OK
 
 
 def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:

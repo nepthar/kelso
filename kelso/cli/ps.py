@@ -30,7 +30,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       rows.append(
         (
           observation.app_id,
-          _status(observation),
+          _status(observation, spec),
           _config(observation, spec, ctx),
           _volumes(observation, spec),
           observation.last_action or EMPTY,
@@ -45,9 +45,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     )
 
 
-def _status(observation: AppObservation) -> str:
+def _status(observation: AppObservation, spec: AppSpec | None) -> str:
   if observation.containers:
-    return observation.status
+    return observation.status(spec.run_units if spec else ())
   return UNLOADED if observation.state == UNLOADED else EMPTY
 
 

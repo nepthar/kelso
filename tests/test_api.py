@@ -199,7 +199,7 @@ def test_apps_reflects_running_containers(kelso_env, client):
   kelso_env.run("start", "basic-features", "--set", "admin_user=root")
 
   app = client.get("/apps").json()["apps"][0]
-  assert app["status"] == "running"
+  assert app["status"] == "ok"
   assert app["containers"] == {"running": 1, "total": 1}
   assert app["configured"] == "ready"
   assert app["last_action"] == "started"
@@ -302,7 +302,7 @@ def test_method_not_allowed(kelso_env, client):
 
 def test_stop_runs_as_a_job(kelso_env, client, jobs):
   kelso_env.run("start", "basic-features", "--set", "admin_user=root")
-  assert client.get("/apps").json()["apps"][0]["status"] == "running"
+  assert client.get("/apps").json()["apps"][0]["status"] == "ok"
 
   job = submit(client, jobs, "stop", {"app": "basic-features"})
   assert job["state"] == "done"
@@ -331,7 +331,7 @@ def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
   job = submit(client, jobs, "load", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert f"Restarted {APP}" in read_log(job)
-  assert client.get(f"/apps/{APP}").json()["status"] == "running"
+  assert client.get(f"/apps/{APP}").json()["status"] == "ok"
   loaded = (kelso_env.run_root / APP / "app_bundle" / "manifest.toml").read_text()
   assert 'version      = "0.2.0"' in loaded
   assert _compose_calls(kelso_env) == [

@@ -57,9 +57,7 @@ volumes = { models = "/cache" }
 
 [run.redis]
 image = "docker.io/valkey/valkey:9@sha256:8e8d64b405ce18f41b8e5ee20aa4687a8ed0022d1298f2ce31cdcf3a76e09411"
-
-[run.redis.compose.healthcheck]
-test = "redis-cli ping || exit 1"
+healthcheck = "redis-cli ping || exit 1"
 
 [run.database]
 image   = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23"

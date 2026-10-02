@@ -15,7 +15,7 @@
 <span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a>
 {%- if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}<a class="btn icon" href="{{ here }}/console" title="Console" aria-label="Console">{{ mdi('console') }}</a>{% endif -%}
 <div class="row actions">
-{% if app.status == 'running' %}
+{% if app.status not in ('stopped', None) %}
   {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
       desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
 {% else %}

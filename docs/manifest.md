@@ -52,6 +52,7 @@ creates.
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
+| `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
 ```toml
@@ -253,6 +254,28 @@ JELLYFIN_PublishedServerUrl = "${routes.main}"
 DB_PASSWORD                 = "${mongo_pass}"
 ```
 
+## Healthchecks
+
+A unit's `healthcheck` is a command docker runs inside the container; exiting
+0 means healthy. The bundle says only what to run. Kelso writes it into
+compose with the timing: every 5 seconds for the first 2 minutes after a start,
+so `kelso up` hears quickly, and every 60 seconds after that. Kelso never runs
+the check itself; it reads what docker last recorded.
+
+```toml
+[run.db]
+image       = "docker.io/mongo:8.0.11"
+healthcheck = ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+
+[run.main]
+image       = "nginx:alpine"
+healthcheck = "wget -q -O /dev/null http://localhost:8080/ || exit 1"
+```
+
+Leave it out when the image already has a healthcheck (`docker image inspect
+--format '{{json .Config.Healthcheck}}' <image>` shows it): that one applies
+as the image's author wrote it.
+
 ## Free-form docker options
 
 `[run.<unit>.compose]` is copied verbatim into that unit's compose service, for
@@ -262,20 +285,21 @@ the things kelso does not model:
 [run.main.compose]
 mem_limit = "256m"
 
-[run.main.compose.healthcheck]
-test     = "redis-cli ping || exit 1"
-interval = "10s"
+[run.main.compose.ulimits.nofile]
+soft = 10032
+hard = 10032
 ```
 
 Two rules apply.
 
 **Keys kelso generates are refused** — `image`, `volumes`, `ports`, `labels`,
-`environment`, `command`, `hostname`, `restart`, `network_mode`. Those have
+`environment`, `command`, `hostname`, `restart`, `network_mode`,
+`healthcheck`. Those have
 manifest fields; setting them twice would mean one of them silently losing.
 
 **Keys kelso does not recognise are announced.** There is an allowlist of
 options that shape how a container runs without reaching outside it —
-`healthcheck`, `depends_on`, `mem_limit`, `user`, `ulimits`, `read_only` and
+`depends_on`, `mem_limit`, `user`, `ulimits`, `read_only` and
 friends — and anything outside it produces a warning on load, in `kelso
 inspect`, and on the app's card in the web UI:
 
