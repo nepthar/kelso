@@ -75,7 +75,10 @@ from kelso.lib.spec import AppSpec
 #     /volumes carries `volume_roots` (size, device, used, available).
 # 29: GET /cron (each cron job's next run); activity runs carry `args`, and
 #     /activity takes `verb`.
-API_VERSION = 29
+# 30: app routes carry `host_url`, where the route answers on the host itself;
+#     units carry `resolved_environment`, secrets as `<secret>`; app volumes'
+#     `path` is `$app/<src>`; GET /host (cpus, memory, and kelso's disks).
+API_VERSION = 30
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -279,6 +282,11 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
     return {"route_providers": views.route_providers_view(_ctx_again(ctx))}
+
+  @app.get("/host", tags=["host"])
+  def get_host(ctx: Ctx) -> dict:
+    """The host's CPUs and memory, and each disk kelso keeps something on."""
+    return views.host_view(ctx)
 
   @app.get("/volumes", tags=["volumes"])
   def list_volumes(ctx: Ctx) -> dict:

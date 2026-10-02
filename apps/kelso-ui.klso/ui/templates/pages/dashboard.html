@@ -1,17 +1,35 @@
 {% extends "frame.html" %}
 {% from "macros.html" import pill, sub %}
-{% block head %}<link rel="stylesheet" href="{{ asset('vendor/uplot-1.6.32/uPlot.min.css') }}">{% endblock %}
 
 {% block content %}
 <h2>kelso host</h2>
 <div class="row host-line">
   <a class="btn icon" href="/host/console" title="Host shell" aria-label="Host shell">{{ mdi('console') }}</a>
   <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
+  {#- Longer spans wait on rolled-up metrics; only the last hour is kept at full detail. -#}
+  <select class="timeframe" aria-label="Time frame">
+    <option selected>1 hour</option>
+    <option disabled>1 day</option>
+    <option disabled>1 week</option>
+  </select>
 </div>
-<div class="charts">
-  <div class="card pad"><h2>Host CPU</h2><div class="chart" id="chart-cpu"></div></div>
-  <div class="card pad"><h2>Host memory</h2><div class="chart" id="chart-mem"></div></div>
-</div>
+<div class="card scroll"><table class="tall"><thead><tr>
+  <th>Resource</th><th>Usage %</th><th>Total</th><th>Notes</th>
+</tr></thead><tbody>
+{% for r in resources %}
+<tr>
+  <td class="name">{{ r.name }}</td>
+  <td class="trend">
+    {%- if r.line %}<svg class="spark" viewBox="{{ spark_box }}" preserveAspectRatio="none" aria-hidden="true">
+      {%- for y in spark_grid %}<line x1="0" x2="{{ spark_w }}" y1="{{ y }}" y2="{{ y }}"/>{% endfor -%}
+      <polyline points="{{ r.line }}"/></svg><span>{{ r.current }}%</span>
+    {%- else %}<span class="muted">no samples yet</span>{% endif -%}
+  </td>
+  <td class="muted">{{ r.total }}</td>
+  <td class="muted wrap">{{ r.notes }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
 
 <h2>Loaded apps</h2>
 {% if not apps %}
@@ -36,12 +54,4 @@
 {% endfor %}
 </tbody></table></div>
 {% endif %}
-
-{#- Read by charts.js. A data block, not a script: CSP has nothing to object to. -#}
-<script type="application/json" id="host-metrics">{{ metrics|tojson }}</script>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ asset('vendor/uplot-1.6.32/uPlot.iife.min.js') }}"></script>
-<script src="{{ asset('js/charts.js') }}"></script>
 {% endblock %}

@@ -12,34 +12,6 @@ from kelso.lib.util import path_size
 
 CPU_SAMPLE_S = 0.2
 
-_SKIP_FS = frozenset(
-  {
-    "autofs",
-    "bpf",
-    "cgroup",
-    "cgroup2",
-    "configfs",
-    "debugfs",
-    "devfs",
-    "devtmpfs",
-    "fuse",
-    "fusectl",
-    "hugetlbfs",
-    "mqueue",
-    "nsfs",
-    "overlay",
-    "proc",
-    "pstore",
-    "ramfs",
-    "rpc_pipefs",
-    "securityfs",
-    "squashfs",
-    "sysfs",
-    "tmpfs",
-    "tracefs",
-  }
-)
-
 
 @dataclass(frozen=True)
 class KelsoDir:
@@ -139,11 +111,11 @@ def record_host_stats(ctx: KelsoCtx) -> int:
   if swap is not None:
     ctx.record_gauge("host_swap_used_ratio", swap)
     n += 1
-  for device, mount in mounted_disks():
-    ratio = drive_used_ratio(mount)
+  for disk in kelso_disks(ctx):
+    ratio = drive_used_ratio(disk.mountpoint)
     if ratio is None:
       continue
-    ctx.record_gauge(f"host_drive_used_ratio/{device}", ratio)
+    ctx.record_gauge(disk.gauge, ratio)
     n += 1
   return n + record_app_stats(ctx)
 
@@ -166,16 +138,36 @@ def swap_used_ratio() -> float | None:
   return max(0.0, min(1.0, swap.percent / 100.0))
 
 
-def mounted_disks() -> list[tuple[str, Path]]:
-  """`(device_name, mountpoint)` for real disks, or `/` as `root`."""
-  seen: dict[str, Path] = {}
-  for part in psutil.disk_partitions(all=False):
-    if part.fstype in _SKIP_FS:
-      continue
-    name = Path(part.device).name or "root"
-    if name not in seen:
-      seen[name] = Path(part.mountpoint)
-  return list(seen.items()) or [("root", Path("/"))]
+@dataclass(frozen=True)
+class KelsoDisk:
+  """A filesystem kelso keeps something on, and what of kelso is there."""
+
+  device: str
+  mountpoint: Path
+  # Volume kinds, kelso's own directories, and host volumes as `<tag> (host)`.
+  holds: tuple[str, ...]
+
+  @property
+  def gauge(self) -> str:
+    return f"host_drive_used_ratio/{Path(self.device).name or 'root'}"
+
+
+def kelso_disks(ctx: KelsoCtx) -> list[KelsoDisk]:
+  """The filesystems under kelso's volume roots, own directories and host volumes."""
+  places = [
+    *sorted(ctx.config.volume_roots.items()),
+    *((entry.name, entry.root(ctx)) for entry in KELSO_DIRS),
+    *((f"{tag} (host)", v.path) for tag, v in sorted(ctx.config.host_volumes.items())),
+  ]
+  holds: dict[tuple[str, Path], list[str]] = {}
+  for name, path in places:
+    filesystem = filesystem_of(path)
+    if filesystem is not None:
+      holds.setdefault(filesystem, []).append(name)
+  return [
+    KelsoDisk(device, mountpoint, tuple(names))
+    for (device, mountpoint), names in holds.items()
+  ]
 
 
 def filesystem_of(path: Path) -> tuple[str, Path] | None:

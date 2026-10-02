@@ -285,3 +285,54 @@ def test_cron_page_puts_upcoming_runs_above_now_and_finished_ones_below(client, 
   assert 'class="dot exited"></span>skip' in above
   assert "nightly" in below and 'class="dot running"></span>ok' in below
   assert "2.1s" in below
+
+
+def test_app_page_order_and_routes_in_the_info_box(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  # The notices sit between the first row and the sections; not part of the order.
+  headings = [
+    h for h in re.findall(r"<h2>([^<]+)</h2>", text) if h != "Not ready to start"
+  ]
+  assert headings[:6] == [
+    "Info",
+    "Manifest",
+    "Configuration",
+    "Commands",
+    "Volumes",
+    "Run units",
+  ]
+  assert "Routes" not in headings
+  reachable = text.split('<div class="reachable">')[1].split("</div>\n  </div>")[0]
+  assert (
+    '<span class="key">main:</span> <a href="https://kelso.example.test"' in reachable
+  )
+  assert 'title="main:8080 → 10001, via web"' in reachable
+  # No published address and no host port: nowhere to reach it, so not listed.
+  assert "admin" not in reachable
+
+
+def test_app_environment_shows_the_manifest_and_what_it_resolves_to(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  env = text.split("<summary>Environment</summary>")[1].split("</details>")[0]
+  assert "<th>Variable</th><th>In the manifest</th><th>Value</th>" in env
+  row = env.split('<td class="key">PASS</td>')[1].split("</tr>")[0]
+  assert "${admin_pass}" in row
+  assert "&lt;secret&gt;" in row
+
+
+def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
+  text = client.get("/").text
+  rows = text.split('<table class="tall">')[1].split("</table>")[0].split("<tr>")[2:]
+  cpu, memory, disk = rows
+  assert "Host CPU" in cpu and "6 CPUs" in cpu
+  # 1.6% at 214s into the hour, then 50% at 514s, on a 200x40 box.
+  assert '<polyline points="11.9,39.4 28.6,20.0"/>' in cpu and "50%" in cpu
+  assert re.findall(r'<line x1="0" x2="200" y1="([\d.]+)"', cpu) == [
+    "10.0",
+    "20.0",
+    "30.0",
+  ]
+  assert "Host memory" in memory and "8.0 GB" in memory and "no samples yet" in memory
+  assert "/dev/sda2" in disk and "2.0 TB" in disk and "42%" in disk
+  assert "bulk, snapshots, &lt;i" in disk
+  assert "<option disabled>1 day</option>" in text

@@ -1827,7 +1827,7 @@ def test_inspect_says_each_volumes_kind_and_when_nothing_runs(kelso_env):
   inspected = kelso_env.run("inspect", BASIC)
   assert inspected.returncode == 0, inspected.stderr
   assert "State:       not running" in inspected.stdout
-  assert "bin (app, read-only): " in inspected.stdout
+  assert "bin (app, read-only): $app/bin" in inspected.stdout
   assert f"config (data): {kelso_env.volumes_root / 'data' / BASIC / 'config'}" in (
     inspected.stdout
   )

@@ -66,6 +66,11 @@ class AppVolume:
     """Where the run dir links this volume, relative to the compose file."""
     return f"./volumes/{self.kind}/{self.name}"
 
+  @property
+  def in_bundle(self) -> str:
+    """An `app` volume's file or folder in the bundle, shown as `$app/<src>`."""
+    return f"$app/{self.src or self.name}"
+
 
 @dataclass(frozen=True)
 class BoundVolume:

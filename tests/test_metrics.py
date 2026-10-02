@@ -10,11 +10,12 @@ from kelso.lib import activity
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import (
+  KelsoDisk,
   _pct,
   cpu_used_ratio,
   drive_used_ratio,
+  kelso_disks,
   mem_used_ratio,
-  mounted_disks,
   record_host_stats,
   record_volume_sizes,
   swap_used_ratio,
@@ -71,7 +72,10 @@ def test_host_metrics_records_disk_and_app_stats(kelso_env, monkeypatch):
   monkeypatch.setattr("kelso.lib.metric.cpu_used_ratio", lambda: 0.4)
   monkeypatch.setattr("kelso.lib.metric.mem_used_ratio", lambda: 0.5)
   monkeypatch.setattr("kelso.lib.metric.swap_used_ratio", lambda: 0.1)
-  monkeypatch.setattr("kelso.lib.metric.mounted_disks", lambda: [("root", Path("/"))])
+  monkeypatch.setattr(
+    "kelso.lib.metric.kelso_disks",
+    lambda _ctx: [KelsoDisk("/dev/root", Path("/"), ("data",))],
+  )
   monkeypatch.setattr("kelso.lib.metric.drive_used_ratio", lambda _p: 0.25)
 
   ctx = _ctx(kelso_env)
@@ -116,20 +120,12 @@ def test_swap_used_ratio_skips_when_there_is_none(monkeypatch):
   assert swap_used_ratio() is None
 
 
-def test_mounted_disks_skips_pseudo_filesystems(monkeypatch):
-  monkeypatch.setattr(
-    "kelso.lib.metric.psutil.disk_partitions",
-    lambda all=False: [
-      SimpleNamespace(device="/dev/sda1", mountpoint="/", fstype="ext4"),
-      SimpleNamespace(device="tmpfs", mountpoint="/run", fstype="tmpfs"),
-    ],
-  )
-  assert mounted_disks() == [("sda1", Path("/"))]
-
-
-def test_mounted_disks_falls_back_to_root_when_empty(monkeypatch):
-  monkeypatch.setattr("kelso.lib.metric.psutil.disk_partitions", lambda all=False: [])
-  assert mounted_disks() == [("root", Path("/"))]
+def test_kelso_disks_say_what_of_kelso_each_one_holds(kelso_env):
+  """Everything of a test install is on one filesystem."""
+  assert kelso_env.run("load", "io.p2net.basic-features").returncode == 0
+  [disk] = kelso_disks(_ctx(kelso_env))
+  assert {"data", "temp", "repos", "var"} <= set(disk.holds)
+  assert disk.gauge == f"host_drive_used_ratio/{Path(disk.device).name or 'root'}"
 
 
 def test_drive_used_ratio(monkeypatch):
@@ -151,7 +147,10 @@ def test_record_host_stats_skips_unavailable_gauges(kelso_env, monkeypatch):
   monkeypatch.setattr("kelso.lib.metric.cpu_used_ratio", lambda: None)
   monkeypatch.setattr("kelso.lib.metric.mem_used_ratio", lambda: None)
   monkeypatch.setattr("kelso.lib.metric.swap_used_ratio", lambda: None)
-  monkeypatch.setattr("kelso.lib.metric.mounted_disks", lambda: [("root", Path("/"))])
+  monkeypatch.setattr(
+    "kelso.lib.metric.kelso_disks",
+    lambda _ctx: [KelsoDisk("/dev/root", Path("/"), ("data",))],
+  )
   monkeypatch.setattr("kelso.lib.metric.drive_used_ratio", lambda _p: 0.3)
   ctx = _ctx(kelso_env)
   n = record_host_stats(ctx)

@@ -92,7 +92,8 @@ APP_DETAIL = {
       "name": "main",
       "image": "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
       "state": "running",
-      "environment": {"PORT": "8080", "EVIL": EVIL},
+      "environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "${admin_pass}"},
+      "resolved_environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "<secret>"},
       "command": ["/app/start.sh", EVIL],
       "volumes": [
         {"name": "ui", "path": "/app", "kind": "app", "readonly": True, "desc": EVIL},
@@ -116,6 +117,7 @@ APP_DETAIL = {
       "host_port": 10001,
       "url": "https://kelso.example.test",
       "published_url": "https://kelso.example.test",
+      "host_url": "http://10.0.0.5:10001",
       "provider": "web",
     },
     {
@@ -125,6 +127,7 @@ APP_DETAIL = {
       "host_port": None,
       "url": None,
       "published_url": None,
+      "host_url": None,
       "provider": None,
     },
   ],
@@ -133,7 +136,7 @@ APP_DETAIL = {
       "name": "ui",
       "kind": "app",
       "readonly": True,
-      "path": "/k/ui",
+      "path": "$app/ui",
       "bytes": 79549702,
       "bind": None,
     },
@@ -498,13 +501,28 @@ METRICS = {
   "metrics": {
     "host_cpu_used_ratio": [{"t": 1790182164, "v": 0.016}, {"t": 1790182464, "v": 0.5}],
     "host_mem_used_ratio": [],
+    "host_drive_used_ratio/sda2": [{"t": 1790185550, "v": 0.42}],
   },
+}
+
+HOST = {
+  "cpus": 6,
+  "memory_bytes": 8 * 1024**3,
+  "disks": [
+    {
+      "device": "/dev/sda2",
+      "mountpoint": "/",
+      "total_bytes": 2 * 1024**4,
+      "holds": ["bulk", "snapshots", EVIL],
+      "gauge": "host_drive_used_ratio/sda2",
+    }
+  ],
 }
 
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 29, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 30, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -524,6 +542,7 @@ GET = {
   "/activity?verb=cron&limit=100": CRON_RUNS,
   "/activity/x.log": {"text": "log text"},
   "/metrics?prefix=host_&hours=1": METRICS,
+  "/host": HOST,
   "/jobs/j1": {"id": "j1", "state": "done", "log": "x.log"},
 }
 
@@ -538,7 +557,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 29
+    self.api = 30
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

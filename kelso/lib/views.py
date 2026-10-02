@@ -21,11 +21,16 @@ from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
 from kelso.lib.lifecycle.volumes import volumes_on_disk
-from kelso.lib.metric import KELSO_DIRS, filesystem_of
+from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
-from kelso.lib.receipt import published_route_urls
+from kelso.lib.receipt import host_url, published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
-from kelso.lib.run_layout import AppRunData, load_run_data, resolved_subdomain
+from kelso.lib.run_layout import (
+  AppRunData,
+  load_run_data,
+  resolved_subdomain,
+  shown_environment,
+)
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
@@ -248,6 +253,27 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   ]
 
 
+def host_view(ctx: KelsoCtx) -> dict[str, Any]:
+  """The host's size, and the disks kelso keeps things on.
+
+  Each disk's `gauge` names its usage history under GET /metrics.
+  """
+  return {
+    "cpus": psutil.cpu_count(),
+    "memory_bytes": psutil.virtual_memory().total,
+    "disks": [
+      {
+        "device": disk.device,
+        "mountpoint": str(disk.mountpoint),
+        "total_bytes": psutil.disk_usage(str(disk.mountpoint)).total,
+        "holds": list(disk.holds),
+        "gauge": disk.gauge,
+      }
+      for disk in kelso_disks(ctx)
+    ],
+  }
+
+
 def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Each volume root's size, summed from its volumes', and the filesystem it shares."""
   totals: dict[str, int] = {}
@@ -372,7 +398,7 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "network_mode": spec.network_mode,
       "run_path": str(ctx.loaded_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),
-      "units": _units(spec, observation),
+      "units": _units(spec, observation, run_data),
       "routes": _routes(spec, run_data, ctx),
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
@@ -423,7 +449,9 @@ def _configured(
   return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
 
 
-def _units(spec: AppSpec, observation: AppObservation) -> list[dict[str, Any]]:
+def _units(
+  spec: AppSpec, observation: AppObservation, run_data: AppRunData
+) -> list[dict[str, Any]]:
   """Declared run units joined to whatever containers are actually up."""
   containers = {c.run_unit: c for c in observation.containers}
   units = []
@@ -437,10 +465,10 @@ def _units(spec: AppSpec, observation: AppObservation) -> list[dict[str, Any]]:
         "state": container.state if container else None,
         "container_name": container.name if container else None,
         "container_id": container.container_id if container else None,
-        # As the manifest wrote it, so `${admin_pass}` stays a placeholder.
-        # The *resolved* environment is `AppRunData.config_env`, which carries
-        # secret values and must never be projected.
+        # As the manifest wrote it, and as the container gets it. Never
+        # `AppRunData.config_env`, which carries secret values.
         "environment": dict(unit.environment),
+        "resolved_environment": shown_environment(spec, unit, run_data),
         "command": list(unit.command) if unit.command else None,
         "volumes": [
           {
@@ -474,6 +502,9 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
         "host_port": assigned.host_port if assigned else None,
         "url": run_data.route_urls.get(name),
         "published_url": published.get(name),
+        "host_url": host_url(
+          spec, run_data, name, ctx.config.kelso_address or "localhost"
+        ),
         "provider": assignments.get(name),
       }
     )
@@ -491,7 +522,10 @@ def _volumes(
   volumes = []
   for name, volume in spec.volumes.items():
     link = run_data.volume_links.get(name)
-    source = link.source if link else None
+    if volume.kind == "app":
+      path = volume.in_bundle
+    else:
+      path = str(link.source) if link else None
     # Host volumes are gauged under the tag they are bound to, since two apps
     # binding one host volume are looking at the same directory.
     if volume.kind == "host":
@@ -504,7 +538,7 @@ def _volumes(
         "name": name,
         "kind": volume.kind,
         "readonly": volume.readonly,
-        "path": str(source) if source else None,
+        "path": path,
         # None until volume-metrics has run over this volume at least once.
         "bytes": _gauge_bytes(gauges, key) if key else None,
         # Only `host` volumes are bindable; the rest are kelso's to place.
