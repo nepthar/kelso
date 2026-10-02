@@ -25,12 +25,13 @@ def volumes(page: PageDep):
     host_volumes=api("/host-volumes")["host_volumes"],
     volumes=by_size,
     kelso_dirs=managed.get("kelso_dirs") or [],
+    volume_roots=managed.get("volume_roots") or [],
   )
 
 
 @router.post("/volumes")
 async def post_volumes(request: Request):
-  """Declare a host volume, or drop one."""
+  """Declare a host volume, drop one, or delete an orphaned app volume."""
   form = await request.form()
   action, tag = field(form, "action"), field(form, "tag")
   try:
@@ -49,6 +50,10 @@ async def post_volumes(request: Request):
     if action == "delete":
       api(f"/host-volumes/{quote(tag)}", "DELETE")
       return see("/volumes", ok=f"Removed host volume {tag}")
+    if action == "delete-volume":
+      app_id, name = field(form, "app_id"), field(form, "name")
+      api(f"/volumes/{quote(app_id, safe='')}/{quote(name, safe='')}", "DELETE")
+      return see("/volumes", ok=f"Deleted volume {name} of {app_id}")
   except ApiError as e:
     return see("/volumes", err=str(e))
   return see("/volumes")

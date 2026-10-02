@@ -178,6 +178,28 @@ def mounted_disks() -> list[tuple[str, Path]]:
   return list(seen.items()) or [("root", Path("/"))]
 
 
+def filesystem_of(path: Path) -> tuple[str, Path] | None:
+  """`(device, mountpoint)` of the filesystem holding `path`, or None if missing."""
+  try:
+    device = path.stat().st_dev
+  except OSError:
+    return None
+  matches = []
+  for part in psutil.disk_partitions(all=True):
+    try:
+      if Path(part.mountpoint).stat().st_dev == device:
+        matches.append(part)
+    except OSError:
+      continue
+  if not matches:
+    return None
+  # By device id, since a path prefix can lie (macOS firmlinks /Users onto the
+  # data volume). APFS also gives `/` the data volume's id; the deeper mount is
+  # the real one.
+  part = max(matches, key=lambda p: len(p.mountpoint))
+  return part.device, Path(part.mountpoint)
+
+
 def drive_used_ratio(mount: Path) -> float | None:
   try:
     usage = psutil.disk_usage(str(mount))

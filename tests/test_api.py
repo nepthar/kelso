@@ -782,8 +782,7 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
   volumes = {v["name"]: v for v in body["volumes"]}
   assert volumes["config"]["app_id"] == APP
   assert volumes["config"]["kind"] == "data"
-  assert volumes["config"]["in_use"] is True
-  assert volumes["config"]["declared"] is True
+  assert volumes["config"]["use"] == "in use"
   assert volumes["config"]["bytes"] is None
   # The set of directories is kelsod's to name; the UI renders what it sends.
   dirs = {d["name"]: d for d in body["kelso_dirs"]}
@@ -804,6 +803,12 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
   assert dirs["repos"]["bytes"] > 0
   media = {v["tag"]: v for v in client.get("/host-volumes").json()["host_volumes"]}
   assert media["media"]["bytes"] == 4
+  roots = {r["kind"]: r for r in body["volume_roots"]}
+  assert set(roots) == {"bulk", "data", "logs", "temp"}
+  assert roots["data"]["bytes"] == 2
+  assert roots["data"]["device"]
+  assert roots["data"]["used"] > 0
+  assert roots["data"]["available"] > 0
 
 
 def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
@@ -845,8 +850,28 @@ def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
   assert kelso_env.run("load", APP).returncode == 0
 
   volumes = {v["name"]: v for v in client.get("/volumes").json()["volumes"]}
-  assert volumes["config"]["declared"] is False, "data left behind, flagged"
-  assert volumes["cache"]["declared"] is True
+  assert volumes["config"]["use"] == "orphaned", "data left behind, flagged"
+  assert volumes["cache"]["use"] == "idle"
+
+  refused = client.delete(f"/volumes/{APP}/cache")
+  assert refused.status_code == 400
+  assert "no orphaned volume 'cache'" in refused.json()["error"]
+  assert (kelso_env.volumes_root / "temp" / APP / "cache").is_dir()
+
+  deleted = client.delete(f"/volumes/{APP}/config")
+  assert deleted.status_code == 200, deleted.text
+  assert not (kelso_env.volumes_root / "data" / APP / "config").exists()
+  assert {v["name"] for v in deleted.json()["volumes"]} == {"cache"}
+
+
+def test_an_unloaded_apps_volumes_are_kept_not_orphaned(kelso_env, client):
+  assert kelso_env.run("load", APP).returncode == 0
+  assert kelso_env.run("unload", APP, "--yes").returncode == 0
+
+  uses = {v["use"] for v in client.get("/volumes").json()["volumes"]}
+  assert uses == {"unloaded"}
+  assert client.delete(f"/volumes/{APP}/config").status_code == 400
+  assert (kelso_env.volumes_root / "data" / APP / "config").is_dir()
 
 
 # --- the single app view ---------------------------------------------------
@@ -1104,3 +1129,13 @@ def test_metrics_refuses_hours_below_one(kelso_env, client):
   response = client.get("/metrics?hours=0")
   assert response.status_code == 400
   assert "hours must be >= 1" in response.json()["error"]
+
+
+def test_a_loaded_app_whose_manifest_no_longer_parses_has_no_orphans(kelso_env, client):
+  assert kelso_env.run("load", APP).returncode == 0
+  manifest = kelso_env.run_root / APP / "app_bundle" / "manifest.toml"
+  manifest.write_text(manifest.read_text() + "\n[nonsense]\n")
+
+  uses = {v["use"] for v in client.get("/volumes").json()["volumes"]}
+  assert uses == {"unknown"}
+  assert client.delete(f"/volumes/{APP}/config").status_code == 400

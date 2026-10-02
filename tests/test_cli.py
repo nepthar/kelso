@@ -1809,3 +1809,13 @@ def test_inspect_falls_back_to_the_bundle_when_unloaded(kelso_env):
   assert "No such file" not in inspected.stderr
   assert f"{BASIC} is not loaded" in inspected.stdout
   assert f"kelso load {BASIC}" in inspected.stdout
+
+
+def test_system_volumes_says_which_volume_is_orphaned(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.volumes_root / "data" / BASIC / "retired").mkdir()
+
+  listed = kelso_env.run("system", "volumes")
+  assert listed.returncode == 0, listed.stderr
+  uses = {line.split()[1]: line.split()[3] for line in listed.stdout.splitlines()[2:]}
+  assert uses == {"config": "idle", "cache": "idle", "retired": "orphaned"}

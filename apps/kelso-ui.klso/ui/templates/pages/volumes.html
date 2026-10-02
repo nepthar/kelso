@@ -48,15 +48,55 @@
 <p class="empty">No app volumes on disk yet.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>Volume</th><th>App</th><th>Kind</th><th>Use</th><th>Size</th>
+  <th>Volume</th><th>App</th><th>Kind</th><th>Use</th><th>Size</th><th class="act"></th>
 </tr></thead><tbody>
 {% for v in volumes %}
+{% set orphaned = v.use == 'orphaned' %}
 <tr>
-  <td class="name">{{ v.name }}{% if not v.declared %}{{ sub('not in the manifest') }}{% endif %}</td>
+  <td class="name">{{ v.name }}{% if orphaned %}{{ sub('not in the manifest') }}{% endif %}</td>
   <td class="muted">{{ v.app_id }}</td>
   <td class="muted">{{ v.kind }}</td>
-  <td>{{ pill('in use', 'running') if v.in_use else pill('idle') }}</td>
+  <td>{{ pill(v.use, {'in use': 'running', 'orphaned': 'bad'}.get(v.use, '')) }}</td>
   <td class="muted">{{ v.get('bytes')|size }}</td>
+  <td class="act">{% if orphaned %}<form method="post" action="/volumes" data-confirm="Are you sure you want to delete the orphaned volume {{ v.name }} of {{ v.app_id }}? Everything in it is deleted, and this cannot be undone.">
+    <input type="hidden" name="action" value="delete-volume">
+    <input type="hidden" name="app_id" value="{{ v.app_id }}">
+    <input type="hidden" name="name" value="{{ v.name }}">
+    {{- icon_button('delete', 'delete-outline', submit=true, danger=true) -}}
+  </form>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<h2>Volume disks</h2>
+<p class="lede">Each kind of app volume, against the disk it is on</p>
+<div class="card">
+{% if not volume_roots %}
+<p class="empty">Kelso reported no volume roots.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>Volume</th><th></th><th>Used</th><th>Available</th><th>Device</th>
+</tr></thead><tbody>
+{% for r in volume_roots %}
+<tr>
+  <td class="name">{{ r.kind }}</td>
+  <td class="grow">{% if r.used is not none %}
+    {% set mine = r.get('bytes') or 0 %}
+    {% set total = r.used + r.available %}
+    {% set other = [r.used - mine, 0]|max %}
+    {% set mine_w = (100 * mine / total)|round(2) if total else 0 %}
+    {% set other_w = (100 * other / total)|round(2) if total else 0 %}
+    <svg class="usage" viewBox="0 0 100 1" preserveAspectRatio="none" role="img" aria-label="{{ r.kind }} {{ mine|size }}, other {{ other|size }}, free {{ r.available|size }}">
+      <title>{{ r.kind }} {{ mine|size }} · other {{ other|size }} · free {{ r.available|size }}</title>
+      <rect class="mine" x="0" width="{{ mine_w }}" height="1"></rect>
+      <rect class="other" x="{{ mine_w }}" width="{{ other_w }}" height="1"></rect>
+    </svg>
+  {% else %}<span class="muted">path is missing</span>{% endif %}</td>
+  <td class="muted">{{ r.get('bytes')|size }}</td>
+  <td class="muted">{{ r.available|size }}</td>
+  <td class="muted path">{{ r.device or '—' }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>

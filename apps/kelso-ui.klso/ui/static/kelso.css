@@ -555,6 +555,10 @@ details.reveal > summary:hover { color: var(--coral); }
 }
 
 /* --- charts --------------------------------------------------------------- */
+td.grow { width: 100%; min-width: 120px; }
+.usage { display: block; width: 100%; height: 10px; background: var(--void); border: 1px solid var(--line); }
+.usage .mine { fill: var(--coral); }
+.usage .other { fill: var(--muted); }
 .charts { display: flex; gap: 20px; align-items: stretch; }
 .charts > .card { flex: 1; min-width: 0; }
 .charts h2 { margin: 0 0 10px; display: block; }

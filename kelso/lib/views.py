@@ -8,6 +8,8 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+import psutil
+
 from kelso.lib import activity
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle, manifest_text
@@ -17,7 +19,8 @@ from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
-from kelso.lib.metric import KELSO_DIRS
+from kelso.lib.lifecycle.volumes import volumes_on_disk
+from kelso.lib.metric import KELSO_DIRS, filesystem_of
 from kelso.lib.observations import AppObservation, observe
 from kelso.lib.receipt import published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
@@ -183,44 +186,18 @@ def _gauge_bytes(gauges: dict[str, Any], name: str) -> int | None:
 
 def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every kelso-managed volume on disk, whatever declared it."""
-  running = {
-    observation.app_id
-    for observation in ctx.observations()
-    if observation.running_count
-  }
-  declared: dict[str, set[str]] = {}
-  volumes = []
   gauges = ctx.read_gauges("volume_size_bytes/")
-
-  for kind, root in sorted(ctx.config.volume_roots.items()):
-    if not root.is_dir():
-      continue
-    for app_dir in sorted(root.iterdir()):
-      if not app_dir.is_dir():
-        continue
-      app_id = app_dir.name
-      if app_id not in declared:
-        spec = ctx.loaded_spec(app_id)
-        declared[app_id] = set(spec.volumes) if spec else set()
-      for volume_dir in sorted(app_dir.iterdir()):
-        if not volume_dir.is_dir():
-          continue
-        volumes.append(
-          {
-            "app_id": app_id,
-            "name": volume_dir.name,
-            "kind": kind,
-            "path": str(volume_dir),
-            "in_use": app_id in running,
-            # False means the data outlived whatever declared it: either the
-            # app is gone, or its manifest stopped naming this volume.
-            "declared": volume_dir.name in declared[app_id],
-            "bytes": _gauge_bytes(
-              gauges, f"volume_size_bytes/{app_id}/{kind}/{volume_dir.name}"
-            ),
-          }
-        )
-  return volumes
+  return [
+    {
+      "app_id": str(v.app_id),
+      "name": v.name,
+      "kind": v.kind,
+      "path": str(v.path),
+      "use": v.use,
+      "bytes": _gauge_bytes(gauges, f"volume_size_bytes/{v.app_id}/{v.kind}/{v.name}"),
+    }
+    for v in volumes_on_disk(ctx)
+  ]
 
 
 def host_volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
@@ -268,6 +245,39 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
     }
     for entry in KELSO_DIRS
   ]
+
+
+def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
+  """Each volume root's size, summed from its volumes', and the filesystem it shares."""
+  totals: dict[str, int] = {}
+  for key, entry in ctx.read_gauges("volume_size_bytes/").items():
+    _, _, app_id, kind, name = key.split("/", 4)
+    root = ctx.config.volume_roots.get(kind)
+    # Only volumes still on disk: a removed one keeps its last reading for hours.
+    if root is not None and (root / app_id / name).is_dir():
+      totals[kind] = totals.get(kind, 0) + int(float(entry.value))
+  roots = []
+  for kind, root in sorted(ctx.config.volume_roots.items()):
+    row: dict[str, Any] = {
+      "kind": kind,
+      "path": str(root),
+      "bytes": totals.get(kind, 0),
+      "device": None,
+      "mountpoint": None,
+      "used": None,
+      "available": None,
+    }
+    filesystem = filesystem_of(root)
+    if filesystem is not None:
+      usage = psutil.disk_usage(str(root))
+      row |= {
+        "device": filesystem[0],
+        "mountpoint": str(filesystem[1]),
+        "used": usage.used,
+        "available": usage.free,
+      }
+    roots.append(row)
+  return roots
 
 
 def snapshots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:

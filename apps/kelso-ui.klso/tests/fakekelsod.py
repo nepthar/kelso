@@ -309,37 +309,53 @@ VOLUMES = {
       "app_id": "kelso-ui",
       "name": "tls",
       "kind": "data",
-      "in_use": True,
-      "declared": True,
+      "use": "in use",
       "bytes": 864,
     },
     {
       "app_id": "mealie",
       "name": EVIL,
       "kind": "data",
-      "in_use": False,
-      "declared": False,
+      "use": "orphaned",
       "bytes": None,
     },
     {
       "app_id": "jellyfin",
       "name": "cache",
       "kind": "temp",
-      "in_use": False,
-      "declared": True,
+      "use": "idle",
       "bytes": 0,
     },
     {
       "app_id": "jellyfin",
       "name": "config",
       "kind": "data",
-      "in_use": False,
-      "declared": True,
+      "use": "idle",
       "bytes": 601653,
     },
   ],
   "kelso_dirs": [
     {"name": "run", "description": f"Loaded apps {EVIL}", "bytes": 1024**3},
+  ],
+  "volume_roots": [
+    {
+      "kind": "data",
+      "path": "/k/volumes/data",
+      "bytes": 25,
+      "device": f"/dev/sda1 {EVIL}",
+      "mountpoint": "/",
+      "used": 75,
+      "available": 25,
+    },
+    {
+      "kind": "bulk",
+      "path": "/mnt/gone",
+      "bytes": None,
+      "device": None,
+      "mountpoint": None,
+      "used": None,
+      "available": None,
+    },
   ],
 }
 
@@ -452,7 +468,7 @@ METRICS = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 27, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 28, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -484,7 +500,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 27
+    self.api = 28
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

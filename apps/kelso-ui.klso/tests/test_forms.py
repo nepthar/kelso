@@ -37,6 +37,15 @@ def test_host_volume_create_and_delete(client, fake):
   ]
 
 
+def test_orphaned_volume_delete_names_app_and_volume(client, fake):
+  response = client.post(
+    "/volumes",
+    data={"action": "delete-volume", "app_id": "mealie", "name": "old db"},
+  )
+  assert response.headers["location"] == "/volumes?ok=Deleted+volume+old+db+of+mealie"
+  assert fake.posts == [("DELETE", "/volumes/mealie/old db", None)]
+
+
 def test_route_provider_new_keeps_kind_on_error(client, fake):
   fake.fail = "bad domain"
   response = client.post("/routes/fresh", data={"kind": "pangolin", "set.domain": "x"})
