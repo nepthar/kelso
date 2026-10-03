@@ -27,7 +27,7 @@ def install_service(config_path: Path) -> None:
   print(f"Wrote {unit}")
   service.activate()
   print(f"kelsod is running as {service.UNIT_NAME}, and will start at boot.")
-  print(f"  Logs: journalctl --user -u {service.UNIT_NAME}")
+  print(f"  Logs: journalctl --user-unit {service.UNIT_NAME}")
 
 
 def _install(_args: argparse.Namespace, ctx: KelsoCtx) -> None:

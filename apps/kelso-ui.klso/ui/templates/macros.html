@@ -12,8 +12,8 @@
 {%- endmacro %}
 
 {% macro error_card(message) -%}
-<div class="error"><h2>Cannot reach kelsod</h2><p>{{ message }}</p>
-  <p class="muted">The socket is bound with <code>kelso config kelso-ui --bind conn=&lt;host_volume&gt;</code>.</p></div>
+<div class="error"><h2>Trouble talking to kelsod</h2><p>{{ message }}</p>
+  <p class="muted">This app reaches kelsod through its admin socket, or over TCP when <code>api_address</code> is set (Docker Desktop on macOS). If kelsod answered with an error, <code>journalctl --user-unit kelsod</code> on the host says why.</p></div>
 {%- endmacro %}
 
 {#- A terminal on the websocket at `src`; console.js draws it. The caller is the
