@@ -29,7 +29,7 @@ def a_bundle(
   *,
   connections: str = 'admin = { kind = "kelso.admin" }',
   attached: str = '["admin"]',
-  env: str = 'SOCK = "${conn.admin.socket}"\nADDR = "${conn.admin.address}"',
+  env: str = 'SOCK = "${conn.admin.socket}"',
 ) -> None:
   bundle = kelso_env.local_repo / f"{APP}.klso"
   bundle.mkdir(exist_ok=True)
@@ -54,20 +54,9 @@ def test_kelso_admin_mounts_the_socket_folder_and_says_where(kelso_env):
   assert mount["source"] == str(kelso_env.root / "var" / "conn")
   assert mount["bind"] == {"create_host_path": False}
   assert main["environment"]["SOCK"] == "/run/kelso/conn/admin/admin.sock"
-  # No admin_address configured: the socket is the way in.
-  assert main["environment"]["ADDR"] == ""
 
   inspected = kelso_env.run("inspect", APP)
   assert "connection 'admin' to kelsod's admin API" in inspected.stdout
-
-
-def test_admin_address_from_config_reaches_the_app(kelso_env):
-  config = kelso_env.config.read_text()
-  kelso_env.config.write_text(f'admin_address = "host.docker.internal:41997"\n{config}')
-  a_bundle(kelso_env)
-  assert kelso_env.run("load", APP).returncode == 0
-
-  assert service(kelso_env)["environment"]["ADDR"] == "host.docker.internal:41997"
 
 
 def test_a_missing_host_path_blocks_load(kelso_env):
@@ -86,8 +75,8 @@ def test_a_missing_host_path_blocks_load(kelso_env):
     ({"attached": '["other"]'}, "connection 'other' is not declared in [connections]"),
     ({"attached": "[]"}, "connection 'admin' is not attached to this unit"),
     (
-      {"env": 'X = "${conn.admin.password}"'},
-      "references ${conn.admin.password}, which is not a known substitution",
+      {"env": 'X = "${conn.admin.address}"'},
+      "references ${conn.admin.address}, which is not a known substitution",
     ),
   ],
 )

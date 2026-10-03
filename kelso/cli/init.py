@@ -61,11 +61,6 @@ url = "github://nepthar/kelso/main/demo-apps"
 # required as soon as one is configured.
 # kelso_address = "10.0.0.5"
 
-# Apps with a kelso.admin connection reach kelsod through its admin socket.
-# Where a socket cannot cross into a container -- Docker Desktop on macOS --
-# run `kelsod --port N` and give them its address instead.
-# admin_address = "host.docker.internal:41997"
-
 # Routes are auto-assigned to this provider tag on first load (like a config
 # default), unless marked private=true in the manifest. The reserved tag
 # "none" is a built-in noop and is the default when this key is omitted.

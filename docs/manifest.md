@@ -122,7 +122,7 @@ to whatever names the app reads. Kelso sets no environment of its own.
 
 | Kind | Gives the app | Properties |
 | --- | --- | --- |
-| `kelso.admin` | kelsod's admin API: full control of kelso. | `socket`: the admin socket's path in the container. `address`: `host:port` of kelsod when `config.toml` sets `admin_address`, else empty. |
+| `kelso.admin` | kelsod's admin API: full control of kelso. | `socket`: the admin socket's path in the container. |
 | `docker.admin` | The docker daemon: full control of the host. | `socket`: the docker socket's path in the container. `host`: the same as a `DOCKER_HOST` value. |
 
 Each one hands the app control of something outside it, so kelso calls every
@@ -138,13 +138,12 @@ connections = ["admin"]
 
 [run.main.env]
 KELSO_SOCKET = "${conn.admin.socket}"
-KELSO_API    = "${conn.admin.address}"
 ```
 
-On Linux the socket is all an app needs. Docker Desktop on macOS cannot carry
-a unix socket into a container: run `kelsod --port N` and set
-`admin_address = "host.docker.internal:N"` in `config.toml`, and apps that read
-`address` reach kelsod over TCP instead.
+A connection does not cross machines. Docker Desktop on macOS mounts the
+admin socket but cannot carry connections through it, so an app that must
+work there takes kelsod's TCP address as an ordinary config value instead, as
+kelso-ui does with `api_address`.
 
 ## `[config]` and `[adv_config]`
 

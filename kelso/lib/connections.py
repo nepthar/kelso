@@ -46,11 +46,8 @@ CONNECTION_KINDS = {
       "kelso.admin",
       "kelsod's admin API: full control of kelso",
       lambda config: config.conn_root,
-      lambda config, mounted: {
-        "socket": f"{mounted}/admin.sock",
-        "address": config.admin_address,
-      },
-      ("socket", "address"),
+      lambda config, mounted: {"socket": f"{mounted}/admin.sock"},
+      ("socket",),
     ),
     ConnectionKind(
       "docker.admin",
