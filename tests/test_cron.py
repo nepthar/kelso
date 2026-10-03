@@ -153,6 +153,7 @@ def test_a_tick_runs_a_due_job_and_records_it(kelso_env):
   assert run["app_id"] == APP
   assert run["args"] == {"job": "every-minute", "command": "hello"}
   assert run["status"] == "ok"
+  assert run["started_by"] == "cli"
 
   # Ran just now, so the next run is under a minute away rather than due.
   [row] = listed(kelso_env)

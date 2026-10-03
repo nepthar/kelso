@@ -1,3 +1,4 @@
+import shlex
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,6 +7,7 @@ from typing import Literal
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import container_recovery_message, logger
+from kelso.lib.lifecycle.rootfs import run_as_root
 from kelso.lib.lifecycle.run import stop
 
 # Deleting config while keeping data regenerates an app's secrets against a
@@ -117,13 +119,10 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
     plan.config_path.unlink()
     logger.info("Removed config %s", plan.config_path)
 
-  for path in plan.volume_paths:
-    if plan.empties:
-      _empty_volumes(path)
-      logger.info("Emptied volumes in %s", path)
-    elif path.is_dir():
-      shutil.rmtree(path)
-      logger.info("Removed volume %s", path)
+  if plan.empties:
+    _empty_volumes(app_id, plan.volume_paths)
+  else:
+    _remove_volumes(app_id, plan.volume_paths)
 
   if plan.purges:
     ctx.kelso_db.purge_app(app_id)
@@ -133,13 +132,34 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
   record_app_action(_ACTIONS[plan.mode], app_id, ctx)
 
 
-def _empty_volumes(app_dir: Path) -> None:
-  """Delete what is inside each volume under `app_dir`, keeping the volume dirs."""
-  for volume in app_dir.iterdir():
-    if not volume.is_dir() or volume.is_symlink():
-      continue
-    for entry in volume.iterdir():
-      if entry.is_dir() and not entry.is_symlink():
-        shutil.rmtree(entry)
-      else:
-        entry.unlink()
+def _remove_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:
+  """Delete each app volume dir. Its files may be root's, so a container does it."""
+  existing = [path.resolve() for path in paths if path.is_dir()]
+  if not existing:
+    return
+  run_as_root(
+    f"remove the volumes of {app_id}",
+    "rm -rf -- " + " ".join(shlex.quote(str(path)) for path in existing),
+    [path.parent for path in existing],
+  )
+  for path in existing:
+    logger.info("Removed volume %s", path)
+
+
+def _empty_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:
+  """Delete what is inside each volume under `paths`, keeping the volume dirs."""
+  volumes = [
+    volume.resolve()
+    for path in paths
+    if path.is_dir()
+    for volume in path.iterdir()
+    if volume.is_dir() and not volume.is_symlink()
+  ]
+  if volumes:
+    run_as_root(
+      f"empty the volumes of {app_id}",
+      "find " + " ".join(shlex.quote(str(v)) for v in volumes) + " -mindepth 1 -delete",
+      volumes,
+    )
+  for path in paths:
+    logger.info("Emptied volumes in %s", path)

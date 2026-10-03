@@ -49,8 +49,9 @@ class Job:
   record_activity: bool = True
   app: str | None = None
 
-  def __init__(self) -> None:
+  def __init__(self, started_by: str) -> None:
     self.id: str = uuid.uuid4().hex[:12]
+    self.started_by = started_by
     self.args: dict[str, str] = {}
     self.state: str = QUEUED
     self.error: str | None = None
@@ -71,12 +72,13 @@ class Job:
       "started_at": self.started_at,
       "finished_at": self.finished_at,
       "log": self.log,
+      "started_by": self.started_by,
     }
 
   @classmethod
-  def prepare(cls, args: dict[str, str], ctx: KelsoCtx) -> Job:
+  def prepare(cls, args: dict[str, str], ctx: KelsoCtx, *, started_by: str) -> Job:
     """Construct and parse. Raises ``ValueError`` before any log is filed."""
-    job = cls()
+    job = cls(started_by)
     job.args = dict(args)
     cls._check_args(args)
     job.init(ctx, args)
@@ -84,10 +86,15 @@ class Job:
 
   @classmethod
   def call(
-    cls, args: dict[str, str], ctx: KelsoCtx, *, echo: TextIO | None = None
+    cls,
+    args: dict[str, str],
+    ctx: KelsoCtx,
+    *,
+    started_by: str,
+    echo: TextIO | None = None,
   ) -> Job:
     """Parse, execute, re-raise on failure. Returns the finished job on success."""
-    job = cls.prepare(args, ctx)
+    job = cls.prepare(args, ctx, started_by=started_by)
     job.execute(ctx, echo=echo)
     return job
 
@@ -98,7 +105,14 @@ class Job:
     if not self.record_activity:
       self._execute_quiet(ctx)
       return
-    activity = Activity(ctx, self.name, app=self.app, args=self.args, echo=echo)
+    activity = Activity(
+      ctx,
+      self.name,
+      app=self.app,
+      args=self.args,
+      echo=echo,
+      started_by=self.started_by,
+    )
     ok = False
     try:
       with activity:

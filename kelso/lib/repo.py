@@ -4,19 +4,19 @@ A `local` repo is a directory the operator keeps; a `github` repo is one kelso
 mirrors into `repos/<name>/`. Nothing below `Repo.path` knows which kind it
 has. `local` is built in at `repos/local`.
 
-This module owns the repo model and the verbs over it. Talking to GitHub is
-`kelso.lib.github`.
+This module owns the repo model and the verbs over it. A mirror is a shallow,
+sparse git checkout of one folder; the git commands are `kelso.lib.git`.
 """
 
-import os
+import logging
+import re
 import shutil
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from kelso.lib.apps import AppID
-from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, KLSO_TAR_SUFFIX
+from kelso.lib import git
+from kelso.lib.bundle import scan_bundles
 from kelso.lib.util import (
   fmt_size,
   now_ts,
@@ -24,9 +24,13 @@ from kelso.lib.util import (
   validate_identifier,
 )
 
+logger = logging.getLogger("kelso.repo")
+
 LOCAL_REPO = "local"
 
 GITHUB_SCHEME = "github://"
+
+_REF_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 RepoKind = Literal["local", "github"]
 
@@ -52,6 +56,10 @@ class GithubFolder:
     return "/".join((f"{GITHUB_SCHEME}{self.user}", self.repo, self.ref, *self.path))
 
   @property
+  def clone_url(self) -> str:
+    return f"https://github.com/{self.user}/{self.repo}.git"
+
+  @property
   def repo_path(self) -> str:
     """The folder as git addresses it; empty means the repository root."""
     return "/".join(self.path)
@@ -69,6 +77,8 @@ class Repo:
   path: Path
   kind: RepoKind
   remote: GithubFolder | None = None
+  # Where a mirrored repo's git checkout lives; `path` is its folder inside.
+  checkout: Path | None = None
 
   @property
   def mirrored(self) -> bool:
@@ -92,6 +102,11 @@ def parse_github_url(raw: str) -> GithubFolder:
   repo = validate_github_segment(repo, "repo")
   if not ref:
     raise ValueError(f"Malformed repo url {raw!r}: empty ref")
+  # The ref is handed to `git fetch`, where a leading dash would be an option.
+  if not _REF_RE.fullmatch(ref) or ref.startswith("-") or ".." in ref:
+    raise ValueError(
+      f"Malformed repo url {raw!r}: {ref!r} is not a branch, tag, or commit sha"
+    )
   for segment in path:
     check_segment(segment, raw)
 
@@ -122,24 +137,7 @@ def name_from_url(raw: str) -> str:
 # --- mirroring -------------------------------------------------------------
 
 MAX_BUNDLES = 128
-MAX_REPO_FILES = 1024
 MAX_REPO_BYTES = 64 * 1024 * 1024
-
-_SUFFIXES = (KLSO_TAR_SUFFIX, KLSO_MD_SUFFIX, KLSO_SUFFIX)
-
-
-@dataclass(frozen=True)
-class RemoteBundle:
-  """One bundle in a repo listing, and the blobs that make it up."""
-
-  app_id: str
-  name: str  # the entry as it is named in the folder, suffix included
-  files: tuple[str, ...]  # paths relative to the folder
-  total_bytes: int
-
-  @property
-  def is_dir(self) -> bool:
-    return self.name.endswith(KLSO_SUFFIX)
 
 
 @dataclass(frozen=True)
@@ -148,7 +146,6 @@ class MirrorResult:
   sha: str
   previous_sha: str | None
   bundles: tuple[str, ...]
-  files: int
   total_bytes: int
 
   @property
@@ -156,140 +153,47 @@ class MirrorResult:
     return self.sha == self.previous_sha
 
 
-def group_bundles(paths: Mapping[str, int]) -> tuple[RemoteBundle, ...]:
-  """Pick the bundles out of a flat listing; anything else is skipped, not refused.
-
-  Raises ValueError if a bundle's name is not a usable app id.
-  """
-  dirs: dict[str, list[str]] = {}
-  singles: dict[str, str] = {}
-
-  for path in paths:
-    head, _, _ = path.partition("/")
-    if head != path:
-      if head.endswith(KLSO_SUFFIX):
-        dirs.setdefault(head, []).append(path)
-      continue
-    for suffix in _SUFFIXES:
-      if path.endswith(suffix) and path != suffix:
-        singles[path] = suffix
-        break
-
-  found: list[RemoteBundle] = []
-  for name, files in sorted(dirs.items()):
-    if f"{name}/manifest.toml" not in files:
-      continue
-    found.append(_bundle(name, KLSO_SUFFIX, tuple(sorted(files)), paths))
-  for name, suffix in sorted(singles.items()):
-    found.append(_bundle(name, suffix, (name,), paths))
-
-  return tuple(sorted(found, key=lambda h: h.app_id))
-
-
-def _bundle(
-  name: str, suffix: str, files: tuple[str, ...], sizes: Mapping[str, int]
-) -> RemoteBundle:
-  app_id = name.removesuffix(suffix)
-  try:
-    AppID(app_id)
-  except ValueError as e:
-    raise ValueError(f"{name} does not name a valid app id: {e}") from e
-  return RemoteBundle(
-    app_id=app_id,
-    name=name,
-    files=files,
-    total_bytes=sum(sizes[path] for path in files),
-  )
-
-
 def mirror(repo: Repo, ctx) -> MirrorResult:
-  """Replace `repos/<name>` with whatever the remote holds now.
+  """Bring `repos/<name>` to what the remote holds now, as a sparse git checkout.
 
-  Always a full replacement, never a merge. Raises ValueError for a local repo.
+  Raises ValueError for a local repo, a folder the remote does not have, or one
+  over the size limits -- whose copy is then removed.
   """
-  from kelso.lib import github
-
-  if repo.remote is None:
+  if repo.remote is None or repo.checkout is None:
     raise ValueError(
       f"Repo {repo.name!r} is a local directory; there is nothing to update"
     )
 
-  state = ctx.kelso_db.get_repo_state(repo.name)
-  previous = state["sha"] if state else None
-
-  sha = github.resolve_ref(repo.remote)
-  entries = github.list_tree(repo.remote, sha)
-  sizes = {entry.path: entry.size for entry in entries}
-  executable = {entry.path for entry in entries if entry.executable}
-  bundles = group_bundles(sizes)
-  _check_size(repo, bundles)
-
-  scratch = repo.path.parent / f".update-{repo.name}"
-  shutil.rmtree(scratch, ignore_errors=True)
-  scratch.mkdir(parents=True)
-  files = 0
-  total = 0
+  previous = git.head(repo.checkout)
+  logger.info("Fetching the latest from %s", repo.remote.url)
   try:
-    for bundle in bundles:
-      for path in bundle.files:
-        dest = scratch / path
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        total += github.download(
-          github.raw_url(repo.remote, sha, *path.split("/")), dest
-        )
-        # Bundles ship scripts that run in-container; losing +x fails only there.
-        dest.chmod(0o755 if path in executable else 0o644)
-        files += 1
-    _swap(scratch, repo.path)
-  finally:
-    shutil.rmtree(scratch, ignore_errors=True)
+    sha = git.checkout_folder(
+      repo.checkout, repo.remote.clone_url, repo.remote.ref, repo.remote.repo_path
+    )
+  except RuntimeError as e:
+    raise ValueError(f"Could not update {repo.name} from {repo.remote.url}: {e}") from e
+  if not repo.path.is_dir():
+    raise ValueError(
+      f"{repo.remote.url}: there is no folder {repo.remote.repo_path!r} at {sha[:8]}"
+    )
+
+  bundles = tuple(sorted(app_id for app_id, _ in scan_bundles(repo.path)))
+  total = sum(
+    f.stat().st_size
+    for f in repo.path.rglob("*")
+    if f.is_file() and ".git" not in f.relative_to(repo.checkout).parts
+  )
+  if len(bundles) > MAX_BUNDLES or total > MAX_REPO_BYTES:
+    shutil.rmtree(repo.checkout)
+    ctx.kelso_db.del_repo_state(repo.name)
+    raise ValueError(
+      f"{repo.describe()} holds {len(bundles)} apps in {fmt_size(total)}, over "
+      f"kelso's limit of {MAX_BUNDLES} apps or {fmt_size(MAX_REPO_BYTES)} for one "
+      f"repo. Its copy was removed."
+    )
 
   ctx.kelso_db.set_repo_state(repo.name, sha=sha, at=now_ts())
-  return MirrorResult(
-    name=repo.name,
-    sha=sha,
-    previous_sha=previous,
-    bundles=tuple(bundle.app_id for bundle in bundles),
-    files=files,
-    total_bytes=total,
-  )
-
-
-def _check_size(repo: Repo, bundles: tuple[RemoteBundle, ...]) -> None:
-  files = sum(len(bundle.files) for bundle in bundles)
-  total = sum(bundle.total_bytes for bundle in bundles)
-  if len(bundles) > MAX_BUNDLES:
-    raise ValueError(
-      f"{repo.describe()} holds {len(bundles)} apps, over the {MAX_BUNDLES} limit."
-    )
-  if files > MAX_REPO_FILES:
-    raise ValueError(
-      f"{repo.describe()} holds {files} files, over the {MAX_REPO_FILES} limit."
-    )
-  if total > MAX_REPO_BYTES:
-    raise ValueError(
-      f"{repo.describe()} is {fmt_size(total)}, over the "
-      f"{fmt_size(MAX_REPO_BYTES)} limit for one repo."
-    )
-
-
-def _swap(incoming: Path, dest: Path) -> None:
-  """Rename `incoming` onto `dest`, restoring the old copy if that fails."""
-  if dest.is_symlink():
-    raise ValueError(f"{dest} is a symlink; kelso will not mirror over it")
-  outgoing = dest.parent / f".outgoing-{dest.name}"
-  shutil.rmtree(outgoing, ignore_errors=True)
-  dest.parent.mkdir(parents=True, exist_ok=True)
-  try:
-    if dest.exists():
-      os.replace(dest, outgoing)
-    os.replace(incoming, dest)
-  except OSError as e:
-    if not dest.exists() and outgoing.exists():
-      os.replace(outgoing, dest)
-    raise ValueError(f"Could not update {dest}: {e}") from e
-  finally:
-    shutil.rmtree(outgoing, ignore_errors=True)
+  return MirrorResult(repo.name, sha, previous, bundles, total)
 
 
 # --- the repo verbs --------------------------------------------------------
@@ -341,8 +245,6 @@ def update(ctx, name: str = "") -> tuple[MirrorResult, ...]:
 
 def remove(ctx, name: str) -> RemoveResult:
   """Drop a repo, and the mirrored copy if it had one."""
-  import shutil
-
   from kelso.lib.config_edit import remove_repo
 
   repo = get(ctx, name)
@@ -352,8 +254,8 @@ def remove(ctx, name: str) -> RemoveResult:
   bound = bound_apps(ctx, repo.name)
   with ctx.locked(f"repo remove {name}"):
     remove_repo(ctx, repo.name)
-    if repo.mirrored:
-      shutil.rmtree(repo.path, ignore_errors=True)
+    if repo.checkout is not None:
+      shutil.rmtree(repo.checkout, ignore_errors=True)
       ctx.kelso_db.del_repo_state(repo.name)
   return RemoveResult(repo.name, bound)
 

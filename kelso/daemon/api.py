@@ -40,6 +40,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
+from kelso.lib.util import Identifier, validate_identifier
 
 # Bumped when a response shape changes in a way a client would notice. The web
 # UI ships separately from the daemon, so it has to be able to tell.
@@ -82,7 +83,11 @@ from kelso.lib.spec import AppSpec
 #     running/exited/stopped.
 # 31: apps carry `update_version`; `update` is a job verb; catalog apps carry
 #     `error` when their manifest does not parse.
-API_VERSION = 31
+# 32: POST /jobs requires `started_by`, an identifier; jobs and activity runs
+#     carry it, empty for runs recorded before it existed.
+# 33: the console websockets require `started_by` too, and console runs no
+#     longer carry `via` in their args.
+API_VERSION = 33
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -121,6 +126,8 @@ class JobSubmission(BaseModel):
 
   verb: str
   args: dict[str, str] = Field(default_factory=dict)
+  # Who is asking, as the activity log records it; kelso-ui says `kelso_ui`.
+  started_by: Identifier
 
 
 def _ctx(request: Request) -> KelsoCtx:
@@ -134,6 +141,17 @@ def _runner(request: Request) -> JobRunner:
 
 Ctx = Annotated[KelsoCtx, Depends(_ctx)]
 Jobs = Annotated[JobRunner, Depends(_runner)]
+
+
+def _started_by_refusal(started_by: str) -> str | None:
+  """Why a console's `started_by` query parameter is unusable, if it is."""
+  if not started_by:
+    return "started_by is required, e.g. ?started_by=kelso_ui"
+  try:
+    validate_identifier(started_by)
+  except ValueError as e:
+    return f"started_by: {e}"
+  return None
 
 
 def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
@@ -210,9 +228,12 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       raise HTTPException(404, str(e)) from e
 
   @app.websocket("/apps/{app_id}/console")
-  async def app_console(websocket: WebSocket, app_id: str, unit: str = "main"):
+  async def app_console(
+    websocket: WebSocket, app_id: str, started_by: str = "", unit: str = "main"
+  ):
     """A shell in one of the app's running units. See kelso/daemon/console.py."""
-    if refusal := console.network_refusal(websocket):
+    refusal = console.network_refusal(websocket) or _started_by_refusal(started_by)
+    if refusal:
       await console.refuse(websocket, refusal)
       return
     try:
@@ -223,16 +244,17 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       await console.refuse(websocket, str(e))
       return
-    await console.serve(websocket, cmd, ctx)
+    await console.serve(websocket, cmd, ctx, started_by=started_by)
 
   @app.websocket("/host/console")
-  async def host_console(websocket: WebSocket):
+  async def host_console(websocket: WebSocket, started_by: str = ""):
     """A login shell on the host, as kelsod's own user."""
-    if refusal := console.network_refusal(websocket):
+    refusal = console.network_refusal(websocket) or _started_by_refusal(started_by)
+    if refusal:
       await console.refuse(websocket, refusal)
       return
     ctx = await asyncio.to_thread(ctx_factory)
-    await console.serve_host(websocket, ctx)
+    await console.serve_host(websocket, ctx, started_by=started_by)
 
   @app.get("/apps/{app_id}/config-request", tags=["config"])
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:
@@ -403,7 +425,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.post("/jobs", status_code=202, tags=["jobs"])
   def submit_job(submission: JobSubmission, ctx: Ctx, jobs: Jobs) -> dict:
     try:
-      return jobs.submit(submission.verb, submission.args, ctx)
+      return jobs.submit(
+        submission.verb, submission.args, ctx, started_by=submission.started_by
+      )
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
 

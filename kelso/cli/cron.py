@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from tabulate import tabulate
 
+from kelso.lib.activity import BY_CLI
 from kelso.lib.kelso import KelsoCtx, lock_holder_hint
 from kelso.lib.lifecycle.cron import cron_lock_path, cron_runs, tick
 
@@ -45,7 +46,7 @@ def run_list(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def run_tick(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  ran = tick(ctx, by="cron tick", echo=sys.stderr)
+  ran = tick(ctx, by="cron tick", started_by=BY_CLI, echo=sys.stderr)
   if ran is None:
     raise ValueError(
       "A cron tick is already running; nothing was started.\n"

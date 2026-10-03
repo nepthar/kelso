@@ -26,7 +26,7 @@ APP = "io.p2net.basic-features"
 # Absolute: TestClient opens a relative websocket URL on `testserver`, which is
 # not loopback. This is kelso-ui arriving through Docker Desktop.
 LOOPBACK = "ws://127.0.0.1"
-URL = f"{LOOPBACK}/apps/{APP}/console"
+URL = f"{LOOPBACK}/apps/{APP}/console?started_by=test"
 
 
 def ctx() -> KelsoCtx:
@@ -75,7 +75,8 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   run = client.get("/activity").json()["activity"][0]
   assert (run["verb"], run["app_id"], run["status"]) == ("console", APP, "ok")
   body = client.get(f"/activity/{run['log']}").json()["text"]
-  assert "via" in body and "cli" in body
+  assert run["started_by"] == "cli"
+  assert "via" not in body
 
 
 def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
@@ -142,7 +143,7 @@ def test_a_resize_reaches_the_whole_process_group(running, client, monkeypatch):
 
 
 def test_console_refuses_a_unit_that_is_not_running(running, client):
-  with client.websocket_connect(f"{URL}?unit=worker") as ws:
+  with client.websocket_connect(f"{URL}&unit=worker") as ws:
     out, closed = drain(ws)
   assert closed.code == console.REFUSED
   assert b"worker is not running" in out
@@ -155,6 +156,18 @@ def test_consoles_are_refused_over_the_network(client):
       out, closed = drain(ws)
     assert closed.code == console.REFUSED
     assert b"admin socket or loopback" in out
+
+
+@pytest.mark.parametrize(
+  ("query", "expected"),
+  [("", b"started_by is required"), ("?started_by=a+b", b"started_by")],
+)
+def test_consoles_need_to_know_who_opened_them(client, query, expected):
+  for path in (f"/apps/{APP}/console", "/host/console"):
+    with client.websocket_connect(f"{LOOPBACK}{path}{query}") as ws:
+      out, closed = drain(ws)
+    assert closed.code == console.REFUSED
+    assert expected in out
 
 
 def test_consoles_open_on_the_admin_socket_and_loopback():
@@ -220,7 +233,7 @@ def test_the_host_console_gets_a_real_terminal(
   monkeypatch.setattr(
     console, "host_shell", lambda: (["/bin/sh", "-c", script], tmp_path)
   )
-  with client.websocket_connect(f"{LOOPBACK}/host/console") as ws:
+  with client.websocket_connect(f"{LOOPBACK}/host/console?started_by=test") as ws:
     out, closed = drain(ws)
 
   text = out.decode()

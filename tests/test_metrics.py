@@ -43,7 +43,7 @@ def test_volume_metrics_records_each_directory(kelso_env):
   (snapshots / "blob").write_bytes(b"s" * 50)
 
   ctx = _ctx(kelso_env)
-  job = VolumeMetricsJob.call({}, ctx)
+  job = VolumeMetricsJob.call({}, ctx, started_by="test")
   assert job.state == "done"
 
   gauges = {k: int(e.value) for k, e in ctx.read_gauges("").items()}
@@ -79,7 +79,7 @@ def test_host_metrics_records_disk_and_app_stats(kelso_env, monkeypatch):
   monkeypatch.setattr("kelso.lib.metric.drive_used_ratio", lambda _p: 0.25)
 
   ctx = _ctx(kelso_env)
-  HostMetricsJob.call({}, ctx)
+  HostMetricsJob.call({}, ctx, started_by="test")
 
   gauges = {k: float(e.value) for k, e in ctx.read_gauges("").items()}
   assert gauges["gauge/host_cpu_used_ratio"] == 0.4

@@ -276,6 +276,15 @@ def test_snapshots_page_totals_every_archive(client, fake):
   assert "Application snapshots · 4.7 KB in total" in client.get("/snapshots").text
 
 
+def test_activity_says_who_started_each_run(client, fake):
+  rows = client.get("/activity").text.split("<tr>")
+  snapshot = next(row for row in rows if ">snapshot<" in row)
+  assert ">kelso_ui<" in snapshot
+  # Recorded before `started_by` existed.
+  older = next(row for row in rows if ">repo-update<" in row)
+  assert ">—<" in older
+
+
 def test_cron_page_puts_upcoming_runs_above_now_and_finished_ones_below(client, fake):
   table = client.get("/cron").text.split("<tbody>")[1].split("</tbody>")[0]
   above, below = table.split('<tr class="now-cursor">')

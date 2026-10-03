@@ -26,6 +26,7 @@ from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
 from kelso.jobs.update import UpdateJob
 from kelso.jobs.updown import DownJob, UpJob
+from kelso.lib.activity import BY_CRON, BY_KELSOD
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import tick
 
@@ -91,12 +92,14 @@ class JobRunner:
     )
     self._sched.start()
 
-  def submit(self, verb: str, args: dict[str, str], ctx: KelsoCtx) -> dict[str, Any]:
+  def submit(
+    self, verb: str, args: dict[str, str], ctx: KelsoCtx, *, started_by: str
+  ) -> dict[str, Any]:
     spec = JOBS.get(verb)
     if spec is None:
       known = ", ".join(sorted(JOBS))
       raise ValueError(f"Unknown verb {verb!r}; known verbs are: {known}")
-    job = spec.prepare(args, ctx)
+    job = spec.prepare(args, ctx, started_by=started_by)
     with self._lock:
       self._jobs[job.id] = job
       self._trim()
@@ -155,7 +158,7 @@ class JobRunner:
 
   def _cron_tick(self) -> None:
     try:
-      tick(self._ctx_factory(), by="cron tick (kelsod)")
+      tick(self._ctx_factory(), by="cron tick (kelsod)", started_by=BY_CRON)
     except Exception as e:  # noqa: BLE001 - a failed tick must not kill the thread
       logger.exception("cron tick failed: %s", e)
 
@@ -163,7 +166,7 @@ class JobRunner:
     if self._busy_with(verb):
       return
     try:
-      self.submit(verb, {}, self._ctx_factory())
+      self.submit(verb, {}, self._ctx_factory(), started_by=BY_KELSOD)
     except Exception:  # noqa: BLE001 - a missed tick must not kill the scheduler
       logger.exception("could not submit scheduled %s", verb)
 

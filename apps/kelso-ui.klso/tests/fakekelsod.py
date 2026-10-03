@@ -484,6 +484,7 @@ ACTIVITY = {
       "app_id": "kelso-ui",
       "verb": "snapshot",
       "status": "ok",
+      "started_by": "kelso_ui",
       "duration_ms": 1505,
       "log": "2026-09-23T150302Z.kelso-ui.snapshot.log",
       "available": True,
@@ -536,7 +537,7 @@ HOST = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 30, "hostname": f"tycho {EVIL}"},
+  "/version": {"kelso": "0.1.0", "api": 33, "hostname": f"tycho {EVIL}"},
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
@@ -553,7 +554,7 @@ GET = {
   "/route-providers/fresh/config-request?kind=pangolin": NEW_PROVIDER_CONFIG,
   "/activity?limit=100": ACTIVITY,
   "/cron": CRON,
-  "/activity?verb=cron&limit=100": CRON_RUNS,
+  "/activity?verb=cron&limit=25": CRON_RUNS,
   "/activity/x.log": {"text": "log text"},
   "/metrics?prefix=host_&hours=1": METRICS,
   "/host": HOST,
@@ -571,7 +572,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 30
+    self.api = 33
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

@@ -5,6 +5,8 @@ Diagnosis only reads; the caller holds the kelso lock and renders the result.
 
 from dataclasses import dataclass
 
+from kelso.lib.docker import DOCKER, docker_run_command
+from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
 from kelso.lib.observations import AppObservation
 
@@ -27,13 +29,39 @@ class DoctorPrognosis:
 
 def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
   """Collect problems and warnings across volumes, the catalog, and every app."""
-  problems = [*_volume_problems(ctx), *_catalog_problems(ctx)]
+  problems = [*tool_problems(), *_volume_problems(ctx), *_catalog_problems(ctx)]
   warnings = []
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
     warnings += [Finding(subject, m) for m in _app_warnings(observation)]
   return DoctorPrognosis(tuple(problems), tuple(warnings))
+
+
+def tool_problems() -> list[Finding]:
+  """git, docker, and docker compose, each answering on this host."""
+  findings = []
+  try:
+    git("--version")
+  except RuntimeError as e:
+    findings.append(Finding("git", f"{e}. Kelso mirrors repos with it."))
+  for cmd, what in (
+    (["info"], "the docker daemon"),
+    (["compose", "version"], "docker compose"),
+  ):
+    try:
+      ok = docker_run_command(cmd, check=False).returncode == 0
+    except OSError:
+      ok = False
+    if not ok:
+      findings.append(
+        Finding(
+          what,
+          f"`{DOCKER} {' '.join(cmd)}` failed. Install it, or make sure this "
+          f"user can reach the daemon (`docker info` says why not).",
+        )
+      )
+  return findings
 
 
 def _volume_problems(ctx: KelsoCtx) -> list[Finding]:

@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import kelso.lib.git
 from kelso.lib import lifecycle
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
@@ -80,7 +81,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
   ]
   assert _ps_row(concise.stdout, "ports-demo") == [
     "ports-demo",
-    "ok",
+    "running",
     "ready",
     "0",
     "started",
@@ -92,7 +93,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
 
   assert _ps_row(kelso_env.run("ps").stdout, "ports-demo") == [
     "ports-demo",
-    "-",
+    "stopped",
     "ready",
     "0",
     "stopped",
@@ -524,7 +525,7 @@ def test_load_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
 
   loaded = (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
   assert "0.2.0" in loaded
-  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "ok"
+  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
 
 
 def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
@@ -535,7 +536,7 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert loaded.returncode == 0, loaded.stderr
   assert f"Start it with: kelso start {app_id}" in loaded.stdout
   # Loaded but never started reads as "-", not "stopped".
-  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "-"
+  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
 
 
 def test_missing_config_is_an_actionable_error(kelso_env, monkeypatch, tmp_path):
@@ -1052,7 +1053,7 @@ cmd = ["true"]
   assert (kelso_env.run_root / app_id).is_dir()
 
   needs_config_row = _ps_row(kelso_env.run("ps").stdout, app_id)
-  assert needs_config_row[:4] == [app_id, "-", "missing", "0"]
+  assert needs_config_row[:4] == [app_id, "stopped", "missing", "0"]
 
   configured = kelso_env.run("config", app_id, "--set", "api_key=sekrit")
   assert configured.returncode == 0, configured.stderr
@@ -1099,7 +1100,7 @@ cmd = ["true"]
   assert ["compose", "up", "-d"] not in calls
 
   row = _ps_row(kelso_env.run("ps").stdout, app_id)
-  assert row[:4] == [app_id, "-", "missing", "0"]
+  assert row[:4] == [app_id, "stopped", "missing", "0"]
 
   assert kelso_env.run("config", app_id, "--set", "hostname=box").returncode == 0
   assert kelso_env.run("start", app_id).returncode == 0
@@ -1116,11 +1117,11 @@ cmd = ["true"]
 def test_ps_reports_config_readiness_and_volume_count(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
-  assert row[1:4] == ["-", "missing", "3"]
+  assert row[1:4] == ["stopped", "missing", "3"]
 
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
-  assert row[1:4] == ["-", "ready", "3"]
+  assert row[1:4] == ["stopped", "ready", "3"]
 
 
 def test_unallocated_routes_are_not_reported_as_missing_config(kelso_env):
@@ -1171,7 +1172,7 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
   listed = kelso_env.run("ps")
   assert listed.returncode == 0, listed.stderr
   row = _ps_row(listed.stdout, app_id)
-  assert row[1:4] == ["-", "-", "-"]
+  assert row[1:4] == ["stopped", "-", "-"]
 
 
 # --- doctor ----------------------------------------------------------------
@@ -1215,8 +1216,8 @@ def test_doctor_reports_orphaned_routes(kelso_env):
     }
   )
 
-  ps = kelso_env.run("ps")
-  assert _ps_row(ps.stdout, "io.example.abandoned")[1:4] == ["-", "-", "-"]
+  ps = kelso_env.run("ps", "-a")
+  assert _ps_row(ps.stdout, "io.example.abandoned")[1:4] == ["available", "-", "-"]
 
   prognosis = _diagnose(kelso_env)
   assert prognosis.healthy
@@ -1225,6 +1226,22 @@ def test_doctor_reports_orphaned_routes(kelso_env):
       "io.example.abandoned", "orphaned route allocation; `kelso cleanup` releases it"
     ),
   )
+
+
+def test_ps_says_running_and_adds_what_a_healthcheck_says(kelso_env):
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  container = {
+    "app_id": "ports-demo",
+    "run_unit": "main",
+    "id": "c",
+    "state": "running",
+  }
+
+  kelso_env.set_containers([{**container, "status": "Up 2 minutes (healthy)"}])
+  assert "running (healthy)" in kelso_env.run("ps").stdout
+
+  kelso_env.set_containers([{**container, "status": "Up 2 minutes (unhealthy)"}])
+  assert "running (degraded)" in kelso_env.run("ps").stdout
 
 
 def test_doctor_exposes_mixed_container_states(kelso_env):
@@ -1385,6 +1402,24 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
   # --no-mirror leaves them configured but unfetched, and says so.
   assert "Skipped mirroring" in result.stdout
   assert "kelso repo update" in result.stdout
+
+
+def test_init_refuses_without_git_and_writes_nothing(kelso_env, tmp_path, monkeypatch):
+  monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
+  root = tmp_path / "fresh"
+
+  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+
+  assert result.returncode == 1
+  assert "git: git is not installed" in result.stderr
+  assert not root.exists()
+
+
+def test_doctor_reports_a_missing_tool(kelso_env, monkeypatch):
+  monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert "git: git is not installed" in result.stdout
 
 
 def test_init_keeps_a_volume_kind_linked_before_it_ran(kelso_env, tmp_path):
@@ -1579,6 +1614,7 @@ def _seed_activity(kelso_env, **kwargs):
     started=started,
     finished=started + timedelta(seconds=1),
     output=kwargs.get("output", "up and running"),
+    started_by="test",
   )
 
 
@@ -1676,6 +1712,14 @@ def _basic_with_files(kelso_env):
   return data, temp
 
 
+def _root_scripts(kelso_env) -> list[str]:
+  """The scripts kelso ran in a throwaway root container, in order."""
+  calls = [
+    json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
+  ]
+  return [args[-1] for args in calls if args[0] == "run"]
+
+
 def test_rm_unloads_and_deletes_temp_keeping_data_and_config(kelso_env):
   data, temp = _basic_with_files(kelso_env)
 
@@ -1686,6 +1730,8 @@ def test_rm_unloads_and_deletes_temp_keeping_data_and_config(kelso_env):
   assert not (kelso_env.volumes_root / "temp" / BASIC).exists()
   assert (data / "app.db").read_text() == "rows"
   assert "config/admin_user" in kelso_env.app_logtab(BASIC).read_text()
+  # Containers write volume files as root, so the host cannot delete them.
+  assert "rm -rf" in _root_scripts(kelso_env)[-1]
 
 
 def test_rm_temp_empties_temp_and_leaves_the_app_loaded(kelso_env):
@@ -1696,6 +1742,7 @@ def test_rm_temp_empties_temp_and_leaves_the_app_loaded(kelso_env):
   assert temp.is_dir() and list(temp.iterdir()) == []
   assert (data / "app.db").read_text() == "rows"
   assert (kelso_env.run_root / BASIC).is_dir()
+  assert "-mindepth 1 -delete" in _root_scripts(kelso_env)[-1]
 
 
 def test_rm_data_empties_every_volume_and_leaves_an_app_that_starts(kelso_env):
@@ -1764,8 +1811,9 @@ def test_ps_reports_what_an_unloaded_app_kept(kelso_env):
   """`ps` must not contradict what `unload` said it was keeping."""
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
+  assert BASIC not in kelso_env.run("ps").stdout
 
-  listed = kelso_env.run("ps")
+  listed = kelso_env.run("ps", "-a")
   assert listed.returncode == 0, listed.stderr
   row = _ps_row(listed.stdout, BASIC)
   # STATUS says where it stands, and CONFIG/VOLUMES say what survived --

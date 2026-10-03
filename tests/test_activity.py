@@ -31,6 +31,7 @@ def _record(ctx, verb="start", app="demo.app", status=activity.OK, output="hello
     started=started,
     finished=started + timedelta(seconds=2, milliseconds=500),
     output=output,
+    started_by="test",
   )
 
 
@@ -108,6 +109,7 @@ def test_pruning_keeps_the_newest_files_but_the_index_remembers(ctx, monkeypatch
       started=started + timedelta(minutes=i),
       finished=started + timedelta(minutes=i, seconds=1),
       output=f"run {i}",
+      started_by="test",
     )
 
   files = sorted(ctx.config.activity_root.glob("*.log"))
@@ -155,6 +157,7 @@ def test_begin_run_is_readable_before_finish(ctx):
     status=activity.OK,
     started=started,
     finished=finished,
+    started_by="test",
   )
   body = path.read_text()
   assert "— ok" in body
@@ -167,7 +170,7 @@ def test_begin_run_is_readable_before_finish(ctx):
 
 def test_activity_records_a_free_form_block(ctx):
   """The context manager, used the way a CLI verb would use it."""
-  with activity.Activity(ctx, "refresh", app="demo.app") as act:
+  with activity.Activity(ctx, "refresh", started_by="test", app="demo.app") as act:
     logging.getLogger("kelso.lifecycle").info("stopped")
     act.write("copied 3 volumes\n")
     logging.getLogger("kelso.lifecycle").info("started")
@@ -189,7 +192,7 @@ def test_activity_records_a_free_form_block(ctx):
 
 
 def test_activity_records_a_failure_and_reraises(ctx):
-  act = activity.Activity(ctx, "refresh", app="demo.app")
+  act = activity.Activity(ctx, "refresh", started_by="test", app="demo.app")
   with pytest.raises(ValueError, match="volume is gone"), act:
     logging.getLogger("kelso.lifecycle").info("stopping")
     raise ValueError("volume is gone")
@@ -204,7 +207,7 @@ def test_activity_records_a_failure_and_reraises(ctx):
 
 def test_activity_echo_copies_the_log_to_a_stream(ctx):
   echo = io.StringIO()
-  with activity.Activity(ctx, "refresh", echo=echo) as act:
+  with activity.Activity(ctx, "refresh", started_by="test", echo=echo) as act:
     logging.getLogger("kelso").info("working")
 
   # Same bytes, both places -- but the trailer belongs to the file alone.
@@ -215,7 +218,7 @@ def test_activity_echo_copies_the_log_to_a_stream(ctx):
 
 
 def test_activity_subprocess_streams_into_the_log(ctx):
-  with activity.Activity(ctx, "probe") as act:
+  with activity.Activity(ctx, "probe", started_by="test") as act:
     act.subprocess(["echo", "from the child"])
     data = act.subprocess(["echo", '{"a": 1}'], parse_json=True)
   assert data == {"a": 1}
@@ -227,7 +230,7 @@ def test_activity_subprocess_streams_into_the_log(ctx):
 
 
 def test_activity_outside_its_block_is_refused(ctx):
-  act = activity.Activity(ctx, "probe")
+  act = activity.Activity(ctx, "probe", started_by="test")
   with pytest.raises(RuntimeError, match="not running"):
     act.write("nope")
   with pytest.raises(RuntimeError, match="not running"):

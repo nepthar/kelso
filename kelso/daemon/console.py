@@ -95,10 +95,13 @@ async def refuse(ws: WebSocket, message: str) -> None:
   await ws.close(REFUSED, message.encode()[:120].decode(errors="ignore"))
 
 
-async def serve(ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx) -> None:
+async def serve(
+  ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx, *, started_by: str
+) -> None:
   """A shell in an app's unit, filed in the activity log."""
-  args = {"unit": cmd.unit, "via": "web"}
-  record = await asyncio.to_thread(ConsoleRecord, ctx, cmd.app_id, args)
+  record = await asyncio.to_thread(
+    lambda: ConsoleRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=started_by)
+  )
   await _session(
     ws,
     record,
@@ -109,11 +112,12 @@ async def serve(ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx) -> None:
   )
 
 
-async def serve_host(ws: WebSocket, ctx: KelsoCtx) -> None:
+async def serve_host(ws: WebSocket, ctx: KelsoCtx, *, started_by: str) -> None:
   """A login shell on the host as kelsod's own user, filed in the activity log."""
   argv, home = host_shell()
-  args = {"shell": argv[0], "via": "web"}
-  record = await asyncio.to_thread(ConsoleRecord, ctx, None, args)
+  record = await asyncio.to_thread(
+    lambda: ConsoleRecord(ctx, None, {"shell": argv[0]}, started_by=started_by)
+  )
   # Nothing else sets TERM here: docker does it for a container's shell.
   env = {"TERM": "xterm-256color"}
   await _session(ws, record, argv, cwd=home, env=env, hangup=None)

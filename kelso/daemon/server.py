@@ -18,6 +18,7 @@ import uvicorn
 from kelso import VERSION
 from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
+from kelso.lib.activity import BY_KELSOD
 from kelso.lib.config import Config, load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import updown
@@ -126,7 +127,7 @@ def serve(
   updown.start_kelsod_group(ctx)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  jobs.submit("up", {"resume": "yes"}, ctx)
+  jobs.submit("up", {"resume": "yes"}, ctx, started_by=BY_KELSOD)
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)

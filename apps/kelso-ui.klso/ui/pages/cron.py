@@ -11,5 +11,5 @@ router = APIRouter()
 def cron(page: PageDep):
   # Furthest first, so time runs down the page to the "now" line.
   upcoming = list(reversed(api("/cron")["cron"]))
-  runs = api("/activity?verb=cron&limit=100")["activity"]
+  runs = api("/activity?verb=cron&limit=25")["activity"]
   return page.render("pages/cron.html", "Cron", upcoming=upcoming, runs=runs)

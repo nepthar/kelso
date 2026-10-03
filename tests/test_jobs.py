@@ -44,7 +44,7 @@ def _log_text(ctx, job) -> str:
 
 
 def test_call_files_an_activity_log(ctx):
-  job = SleepJob.call({"seconds": "0", "say_name": "kelso"}, ctx)
+  job = SleepJob.call({"seconds": "0", "say_name": "kelso"}, ctx, started_by="test")
 
   assert job.state == DONE
   assert job.error is None
@@ -68,7 +68,9 @@ def test_call_files_an_activity_log(ctx):
 
 def test_echo_copies_the_log_to_the_stream(ctx):
   echo = io.StringIO()
-  job = SleepJob.call({"seconds": "0", "say_name": "kelso"}, ctx, echo=echo)
+  job = SleepJob.call(
+    {"seconds": "0", "say_name": "kelso"}, ctx, echo=echo, started_by="test"
+  )
 
   assert job.state == DONE
   # Same bytes, both places: the terminal sees what the log file keeps.
@@ -78,19 +80,19 @@ def test_echo_copies_the_log_to_the_stream(ctx):
 
 def test_init_failure_does_not_file_a_log(ctx):
   with pytest.raises(ValueError, match="seconds"):
-    SleepJob.call({"seconds": "nope"}, ctx)
+    SleepJob.call({"seconds": "nope"}, ctx, started_by="test")
   assert activity.list_runs(ctx) == []
 
 
 def test_unknown_argument_is_refused_before_run(ctx):
   with pytest.raises(ValueError, match="takes no argument 'bogus'"):
-    SleepJob.call({"seconds": "0", "bogus": "1"}, ctx)
+    SleepJob.call({"seconds": "0", "bogus": "1"}, ctx, started_by="test")
   assert activity.list_runs(ctx) == []
 
 
 def test_missing_seconds_is_refused(ctx):
   with pytest.raises(ValueError, match="requires argument 'seconds'"):
-    SleepJob.call({}, ctx)
+    SleepJob.call({}, ctx, started_by="test")
 
 
 def test_failed_subprocess_files_an_error_log(ctx):
@@ -99,7 +101,7 @@ def test_failed_subprocess_files_an_error_log(ctx):
       self.subprocess(["false"])
 
   with pytest.raises(RuntimeError, match="exited with status"):
-    FailJob.call({"seconds": "0"}, ctx)
+    FailJob.call({"seconds": "0"}, ctx, started_by="test")
 
   runs = activity.list_runs(ctx)
   assert len(runs) == 1
@@ -120,13 +122,13 @@ def test_json_subprocess_is_captured_not_streamed(ctx):
       data = self.subprocess(["echo", '{"a": 1}'], parse_json=True)
       assert data == {"a": 1}
 
-  job = JsonJob.call({}, ctx)
+  job = JsonJob.call({}, ctx, started_by="test")
   assert job.state == DONE
   assert '{"a": 1}' not in _log_text(ctx, job)
 
 
 def test_as_dict_carries_no_output(ctx):
-  job = SleepJob.call({"seconds": "0"}, ctx)
+  job = SleepJob.call({"seconds": "0"}, ctx, started_by="test")
   payload = job.as_dict()
   assert payload["verb"] == "sleep"
   assert payload["state"] == DONE

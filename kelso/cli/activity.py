@@ -75,5 +75,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     log = entry["log"] if entry["available"] else f"{entry['log']} (pruned)"
     print(
       f"{index:>3}  {entry['ts']}  {entry['status']:<5}  "
-      f"{_duration(entry['duration_ms']):>7}  {what:<24}  var/logs/{log}"
+      f"{_duration(entry['duration_ms']):>7}  {entry['started_by'] or '-':<8}  "
+      f"{what:<24}  var/logs/{log}"
     )
