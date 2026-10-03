@@ -79,7 +79,9 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
   return sorted(runs, key=lambda run: (run.next_at, run.app_id, run.name))
 
 
-def tick(ctx: KelsoCtx, *, by: str, echo: TextIO | None = None) -> list[CronRun] | None:
+def tick(
+  ctx: KelsoCtx, *, by: str, started_by: str, echo: TextIO | None = None
+) -> list[CronRun] | None:
   """Run every due job of a running app, in turn. None if a tick is already running."""
   path = cron_lock_path(ctx)
   lock = FileLock(path)
@@ -95,7 +97,7 @@ def tick(ctx: KelsoCtx, *, by: str, echo: TextIO | None = None) -> list[CronRun]
       if run.next_at > now or not run.runnable:
         continue
       try:
-        _run(run, ctx, echo)
+        _run(run, ctx, echo, started_by)
       except Exception as e:  # noqa: BLE001 - one failed job must not end the tick
         logger.warning("cron %s of %s failed: %s", run.name, run.app_id, e)
       ran.append(run)
@@ -108,7 +110,7 @@ def cron_lock_path(ctx: KelsoCtx) -> Path:
   return ctx.config.lock_root / "cron.lock"
 
 
-def _run(run: CronRun, ctx: KelsoCtx, echo: TextIO | None) -> None:
+def _run(run: CronRun, ctx: KelsoCtx, echo: TextIO | None, started_by: str) -> None:
   by = f"cron {run.app_id} {run.name}"
   with ctx.app_lock(run.app_id, by):
     # Recorded before it runs, so a job that crashes waits for its next time
@@ -119,7 +121,9 @@ def _run(run: CronRun, ctx: KelsoCtx, echo: TextIO | None) -> None:
         datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
       )
     args = {"job": run.name, "command": run.command}
-    with Activity(ctx, "cron", app=run.app_id, args=args, echo=echo):
+    with Activity(
+      ctx, "cron", app=run.app_id, args=args, echo=echo, started_by=started_by
+    ):
       code = run_command(
         run.app_id, run.command, shlex.split(run.args), ctx, timeout=run.timeout
       )

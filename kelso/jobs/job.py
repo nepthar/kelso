@@ -58,6 +58,7 @@ class Job:
     self.started_at: str | None = None
     self.finished_at: str | None = None
     self.log: str | None = None
+    self.started_by: str = ""
     self._activity: Activity | None = None
 
   def as_dict(self) -> dict[str, Any]:
@@ -71,23 +72,30 @@ class Job:
       "started_at": self.started_at,
       "finished_at": self.finished_at,
       "log": self.log,
+      "started_by": self.started_by,
     }
 
   @classmethod
-  def prepare(cls, args: dict[str, str], ctx: KelsoCtx) -> Job:
+  def prepare(cls, args: dict[str, str], ctx: KelsoCtx, *, started_by: str = "") -> Job:
     """Construct and parse. Raises ``ValueError`` before any log is filed."""
     job = cls()
     job.args = dict(args)
+    job.started_by = started_by
     cls._check_args(args)
     job.init(ctx, args)
     return job
 
   @classmethod
   def call(
-    cls, args: dict[str, str], ctx: KelsoCtx, *, echo: TextIO | None = None
+    cls,
+    args: dict[str, str],
+    ctx: KelsoCtx,
+    *,
+    echo: TextIO | None = None,
+    started_by: str = "",
   ) -> Job:
     """Parse, execute, re-raise on failure. Returns the finished job on success."""
-    job = cls.prepare(args, ctx)
+    job = cls.prepare(args, ctx, started_by=started_by)
     job.execute(ctx, echo=echo)
     return job
 
@@ -98,7 +106,14 @@ class Job:
     if not self.record_activity:
       self._execute_quiet(ctx)
       return
-    activity = Activity(ctx, self.name, app=self.app, args=self.args, echo=echo)
+    activity = Activity(
+      ctx,
+      self.name,
+      app=self.app,
+      args=self.args,
+      echo=echo,
+      started_by=self.started_by,
+    )
     ok = False
     try:
       with activity:

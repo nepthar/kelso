@@ -16,6 +16,8 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import record_volume_sizes
 
 APP = "io.p2net.basic-features"
+# Who these tests' jobs say started them; POST /jobs requires one.
+BY = "test"
 
 
 def ctx() -> KelsoCtx:
@@ -45,10 +47,26 @@ def read_log(job) -> str:
 
 def submit(client: TestClient, jobs: JobRunner, verb: str, args: dict[str, str]):
   """Submit and run one job, returning its finished record."""
-  response = client.post("/jobs", json={"verb": verb, "args": args})
+  response = client.post("/jobs", json={"verb": verb, "args": args, "started_by": BY})
   assert response.status_code == 202, response.text
   jobs.run_pending()
   return jobs.get(response.json()["id"])
+
+
+def test_a_job_records_who_started_it(kelso_env, client, jobs):
+  response = client.post(
+    "/jobs", json={"verb": "load", "args": {"app": APP}, "started_by": "a-script"}
+  )
+  assert response.json()["started_by"] == "a-script"
+  response = client.post(
+    "/jobs",
+    json={"verb": "load", "args": {"app": APP}, "started_by": "kelso_ui"},
+  )
+  assert response.json()["started_by"] == "kelso_ui"
+  jobs.run_pending()
+
+  runs = client.get("/activity").json()["activity"]
+  assert [run["started_by"] for run in runs] == ["kelso_ui", "a-script"]
 
 
 def test_version(kelso_env, client):
@@ -358,7 +376,9 @@ def test_load_reloads_a_stopped_app_without_starting(kelso_env, client, jobs):
 
 
 def test_load_unknown_app_is_refused(kelso_env, client):
-  response = client.post("/jobs", json={"verb": "load", "args": {"app": "nope"}})
+  response = client.post(
+    "/jobs", json={"verb": "load", "args": {"app": "nope"}, "started_by": BY}
+  )
   assert response.status_code == 400
   assert "No app found" in response.json()["error"]
 
@@ -438,7 +458,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
       logging.getLogger("kelso").info("done")
 
   monkeypatch.setitem(JOBS, "load", LiveJob)
-  job = jobs.submit("load", {"app": "basic-features"}, ctx())
+  job = jobs.submit("load", {"app": "basic-features"}, ctx(), started_by="api")
   jobs.run_pending()
   finished = jobs.get(job["id"])
   assert finished is not None
@@ -507,7 +527,9 @@ def test_cmd_verb_forwards_extra_arguments(kelso_env, client, jobs):
 
 
 def test_cmd_verb_requires_a_command_argument(kelso_env, client):
-  response = client.post("/jobs", json={"verb": "cmd", "args": {"app": APP}})
+  response = client.post(
+    "/jobs", json={"verb": "cmd", "args": {"app": APP}, "started_by": BY}
+  )
   assert response.status_code == 400
   assert "command" in response.json()["error"]
 
@@ -515,7 +537,12 @@ def test_cmd_verb_requires_a_command_argument(kelso_env, client):
 def test_cmd_verb_reports_an_unknown_command(kelso_env, client):
   kelso_env.run("start", "basic-features", "--set", "admin_user=root")
   response = client.post(
-    "/jobs", json={"verb": "cmd", "args": {"app": "basic-features", "command": "nope"}}
+    "/jobs",
+    json={
+      "verb": "cmd",
+      "args": {"app": "basic-features", "command": "nope"},
+      "started_by": BY,
+    },
   )
   assert response.status_code == 400
   assert "nope" in response.json()["error"]
@@ -577,7 +604,11 @@ def test_restore_unknown_snapshot_is_refused(kelso_env, client):
   (snap / "2026-01-01_00-00Z_real.tar.gz").write_bytes(b"x")
   response = client.post(
     "/jobs",
-    json={"verb": "restore", "args": {"app": "ports-demo", "snapshot": "nope"}},
+    json={
+      "verb": "restore",
+      "args": {"app": "ports-demo", "snapshot": "nope"},
+      "started_by": BY,
+    },
   )
   assert response.status_code == 400
   assert "No snapshot nope" in response.json()["error"]
@@ -586,7 +617,11 @@ def test_restore_unknown_snapshot_is_refused(kelso_env, client):
 def test_restore_unknown_app_is_refused(kelso_env, client):
   response = client.post(
     "/jobs",
-    json={"verb": "restore", "args": {"app": "never-snapshotted", "snapshot": "x"}},
+    json={
+      "verb": "restore",
+      "args": {"app": "never-snapshotted", "snapshot": "x"},
+      "started_by": BY,
+    },
   )
   assert response.status_code == 400
   assert "No snapshots found" in response.json()["error"]
@@ -636,6 +671,7 @@ def test_snapshot_delete_unknown_snapshot_is_refused(kelso_env, client):
     json={
       "verb": "snapshot-delete",
       "args": {"app": "ports-demo", "snapshot": "nope"},
+      "started_by": BY,
     },
   )
   assert response.status_code == 400
@@ -651,9 +687,17 @@ def test_snapshot_delete_unknown_snapshot_is_refused(kelso_env, client):
     ({"args": {"app": "basic-features"}}, "verb: Field required"),
     ({"verb": "stop", "args": {"app": 3}}, "args.app: Input should be a valid str"),
     ({"verb": "stop", "app": "basic-features"}, "app: Extra inputs"),
+    ({"verb": "stop", "args": {"app": "x"}}, "started_by: Field required"),
+    (
+      {"verb": "stop", "args": {"app": "x"}, "started_by": "a b"},
+      "Invalid identifier",
+    ),
     # ...and meaning, which only a live context can judge.
-    ({"verb": "explode", "args": {"app": "basic-features"}}, "Unknown verb"),
-    ({"verb": "stop", "args": {}}, "requires argument"),
+    (
+      {"verb": "explode", "args": {"app": "basic-features"}, "started_by": BY},
+      "Unknown verb",
+    ),
+    ({"verb": "stop", "args": {}, "started_by": BY}, "requires argument"),
   ],
 )
 def test_submission_is_refused_with_a_reason(kelso_env, client, body, expected):
@@ -709,7 +753,9 @@ def test_verbs_take_ids_of_loaded_apps_and_nothing_else(kelso_env, client, app):
   binds, which image it runs -- and that is root. `kelso load <path>` stays
   a CLI-only capability.
   """
-  response = client.post("/jobs", json={"verb": "load", "args": {"app": app}})
+  response = client.post(
+    "/jobs", json={"verb": "load", "args": {"app": app}, "started_by": BY}
+  )
   assert response.status_code == 400
   assert "No app found" in response.json()["error"]
 
@@ -720,6 +766,7 @@ def test_verbs_reject_arguments_they_do_not_declare(kelso_env, client):
     json={
       "verb": "stop",
       "args": {"app": "basic-features", "bundle": "/tmp/evil.klso"},
+      "started_by": BY,
     },
   )
   assert response.status_code == 400
@@ -1055,13 +1102,18 @@ def test_rm_verb_takes_a_tier(kelso_env, client, jobs):
   assert data.is_dir() and list(data.iterdir()) == []
   assert (kelso_env.run_root / APP).is_dir()
 
-  refused = client.post("/jobs", json={"verb": "rm", "args": {"app": APP, "tier": "x"}})
+  refused = client.post(
+    "/jobs",
+    json={"verb": "rm", "args": {"app": APP, "tier": "x"}, "started_by": BY},
+  )
   assert refused.status_code == 400
 
 
 def test_removal_verbs_refuse_an_unknown_app(kelso_env, client):
   for verb in ("unload", "rm"):
-    response = client.post("/jobs", json={"verb": verb, "args": {"app": "nope"}})
+    response = client.post(
+      "/jobs", json={"verb": verb, "args": {"app": "nope"}, "started_by": BY}
+    )
     assert response.status_code == 400, verb
 
 

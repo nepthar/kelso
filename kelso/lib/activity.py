@@ -44,6 +44,12 @@ FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.log")
 OK = "ok"
 ERROR = "error"
 
+# Who started a run, as `started_by` records it. Runs recorded before the
+# field existed have none.
+BY_KELSOD = "kelsod"  # kelsod's own startup and schedule
+BY_CRON = "cron"  # a cron job kelsod's tick found due
+BY_CLI = "cli"
+
 
 def _index_key(app_id: AppID | None) -> str:
   return f"apps/{app_id}/run" if app_id else f"{KELSO_DIR}/run"
@@ -122,6 +128,7 @@ def finish_run(
   started: datetime,
   finished: datetime,
   args: dict[str, str] | None = None,
+  started_by: str = "",
 ) -> None:
   """Append the closing trailer to ``relpath`` and index the run."""
   path = ctx.config.activity_root / relpath
@@ -138,6 +145,7 @@ def finish_run(
         "status": status,
         "ms": duration_ms,
         "log": relpath,
+        "started_by": started_by,
       },
       separators=(",", ":"),
     ),
@@ -155,6 +163,7 @@ def record_run(
   started: datetime,
   finished: datetime,
   output: str,
+  started_by: str = "",
 ) -> str:
   """Write one run's output file and index record; returns its relative path."""
   relpath = begin_run(ctx, verb, args, app_id=app_id, started=started)
@@ -171,6 +180,7 @@ def record_run(
     started=started,
     finished=finished,
     args=args,
+    started_by=started_by,
   )
   return relpath
 
@@ -239,8 +249,10 @@ class Activity:
     app: AppID | str | None = None,
     args: dict[str, str] | None = None,
     echo: TextIO | None = None,
+    started_by: str = "",
   ) -> None:
     self.ctx = ctx
+    self.started_by = started_by
     self.verb = verb
     self.app = _as_app_id(app)
     self.args = dict(args or {})
@@ -295,6 +307,7 @@ class Activity:
           args=self.args,
           started=self._started,
           finished=datetime.now(UTC),
+          started_by=self.started_by,
         )
       except Exception:  # noqa: BLE001 - a log failure must not hide the block's own error
         logger.exception("could not record activity for `%s`", self.verb)
@@ -415,6 +428,7 @@ def list_runs(
         "status": record.get("status", ""),
         "duration_ms": record.get("ms"),
         "log": relpath,
+        "started_by": record.get("started_by", ""),
         "available": bool(relpath) and (ctx.config.activity_root / relpath).is_file(),
       }
     )

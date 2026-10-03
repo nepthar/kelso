@@ -40,6 +40,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
+from kelso.lib.util import Identifier
 
 # Bumped when a response shape changes in a way a client would notice. The web
 # UI ships separately from the daemon, so it has to be able to tell.
@@ -82,7 +83,9 @@ from kelso.lib.spec import AppSpec
 #     running/exited/stopped.
 # 31: apps carry `update_version`; `update` is a job verb; catalog apps carry
 #     `error` when their manifest does not parse.
-API_VERSION = 31
+# 32: POST /jobs requires `started_by`, an identifier; jobs and activity runs
+#     carry `started_by`, empty for runs recorded before it existed.
+API_VERSION = 32
 
 CtxFactory = Callable[[], KelsoCtx]
 
@@ -121,6 +124,8 @@ class JobSubmission(BaseModel):
 
   verb: str
   args: dict[str, str] = Field(default_factory=dict)
+  # Who is asking, as the activity log records it; kelso-ui says `kelso_ui`.
+  started_by: Identifier
 
 
 def _ctx(request: Request) -> KelsoCtx:
@@ -403,7 +408,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   @app.post("/jobs", status_code=202, tags=["jobs"])
   def submit_job(submission: JobSubmission, ctx: Ctx, jobs: Jobs) -> dict:
     try:
-      return jobs.submit(submission.verb, submission.args, ctx)
+      return jobs.submit(
+        submission.verb, submission.args, ctx, started_by=submission.started_by
+      )
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
 

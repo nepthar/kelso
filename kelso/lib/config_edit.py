@@ -34,7 +34,7 @@ def edit_config(ctx: KelsoCtx) -> Iterator[TOMLDocument]:
   path = ctx.config.config_path
   document = tomlkit.parse(path.read_text())
   yield document
-  _commit(path, tomlkit.dumps(document))
+  _commit(path, tomlkit.dumps(document).rstrip("\n") + "\n")
 
 
 def _commit(path: Path, text: str) -> None:
@@ -49,6 +49,16 @@ def _commit(path: Path, text: str) -> None:
   os.replace(incoming, path)
 
 
+def _table(**items):
+  """A new table that ends in a blank line, so the next header is not pressed
+  against it; tomlkit adds none when a table goes in ahead of another."""
+  table = tomlkit.table()
+  for key, value in items.items():
+    table[key] = value
+  table.add(tomlkit.nl())
+  return table
+
+
 def _host_volumes(document: TOMLDocument):
   """The `[host_volume]` table, created on first use."""
   if "host_volume" not in document:
@@ -57,13 +67,8 @@ def _host_volumes(document: TOMLDocument):
 
 
 def _entry(path: str, *, readonly: bool, require_mount: bool):
-  table = tomlkit.table()
-  table["path"] = path
-  if readonly:
-    table["readonly"] = True
-  if require_mount:
-    table["require_mount"] = True
-  return table
+  flags = {"readonly": readonly, "require_mount": require_mount}
+  return _table(path=path, **{name: True for name, on in flags.items() if on})
 
 
 def _check_path(ctx: KelsoCtx, raw: str, *, require_mount: bool) -> None:
@@ -168,12 +173,7 @@ def add_repo(ctx: KelsoCtx, name: str, *, path: str = "", url: str = "") -> None
         f"under a different name, or remove that one with "
         f"`kelso repo remove {name}`."
       )
-    table = tomlkit.table()
-    if path:
-      table["path"] = path
-    else:
-      table["url"] = url
-    repos[name] = table
+    repos[name] = _table(path=path) if path else _table(url=url)
 
 
 def remove_repo(ctx: KelsoCtx, name: str) -> None:
@@ -199,14 +199,14 @@ def set_route_provider(
   validate_identifier(tag)
   with edit_config(ctx) as document:
     providers = _route_providers(document)
-    table = tomlkit.table()
-    table["kind"] = kind
-    table["domain"] = domain
     if args:
-      arg_table = tomlkit.table()
-      for name, value in args.items():
-        arg_table[name] = value
-      table["args"] = arg_table
+      table = tomlkit.table()
+      table["kind"] = kind
+      table["domain"] = domain
+      # The args table is written last, so it carries the blank line.
+      table["args"] = _table(**args)
+    else:
+      table = _table(kind=kind, domain=domain)
     providers[tag] = table
 
 

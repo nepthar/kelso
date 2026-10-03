@@ -2,15 +2,19 @@
 half-written."""
 
 import json
+from itertools import pairwise
 
 import pytest
 
 from kelso.lib.config import load_config
 from kelso.lib.config_edit import (
   add_host_volume,
+  add_repo,
   edit_config,
   remove_host_volume,
+  remove_repo,
   set_host_volume,
+  set_route_provider,
 )
 from kelso.lib.kelso import KelsoCtx
 
@@ -41,6 +45,26 @@ def test_an_edit_keeps_the_comments_around_it(kelso_env, host_dir):
   # Everything that was there before is still there, in order.
   assert text.startswith(original.rstrip() + "\n" or original)
   assert "[host_volume.media]" in text
+
+
+def test_every_table_kelso_writes_is_set_off_by_a_blank_line(kelso_env, host_dir):
+  # route_provider sits ahead of host_volume, so a new provider lands between.
+  set_route_provider(ctx_of(kelso_env), "lan", kind="noop", domain="a.test", args={})
+  set_route_provider(
+    ctx_of(kelso_env), "cf", kind="noop", domain="b.test", args={"zone": "z"}
+  )
+  add_repo(ctx_of(kelso_env), "dev", path=str(host_dir))
+  add_repo(ctx_of(kelso_env), "more", path=str(host_dir.parent))
+  remove_repo(ctx_of(kelso_env), "dev")
+
+  text = kelso_env.config.read_text()
+  lines = text.splitlines()
+  pressed = [
+    line for before, line in pairwise(lines) if line.startswith("[") and before
+  ]
+  assert pressed == []
+  assert "\n\n\n" not in text
+  assert text.endswith('"\n')
 
 
 def test_add_set_and_remove_round_trip(kelso_env, host_dir):

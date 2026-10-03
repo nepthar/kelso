@@ -62,7 +62,11 @@ def test_job_submit_and_poll(client, fake):
   response = client.post("/jobs", json={"verb": "stop", "args": {"app": "kelso-ui"}})
   assert response.status_code == 202
   assert fake.posts == [
-    ("POST", "/jobs", {"verb": "stop", "args": {"app": "kelso-ui"}})
+    (
+      "POST",
+      "/jobs",
+      {"verb": "stop", "args": {"app": "kelso-ui"}, "started_by": "kelso_ui"},
+    )
   ]
   assert client.get("/jobs/j1").json()["state"] == "done"
 
