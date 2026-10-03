@@ -97,7 +97,7 @@ def test_kelsod_down_renders_inside_the_frame(client, fake):
   fake.fail = "kelsod said <b>no</b>"
   response = client.get("/apps/kelso-ui")
   assert response.status_code == 502
-  assert "Cannot reach kelsod" in response.text
+  assert "Trouble talking to kelsod" in response.text
   assert "kelsod said &lt;b&gt;no&lt;/b&gt;" in response.text
   # The handler named the page before kelsod failed it.
   assert "<h1>kelso-ui</h1>" in response.text

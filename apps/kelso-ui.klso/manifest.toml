@@ -4,11 +4,9 @@ display_name = "Kelso UI"
 description  = "Web interface for kelso, over the kelsod admin socket"
 
 [config]
-# Development escape hatch. Docker Desktop's bind mounts cannot carry a unix
-# socket, so on macOS the socket is visible in the container and unusable --
-# run `kelsod --port N` and point this at host.docker.internal:N instead.
-# Docker Desktop reaches the host's loopback, so kelsod need not listen on the
-# network. Empty means use the socket, which is what a Linux host should do.
+# Docker Desktop on macOS cannot carry the admin socket into a container: run
+# `kelsod --port N` and set this to host.docker.internal:N. Empty, the app uses
+# the socket, which is all a Linux host needs.
 api_address = { default = "", desc = "host:port of kelsod, instead of the admin socket" }
 admin_pass  = { secret = true, desc = "password for the web ui" }
 
@@ -20,19 +18,22 @@ instance_id = { secret = true, default = "{hex:4}", desc = "Shown beside the hos
 ui   = { kind = "app", src = "ui", desc = "The application"}
 venv = { kind = "temp", desc = "virtual env, dependencies, etc." }
 tls  = { kind = "data", desc = "self-signed cert for the https listener" }
-conn = { kind = "host", desc = "The $kelso/var/conn directory holding admin.sock" }
+
+[connections]
+admin = { kind = "kelso.admin", desc = "kelsod's admin API, which this app is a face for" }
 
 [run.main]
 image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
-volumes = { ui = "/app", venv = "/venv", tls = "/tls", conn = "/run/kelso-admin" }
+volumes = { ui = "/app", venv = "/venv", tls = "/tls" }
+connections = ["admin"]
 routes  = { main = { port = "8080", scheme = "https" } }
-# A connection is enough: every page sits behind the sign-in and a self-signed
-# certificate.
+# Accepting a TCP connection is enough: every page sits behind the sign-in and a
+# self-signed certificate.
 healthcheck = ["python", "-c", "import socket; socket.create_connection(('localhost', 8080), 3)"]
 
 [run.main.env]
-KELSO_SOCKET            = "/run/kelso-admin/admin.sock"
+KELSO_SOCKET            = "${conn.admin.socket}"
 KELSO_API               = "${api_address}"
 ADMIN_PASSWORD           = "${admin_pass}"
 KELSO_UI_ID              = "${instance_id}"

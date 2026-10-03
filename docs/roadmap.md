@@ -61,17 +61,6 @@ out by opening the dashboard. For v1, one configurable webhook and two levels:
 
 Alerts queue in a logtab spool, so a webhook that is down gets them later.
 
-### Upgrading kelso keeps apps loading
-Upgrading den and harbor from #31 to #38 took moving files by hand and editing
-manifests that no longer parsed. Once people run kelso, `uv tool upgrade kelso`
-has to leave their apps working, or say exactly what to do:
-- A manifest format version, so a format change is a known event rather than a
-  parse error.
-- `doctor` reports a loaded app whose saved manifest no longer parses, with
-  `kelso load <app>` as the fix. Today it only shows as "unknown" on the
-  volumes page.
-- A release note for each on-disk or manifest format change.
-
 ### Off-host snapshots
 Snapshots stay on the box. Copying them elsewhere also needs a plan for
 `conf/master.key`: no snapshot carries it, so a restore on another machine

@@ -1,13 +1,14 @@
 import re
 import string
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal
 
 from kelso.lib.apps import AppID
 from kelso.lib.config import Config
+from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS, guest_path
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
@@ -132,6 +133,17 @@ class ConfigIssue:
 
 
 @dataclass(frozen=True)
+class ResolvedConnection:
+  """A `[connections]` entry as this machine provides it."""
+
+  kind: str
+  host_path: Path
+  guest_path: str
+  # What `${conn.<name>.<property>}` resolves to.
+  properties: Mapping[str, str]
+
+
+@dataclass(frozen=True)
 class VolumeLink:
   """One entry under ``var/run/<id>/volumes/<kind>/``."""
 
@@ -180,6 +192,7 @@ class AppRunData:
   # is looked at in one pass.
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
+  connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
 
   @property
   def load_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -224,6 +237,29 @@ def _load_config_values(
       )
     result[config_name] = ConfigValue(config, resolved)
   return result
+
+
+def _load_connections(
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
+) -> dict[str, ResolvedConnection]:
+  resolved = {}
+  for name, entry in spec.manifest.connections.items():
+    kind = CONNECTION_KINDS[entry.kind]
+    host_path = kind.host_path(ctx.config)
+    if not host_path.exists():
+      issues.append(
+        ConfigIssue(
+          f"connection {name}: {entry.kind} needs {host_path}, which does not exist",
+          f"Make {host_path} available on this machine, or drop the connection",
+          load_blocking=True,
+        )
+      )
+      continue
+    mounted = guest_path(name)
+    resolved[name] = ResolvedConnection(
+      entry.kind, host_path, mounted, kind.properties(ctx.config, mounted)
+    )
+  return resolved
 
 
 def _load_volume_links(
@@ -457,7 +493,14 @@ def _env_substitutions(
   routes = ",".join(
     _env_kvpair(name, str(data.routes[name].container_port)) for name in run_unit.routes
   )
+  connections = {
+    f"{CONN_KEY_PREFIX}{name}.{prop}": value
+    for name in run_unit.connections
+    if name in data.connections
+    for prop, value in data.connections[name].properties.items()
+  }
   return {
+    **connections,
     **{name: f"${{{cfg.env_name()}}}" for name, cfg in spec.config.items()},
     **{f"{ROUTE_KEY_PREFIX}{name}": url for name, url in data.route_urls.items()},
     f"{KLSO_KEY_PREFIX}domain": data.app_domain or "",
@@ -534,6 +577,10 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     # where the volumes it declared ended up.
     if unit_commands(spec, run_name):
       mounts.append(_mount(f"./kelso/{run_name}", KELSO_GUEST_DIR, readonly=True))
+    for name in run_unit.connections:
+      conn = data.connections.get(name)
+      if conn is not None:
+        mounts.append(_mount(str(conn.host_path), conn.guest_path, readonly=False))
     mounts.extend(data.host_mounts)
     if mounts:
       service["volumes"] = mounts
@@ -589,6 +636,7 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     routes=routes,
     route_urls=_route_urls(routes, assignments, ctx.config),
     host_mounts=_host_mounts(),
+    connections=_load_connections(spec, issues, ctx),
     issues=tuple(issues),
   )
 

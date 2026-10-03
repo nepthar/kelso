@@ -116,6 +116,8 @@ class AppRunUnit:
   shell: tuple[str, ...]
   # The argv a healthcheck runs, or None to leave the image's own.
   healthcheck: tuple[str, ...] | None
+  # Names in `[connections]` attached to this unit.
+  connections: tuple[str, ...]
   compose_extra: Mapping[str, Any]
 
 
@@ -334,6 +336,7 @@ def _resolve_run_units(
       restart=run_entry.restart,
       shell=tuple(run_entry.shell),
       healthcheck=_healthcheck_argv(run_entry),
+      connections=tuple(run_entry.connections),
       compose_extra=run_entry.compose,
     )
 

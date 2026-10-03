@@ -52,6 +52,7 @@ creates.
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
+| `connections` | list of names | `[]` | `[connections]` this unit is given. See [`[connections.<name>]`](#connectionsname). |
 | `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
@@ -104,6 +105,45 @@ app until the operator binds it to one of the host volumes they declared:
 ```
 kelso config <app> --bind media=photos
 ```
+
+## `[connections.<name>]`
+
+Something outside the app that it needs to reach, which kelso provides: the
+app names a kind, and kelso works out how to get it there on this machine. A
+run unit is given a connection by listing it in its `connections`; kelso then
+mounts what the kind needs at `/run/kelso/conn/<name>` and offers what the app
+needs to know as `${conn.<name>.<property>}`, which `[run.<unit>.env]` maps
+to whatever names the app reads. Kelso sets no environment of its own.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `kind` | string | **required** | One of the kinds below. |
+| `desc` | string | `""` | Shown to the operator. |
+
+| Kind | Gives the app | Properties |
+| --- | --- | --- |
+| `kelso.admin` | kelsod's admin API: full control of kelso. | `socket`: the admin socket's path in the container. |
+| `docker.admin` | The docker daemon: full control of the host. | `socket`: the docker socket's path in the container. `host`: the same as a `DOCKER_HOST` value. |
+
+Each one hands the app control of something outside it, so kelso calls every
+connection out as a danger on load and on the app's page.
+
+```toml
+[connections]
+admin = { kind = "kelso.admin" }
+
+[run.main]
+image       = "..."
+connections = ["admin"]
+
+[run.main.env]
+KELSO_SOCKET = "${conn.admin.socket}"
+```
+
+A connection does not cross machines. Docker Desktop on macOS mounts the
+admin socket but cannot carry connections through it, so an app that must
+work there takes kelsod's TCP address as an ordinary config value instead, as
+kelso-ui does with `api_address`.
 
 ## `[config]` and `[adv_config]`
 

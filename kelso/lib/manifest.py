@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
+from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS
 from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
@@ -222,6 +223,8 @@ class RunEntry(BaseModel):
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
   healthcheck: str | list[str] | None = Field(default=None, min_length=1)
+  # `[connections]` this unit is given; each mounts under /kelso/conn/<name>.
+  connections: list[Identifier] = Field(default_factory=list)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (ulimits, mem_limit, ...).
   compose: dict[str, Any] = Field(default_factory=dict)
@@ -247,6 +250,21 @@ class CommandEntry(BaseModel):
 
 
 MAX_CRON_TIMEOUT = 30 * 60
+
+
+class ConnectionEntry(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  kind: str
+  desc: str = ""
+
+  @field_validator("kind")
+  @classmethod
+  def check_kind(cls, value: str) -> str:
+    if value not in CONNECTION_KINDS:
+      known = ", ".join(sorted(CONNECTION_KINDS))
+      raise ValueError(f"unknown connection kind {value!r}; kinds are: {known}")
+    return value
 
 
 class CronEntry(BaseModel):
@@ -286,6 +304,7 @@ class Manifest(BaseModel):
   volumes: dict[Identifier, VolumeEntry] = Field(default_factory=dict)
   commands: dict[Identifier, CommandEntry] = Field(default_factory=dict)
   cron: dict[Identifier, CronEntry] = Field(default_factory=dict)
+  connections: dict[Identifier, ConnectionEntry] = Field(default_factory=dict)
 
 
 def parse_manifest(data: bytes, app: AppID, source: Path) -> Manifest:
@@ -339,6 +358,7 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_env_refs(manifest))
   errors.extend(_validate_commands(manifest))
   errors.extend(_validate_cron(manifest))
+  errors.extend(_validate_connections(manifest))
   return errors
 
 
@@ -381,6 +401,17 @@ def _validate_commands(manifest: Manifest) -> list[str]:
   return errors
 
 
+def _validate_connections(manifest: Manifest) -> list[str]:
+  errors: list[str] = []
+  for unit_name, run_entry in manifest.run.items():
+    for name in run_entry.connections:
+      if name not in manifest.connections:
+        errors.append(
+          f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
+        )
+  return errors
+
+
 def _validate_cron(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   for name, entry in manifest.cron.items():
@@ -411,14 +442,27 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
 
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
+    attached = known | {
+      f"{CONN_KEY_PREFIX}{name}.{prop}"
+      for name in run_entry.connections
+      if name in manifest.connections
+      for prop in CONNECTION_KINDS[manifest.connections[name].kind].property_names
+    }
     for var, value in run_entry.env.items():
       for ref in sorted(EnvTemplate(value).get_identifiers()):
-        if ref in known:
+        if ref in attached:
           continue
         if "." not in ref:
           continue  # Undeclared config-style; compose leaves it unsubstituted.
         where = f"[run.{unit_name}.env]: {var} references ${{{ref}}}"
-        errors.append(f"{where}, which is not a known substitution")
+        conn = ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
+        if ref.startswith(CONN_KEY_PREFIX) and conn not in run_entry.connections:
+          errors.append(
+            f"{where}, but connection {conn!r} is not attached to this unit; "
+            f"add it to [run.{unit_name}] connections"
+          )
+        else:
+          errors.append(f"{where}, which is not a known substitution")
   return errors
 
 

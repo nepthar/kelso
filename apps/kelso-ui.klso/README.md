@@ -30,12 +30,11 @@ matches.
 
 ## Setup
 
-It needs `kelsod` running on the host, and `$kelso/var/conn` bound in. For now
-that is manual — declare the directory as a host volume:
+It needs `kelsod` running on the host. Its manifest asks for a `kelso.admin`
+connection, so kelso mounts the admin socket in and tells the app where it is;
+there is nothing to bind:
 
 ```
-kelso system host-volume --add kelso_conn=${kelso_root}/var/conn
-kelso config kelso-ui --bind conn=kelso_conn
 kelso start kelso-ui
 ```
 

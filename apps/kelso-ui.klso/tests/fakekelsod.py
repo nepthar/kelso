@@ -176,7 +176,7 @@ APP_DETAIL = {
   "issues": [
     {
       "problem": f"volume conn is not bound {EVIL}",
-      "fix": "kelso config kelso-ui --bind conn=x",
+      "fix": "kelso config kelso-ui --set admin_pass=x",
     },
     {"problem": "no fix offered"},
   ],
