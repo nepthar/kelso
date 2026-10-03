@@ -80,7 +80,9 @@ from kelso.lib.spec import AppSpec
 #     `path` is `$app/<src>`; GET /host (cpus, memory, and kelso's disks); an
 #     app's `status` is healthy/ok/degraded/stopped in place of
 #     running/exited/stopped.
-API_VERSION = 30
+# 31: apps carry `update_version`; `update` is a job verb; catalog apps carry
+#     `error` when their manifest does not parse.
+API_VERSION = 31
 
 CtxFactory = Callable[[], KelsoCtx]
 

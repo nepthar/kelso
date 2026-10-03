@@ -8,11 +8,12 @@
 <p class="empty">No snapshots yet. Take one from an app's page.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>App</th><th>When</th><th>Tag</th><th>Size</th><th class="act"></th>
+  <th>App</th><th>Version</th><th>When</th><th>Tag</th><th>Size</th><th class="act"></th>
 </tr></thead><tbody>
 {% for snap in snapshots %}
 <tr>
   <td class="name">{{ snap.app_id }}</td>
+  <td class="muted">{{ snap.get('app_version') or '—' }}</td>
   <td class="muted">{{ when(snap.taken_at) if snap.get('taken_at') else snap.name }}</td>
   <td class="muted">{{ snap.get('tag') or '' }}</td>
   <td class="muted">{{ snap.get('bytes')|size }}</td>

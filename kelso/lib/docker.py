@@ -153,6 +153,11 @@ def remove_image(image: DockerImage) -> None:
     raise DockerError(cmd, result.returncode, result.stderr)
 
 
+def pull_image(image: str) -> None:
+  """`docker pull`, streaming its progress. Raises DockerError if it fails."""
+  docker_run_command(["pull", image], json_output=False)
+
+
 class DockerError(RuntimeError):
   """A docker invocation exited non-zero."""
 

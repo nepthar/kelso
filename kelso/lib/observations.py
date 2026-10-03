@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kelso.lib.apps import AppID, read_app_actions, read_app_starts
+from kelso.lib.bundle import load_bundle
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
 
@@ -82,6 +83,9 @@ class AppObservation:
   last_action: str | None
   config_changed_at: str | None = None
   started_at: str | None = None
+  loaded_version: str | None = None
+  # The version in the bundle it was loaded from; None if that is gone or broken.
+  source_version: str | None = None
 
   @property
   def running_count(self) -> int:
@@ -109,6 +113,13 @@ class AppObservation:
     if not (self.running_count and self.config_changed_at and self.started_at):
       return False
     return self.config_changed_at > self.started_at
+
+  @property
+  def update_version(self) -> str | None:
+    """The source's version, when a loaded app's source has a different one."""
+    if not self.loaded or self.source_version in (None, self.loaded_version):
+      return None
+    return self.source_version
 
   @property
   def loaded(self) -> bool:
@@ -152,6 +163,19 @@ def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
   return origin if origin is not None and origin.exists() else None
 
 
+def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
+  """The loaded version, and the version in the bundle it was loaded from."""
+  store = ctx.app_store(app_id)
+  origin = store.get_meta("origin")
+  source = None
+  if origin and Path(origin).exists():
+    try:
+      source = load_bundle(Path(origin)).app_spec().version
+    except ValueError:
+      pass
+  return store.get_meta("loaded_version"), source
+
+
 def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
@@ -177,10 +201,16 @@ def collect_observations(
     app_id = AppID(raw_id)
     paths = ctx.loaded_paths(app_id)
     action = actions.get(raw_id)
+    run_dir_exists = paths.run_path.is_dir()
+    loaded_version, source_version = (
+      _versions(app_id, ctx)
+      if run_dir_exists and raw_id in config_ids
+      else (None, None)
+    )
     observations[app_id] = AppObservation(
       app_id=app_id,
       bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
-      run_dir_exists=paths.run_path.is_dir(),
+      run_dir_exists=run_dir_exists,
       compose_exists=paths.compose_path.is_file(),
       config_exists=raw_id in config_ids,
       # Spelled out rather than borrowing `lifecycle.managed_volume_dirs`,
@@ -197,6 +227,8 @@ def collect_observations(
         else None
       ),
       started_at=starts.get(raw_id),
+      loaded_version=loaded_version,
+      source_version=source_version,
     )
   return observations
 

@@ -52,6 +52,7 @@
   <p class="muted mono">{{ app.get('app_id') }} · {{ app.get('repo') or 'main' }}</p>
   {% else %}
   <p class="lede">This app's manifest could not be read.</p>
+  {% if app.get('error') %}<pre class="stale">{{ app.error }}</pre>{% endif %}
   {% endif %}
   {% set others = app.contested|reject('equalto', app.get('repo'))|list %}
   {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Loading from here binds it to {{ app.get('repo') }}.</p>{% endif %}
@@ -111,7 +112,7 @@
 <tr class="catalog-row" data-card="{{ app.card_id }}">
   <td class="name">{{ app.get('display_name') or app.get('app_id') }}{% if app.get('app_id') in contested %} <span class="dot exited" title="in more than one repo"></span>{% endif %}</td>
   <td class="muted">{{ app.get('app_id') or '' }}</td>
-  <td class="muted">{{ app.get('version') or '—' }}</td>
+  <td class="muted">{% if app.get('error') %}<span class="pill" title="{{ app.error }}"><span class="dot exited"></span>invalid</span>{% else %}{{ app.get('version') or '—' }}{% endif %}</td>
   <td class="wrap">{{ app.get('description') or '' }}</td>
 </tr>
 {% endfor %}

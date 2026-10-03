@@ -9,6 +9,7 @@ from tabulate import tabulate
 
 from kelso.lib import repo as repo_lib
 from kelso.lib.apps import read_app_actions
+from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.repo import USAGE
@@ -101,14 +102,30 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       block = f"{header}\n{'=' * len(header)}"
       if entries:
         rows = [
-          (e.app_id, _status(e, loaded, origins, actions), _relative(e.path, repo.path))
+          (
+            e.app_id,
+            _status(e, loaded, origins, actions),
+            _version(e),
+            _relative(e.path, repo.path),
+          )
           for e in entries
         ]
         block += "\n" + tabulate(
-          rows, headers=["APP_ID", "STATUS", "PATH"], tablefmt="simple"
+          rows,
+          headers=["APP_ID", "STATUS", "VERSION", "PATH"],
+          tablefmt="simple",
+          disable_numparse=True,
         )
       blocks.append(block)
     print("\n\n".join(blocks))
+
+
+def _version(entry: CatalogEntry) -> str:
+  """The bundle's version, or `invalid` when its manifest does not parse."""
+  try:
+    return load_bundle(entry.path).app_spec().version
+  except ValueError:
+    return "invalid"
 
 
 def _relative(path: Path, root: Path) -> str:

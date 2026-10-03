@@ -24,6 +24,7 @@ from kelso.cli import (
   status,
   stop,
   system,
+  update,
   updown,
 )
 from kelso.lib.config import load_config
@@ -42,6 +43,7 @@ COMMANDS = [
   config,
   cmd,
   load,
+  update,
   remove,
   inspect,
   logs,
@@ -63,6 +65,7 @@ Apps
   config      View or set an app's config, routes, and volume binds
   cmd         List or run an app's commands
   load        Load or re-load an app, restarting it if running
+  update      Snapshot an app and re-load it from its source's new version
   unload      Stop an app and remove its loaded copy, keeping data and config
   rm          Unload a stopped app and delete its temp and logs
               (--temp, --data, --purge: more or less)

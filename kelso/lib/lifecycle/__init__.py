@@ -59,6 +59,7 @@ from kelso.lib.lifecycle.run import (
   stop,
 )
 from kelso.lib.lifecycle.snapshot import delete_snapshot, snapshot
+from kelso.lib.lifecycle.update import UpdateResult, update
 
 __all__ = [
   "CleanupPlan",
@@ -109,4 +110,6 @@ __all__ = [
   "stop",
   "unlink_host_volumes",
   "unregister_app_routes",
+  "UpdateResult",
+  "update",
 ]

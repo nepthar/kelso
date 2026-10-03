@@ -76,6 +76,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
     "CONFIG",
     "VOLUMES",
     "LAST_ACTION",
+    "VERSION",
   ]
   assert _ps_row(concise.stdout, "ports-demo") == [
     "ports-demo",
@@ -83,6 +84,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
     "ready",
     "0",
     "started",
+    "0.1.0",
   ]
 
   stopped = kelso_env.run("stop", "ports-demo")
@@ -94,6 +96,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
     "ready",
     "0",
     "stopped",
+    "0.1.0",
   ]
 
   calls = [

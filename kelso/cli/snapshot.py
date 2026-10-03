@@ -1,5 +1,7 @@
 import argparse
 
+from tabulate import tabulate
+
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   RestorePlan,
@@ -12,6 +14,7 @@ from kelso.lib.lifecycle import (
   start,
   stop,
 )
+from kelso.lib.lifecycle.snapshot import snapshot_version
 
 
 def register(subparsers) -> None:
@@ -83,8 +86,13 @@ def run_list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if not names:
     print(f"No snapshots of {app}. Take one with `kelso snapshot take {app}`")
     return
-  for name in reversed(names):
-    print(name)
+  root = ctx.config.snapshot_root
+  rows = [(name, snapshot_version(root, app, name) or "-") for name in reversed(names)]
+  print(
+    tabulate(
+      rows, headers=["SNAPSHOT", "VERSION"], tablefmt="simple", disable_numparse=True
+    )
+  )
 
 
 def run_restore(args: argparse.Namespace, ctx: KelsoCtx) -> None:

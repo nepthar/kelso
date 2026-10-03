@@ -233,10 +233,12 @@ def test_snapshot_list_shows_newest_first(kelso_env):
   names = [f"2020-01-{day:02d}_00-00Z" for day in range(1, 4)]
   for name in names:
     (snap_dir / f"{name}.tar.gz").write_bytes(b"")
+  (snap_dir / f"{names[0]}.toml").write_text('app_version = "0.9"\n')
 
   listed = kelso_env.run("snapshot", "list", app_id)
   assert listed.returncode == 0, listed.stderr
-  assert listed.stdout.splitlines() == list(reversed(names))
+  rows = [line.split() for line in listed.stdout.splitlines()[2:]]
+  assert rows == [[names[2], "-"], [names[1], "-"], [names[0], "0.9"]]
 
 
 def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):

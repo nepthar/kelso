@@ -347,3 +347,19 @@ def test_dashboard_status_pills_by_health(client, fake):
   assert 'class="dot running"></span>healthy' in rows["kelso-ui"]
   assert 'class="dot exited"></span>degraded' in rows["immich"]
   assert 'class="dot"></span>stopped' in rows["jellyfin"]
+
+
+def test_dashboard_offers_an_update_when_the_source_moved_on(client, fake):
+  rows = {
+    row.split('href="/apps/')[1].split('"')[0]: row
+    for row in client.get("/").text.split("<tr>")
+    if 'href="/apps/' in row
+  }
+  assert 'data-verb="update"' in rows["immich"]
+  assert 'title="Update 3.1.0 → 3.2.0"' in rows["immich"]
+  assert 'data-verb="update"' not in rows["kelso-ui"]
+
+
+def test_catalog_marks_a_bundle_that_does_not_parse(client, fake):
+  page = client.get("/catalog").text
+  assert 'title="manifest broken.klso/manifest.toml: not valid TOML"' in page
