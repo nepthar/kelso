@@ -147,6 +147,7 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "app_id": "broken",
     "display_name": "",
     "version": None,
+    "error": f"manifest {broken / 'manifest.toml'}: not valid TOML",
     "description": "",
     "author": "",
     "url": "",
@@ -529,6 +530,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
   (snap / "2020-01-01_00-00Z_old.tar.gz").write_bytes(b"x")
   (snap / "2024-06-15_12-00Z.tar.gz").write_bytes(b"z")
   (snap / "2026-01-01_00-00Z_new.tar.gz").write_bytes(b"y")
+  (snap / "2026-01-01_00-00Z_new.toml").write_text('app_version = "1.2"\n')
   body = client.get("/snapshots").json()["snapshots"]
   assert body == [
     {
@@ -536,6 +538,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
       "name": "2026-01-01_00-00Z_new",
       "taken_at": "2026-01-01T00:00:00Z",
       "tag": "new",
+      "app_version": "1.2",
       "bytes": 1,
     },
     {
@@ -543,6 +546,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
       "name": "2024-06-15_12-00Z",
       "taken_at": "2024-06-15T12:00:00Z",
       "tag": "",
+      "app_version": None,
       "bytes": 1,
     },
     {
@@ -550,6 +554,7 @@ def test_snapshots_lists_archives_newest_first(kelso_env, client):
       "name": "2020-01-01_00-00Z_old",
       "taken_at": "2020-01-01T00:00:00Z",
       "tag": "old",
+      "app_version": None,
       "bytes": 1,
     },
   ]

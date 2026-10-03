@@ -24,6 +24,7 @@ from kelso.jobs.restore import RestoreJob
 from kelso.jobs.snapshot import DeleteSnapshotJob, SnapshotJob
 from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
+from kelso.jobs.update import UpdateJob
 from kelso.jobs.updown import DownJob, UpJob
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import tick
@@ -45,6 +46,7 @@ JOBS: dict[str, type[Job]] = {
   "up": UpJob,
   "down": DownJob,
   "load": LoadJob,
+  "update": UpdateJob,
   "snapshot": SnapshotJob,
   "snapshot-delete": DeleteSnapshotJob,
   "restore": RestoreJob,

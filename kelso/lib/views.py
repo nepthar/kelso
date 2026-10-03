@@ -19,7 +19,11 @@ from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
-from kelso.lib.lifecycle.snapshot import snapshot_archive, split_snapshot_name
+from kelso.lib.lifecycle.snapshot import (
+  snapshot_archive,
+  snapshot_version,
+  split_snapshot_name,
+)
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
@@ -70,7 +74,7 @@ def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
-  spec = _catalog_spec(entry)
+  spec, error = _catalog_spec(entry)
   # The logtab is what makes an id more than a catalog listing, and AppStore
   # creates it on contact -- so this is a file check, never a store lookup.
   has_config = ctx.config.app_config_path(entry.app_id).is_file()
@@ -80,6 +84,7 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
     "app_id": entry.app_id,
     "display_name": spec.display_name if spec else "",
     "version": spec.version if spec else None,
+    "error": error,
     "description": spec.description if spec else "",
     "author": spec.author if spec else "",
     "url": spec.url if spec else "",
@@ -172,12 +177,12 @@ def contested_view(ctx: KelsoCtx) -> dict[str, list[str]]:
   return {app_id: sorted(repos) for app_id, repos in ctx.contested_app_ids().items()}
 
 
-def _catalog_spec(entry: CatalogEntry) -> AppSpec | None:
-  """The bundle's schema, or None when the bundle on disk does not parse."""
+def _catalog_spec(entry: CatalogEntry) -> tuple[AppSpec | None, str | None]:
+  """The bundle's spec, or None and why when the bundle on disk does not parse."""
   try:
-    return load_bundle(entry.path).app_spec()
-  except (ValueError, RuntimeError):
-    return None
+    return load_bundle(entry.path).app_spec(), None
+  except (ValueError, RuntimeError) as e:
+    return None, str(e)
 
 
 def _gauge_bytes(gauges: dict[str, Any], name: str) -> int | None:
@@ -320,6 +325,7 @@ def snapshots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
           "name": name,
           "taken_at": taken_at,
           "tag": tag,
+          "app_version": snapshot_version(ctx.config.snapshot_root, app_id, name),
           "bytes": archive.stat().st_size if archive.is_file() else None,
         }
       )
@@ -427,6 +433,7 @@ def _summary(
     "app_id": str(observation.app_id),
     "display_name": spec.display_name if spec else "",
     "version": spec.version if spec else None,
+    "update_version": observation.update_version,
     "status": observation.status(spec.run_units if spec else ()),
     "state": observation.state,
     "containers": {

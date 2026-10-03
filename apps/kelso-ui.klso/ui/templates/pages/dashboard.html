@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import pill, sub %}
+{% from "macros.html" import job_button, pill, sub %}
 
 {% block content %}
 <h2>kelso host</h2>
@@ -47,7 +47,12 @@
     {%- elif app.configured == 'ready' %}{{ pill('ready', 'running') }}
     {%- else %}{{ pill('needs config', 'bad') }}{% endif -%}
   </td>
-  <td class="muted">{{ app.get('version') or '—' }}</td>
+  <td class="muted">{{ app.get('version') or '—' }}
+    {%- if app.get('update_version') %} {{ job_button('Update ' ~ app.version ~ ' → ' ~ app.update_version, 'update', icon='arrow-up-circle-outline',
+        title='Update ' ~ (app.get('display_name') or app.app_id),
+        desc='Updates ' ~ app.app_id ~ ' from ' ~ app.version ~ ' to ' ~ app.update_version ~ ". Its new images are pulled first, then it is stopped, snapshotted as pre-update, re-loaded, and started again if it was running. Its data and configuration are kept.",
+        args={'app': app.app_id}, done='/') }}{% endif -%}
+  </td>
   <td class="muted">{{ app.get('volume_count', 0) }}</td>
   <td class="muted">{{ app.get('last_action') or '—' }}</td>
 </tr>

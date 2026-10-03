@@ -11,11 +11,10 @@ Kubernetes and similar can be overkill, while raw Docker Compose files alone sti
 What has to be true before v1, roughly in order of priority.
 
 ### Updating apps
-Nothing pulls a newer image: `load` re-reads the bundle, and compose only pulls
-an image it does not have. Wanted: `kelso update <app>` (pull, recreate, roll
-back if it does not come up healthy), and the UI showing that an update exists.
-A load that changes an app's version snapshots it first, as restore already
-does, unless passed `--no-snapshot`.
+`kelso update <app>` (and the dashboard's update icon) pulls the source's
+images, snapshots as `pre-update`, and re-loads; repos are still updated by
+hand. Still wanted: rolling back when the new version does not come up healthy,
+and a plain `load` that changes the version snapshotting first.
 
 ### One-command installer
 `kelso init` installs `kelsod` as a systemd user service. Installing kelso itself

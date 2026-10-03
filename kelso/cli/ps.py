@@ -34,13 +34,15 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
           _config(observation, spec, ctx),
           _volumes(observation, spec),
           observation.last_action or EMPTY,
+          _version(observation, spec),
         )
       )
     print(
       tabulate(
         rows,
-        headers=["APP_ID", "STATUS", "CONFIG", "VOLUMES", "LAST_ACTION"],
+        headers=["APP_ID", "STATUS", "CONFIG", "VOLUMES", "LAST_ACTION", "VERSION"],
         tablefmt="simple",
+        disable_numparse=True,
       )
     )
 
@@ -62,6 +64,13 @@ def _config(observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx) ->
   if spec is None:
     return EMPTY
   return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
+
+
+def _version(observation: AppObservation, spec: AppSpec | None) -> str:
+  version = spec.version if spec else EMPTY
+  if observation.update_version:
+    return f"{version} ({observation.update_version} available)"
+  return version
 
 
 def _volumes(observation: AppObservation, spec: AppSpec | None) -> str:

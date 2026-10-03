@@ -1,5 +1,6 @@
 import shlex
 import shutil
+import tomllib
 from datetime import UTC, datetime
 from logging import getLogger
 from pathlib import Path
@@ -62,6 +63,19 @@ def snapshot_archive(root: Path, app: AppID, name: str) -> Path:
   return root / app / f"{name}{SNAPSHOT_TAR_SUFFIX}"
 
 
+def snapshot_meta(root: Path, app: AppID, name: str) -> Path:
+  """A copy of the archive's snapshot.toml beside it, readable without opening it."""
+  return root / app / f"{name}.toml"
+
+
+def snapshot_version(root: Path, app: AppID, name: str) -> str | None:
+  """The app version a snapshot holds, if its metadata is beside it."""
+  try:
+    return tomllib.loads(snapshot_meta(root, app, name).read_text())["app_version"]
+  except (OSError, tomllib.TOMLDecodeError, KeyError):
+    return None
+
+
 def delete_snapshot(app: AppID, name: str, ctx: KelsoCtx) -> None:
   """Remove one snapshot archive. Raises ValueError if it is not there."""
   name = name.removesuffix(SNAPSHOT_TAR_SUFFIX)
@@ -70,6 +84,7 @@ def delete_snapshot(app: AppID, name: str, ctx: KelsoCtx) -> None:
   if archive.parent != directory or not archive.is_file():
     raise ValueError(f"No snapshot {name} for {app}")
   archive.unlink()
+  snapshot_meta(ctx.config.snapshot_root, app, name).unlink(missing_ok=True)
   if directory.is_dir() and not any(directory.iterdir()):
     directory.rmdir()
 
@@ -192,19 +207,17 @@ def snapshot(
   try:
     included, excluded = _volume_names(paths.run_path / "volumes")
     app_version = AppSpec.from_file(paths.manifest_path, app).version
-    (scratch / "snapshot.toml").write_text(
-      "\n".join(
-        [
-          f'app_id = "{app}"',
-          f'date = "{folder_name}"',
-          f'app_version = "{app_version}"',
-          f"included_volumes = {_toml_str_array(included)}",
-          f"excluded_volumes = {_toml_str_array(excluded)}",
-          "",
-        ]
-      ),
-      encoding="utf-8",
+    meta = "\n".join(
+      [
+        f'app_id = "{app}"',
+        f'date = "{folder_name}"',
+        f'app_version = "{app_version}"',
+        f"included_volumes = {_toml_str_array(included)}",
+        f"excluded_volumes = {_toml_str_array(excluded)}",
+        "",
+      ]
     )
+    (scratch / "snapshot.toml").write_text(meta, encoding="utf-8")
 
     # Secrets stay Fernet ciphertext; we never decrypt on this path. compose.yml is
     # not captured: its host ports are a photograph of kelsodb, and `restore`
@@ -262,4 +275,7 @@ def snapshot(
       f"remove it with `kelso cleanup --apply` before retrying."
     ) from e
 
+  snapshot_meta(ctx.config.snapshot_root, app, folder_name).write_text(
+    meta, encoding="utf-8"
+  )
   return archive

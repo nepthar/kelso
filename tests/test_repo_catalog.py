@@ -46,7 +46,7 @@ def ctx_for(kelso_env) -> KelsoCtx:
 
 
 def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
-  """Every `kelso repo list` row for `app_id`, as [app_id, repo, status, path]."""
+  """Every `kelso repo list` row for `app_id`, as [app_id, repo, status, version, path]."""
   rows = []
   repo = ""
   for line in catalog_output.splitlines():
@@ -169,11 +169,17 @@ def test_catalog_names_the_source_of_every_app(kelso_env):
   result = kelso_env.run("repo", "list")
 
   assert result.returncode == 0, result.stderr
-  assert result.stdout.splitlines()[2].split() == ["APP_ID", "STATUS", "PATH"]
+  assert result.stdout.splitlines()[2].split() == [
+    "APP_ID",
+    "STATUS",
+    "VERSION",
+    "PATH",
+  ]
   assert _row(result.stdout, "dev-app") == [
     "dev-app",
     "hrbr-dev",
     "-",
+    "0.1.0",
     "dev-app.klso",
   ]
   assert _row(result.stdout, "ports-demo")[1] == "local"

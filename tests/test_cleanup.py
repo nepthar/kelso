@@ -17,7 +17,7 @@ ORPHAN_ROUTE = {
 
 def _archives(kelso_env, app: str) -> list[str]:
   folder = kelso_env.root / "snapshots" / app
-  return sorted(p.name for p in folder.iterdir()) if folder.is_dir() else []
+  return sorted(p.name for p in folder.glob("*.tar.gz")) if folder.is_dir() else []
 
 
 def _fake_archives(kelso_env, app: str, *names: str) -> None:
