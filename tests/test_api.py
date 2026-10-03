@@ -1,6 +1,7 @@
 """The admin API surface: what it projects, what it refuses, and what it runs."""
 
 import json
+import re
 import socket
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1182,3 +1183,10 @@ def test_host_reports_its_size_and_the_disks_kelso_uses(kelso_env, client):
   assert disk["total_bytes"] > 0
   assert "data" in disk["holds"]
   assert disk["gauge"].startswith("host_drive_used_ratio/")
+
+
+def test_kelso_ui_expects_the_api_version_kelsod_speaks():
+  """Bumping API_VERSION means bumping kelso-ui's NEEDS_API with it."""
+  web = Path(__file__).parent.parent / "apps" / "kelso-ui.klso" / "ui" / "web.py"
+  needs = re.search(r"^NEEDS_API = (\d+)$", web.read_text(), re.M)
+  assert needs and int(needs[1]) == API_VERSION

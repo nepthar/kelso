@@ -24,7 +24,7 @@ timeout.
 
 ```toml klso_path="manifest.toml"
 [app]
-version      = "0.1.0"
+version      = "0.2.0"
 display_name = "Cron Demo"
 description  = "Commands and cron jobs that stamp, read, fail, and time out"
 author       = "Kelso Server"
