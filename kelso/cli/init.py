@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import secrets
+import socket
 from pathlib import Path
 
 from kelso.cli.service import NO_SYSTEMD, install_service
@@ -32,6 +33,17 @@ CONFIG_TEMPLATE = """\
 repos_root = "repos"
 port_base = 41000
 
+# The address by which kelso is reachable on your network, used for setting
+# up routes. Every route provider that proxies traffic points at it, so it is
+# required as soon as one is configured. A top-level key: keep it above the
+# first [table].
+# kelso_address = "10.0.0.5"
+
+# Routes are auto-assigned to this provider tag on first load (like a config
+# default), unless marked private=true in the manifest. The reserved tag
+# "none" is a built-in noop and is the default when this key is omitted.
+# default_route_provider = "web"
+
 # Repos are where the catalog comes from. `repos/local` is always there and is
 # where you drop bundles by hand. Add more with `kelso repo add`, which writes
 # tables like the ones below -- a directory on this machine, or a folder in a
@@ -57,16 +69,6 @@ url = "github://nepthar/kelso/main/demo-apps"
 #
 # [repo.dev]
 # path = "~/code/bundles"
-
-# The address by which kelso is reachable on your network, used for setting
-# up routes. Every route provider that proxies traffic points at it, so it is
-# required as soon as one is configured.
-# kelso_address = "10.0.0.5"
-
-# Routes are auto-assigned to this provider tag on first load (like a config
-# default), unless marked private=true in the manifest. The reserved tag
-# "none" is a built-in noop and is the default when this key is omitted.
-# default_route_provider = "web"
 
 # Optional: reverse-proxy (or other) providers that publish app routes.
 # Each block is tagged by you ("web", "lan", "homelab", …); `kind` selects
@@ -125,6 +127,18 @@ url = "github://nepthar/kelso/main/demo-apps"
 # readonly      = true
 # require_mount = true
 """
+
+
+def lan_address() -> str | None:
+  """This machine's address on the network its default route leaves by."""
+  # A UDP connect sends nothing; it only makes the kernel pick a source address.
+  with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+    try:
+      probe.connect(("192.0.2.1", 9))
+      address = probe.getsockname()[0]
+    except OSError:
+      return None
+  return None if address.startswith(("127.", "0.")) else address
 
 
 def register(subparsers) -> None:
@@ -205,7 +219,13 @@ def run(args: argparse.Namespace, _ctx) -> None:
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True, exist_ok=True)
 
-  config_path.write_text(CONFIG_TEMPLATE)
+  address = lan_address()
+  template = CONFIG_TEMPLATE
+  if address:
+    template = template.replace(
+      '# kelso_address = "10.0.0.5"', f'kelso_address = "{address}"'
+    )
+  config_path.write_text(template)
 
   master_key_path = root / CONF_DIR / MASTER_KEYFILE
   LogTab(master_key_path, title="Kelso Master Key").write(
@@ -217,6 +237,12 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   print(f"Initialized kelso root at {root}")
   print(f"  config:      {config_path}")
+  if address:
+    print(f"  address:     {address} (detected; edit kelso_address if it is wrong)")
+  else:
+    print(
+      "  address:     not detected; set kelso_address before adding a route provider"
+    )
   print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   print(f"  repos:       {root / 'repos'}")
   print(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
@@ -261,11 +287,8 @@ def run(args: argparse.Namespace, _ctx) -> None:
     "\nThe `demos` repo is there to explore what an app can do. You may wish "
     "to remove\nit once you are finished: `kelso repo remove demos`."
   )
-
-  default_root = DEFAULT_ROOT.expanduser().resolve()
-  if root != default_root:
-    print(
-      f"\nThis root is not the default. Persist it with:\n"
-      f"  export KELSO_ROOT={root}\n"
-      f"or pass `--root {root}` on every kelso command."
-    )
+  print(
+    "\nFor the web UI, choose its admin password and start it; it prints the "
+    "address\nto open:\n"
+    "  kelso start kelso-ui --set admin_pass=<password>"
+  )

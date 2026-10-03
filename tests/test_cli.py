@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import kelso.cli.init
 import kelso.lib.config
 import kelso.lib.doctor
 import kelso.lib.git
@@ -22,7 +23,7 @@ from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
-from kelso.lib.docker import DockerReturn
+from kelso.lib.docker import DockerError, DockerReturn
 from kelso.lib.doctor import Finding, diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
@@ -1454,6 +1455,52 @@ def test_doctor_reports_rootless_docker(kelso_env, monkeypatch):
   result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "docker is running rootless" in result.stdout
+
+
+def test_doctor_says_how_to_pick_up_the_docker_group(kelso_env, monkeypatch):
+  real = kelso.lib.doctor.docker_run_command
+
+  def docker(cmd, **kwargs):
+    if cmd == ["info"]:
+      raise DockerError(
+        cmd,
+        1,
+        "permission denied while trying to connect to the Docker daemon socket "
+        "at unix:///var/run/docker.sock",
+      )
+    return real(cmd, **kwargs)
+
+  monkeypatch.setattr(kelso.lib.doctor, "docker_run_command", docker)
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert "log out and back in, or run `newgrp docker`" in result.stdout
+
+
+def test_doctor_refuses_a_git_too_old_to_mirror(kelso_env, monkeypatch):
+  monkeypatch.setattr(kelso.lib.doctor, "git", lambda *args: "git version 2.20.1")
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert "git version 2.20.1 is too old" in result.stdout
+
+
+def test_init_writes_the_address_it_detects(kelso_env, tmp_path, monkeypatch):
+  monkeypatch.setattr(kelso.cli.init, "lan_address", lambda: "10.0.0.7")
+  root = tmp_path / "fresh"
+  result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
+  assert result.returncode == 0, result.stderr
+  assert load_config_file(root / "config.toml").kelso_address == "10.0.0.7"
+  assert "10.0.0.7 (detected" in result.stdout
+
+
+def test_init_leaves_the_address_unset_when_it_finds_none(
+  kelso_env, tmp_path, monkeypatch
+):
+  monkeypatch.setattr(kelso.cli.init, "lan_address", lambda: None)
+  root = tmp_path / "fresh"
+  result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
+  assert result.returncode == 0, result.stderr
+  assert load_config_file(root / "config.toml").kelso_address == ""
+  assert "set kelso_address before adding a route provider" in result.stdout
 
 
 def test_init_yes_takes_the_default_root_without_asking(kelso_env, tmp_path):

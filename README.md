@@ -92,6 +92,29 @@ On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
 service; `kelso system service` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
+### Upgrading kelso
+```bash
+uv tool upgrade kelso
+kelso system service
+```
+The second command rewrites kelsod's systemd unit for the new install and
+restarts it. Apps keep running throughout, except those in start group 0, which
+stop and start with kelsod. Loaded apps keep the version they were loaded at;
+`kelso update <app>` moves one to what its repo holds now.
+
+### Uninstalling kelso
+```bash
+kelso down
+systemctl --user disable --now kelsod.service
+rm ~/.config/systemd/user/kelsod.service
+uv tool uninstall kelso
+sudo rm -rf ~/kelso
+```
+`kelso down` stops every app. The last command deletes all of kelso's data,
+app volumes included; `sudo`, because containers write volume files as root.
+Skip it to keep the root, which stays a folder of ordinary compose projects.
+Docker images kelso pulled stay until you remove them (`docker image prune -a`).
+
 ### Volume Storage Locations
 
 App volumes live in `<kelso_root>/volumes/<kind>/<app>/<volume>` where `<kind>`
