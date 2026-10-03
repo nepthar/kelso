@@ -44,8 +44,8 @@ FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.log")
 OK = "ok"
 ERROR = "error"
 
-# Who started a run, as `started_by` records it. Runs recorded before the
-# field existed have none.
+# Who started a run, as `started_by` records it. Every run records one; runs
+# recorded before the field existed read back as "".
 BY_KELSOD = "kelsod"  # kelsod's own startup and schedule
 BY_CRON = "cron"  # a cron job kelsod's tick found due
 BY_CLI = "cli"
@@ -127,8 +127,8 @@ def finish_run(
   status: str,
   started: datetime,
   finished: datetime,
+  started_by: str,
   args: dict[str, str] | None = None,
-  started_by: str = "",
 ) -> None:
   """Append the closing trailer to ``relpath`` and index the run."""
   path = ctx.config.activity_root / relpath
@@ -163,7 +163,7 @@ def record_run(
   started: datetime,
   finished: datetime,
   output: str,
-  started_by: str = "",
+  started_by: str,
 ) -> str:
   """Write one run's output file and index record; returns its relative path."""
   relpath = begin_run(ctx, verb, args, app_id=app_id, started=started)
@@ -246,10 +246,10 @@ class Activity:
     ctx: KelsoCtx,
     verb: str,
     *,
+    started_by: str,
     app: AppID | str | None = None,
     args: dict[str, str] | None = None,
     echo: TextIO | None = None,
-    started_by: str = "",
   ) -> None:
     self.ctx = ctx
     self.started_by = started_by

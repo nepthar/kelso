@@ -1614,6 +1614,7 @@ def _seed_activity(kelso_env, **kwargs):
     started=started,
     finished=started + timedelta(seconds=1),
     output=kwargs.get("output", "up and running"),
+    started_by="test",
   )
 
 

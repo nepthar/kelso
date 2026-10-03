@@ -8,7 +8,7 @@ protocol (kelso/daemon/console.py); this side adds only the front door.
 import asyncio
 from urllib.parse import quote, urlencode
 
-from api import ApiError, api, open_socket
+from api import STARTED_BY, ApiError, api, open_socket
 from fastapi import APIRouter, WebSocket
 from frontdoor import TERMINAL_CSP, socket_refusal
 from web import PageDep
@@ -38,7 +38,8 @@ def console_page(page: PageDep, app_id: str, unit: str = ""):
 
 @router.websocket("/apps/{app_id}/console/ws")
 async def console_socket(ws: WebSocket, app_id: str, unit: str = "main"):
-  await _bridge(ws, f"/apps/{quote(app_id)}/console?{urlencode({'unit': unit})}")
+  query = urlencode({"unit": unit, "started_by": STARTED_BY})
+  await _bridge(ws, f"/apps/{quote(app_id)}/console?{query}")
 
 
 @router.get("/host/console")
@@ -50,7 +51,7 @@ def host_console_page(page: PageDep):
 
 @router.websocket("/host/console/ws")
 async def host_console_socket(ws: WebSocket):
-  await _bridge(ws, "/host/console")
+  await _bridge(ws, f"/host/console?{urlencode({'started_by': STARTED_BY})}")
 
 
 async def _bridge(ws, path):

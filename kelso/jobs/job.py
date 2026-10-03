@@ -49,8 +49,9 @@ class Job:
   record_activity: bool = True
   app: str | None = None
 
-  def __init__(self) -> None:
+  def __init__(self, started_by: str) -> None:
     self.id: str = uuid.uuid4().hex[:12]
+    self.started_by = started_by
     self.args: dict[str, str] = {}
     self.state: str = QUEUED
     self.error: str | None = None
@@ -58,7 +59,6 @@ class Job:
     self.started_at: str | None = None
     self.finished_at: str | None = None
     self.log: str | None = None
-    self.started_by: str = ""
     self._activity: Activity | None = None
 
   def as_dict(self) -> dict[str, Any]:
@@ -76,11 +76,10 @@ class Job:
     }
 
   @classmethod
-  def prepare(cls, args: dict[str, str], ctx: KelsoCtx, *, started_by: str = "") -> Job:
+  def prepare(cls, args: dict[str, str], ctx: KelsoCtx, *, started_by: str) -> Job:
     """Construct and parse. Raises ``ValueError`` before any log is filed."""
-    job = cls()
+    job = cls(started_by)
     job.args = dict(args)
-    job.started_by = started_by
     cls._check_args(args)
     job.init(ctx, args)
     return job
@@ -91,8 +90,8 @@ class Job:
     args: dict[str, str],
     ctx: KelsoCtx,
     *,
+    started_by: str,
     echo: TextIO | None = None,
-    started_by: str = "",
   ) -> Job:
     """Parse, execute, re-raise on failure. Returns the finished job on success."""
     job = cls.prepare(args, ctx, started_by=started_by)

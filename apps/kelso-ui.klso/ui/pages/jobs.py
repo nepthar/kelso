@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from api import ApiError, api
+from api import STARTED_BY, ApiError, api
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -22,7 +22,7 @@ async def submit(request: Request):
     return JSONResponse({"error": "Expected verb and args"}, status_code=400)
   try:
     job = api(
-      "/jobs", "POST", {"verb": verb, "args": args, "started_by": "kelso_ui"}
+      "/jobs", "POST", {"verb": verb, "args": args, "started_by": STARTED_BY}
     )
   except ApiError as e:
     return JSONResponse({"error": str(e)}, status_code=400)

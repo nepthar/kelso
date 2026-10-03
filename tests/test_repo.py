@@ -413,7 +413,7 @@ def test_contested_lines_name_every_repo_carrying_an_id(github, ctx, kelso_env):
 
 def test_repo_add_job_mirrors_the_folder(github, ctx, kelso_env):
   github.hello_world()
-  RepoAddJob.call({"url": URL}, ctx)
+  RepoAddJob.call({"url": URL}, ctx, started_by="test")
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
   assert "hello-world" in fresh.app_catalog()
@@ -425,24 +425,24 @@ def test_repo_add_job_mirrors_the_folder(github, ctx, kelso_env):
 def test_repo_add_job_takes_a_url_and_never_a_path(ctx, url):
   """Local repos are CLI-only; see the note above `runner.JOBS`."""
   with pytest.raises(ValueError, match="takes a github:// url"):
-    RepoAddJob.prepare({"url": url}, ctx)
+    RepoAddJob.prepare({"url": url}, ctx, started_by="test")
 
 
 def test_repo_add_job_refuses_a_malformed_url_before_writing(ctx, kelso_env):
   before = kelso_env.config.read_text()
   with pytest.raises(ValueError, match="Malformed repo url"):
-    RepoAddJob.prepare({"url": "github://nepthar"}, ctx)
+    RepoAddJob.prepare({"url": "github://nepthar"}, ctx, started_by="test")
   assert kelso_env.config.read_text() == before
 
 
 def test_repo_update_job_brings_the_mirror_forward(github, ctx, kelso_env):
   github.hello_world()
-  RepoAddJob.call({"url": URL}, ctx)
+  RepoAddJob.call({"url": URL}, ctx, started_by="test")
 
   github.add("second.klso.md", MD_BUNDLE)
   sha = github.commit()
   fresh = KelsoCtx(load_config_file(kelso_env.config))
-  RepoUpdateJob.call({"name": "kelso"}, fresh)
+  RepoUpdateJob.call({"name": "kelso"}, fresh, started_by="test")
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
   assert set(fresh.app_catalog()) >= {"hello-world", "second"}
@@ -451,27 +451,27 @@ def test_repo_update_job_brings_the_mirror_forward(github, ctx, kelso_env):
 
 def test_repo_update_job_refuses_an_unknown_repo(ctx):
   with pytest.raises(ValueError, match="No repo 'nope'"):
-    RepoUpdateJob.prepare({"name": "nope"}, ctx)
+    RepoUpdateJob.prepare({"name": "nope"}, ctx, started_by="test")
 
 
 def test_repo_remove_job_drops_it(github, ctx, kelso_env):
   github.hello_world()
-  RepoAddJob.call({"url": URL}, ctx)
+  RepoAddJob.call({"url": URL}, ctx, started_by="test")
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
-  RepoRemoveJob.call({"name": "kelso"}, fresh)
+  RepoRemoveJob.call({"name": "kelso"}, fresh, started_by="test")
 
   assert "kelso" not in load_config_file(kelso_env.config).repos
 
 
 def test_repo_remove_job_refuses_local(ctx):
   with pytest.raises(ValueError, match="built in"):
-    RepoRemoveJob.call({"name": "local"}, ctx)
+    RepoRemoveJob.call({"name": "local"}, ctx, started_by="test")
 
 
 def test_repo_jobs_are_recorded_as_activity(github, ctx):
   github.hello_world()
-  job = RepoAddJob.call({"url": URL}, ctx)
+  job = RepoAddJob.call({"url": URL}, ctx, started_by="test")
 
   assert job.state == "done"
   assert job.log

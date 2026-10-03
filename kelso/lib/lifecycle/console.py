@@ -90,9 +90,17 @@ def host_shell() -> tuple[list[str], Path]:
 class ConsoleRecord:
   """One session in the activity log, filed when it opens and closed by `close`."""
 
-  def __init__(self, ctx: KelsoCtx, app_id: AppID | None, args: dict[str, str]):
+  def __init__(
+    self,
+    ctx: KelsoCtx,
+    app_id: AppID | None,
+    args: dict[str, str],
+    *,
+    started_by: str,
+  ):
     self.ctx = ctx
     self.app_id = app_id
+    self.started_by = started_by
     self.started = datetime.now(UTC)
     self.log = begin_run(ctx, "console", args, app_id=app_id, started=self.started)
 
@@ -107,4 +115,5 @@ class ConsoleRecord:
       status=OK if ok else ERROR,
       started=self.started,
       finished=datetime.now(UTC),
+      started_by=self.started_by,
     )

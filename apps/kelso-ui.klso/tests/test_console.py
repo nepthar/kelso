@@ -43,7 +43,7 @@ def test_relays_both_ways_and_passes_the_close_on(client, kelsod):
     ws.send_bytes(b"exit\r")
     _, closed = drain(ws)
   assert (closed.code, closed.reason) == (1000, "exited 0")
-  assert kelsod.paths == ["/apps/kelso-ui/console?unit=main"]
+  assert kelsod.paths == ["/apps/kelso-ui/console?unit=main&started_by=kelso_ui"]
 
 
 def test_passes_a_refusal_on(client, kelsod):
@@ -127,7 +127,7 @@ def test_the_host_shell_is_relayed_too(client, kelsod):
   with client.websocket_connect(f"{BASE}/host/console/ws") as ws:
     ws.send_bytes(b"hi")
     assert ws.receive_bytes() == b"hi"
-  assert kelsod.paths == ["/host/console"]
+  assert kelsod.paths == ["/host/console?started_by=kelso_ui"]
 
 
 def test_the_dashboard_names_the_host_and_offers_its_shell(client, fake):
