@@ -325,23 +325,60 @@ version = "1"
 [run.main]
 image = "redis:7"
 
-[run.main.compose.healthcheck]
-test = "redis-cli ping || exit 1"
-interval = "10s"
+[run.main.compose.ulimits.nofile]
+soft = 10032
+hard = 10032
 
 [run.side]
 image = "alpine"
-compose = { healthcheck = { disable = true } }
+compose = { stop_grace_period = "30s" }
+""",
+  )
+
+  services = make_compose_dict(spec, run_data(spec))["services"]
+
+  assert services["main"]["ulimits"] == {"nofile": {"soft": 10032, "hard": 10032}}
+  assert services["side"]["stop_grace_period"] == "30s"
+
+
+def test_a_healthcheck_is_the_command_with_kelsos_timing(tmp_path):
+  """The bundle says what to run; kelso says how often."""
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[run.main]
+image       = "nginx:alpine"
+healthcheck = 'test -n "$PORT"'
+
+[run.db]
+image       = "mongo:8"
+healthcheck = ["mongosh", "--eval", "db.adminCommand('ping')"]
+
+[run.plain]
+image = "alpine"
 """,
   )
 
   services = make_compose_dict(spec, run_data(spec))["services"]
 
   assert services["main"]["healthcheck"] == {
-    "test": "redis-cli ping || exit 1",
-    "interval": "10s",
+    # In the unit's shell, with `$` escaped so compose leaves it for the shell.
+    "test": ["CMD", "/bin/sh", "-c", 'test -n "$$PORT"'],
+    "interval": "60s",
+    "start_period": "2m",
+    "start_interval": "5s",
   }
-  assert services["side"]["healthcheck"] == {"disable": True}
+  assert services["db"]["healthcheck"]["test"] == [
+    "CMD",
+    "mongosh",
+    "--eval",
+    "db.adminCommand('ping')",
+  ]
+  # Without one, the image's own healthcheck is left to apply.
+  assert "healthcheck" not in services["plain"]
 
 
 def test_container_log_rotation_defaults_on_and_is_overridable(tmp_path):
@@ -649,7 +686,7 @@ image = "postgres:16"
 
 [run.db.compose]
 shm_size = "128mb"
-healthcheck = { test = "pg_isready" }
+stop_grace_period = "30s"
 """,
   )
 

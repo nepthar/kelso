@@ -467,6 +467,9 @@ def _env_substitutions(
   }
 
 
+# Often while a container starts, so `kelso up` hears quickly; rarely after.
+HEALTHCHECK_TIMING = {"interval": "60s", "start_period": "2m", "start_interval": "5s"}
+
 SECRET_SHOWN = "<secret>"
 
 
@@ -505,6 +508,13 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       "image": run_unit.image,
       "hostname": run_unit.hostname,
     }
+
+    if run_unit.healthcheck is not None:
+      service["healthcheck"] = {
+        # `$$` is compose's literal dollar; a lone one is a compose variable.
+        "test": ["CMD", *(arg.replace("$", "$$") for arg in run_unit.healthcheck)],
+        **HEALTHCHECK_TIMING,
+      }
 
     # Only on failure: at boot, kelsod starts apps in start_order, not docker.
     service["restart"] = "on-failure" if run_unit.restart == "yes" else "no"

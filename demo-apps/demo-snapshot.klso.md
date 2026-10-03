@@ -21,6 +21,7 @@ state  = { kind = "data", desc = "The tick log. This is the volume snapshots cap
 image   = "python:3.12"
 cmd     = ["python", "/app/app.py"]
 volumes = { script = "/app/app.py", state = "/state" }
+healthcheck = ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/', timeout=3)"]
 
 # Host port only by default; assign a provider with `kelso config` if needed.
 routes  = { main = { port = "8080" } }

@@ -427,7 +427,7 @@ def _summary(
     "app_id": str(observation.app_id),
     "display_name": spec.display_name if spec else "",
     "version": spec.version if spec else None,
-    "status": observation.status,
+    "status": observation.status(spec.run_units if spec else ()),
     "state": observation.state,
     "containers": {
       "running": observation.running_count,

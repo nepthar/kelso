@@ -22,4 +22,6 @@ letsenc = { kind = "data" }
 [run.main]
 image   = "jc21/nginx-proxy-manager:latest"
 volumes = { data = "/data", letsenc = "/etc/letsencrypt" }
+# The image ships this script; it is what the project's own docs use.
+healthcheck = ["/usr/bin/check-health"]
 ```

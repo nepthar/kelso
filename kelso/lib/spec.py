@@ -8,6 +8,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.manifest import (
   ConfigError,
   Manifest,
+  RunEntry,
   parse_manifest,
   unlisted_compose_options,
 )
@@ -113,6 +114,8 @@ class AppRunUnit:
   labels: Mapping[str, str]
   restart: str
   shell: tuple[str, ...]
+  # The argv a healthcheck runs, or None to leave the image's own.
+  healthcheck: tuple[str, ...] | None
   compose_extra: Mapping[str, Any]
 
 
@@ -275,6 +278,15 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
   )
 
 
+def _healthcheck_argv(run_entry: RunEntry) -> tuple[str, ...] | None:
+  check = run_entry.healthcheck
+  if check is None:
+    return None
+  if isinstance(check, str):
+    return (*run_entry.shell, check)
+  return tuple(check)
+
+
 def _resolve_run_units(
   manifest: Manifest,
   app: AppID,
@@ -321,6 +333,7 @@ def _resolve_run_units(
       },
       restart=run_entry.restart,
       shell=tuple(run_entry.shell),
+      healthcheck=_healthcheck_argv(run_entry),
       compose_extra=run_entry.compose,
     )
 

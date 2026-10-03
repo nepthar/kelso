@@ -77,7 +77,9 @@ from kelso.lib.spec import AppSpec
 #     /activity takes `verb`.
 # 30: app routes carry `host_url`, where the route answers on the host itself;
 #     units carry `resolved_environment`, secrets as `<secret>`; app volumes'
-#     `path` is `$app/<src>`; GET /host (cpus, memory, and kelso's disks).
+#     `path` is `$app/<src>`; GET /host (cpus, memory, and kelso's disks); an
+#     app's `status` is healthy/ok/degraded/stopped in place of
+#     running/exited/stopped.
 API_VERSION = 30
 
 CtxFactory = Callable[[], KelsoCtx]

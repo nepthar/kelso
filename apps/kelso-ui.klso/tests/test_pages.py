@@ -238,7 +238,7 @@ def test_config_form(client, fake):
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
   assert '<option value="">none defined yet</option>' in basic
-  assert '<option value="harbor_conn" selected>' in basic
+  assert '<option value="kelso_conn" selected>' in basic
   assert '<input type="hidden" name="action" value="config">' in form
 
 
@@ -336,3 +336,14 @@ def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
   assert "/dev/sda2" in disk and "2.0 TB" in disk and "42%" in disk
   assert "bulk, snapshots, &lt;i" in disk
   assert "<option disabled>1 day</option>" in text
+
+
+def test_dashboard_status_pills_by_health(client, fake):
+  rows = {
+    row.split('href="/apps/')[1].split('"')[0]: row
+    for row in client.get("/").text.split("<tr>")
+    if 'href="/apps/' in row
+  }
+  assert 'class="dot running"></span>healthy' in rows["kelso-ui"]
+  assert 'class="dot exited"></span>degraded' in rows["immich"]
+  assert 'class="dot"></span>stopped' in rows["jellyfin"]

@@ -18,6 +18,7 @@ app = { kind = "app", src = "app", readonly = true }
 [run.main]
 image  = "nginx:alpine"
 volumes = { app = "/etc/nginx/templates" }
+healthcheck = "wget -q -O /dev/null http://localhost:8081/ || exit 1"
 
 [run.main.routes]
 # "main" is the bare subdomain; non-private routes auto-assign to default_route_provider

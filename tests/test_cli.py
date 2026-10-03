@@ -79,7 +79,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
   ]
   assert _ps_row(concise.stdout, "ports-demo") == [
     "ports-demo",
-    "running",
+    "ok",
     "ready",
     "0",
     "started",
@@ -521,7 +521,7 @@ def test_load_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
 
   loaded = (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
   assert "0.2.0" in loaded
-  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
+  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "ok"
 
 
 def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
@@ -1847,9 +1847,7 @@ def test_status_shows_each_section(kelso_env):
     "Doctor     0 problems, 0 warnings",
   ]
   apps = shown.stdout.split("\n\n")[1]
-  assert any(
-    line.split()[:3] == [BASIC, "running", "1/1"] for line in apps.splitlines()
-  )
+  assert any(line.split()[:3] == [BASIC, "ok", "1/1"] for line in apps.splitlines())
   volumes = shown.stdout.split("\n\n")[3]
   assert [line.split()[0] for line in volumes.splitlines()[3:]] == [
     "bulk",
