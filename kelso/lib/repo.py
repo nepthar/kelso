@@ -8,6 +8,7 @@ This module owns the repo model and the verbs over it. Talking to GitHub is
 `kelso.lib.github`.
 """
 
+import logging
 import os
 import shutil
 from collections.abc import Mapping
@@ -23,6 +24,8 @@ from kelso.lib.util import (
   validate_github_segment,
   validate_identifier,
 )
+
+logger = logging.getLogger("kelso.repo")
 
 LOCAL_REPO = "local"
 
@@ -205,7 +208,8 @@ def _bundle(
 def mirror(repo: Repo, ctx) -> MirrorResult:
   """Replace `repos/<name>` with whatever the remote holds now.
 
-  Always a full replacement, never a merge. Raises ValueError for a local repo.
+  Always a full replacement, never a merge, and skipped when the ref has not
+  moved. Raises ValueError for a local repo.
   """
   from kelso.lib import github
 
@@ -217,13 +221,22 @@ def mirror(repo: Repo, ctx) -> MirrorResult:
   state = ctx.kelso_db.get_repo_state(repo.name)
   previous = state["sha"] if state else None
 
+  logger.info("Fetching the latest from %s", repo.remote.url)
   sha = github.resolve_ref(repo.remote)
+  if sha == previous and repo.path.is_dir():
+    return MirrorResult(repo.name, sha, previous, (), 0, 0)
   entries = github.list_tree(repo.remote, sha)
   sizes = {entry.path: entry.size for entry in entries}
   executable = {entry.path for entry in entries if entry.executable}
   bundles = group_bundles(sizes)
   _check_size(repo, bundles)
 
+  logger.info(
+    "Downloading %d apps (%s) at %s",
+    len(bundles),
+    fmt_size(sum(bundle.total_bytes for bundle in bundles)),
+    sha[:8],
+  )
   scratch = repo.path.parent / f".update-{repo.name}"
   shutil.rmtree(scratch, ignore_errors=True)
   scratch.mkdir(parents=True)

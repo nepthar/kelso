@@ -485,7 +485,10 @@ def test_a_second_mirror_replaces_what_the_first_left(github, ctx):
 def test_an_unchanged_remote_is_reported_as_such(github, ctx):
   github.hello_world()
   mirror(a_repo(ctx), ctx)
+  github.requests.clear()
   assert mirror(a_repo(ctx), ctx).unchanged
+  # Only the ref is resolved; nothing is listed or downloaded again.
+  assert len(github.requests) == 1
 
 
 def test_a_failed_mirror_leaves_the_previous_copy_alone(github, ctx):
