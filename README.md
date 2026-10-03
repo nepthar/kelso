@@ -52,13 +52,35 @@ Under the hood, Kelso is using the manifest + your configuration to create a doc
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
 ## Getting Started:
-Prerequisites: `git`, `docker`, `docker compose plugin`, `uv` (and therefore `python`). `kelso init` refuses to run until git, docker and docker compose all work.
-1. `$ uv tool install "git+https://github.com/nepthar/kelso"`
-2. `$ kelso init`
-3. Configure kelso as requested by init (or just leave all defaults)
-4. `$ kelso start hello-world`
-5. `$ kelso logs hello-world`
-6. Examine `repos/demos/hello-world.klso.md` to see how the example is constructed.
+Kelso needs `git`, `docker` with the compose plugin, and `uv`. Docker must run
+as root, with your user in the `docker` group: rootless docker and podman are
+not supported yet. `kelso init` checks all of this and refuses to run until it
+holds.
+
+### Prerequisites on a fresh Ubuntu Server
+```bash
+sudo apt-get update && sudo apt-get install -y git curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+Then log out and back in, so the `docker` group and uv's `PATH` take effect.
+
+### Install kelso
+```bash
+uv tool install "git+https://github.com/nepthar/kelso"
+kelso init --yes
+```
+`init --yes` sets kelso up in `~/kelso`, fetches the default repos, and starts
+`kelsod` as a systemd user service that comes back at boot. To keep kelso
+somewhere else, set `KELSO_ROOT` (in your shell profile, so every later command
+finds it too) before running `kelso init`. Without it, kelso looks in `~/kelso`,
+then `~/.local/kelso`, then `/kelso`.
+
+### Try it
+1. `$ kelso start hello-world`
+2. `$ kelso logs hello-world`
+3. Examine `repos/demos/demo-apps/hello-world.klso.md` to see how the example is constructed.
 
 `kelso init` sets up two repos for you: `staples`, the apps kelso maintains,
 and `demos`, small apps that each demonstrate one feature. Remove the second
@@ -70,6 +92,29 @@ On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
 service; `kelso system service` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
+### Upgrading kelso
+```bash
+uv tool upgrade kelso
+kelso system service
+```
+The second command rewrites kelsod's systemd unit for the new install and
+restarts it. Apps keep running throughout, except those in start group 0, which
+stop and start with kelsod. Loaded apps keep the version they were loaded at;
+`kelso update <app>` moves one to what its repo holds now.
+
+### Uninstalling kelso
+```bash
+kelso down
+systemctl --user disable --now kelsod.service
+rm ~/.config/systemd/user/kelsod.service
+uv tool uninstall kelso
+sudo rm -rf ~/kelso
+```
+`kelso down` stops every app. The last command deletes all of kelso's data,
+app volumes included; `sudo`, because containers write volume files as root.
+Skip it to keep the root, which stays a folder of ordinary compose projects.
+Docker images kelso pulled stay until you remove them (`docker image prune -a`).
+
 ### Volume Storage Locations
 
 App volumes live in `<kelso_root>/volumes/<kind>/<app>/<volume>` where `<kind>`
@@ -78,9 +123,9 @@ some of these volumes are stored and you can do so with symlinks.
 
 For example:
 ```
-mv ~/.kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
-rmdir ~/.kelso/volumes/bulk
-ln -s /mnt/nas/kelso-bulk ~/.kelso/volumes/bulk
+mv ~/kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
+rmdir ~/kelso/volumes/bulk
+ln -s /mnt/nas/kelso-bulk ~/kelso/volumes/bulk
 ```
 
 **Note: On a share that may not be mounted, link to a directory *inside* the share,

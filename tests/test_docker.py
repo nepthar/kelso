@@ -139,7 +139,7 @@ repos_root = "repos"
 port_base = 41000
 """
   )
-  env = {**os.environ, "KELSO_CONFIG": str(config)}
+  env = {**os.environ, "KELSO_ROOT": str(root)}
 
   def kelso(*args):
     return subprocess.run(

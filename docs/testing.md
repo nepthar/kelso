@@ -17,7 +17,7 @@ isolated by the `kelso_env` fixture.
 
 Two consequences worth knowing:
 
-- The fixture sets `KELSO_CONFIG` and `chdir`s to the kelso root, because
+- The fixture sets `KELSO_ROOT` and `chdir`s to the kelso root, because
   those used to be `subprocess.run` arguments and now have to be real process
   state.
 - `KelsoEnv.run_subprocess` exists for the one case that needs a genuinely

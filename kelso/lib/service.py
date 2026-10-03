@@ -18,7 +18,7 @@ Description=Kelso admin daemon
 [Service]
 Type=simple
 ExecStart="{kelsod}"
-Environment="KELSO_CONFIG={config_path}"
+Environment="KELSO_ROOT={root}"
 Restart=on-failure
 
 [Install]
@@ -59,30 +59,30 @@ def kelsod_path() -> Path:
   )
 
 
-def _unit_config(text: str) -> str | None:
-  """The config path an existing unit runs kelsod against."""
-  prefix = 'Environment="KELSO_CONFIG='
+def _unit_root(text: str) -> str | None:
+  """The kelso root an existing unit runs kelsod against."""
+  prefix = 'Environment="KELSO_ROOT='
   for line in text.splitlines():
     if line.startswith(prefix):
       return line.removeprefix(prefix).removesuffix('"')
   return None
 
 
-def write_unit(config_path: Path) -> Path:
-  """Write (or rewrite) the unit for `config_path`.
+def write_unit(root: Path) -> Path:
+  """Write (or rewrite) the unit for the kelso root at `root`.
 
-  Raises RuntimeError if the unit already serves a different kelso config.
+  Raises RuntimeError if the unit already serves a different kelso root.
   """
   path = unit_path()
   if path.is_file():
-    serves = _unit_config(path.read_text())
-    if serves is not None and serves != str(config_path):
+    serves = _unit_root(path.read_text())
+    if serves is not None and serves != str(root):
       raise RuntimeError(
         f"{path} already runs kelsod for {serves}. Remove it first if this "
-        f"machine's kelsod should serve {config_path} instead."
+        f"machine's kelsod should serve {root} instead."
       )
   path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(UNIT_TEMPLATE.format(kelsod=kelsod_path(), config_path=config_path))
+  path.write_text(UNIT_TEMPLATE.format(kelsod=kelsod_path(), root=root))
   return path
 
 

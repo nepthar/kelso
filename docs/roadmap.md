@@ -16,10 +16,6 @@ images, snapshots as `pre-update`, and re-loads; repos are still updated by
 hand. Still wanted: rolling back when the new version does not come up healthy,
 and a plain `load` that changes the version snapshotting first.
 
-### One-command installer
-`kelso init` installs `kelsod` as a systemd user service. Installing kelso itself
-still takes `uv` and a separate `kelso init`.
-
 ## After v1
 
 ### App upgrade paths
@@ -77,24 +73,27 @@ Default state - not running, but can be started triggered on a cron or incoming 
 ### Services & Service Catalog
 Allow bundle developers to better focus on their own app by saying "Just give me a postgres instance + login for my app" rather than adding postgres to their manifest manually. This `services` system would enable a bundle to list the services it "provides" and have other services "require" them. This feature will require a lot of thought.
 
+### Rootless docker and podman
+Kelso needs rootful docker today, and `kelso init` refuses a rootless daemon.
+Both break the same assumption: `lib/lifecycle/rootfs.py` reads and deletes
+volume files as the container's root, which under a user namespace maps back to
+the invoking user and cannot touch what the app's containers wrote.
+
 ### Resource limits
 `mem_limit` and `cpus` pass through as raw compose keys, but no app option sets
 them, so one runaway app can starve the box.
 
 ## Known issues
-- **Rootless docker breaks snapshot and restore silently.** `lib/lifecycle/
-  rootfs.py` assumes the container's root can read root-owned volume files;
-  under userns that maps back to the invoking user. Nothing checks; `init`
-  should refuse.
 - **A `cmd` job holds the app lock for the command's whole run.** Kelso-wide
   ops can proceed; the same app cannot be loaded, started, or stopped until it
   exits. Fine for the batch-style commands the UI is for; a long-runner still
   wedges that app. The runner also allocates no TTY, so a command that waits
   on stdin hangs rather than prompting.
-- **Only daemon jobs file activity output.** A CLI invocation prints to the
-  operator's terminal and records only its status line in `activity.logtab`,
-  so the UI's Activity page shows what kelsod ran, not what the operator
-  typed. The mechanism to close this is in place — `Job.call(args, ctx,
+- **Most CLI commands file no activity output.** Only `kelso shell` and a
+  hand-run `kelso cron tick` record a run (`started_by: cli`); every other CLI
+  invocation prints to the operator's terminal and records only its status
+  line in `activity.logtab`, so the UI's Activity page shows what kelsod ran,
+  not what the operator typed. The mechanism to close this is in place — `Job.call(args, ctx,
   echo=stream)` writes the run log and the terminal from one stream — and the
   plan is to migrate CLI verbs onto their Job classes, verb by verb.
 - **Stopping an app warns about unset config variables.** `compose down` runs

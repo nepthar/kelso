@@ -333,9 +333,9 @@ def kelso_env(
   monkeypatch.setenv("FAKE_DOCKER_STATE", str(env.docker_state))
   monkeypatch.setenv("FAKE_DOCKER_LOG", str(env.docker_log))
   # Commands run in-process now, so what used to be `subprocess.run` arguments
-  # have to be real process state: the config location and the working
-  # directory kelso resolves relative paths against.
-  monkeypatch.setenv("KELSO_CONFIG", str(env.config))
+  # have to be real process state: the kelso root and the working directory
+  # kelso resolves relative paths against.
+  monkeypatch.setenv("KELSO_ROOT", str(root))
   monkeypatch.setenv("KELSO_LOCK_TIMEOUT", str(LOCK_TIMEOUT))
   monkeypatch.chdir(root)
   return env

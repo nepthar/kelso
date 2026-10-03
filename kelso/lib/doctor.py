@@ -3,9 +3,10 @@
 Diagnosis only reads; the caller holds the kelso lock and renders the result.
 """
 
+import re
 from dataclasses import dataclass
 
-from kelso.lib.docker import DOCKER, docker_run_command
+from kelso.lib.docker import DOCKER, DockerError, docker_run_command
 from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
 from kelso.lib.observations import AppObservation
@@ -38,30 +39,75 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
   return DoctorPrognosis(tuple(problems), tuple(warnings))
 
 
+# `git sparse-checkout set`, which mirroring needs, arrived in 2.25.
+MIN_GIT = (2, 25)
+
+
 def tool_problems() -> list[Finding]:
-  """git, docker, and docker compose, each answering on this host."""
+  """git, docker, and docker compose, each answering on this host, and docker
+  running as root."""
   findings = []
   try:
-    git("--version")
+    version = git("--version")
   except RuntimeError as e:
     findings.append(Finding("git", f"{e}. Kelso mirrors repos with it."))
-  for cmd, what in (
-    (["info"], "the docker daemon"),
-    (["compose", "version"], "docker compose"),
-  ):
-    try:
-      ok = docker_run_command(cmd, check=False).returncode == 0
-    except OSError:
-      ok = False
-    if not ok:
+  else:
+    found = re.search(r"(\d+)\.(\d+)", version)
+    if found and (int(found[1]), int(found[2])) < MIN_GIT:
       findings.append(
         Finding(
-          what,
-          f"`{DOCKER} {' '.join(cmd)}` failed. Install it, or make sure this "
-          f"user can reach the daemon (`docker info` says why not).",
+          "git",
+          f"{version} is too old: kelso mirrors repos with `git sparse-checkout`, "
+          f"which needs git {MIN_GIT[0]}.{MIN_GIT[1]} or newer. Upgrade git.",
         )
       )
+
+  try:
+    info = docker_run_command(["info"]).data
+  except DockerError as e:
+    findings.append(Finding("the docker daemon", _docker_unreachable(e.stderr)))
+  except OSError:
+    findings.append(Finding("the docker daemon", "docker is not installed."))
+  else:
+    if _rootless(info):
+      findings.append(
+        Finding(
+          "the docker daemon",
+          "docker is running rootless, which kelso does not support yet: "
+          "snapshots and restores read volume files as root and would "
+          "silently miss them. Use rootful docker, with this user in the "
+          "docker group.",
+        )
+      )
+
+  try:
+    docker_run_command(["compose", "version"])
+  except (DockerError, OSError):
+    findings.append(
+      Finding(
+        "docker compose",
+        f"`{DOCKER} compose version` failed. Install the docker compose plugin.",
+      )
+    )
   return findings
+
+
+def _docker_unreachable(stderr: str) -> str:
+  """Why `docker info` failed, as the fix for it."""
+  if "permission denied" in stderr.lower():
+    return (
+      "this user cannot reach the docker daemon. If you just added it to the "
+      "docker group (`sudo usermod -aG docker $USER`), log out and back in, "
+      "or run `newgrp docker`, for that to take effect."
+    )
+  detail = stderr.strip().splitlines()[-1] if stderr.strip() else "no output"
+  return f"`{DOCKER} info` failed ({detail}). Is docker installed and running?"
+
+
+def _rootless(info: list[dict]) -> bool:
+  """Whether `docker info` describes a rootless daemon."""
+  options = (info[0].get("SecurityOptions") or []) if info else []
+  return any("name=rootless" in option for option in options)
 
 
 def _volume_problems(ctx: KelsoCtx) -> list[Finding]:
