@@ -59,7 +59,7 @@ to 0.25s.
 | `test_spec.py` | Manifest bytes in, `AppSpec` out |
 | `test_bundle_md.py` | Single-file `.klso.md` bundles |
 | `test_compose.py` | `AppSpec` + run data out to a compose file; readiness |
-| `test_repo.py` | Repos and mirroring, against an in-process fake GitHub |
+| `test_repo.py` | Repos and mirroring, against a local git repository over file:// |
 | `test_repo_catalog.py` | Several repos: the catalog, ambiguity, and bindings |
 | `test_layout.py` | Loading: the run dir, volume links, re-loading |
 | `test_observations.py` | Where an app stands, and whether what runs is current |

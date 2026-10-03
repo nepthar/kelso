@@ -448,7 +448,10 @@ def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
         return refuse(f"repo {name!r} has an unusable url: {e}")
       # A mirror lives under repos_root by name, so its location is not the
       # operator's to choose -- only the remote it tracks is.
-      repos[name] = Repo(name, repos_root / name, "github", remote)
+      checkout = repos_root / name
+      repos[name] = Repo(
+        name, checkout.joinpath(*remote.path), "github", remote, checkout
+      )
       names_by_path[repos_root / name] = name
       continue
 

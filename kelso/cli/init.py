@@ -13,6 +13,7 @@ from kelso.lib.config import (
   VOLUME_KINDS,
   load_config_file,
 )
+from kelso.lib.doctor import tool_problems
 from kelso.lib.logtab import LogTab
 from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
@@ -33,7 +34,7 @@ port_base = 41000
 # Repos are where the catalog comes from. `repos/local` is always there and is
 # where you drop bundles by hand. Add more with `kelso repo add`, which writes
 # tables like the ones below -- a directory on this machine, or a folder in a
-# GitHub repository that kelso mirrors into repos/<name>.
+# GitHub repository that kelso mirrors into repos/<name> with git.
 #
 # An app id carried by two repos is ambiguous: `kelso system doctor` reports those,
 # and you load one by naming its repo, `kelso load <app>@<repo>`.
@@ -166,6 +167,13 @@ def _mirror_default_repos(config) -> None:
 
 
 def run(args: argparse.Namespace, _ctx) -> None:
+  missing = tool_problems()
+  if missing:
+    raise RuntimeError(
+      "kelso needs these working before it can be set up:\n"
+      + "\n".join(f"  {f.subject}: {f.message}" for f in missing)
+    )
+
   default = Path(os.environ.get("KELSO_ROOT", DEFAULT_ROOT)).expanduser()
   if getattr(args, "root", None):
     default = Path(args.root).expanduser()

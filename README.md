@@ -52,7 +52,7 @@ Under the hood, Kelso is using the manifest + your configuration to create a doc
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
 ## Getting Started:
-Prerequisites: `docker`, `docker compose plugin`, `uv` (and therefore `python`)
+Prerequisites: `git`, `docker`, `docker compose plugin`, `uv` (and therefore `python`). `kelso init` refuses to run until git, docker and docker compose all work.
 1. `$ uv tool install "git+https://github.com/nepthar/kelso"`
 2. `$ kelso init`
 3. Configure kelso as requested by init (or just leave all defaults)

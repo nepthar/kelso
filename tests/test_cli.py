@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import kelso.lib.git
 from kelso.lib import lifecycle
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
@@ -1401,6 +1402,24 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
   # --no-mirror leaves them configured but unfetched, and says so.
   assert "Skipped mirroring" in result.stdout
   assert "kelso repo update" in result.stdout
+
+
+def test_init_refuses_without_git_and_writes_nothing(kelso_env, tmp_path, monkeypatch):
+  monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
+  root = tmp_path / "fresh"
+
+  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+
+  assert result.returncode == 1
+  assert "git: git is not installed" in result.stderr
+  assert not root.exists()
+
+
+def test_doctor_reports_a_missing_tool(kelso_env, monkeypatch):
+  monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert "git: git is not installed" in result.stdout
 
 
 def test_init_keeps_a_volume_kind_linked_before_it_ran(kelso_env, tmp_path):
