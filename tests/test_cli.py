@@ -14,12 +14,15 @@ from pathlib import Path
 import pytest
 import yaml
 
+import kelso.lib.config
+import kelso.lib.doctor
 import kelso.lib.git
 from kelso.lib import lifecycle
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
-from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config_file
+from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
+from kelso.lib.docker import DockerReturn
 from kelso.lib.doctor import Finding, diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
@@ -537,16 +540,6 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert f"Start it with: kelso start {app_id}" in loaded.stdout
   # Loaded but never started reads as "-", not "stopped".
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
-
-
-def test_missing_config_is_an_actionable_error(kelso_env, monkeypatch, tmp_path):
-  monkeypatch.setenv("KELSO_CONFIG", str(tmp_path / "missing.toml"))
-
-  result = kelso_env.run("ps")
-
-  assert result.returncode == 1
-  assert "Error: KELSO_CONFIG is set" in result.stderr
-  assert "Traceback" not in result.stderr
 
 
 # --- config ----------------------------------------------------------------
@@ -1386,10 +1379,20 @@ def test_stop_uses_loaded_manifest_when_bundle_is_missing(
 # --- bootstrap -------------------------------------------------------------
 
 
+def run_at(kelso_env, root, *args, **kwargs):
+  """Run one kelso command with KELSO_ROOT pointing at `root`."""
+  saved = os.environ["KELSO_ROOT"]
+  os.environ["KELSO_ROOT"] = str(root)
+  try:
+    return kelso_env.run(*args, **kwargs)
+  finally:
+    os.environ["KELSO_ROOT"] = saved
+
+
 def test_init_configures_the_default_repos(kelso_env, tmp_path):
   """A fresh root is not an empty store: the catalog has somewhere to come from."""
   root = tmp_path / "fresh"
-  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+  result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
   assert result.returncode == 0, result.stderr
 
   config = load_config_file(root / "config.toml")
@@ -1408,7 +1411,7 @@ def test_init_refuses_without_git_and_writes_nothing(kelso_env, tmp_path, monkey
   monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
   root = tmp_path / "fresh"
 
-  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+  result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
 
   assert result.returncode == 1
   assert "git: git is not installed" in result.stderr
@@ -1422,12 +1425,80 @@ def test_doctor_reports_a_missing_tool(kelso_env, monkeypatch):
   assert "git: git is not installed" in result.stdout
 
 
+def rootless_docker(monkeypatch) -> None:
+  """`docker info` as a rootless daemon reports it; everything else as usual."""
+  real = kelso.lib.doctor.docker_run_command
+
+  def docker(cmd, **kwargs):
+    if cmd == ["info"]:
+      info = {"SecurityOptions": ["name=seccomp,profile=builtin", "name=rootless"]}
+      return DockerReturn(returncode=0, data=[info])
+    return real(cmd, **kwargs)
+
+  monkeypatch.setattr(kelso.lib.doctor, "docker_run_command", docker)
+
+
+def test_init_refuses_rootless_docker(kelso_env, tmp_path, monkeypatch):
+  rootless_docker(monkeypatch)
+  root = tmp_path / "fresh"
+
+  result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
+
+  assert result.returncode == 1
+  assert "docker is running rootless" in result.stderr
+  assert not root.exists()
+
+
+def test_doctor_reports_rootless_docker(kelso_env, monkeypatch):
+  rootless_docker(monkeypatch)
+  result = kelso_env.run("system", "doctor")
+  assert result.returncode == 1
+  assert "docker is running rootless" in result.stdout
+
+
+def test_init_yes_takes_the_default_root_without_asking(kelso_env, tmp_path):
+  root = tmp_path / "fresh"
+  # No input at all: a prompt would read EOF and fail.
+  result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
+  assert result.returncode == 0, result.stderr
+  assert (root / "config.toml").is_file()
+  assert "Kelso root directory" not in result.stdout
+
+
+def test_the_first_root_found_wins(kelso_env, tmp_path, monkeypatch):
+  monkeypatch.delenv("KELSO_ROOT")
+  roots = [tmp_path / name for name in ("home", "local", "slash")]
+  monkeypatch.setattr(kelso.lib.config, "ROOT_LOCATIONS", roots)
+  for root in roots[1:]:
+    root.mkdir()
+    (root / "config.toml").write_text(kelso_env.config.read_text())
+
+  config = load_config()
+  assert config is not None
+  assert config.config_path == (roots[1] / "config.toml").resolve()
+
+
+def test_a_kelso_root_without_a_config_stops_everything(
+  kelso_env, tmp_path, monkeypatch
+):
+  monkeypatch.setenv("KELSO_ROOT", str(tmp_path / "nowhere"))
+  # A root the search would otherwise find is not a fallback.
+  monkeypatch.setattr(kelso.lib.config, "ROOT_LOCATIONS", [kelso_env.root])
+
+  result = kelso_env.run("ps")
+
+  assert result.returncode == 1
+  assert "Error: KELSO_ROOT is set, but no config file exists" in result.stderr
+  assert "Run `kelso init`" in result.stderr
+  assert "Traceback" not in result.stderr
+
+
 def test_init_keeps_a_volume_kind_linked_before_it_ran(kelso_env, tmp_path):
   root = tmp_path / "fresh"
   (root / "volumes").mkdir(parents=True)
   (root / "volumes" / "bulk").symlink_to(tmp_path / "nas-not-mounted")
 
-  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+  result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
   assert result.returncode == 0, result.stderr
   assert (root / "volumes" / "bulk").is_symlink()
   assert "-> " + str(tmp_path / "nas-not-mounted") + " (missing)" in result.stdout
@@ -1440,11 +1511,11 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
   root the fixture builds by hand.
   """
   root = tmp_path / "fresh"
-  # init prompts for the root; an empty line accepts the --root default.
+  # init prompts for the root; an empty line accepts KELSO_ROOT as the default.
   # --no-mirror because the default repos are on GitHub and the suite does not
   # touch the network; `test_init_configures_the_default_repos` covers the
   # tables it writes.
-  result = kelso_env.run("--root", str(root), "init", "--no-mirror", input="\n")
+  result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
 
   assert result.returncode == 0, result.stderr
   assert (root / "config.toml").is_file()
@@ -1458,7 +1529,7 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
 
   # The master key must be readable back, not merely present: a command against
   # the new root has to load it through load_config_file.
-  after = kelso_env.run("--root", str(root), "ps")
+  after = run_at(kelso_env, root, "ps")
   assert after.returncode == 0, after.stderr
 
 

@@ -105,7 +105,6 @@ def _bind_tcp(host: str, port: int) -> socket.socket:
 
 def serve(
   config: Config,
-  config_args: dict[str, str | None],
   *,
   socket_path: Path | None = None,
   host: str = "127.0.0.1",
@@ -114,7 +113,7 @@ def serve(
   socket_path = socket_path or config.admin_socket_path
 
   def ctx_factory() -> KelsoCtx:
-    loaded = load_config(**config_args)
+    loaded = load_config()
     if loaded is None:
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
     return KelsoCtx(loaded)
@@ -153,8 +152,6 @@ def serve(
 def build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(prog="kelsod", description="Kelso admin daemon")
   parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-  parser.add_argument("--root", metavar="DIR", help="Kelso root directory")
-  parser.add_argument("--config", metavar="FILE", help="Path to config.toml")
   parser.add_argument(
     "--socket",
     metavar="PATH",
@@ -185,16 +182,14 @@ def main() -> None:
     level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s"
   )
   args = build_parser().parse_args()
-  config_args = {"config_path": args.config, "root": args.root}
 
   try:
     refuse_root("kelsod")
-    config = load_config(**config_args)
+    config = load_config()
     if config is None:
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
     serve(
       config,
-      config_args,
       socket_path=Path(args.socket).expanduser() if args.socket else None,
       host=args.host,
       port=args.port,

@@ -39,7 +39,8 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
 
 
 def tool_problems() -> list[Finding]:
-  """git, docker, and docker compose, each answering on this host."""
+  """git, docker, and docker compose, each answering on this host, and docker
+  running as root."""
   findings = []
   try:
     git("--version")
@@ -50,10 +51,10 @@ def tool_problems() -> list[Finding]:
     (["compose", "version"], "docker compose"),
   ):
     try:
-      ok = docker_run_command(cmd, check=False).returncode == 0
+      result = docker_run_command(cmd, check=False)
     except OSError:
-      ok = False
-    if not ok:
+      result = None
+    if result is None or result.returncode != 0:
       findings.append(
         Finding(
           what,
@@ -61,7 +62,23 @@ def tool_problems() -> list[Finding]:
           f"user can reach the daemon (`docker info` says why not).",
         )
       )
+    elif cmd == ["info"] and _rootless(result.data):
+      findings.append(
+        Finding(
+          what,
+          "docker is running rootless, which kelso does not support yet: "
+          "snapshots and restores read volume files as root and would "
+          "silently miss them. Use rootful docker, with this user in the "
+          "docker group.",
+        )
+      )
   return findings
+
+
+def _rootless(info: list[dict]) -> bool:
+  """Whether `docker info` describes a rootless daemon."""
+  options = (info[0].get("SecurityOptions") or []) if info else []
+  return any("name=rootless" in option for option in options)
 
 
 def _volume_problems(ctx: KelsoCtx) -> list[Finding]:

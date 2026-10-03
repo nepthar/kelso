@@ -131,22 +131,12 @@ def _configure_logging() -> None:
 def build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
     prog="kelso",
-    usage="kelso [--root DIR] [--config FILE] COMMAND ...",
+    usage="kelso COMMAND ...",
     description="Kelso Server runs apps on hardware you own.",
     epilog=HELP,
     formatter_class=argparse.RawDescriptionHelpFormatter,
   )
   parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-  parser.add_argument(
-    "--root",
-    metavar="DIR",
-    help="Kelso root directory (overrides KELSO_ROOT)",
-  )
-  parser.add_argument(
-    "--config",
-    metavar="FILE",
-    help="Path to config.toml (overrides KELSO_CONFIG / --root)",
-  )
   parser.set_defaults(func=lambda args, ctx: parser.print_help())
   # SUPPRESS keeps argparse's flat command list out of --help; HELP replaces it.
   subparsers = parser.add_subparsers(
@@ -167,10 +157,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command is None or args.command == "init":
       args.func(args, None)
     else:
-      cfg = load_config(
-        config_path=getattr(args, "config", None),
-        root=getattr(args, "root", None),
-      )
+      cfg = load_config()
       if not cfg:
         raise ValueError("Kelso is not initialized; run `kelso init` first")
       args.func(args, KelsoCtx(cfg))

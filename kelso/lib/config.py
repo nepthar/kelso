@@ -469,54 +469,31 @@ def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
   return repos
 
 
-CONFIG_LOCATIONS = [
-  Path("~/.kelso/config.toml"),
-  Path("/etc/kelso/config.toml"),
-]
+# Where kelso looks for a root, in order, when nothing names one.
+ROOT_LOCATIONS = [Path("~/kelso"), Path("~/.local/kelso"), Path("/kelso")]
 
 
-def load_config(
-  *,
-  config_path: str | Path | None = None,
-  root: str | Path | None = None,
-) -> Config | None:
-  """Find and load the kelso config."""
-  if config_path is not None:
-    path = Path(config_path).expanduser().resolve()
-    if not path.is_file():
-      raise RuntimeError(f"No config file exists at {path}")
-    logger.debug(f"Loading from {path}")
-    return load_config_file(path)
+def load_config() -> Config | None:
+  """Load `$KELSO_ROOT/config.toml`, or the first of `ROOT_LOCATIONS` that has one.
 
-  if root is not None:
-    path = (Path(root).expanduser() / "config.toml").resolve()
-    if not path.is_file():
-      raise RuntimeError(f"No config file exists at {path}")
-    logger.debug(f"Loading from {path}")
-    return load_config_file(path)
-
-  if os.environ.get("KELSO_CONFIG"):
-    path = Path(os.environ["KELSO_CONFIG"]).expanduser().resolve()
+  Raises RuntimeError if KELSO_ROOT is set and holds no config.
+  """
+  if os.environ.get("KELSO_ROOT"):
+    path = (Path(os.environ["KELSO_ROOT"]).expanduser() / "config.toml").resolve()
     if not path.is_file():
       raise RuntimeError(
-        f"KELSO_CONFIG is set to {path}, but no config file exists there"
+        f"KELSO_ROOT is set, but no config file exists at {path}. Run "
+        f"`kelso init` to set it up there, or unset KELSO_ROOT."
       )
     logger.debug(f"Loading from {path}")
     return load_config_file(path)
 
-  if os.environ.get("KELSO_ROOT"):
-    path = (Path(os.environ["KELSO_ROOT"]).expanduser() / "config.toml").resolve()
-    if not path.is_file():
-      raise RuntimeError(f"KELSO_ROOT is set, but no config file exists at {path}")
-    logger.debug(f"Loading from {path}")
-    return load_config_file(path)
-
-  for candidate in CONFIG_LOCATIONS:
-    path = candidate.expanduser().resolve()
+  for root in ROOT_LOCATIONS:
+    path = (root.expanduser() / "config.toml").resolve()
     if path.is_file():
       logger.debug(f"Loading from {path}")
       return load_config_file(path)
 
-  searched = ", ".join(str(c.expanduser().resolve()) for c in CONFIG_LOCATIONS)
+  searched = ", ".join(str(root.expanduser()) for root in ROOT_LOCATIONS)
   logger.warning(f"No kelso config found. Searched: {searched}")
   return None

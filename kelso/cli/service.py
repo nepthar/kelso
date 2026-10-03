@@ -19,11 +19,11 @@ def register(subparsers) -> None:
   parser.set_defaults(func=_install)
 
 
-def install_service(config_path: Path) -> None:
+def install_service(root: Path) -> None:
   """Write and start the unit. Raises RuntimeError naming what is left to do."""
   if not service.has_systemd():
     raise RuntimeError(NO_SYSTEMD)
-  unit = service.write_unit(config_path)
+  unit = service.write_unit(root)
   print(f"Wrote {unit}")
   service.activate()
   print(f"kelsod is running as {service.UNIT_NAME}, and will start at boot.")
@@ -31,4 +31,4 @@ def install_service(config_path: Path) -> None:
 
 
 def _install(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  install_service(ctx.config.config_path)
+  install_service(ctx.config.kelso_root)

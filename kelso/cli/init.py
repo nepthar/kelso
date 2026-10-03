@@ -9,6 +9,7 @@ from kelso.lib import service
 from kelso.lib.config import (
   CONF_DIR,
   MASTER_KEYFILE,
+  ROOT_LOCATIONS,
   VAR_DIRS,
   VOLUME_KINDS,
   load_config_file,
@@ -20,7 +21,7 @@ from kelso.lib.repo import LOCAL_REPO
 
 logger = logging.getLogger("kelso.cli")
 
-DEFAULT_ROOT = Path("~/.kelso")
+DEFAULT_ROOT = Path("~/kelso")
 
 CONFIG_TEMPLATE = """\
 # Kelso configuration — edit this file to change your setup.
@@ -129,6 +130,12 @@ url = "github://nepthar/kelso/main/demo-apps"
 def register(subparsers) -> None:
   parser = subparsers.add_parser("init", help="Initialize a kelso root directory")
   parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Use the default root directory instead of asking for one",
+  )
+  parser.add_argument(
     "--no-mirror",
     action="store_true",
     help="Skip fetching the default repos; `kelso repo update` gets them later",
@@ -174,10 +181,8 @@ def run(args: argparse.Namespace, _ctx) -> None:
       + "\n".join(f"  {f.subject}: {f.message}" for f in missing)
     )
 
-  default = Path(os.environ.get("KELSO_ROOT", DEFAULT_ROOT)).expanduser()
-  if getattr(args, "root", None):
-    default = Path(args.root).expanduser()
-  response = input(f"Kelso root directory [{default}]: ").strip()
+  default = Path(os.environ.get("KELSO_ROOT") or DEFAULT_ROOT).expanduser()
+  response = "" if args.yes else input(f"Kelso root directory [{default}]: ").strip()
   root = Path(response if response else default).expanduser().resolve()
 
   if root.exists() and not root.is_dir():
@@ -234,9 +239,15 @@ def run(args: argparse.Namespace, _ctx) -> None:
     print(NO_SYSTEMD)
   else:
     try:
-      install_service(config.config_path)
+      install_service(config.kelso_root)
     except RuntimeError as e:
       logger.warning(str(e))
+
+  if root not in (r.expanduser().resolve() for r in ROOT_LOCATIONS):
+    print(
+      f"\nKelso only finds {root} through KELSO_ROOT. Add this to your shell "
+      f"profile:\n  export KELSO_ROOT={root}"
+    )
 
   print(f"\nTo change your configuration, edit {config_path}")
   print(

@@ -52,13 +52,35 @@ Under the hood, Kelso is using the manifest + your configuration to create a doc
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
 ## Getting Started:
-Prerequisites: `git`, `docker`, `docker compose plugin`, `uv` (and therefore `python`). `kelso init` refuses to run until git, docker and docker compose all work.
-1. `$ uv tool install "git+https://github.com/nepthar/kelso"`
-2. `$ kelso init`
-3. Configure kelso as requested by init (or just leave all defaults)
-4. `$ kelso start hello-world`
-5. `$ kelso logs hello-world`
-6. Examine `repos/demos/hello-world.klso.md` to see how the example is constructed.
+Kelso needs `git`, `docker` with the compose plugin, and `uv`. Docker must run
+as root, with your user in the `docker` group: rootless docker and podman are
+not supported yet. `kelso init` checks all of this and refuses to run until it
+holds.
+
+### Prerequisites on a fresh Ubuntu Server
+```bash
+sudo apt-get update && sudo apt-get install -y git curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+Then log out and back in, so the `docker` group and uv's `PATH` take effect.
+
+### Install kelso
+```bash
+uv tool install "git+https://github.com/nepthar/kelso"
+kelso init --yes
+```
+`init --yes` sets kelso up in `~/kelso`, fetches the default repos, and starts
+`kelsod` as a systemd user service that comes back at boot. To keep kelso
+somewhere else, set `KELSO_ROOT` (in your shell profile, so every later command
+finds it too) before running `kelso init`. Without it, kelso looks in `~/kelso`,
+then `~/.local/kelso`, then `/kelso`.
+
+### Try it
+1. `$ kelso start hello-world`
+2. `$ kelso logs hello-world`
+3. Examine `repos/demos/demo-apps/hello-world.klso.md` to see how the example is constructed.
 
 `kelso init` sets up two repos for you: `staples`, the apps kelso maintains,
 and `demos`, small apps that each demonstrate one feature. Remove the second
@@ -78,9 +100,9 @@ some of these volumes are stored and you can do so with symlinks.
 
 For example:
 ```
-mv ~/.kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
-rmdir ~/.kelso/volumes/bulk
-ln -s /mnt/nas/kelso-bulk ~/.kelso/volumes/bulk
+mv ~/kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
+rmdir ~/kelso/volumes/bulk
+ln -s /mnt/nas/kelso-bulk ~/kelso/volumes/bulk
 ```
 
 **Note: On a share that may not be mounted, link to a directory *inside* the share,
