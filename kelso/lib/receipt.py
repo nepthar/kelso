@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
+from kelso.lib.connections import CONNECTION_KINDS
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData, resolved_subdomain
 from kelso.lib.spec import AppSpec
@@ -276,6 +277,9 @@ def danger_callouts(spec: AppSpec) -> list[str]:
   for name, volume in spec.volumes.items():
     if volume.kind == "host" and not volume.readonly:
       callouts.append(f"writable host bind '{name}'")
+  for name, connection in spec.manifest.connections.items():
+    kind = CONNECTION_KINDS[connection.kind]
+    callouts.append(f"connection '{name}' to {kind.desc}")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
   # bind, and used to be the only one kelso made silently.
   for warning in spec.compose_warnings:

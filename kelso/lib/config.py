@@ -95,6 +95,7 @@ class ConfigFile(BaseModel):
   snapshot_root: str = "snapshots"
   port_base: int = 41000
   kelso_address: str = ""
+  admin_address: str = ""
   default_route_provider: str = NONE_ROUTE_PROVIDER_TAG
   route_provider: dict[str, RouteProviderEntry] = Field(default_factory=dict)
   host_volume: dict[str, HostVolumeEntry] = Field(default_factory=dict)
@@ -120,6 +121,9 @@ class Config:
   master_key: str
   port_base: int
   kelso_address: str
+  # host:port that containers reach kelsod on over TCP, when its admin socket
+  # cannot be mounted. Empty means the socket.
+  admin_address: str
   default_route_provider: str
   route_providers: dict[str, RouteProviderEntry]
   host_volumes: dict[str, HostVolume]
@@ -135,6 +139,7 @@ class Config:
     default_route_provider: str,
     route_providers: dict[str, RouteProviderEntry],
     kelso_address: str = "",
+    admin_address: str = "",
     extra_repos: dict[str, Repo] | None = None,
     host_volumes: dict[str, HostVolume] | None = None,
   ) -> None:
@@ -151,6 +156,7 @@ class Config:
     self.master_key = master_key
     self.port_base = port_base
     self.kelso_address = kelso_address
+    self.admin_address = admin_address
     self.default_route_provider = default_route_provider
     self.route_providers = route_providers
     self.host_volumes = host_volumes or {}
@@ -329,6 +335,7 @@ def load_config_file(config_file: str | Path) -> Config:
     master_key=master_key,
     port_base=parsed.port_base,
     kelso_address=parsed.kelso_address,
+    admin_address=parsed.admin_address,
     default_route_provider=parsed.default_route_provider,
     route_providers=route_providers,
     extra_repos=extra_repos,

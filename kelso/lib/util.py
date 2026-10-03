@@ -78,7 +78,8 @@ PUBLIC_ROUTE_SCHEME = "https"
 class EnvTemplate(string.Template):
   """`[run.<unit>.env]` placeholders against a flat substitution keyspace."""
 
-  idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+)?)"
+  # Up to two dots, for `conn.<name>.<property>`.
+  idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+){0,2})"
 
 
 def same_path(a: Path, b: Path) -> bool:

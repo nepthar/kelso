@@ -7,7 +7,7 @@ import socket
 from websockets.asyncio.client import connect as ws_connect
 from websockets.asyncio.client import unix_connect as ws_unix_connect
 
-SOCKET = os.environ.get("KELSO_SOCKET", "/run/kelso-admin/admin.sock")
+SOCKET = os.environ.get("KELSO_SOCKET", "/run/kelso/conn/admin/admin.sock")
 # host:port wins over the socket when set. Docker Desktop's bind mounts cannot
 # carry AF_UNIX, so a mac host serves this over TCP instead.
 API = os.environ.get("KELSO_API", "").strip()
@@ -79,8 +79,9 @@ def api(path, method="GET", payload=None, timeout=10):
     if not API and e.errno == errno.EOPNOTSUPP:
       hint = (
         " This host's bind mounts cannot carry a unix socket (Docker Desktop "
-        "does not support it). Run `kelsod --port N` and set "
-        "`kelso config kelso-ui --set api_address=host.docker.internal:N`."
+        "does not support it). Run `kelsod --port N`, set "
+        '`admin_address = "host.docker.internal:N"` in config.toml, and run '
+        "`kelso load kelso-ui`."
       )
     raise ApiError(f"Cannot reach kelsod at {where()}: {e}.{hint}") from e
   finally:

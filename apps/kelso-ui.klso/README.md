@@ -30,23 +30,24 @@ matches.
 
 ## Setup
 
-It needs `kelsod` running on the host, and `$kelso/var/conn` bound in. For now
-that is manual — declare the directory as a host volume:
+It needs `kelsod` running on the host. Its manifest asks for a `kelso.admin`
+connection, so kelso mounts the admin socket in and tells the app where it is;
+there is nothing to bind:
 
 ```
-kelso system host-volume --add kelso_conn=${kelso_root}/var/conn
-kelso config kelso-ui --bind conn=kelso_conn
 kelso start kelso-ui
 ```
 
 On a host whose bind mounts cannot carry a unix socket — Docker Desktop on
 macOS, where the socket is visible in the container and unusable — run
-`kelsod --port N` and point the app at it over TCP instead. Docker Desktop
+`kelsod --port N` and give kelso its address in `config.toml`. Docker Desktop
 reaches the host's loopback, so kelsod stays off the network:
 
 ```
-kelso config kelso-ui --set api_address=host.docker.internal:N
+admin_address = "host.docker.internal:N"
 ```
+
+Then `kelso load kelso-ui` to pick it up.
 
 ## Signing in
 
