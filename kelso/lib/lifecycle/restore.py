@@ -23,8 +23,7 @@ from kelso.lib.util import validate_identifier
 
 logger = getLogger("kelso.lifecycle.restore")
 
-# Label of the automatic safety snapshot taken before a restore overwrites the
-# live state. Snapshot archives are named <timestamp>_<label>.tar.gz.
+# Label of the snapshot taken before a restore overwrites the live state.
 PRE_RESTORE_LABEL = "pre-restore"
 
 
@@ -183,8 +182,6 @@ def _restore_data_volumes(plan: RestorePlan, ctx: KelsoCtx) -> None:
   # Containers write as root, so neither the removal nor the copy can be done
   # by this process. One `sh -c` in one container keeps it to a single step, so
   # a failure to start that container fails before anything has been deleted.
-  # -a: recursive, keep ownership/mode/times, preserve inner symlinks and
-  # hardlinks rather than dereferencing them.
   # Targets are named under the *resolved* data root rather than resolved
   # themselves: they have to match the bind mount, and a target that is itself
   # a symlink should be replaced, not followed.

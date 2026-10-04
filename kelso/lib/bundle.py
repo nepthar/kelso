@@ -8,17 +8,13 @@ from pathlib import Path
 from kelso.lib.apps import AppID
 from kelso.lib.spec import AppSpec
 
-# The bundle flavors kelso knows, by filename suffix. These are the one
-# source of truth; everything that names a catalog entry derives from them.
 KLSO_SUFFIX = ".klso"
 KLSO_MD_SUFFIX = ".klso.md"
 KLSO_TAR_SUFFIX = ".klso.tar.gz"
 
-# Markdown bundles are meant to be readable in one sitting; bigger bundles use the
-# folder format.
 KLSO_MD_CUTOFF_KB = 128
 
-# Group1: lang, group2: path, group3: optional ":+x"
+# Groups: language, path, and an optional ":+x".
 KLSO_MD_FILE_PATTERN = re.compile(r'^```(\w*)\s+klso_path="([^"]+?)(:\+x)?"\s*$')
 
 
@@ -100,7 +96,6 @@ class BundleMdFile(KelsoApp):
 class BundleTarFile(KelsoApp):
   SUFFIX = KLSO_TAR_SUFFIX
 
-  ## TDOO: Support tar.gz kelso apps.
   def __init__(self, path: Path, app_id: AppID):
     self.path = path
     self.app_id = app_id
@@ -229,7 +224,6 @@ def extract_md_files(content: str) -> MdFileList:
         current_content = []
     else:
       if line.strip() == "```":
-        # End of file
         files.append(
           MdFile(path=current_path, executable=ex, content="\n".join(current_content))
         )

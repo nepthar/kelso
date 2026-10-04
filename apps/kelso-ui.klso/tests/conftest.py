@@ -30,10 +30,10 @@ def fake():
   web._hostname = ""
   _fake.posts.clear()
   _fake.fail = None
-  _fake.api = 34
+  _fake.api = 1
   yield _fake
   _fake.fail = None
-  _fake.api = 34
+  _fake.api = 1
 
 
 @pytest.fixture(autouse=True)

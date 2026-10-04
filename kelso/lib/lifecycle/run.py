@@ -15,6 +15,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import container_recovery_message, logger
 from kelso.lib.lifecycle.load import (
   LoadResult,
+  check_same_version,
   link_host_volumes,
   load,
   unlink_host_volumes,
@@ -108,8 +109,7 @@ def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
     return {}
 
 
-# How long kelso watches a command before it detaches. Not configurable: a job
-# that needs longer belongs in a background process in the app itself.
+# How long kelso watches a command before it detaches.
 WATCH_SECONDS = 5 * 60
 
 _CONFIG_REF = re.compile(r"\$\{(" + re.escape(KELSO_CONFIG_ENV_PREFIX) + r"_[^}]+)\}")
@@ -118,8 +118,7 @@ _CONFIG_REF = re.compile(r"\$\{(" + re.escape(KELSO_CONFIG_ENV_PREFIX) + r"_[^}]
 def down_env(run_path: Path) -> dict[str, str]:
   """Every config placeholder in the run dir's compose.yml, empty.
 
-  `compose down` interpolates the whole file and warns about each unset one,
-  but uses none of them -- so it gets no values, and no secret is decrypted.
+  `compose down` interpolates the whole file and warns about each unset one.
   """
   text = (run_path / "compose.yml").read_text()
   return dict.fromkeys(_CONFIG_REF.findall(text), "")
@@ -240,13 +239,7 @@ def reload_app(
 ) -> ReloadResult:
   """Stop if running, re-load from the bundle, and start again if it was.
 
-  The point is picking up a changed manifest or pending configuration without
-  the operator having to remember which of stop/load/start apply. Whether
-  the app comes back up is decided by whether it was up to begin with -- a
-  reload is never a way to start something.
-
-  The caller holds the app lock: both the running check and the decision to
-  start again depend on nothing else touching the app in between.
+  The caller holds the app lock, so nothing changes the app in between.
   """
   try:
     running = bool(ctx.run_state(app).running_count)
@@ -254,6 +247,7 @@ def reload_app(
     # Never loaded, so nothing to stop -- loading below is the whole job.
     running = False
 
+  check_same_version(app, bundle, ctx)
   if running:
     stop(app, ctx)
   result = load(app, bundle, ctx, bound=bound)
@@ -288,8 +282,6 @@ def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
       check=True,
       env=down_env(state.run_path),
     )
-    # Nothing is mounting them now, and leaving them behind is how a stopped
-    # app keeps looking like it is still bound to somebody's data.
     unlink_host_volumes(state.run_path)
     record_app_action(action, app_id, ctx)
   except DockerError as e:

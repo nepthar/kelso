@@ -151,12 +151,7 @@ class KelsoEnv:
       store.write(key, value)
 
   def run(self, *args: str, input: str | None = None) -> Result:
-    """Run a kelso command in this process.
-
-    Spawning an interpreter per command cost ~0.12s and bought nothing: the
-    environment is already isolated by `kelso_env`, and `cli_main.run` is the
-    same entry point `main` uses. Both streams are captured, which includes
-    `logging` output -- `run` rebinds the log handler to the current stderr.
+    """Run a kelso command in this process, capturing both streams.
 
     Use `run_subprocess` when a test needs a genuinely separate process.
     """
@@ -223,10 +218,8 @@ sys.exit(
 def use_fake_docker(monkeypatch: pytest.MonkeyPatch, docker) -> None:
   """Route kelso's docker calls to `docker` in-process instead of a child.
 
-  These two modules are the only places kelso starts docker, and a function
-  call costs nothing where an interpreter per call cost most of the suite's
-  time. What is skipped is the process itself; the one test that keeps a real
-  one is `test_a_streamed_failure_hands_the_error_a_tail` in test_docker.py.
+  These two modules are the only places kelso starts docker. The one test that
+  keeps a real process is `test_a_streamed_failure_hands_the_error_a_tail`.
   """
   fake = FakeSubprocess(docker)
   monkeypatch.setattr(kelso.lib.docker, "subprocess", fake)
@@ -332,9 +325,8 @@ def kelso_env(
   monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
   monkeypatch.setenv("FAKE_DOCKER_STATE", str(env.docker_state))
   monkeypatch.setenv("FAKE_DOCKER_LOG", str(env.docker_log))
-  # Commands run in-process now, so what used to be `subprocess.run` arguments
-  # have to be real process state: the kelso root and the working directory
-  # kelso resolves relative paths against.
+  # Commands run in-process, so the kelso root and the working directory kelso
+  # resolves relative paths against have to be real process state.
   monkeypatch.setenv("KELSO_ROOT", str(root))
   monkeypatch.setenv("KELSO_LOCK_TIMEOUT", str(LOCK_TIMEOUT))
   monkeypatch.chdir(root)

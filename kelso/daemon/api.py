@@ -42,54 +42,9 @@ from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import Identifier, validate_identifier
 
-# Bumped when a response shape changes in a way a client would notice. The web
-# UI ships separately from the daemon, so it has to be able to tell.
-# 3: /activity endpoints; jobs carry a `log` path.
-# 4: /snapshots; restore is a job.
-# 5: jobs no longer carry `output`; read the file `log` names via /activity.
-# 6: activity files are flat under var/logs; /activity/{filename}.
-# 7: the `stage` verb is now `install`.
-# 8: apps and catalog carry `state` (installed/uninstalled/available)
-#    in place of the `staged` and `installed` booleans.
-# 9: uninstall and reset are job verbs.
-# 10: GET /metrics (gauge history).
-# 11: /volumes bytes come from gauges; sizes=1 is gone; host volumes carry bytes.
-# 12: restart is a job verb.
-# 15: catalog apps carry `warnings` -- unmodelled [run.<unit>.compose] keys.
-# 16: /volumes carries `kelso_dirs` (name, description, bytes) in place of
-#     the flat `<name>_bytes` keys.
-# 17: the `restart` job verb is now `reload`.
-# 18: GET /apps/{id}/logs (container logs, tail only).
-# 19: snapshot-delete is a job verb.
-# 20: WS /apps/{id}/console (a shell in a running unit).
-# 21: /version carries `hostname`; WS /host/console (a login shell on the host).
-# 22: `reload` is gone; `install` restarts an app that was running.
-# 23: config fields carry `section` (config/advanced/option) in place of
-#     `advanced`; every app has the app options.
-# 24: apps and catalog apps carry `author` and `url`.
-# 25: `up` and `down` are job verbs.
-# 26: install/uninstall are load/unload, reset is gone and rm is a job verb;
-#     app states are loaded/unloaded/available.
-# 27: rm takes `tier` (temp, data, purge) in place of `purge`.
-# 28: /volumes carry `use` (in use/idle/unloaded/orphaned/unknown) in place of
-#     `in_use` and `declared`; DELETE /volumes/{app_id}/{name} (orphans only);
-#     /volumes carries `volume_roots` (size, device, used, available).
-# 29: GET /cron (each cron job's next run); activity runs carry `args`, and
-#     /activity takes `verb`.
-# 30: app routes carry `host_url`, where the route answers on the host itself;
-#     units carry `resolved_environment`, secrets as `<secret>`; app volumes'
-#     `path` is `$app/<src>`; GET /host (cpus, memory, and kelso's disks); an
-#     app's `status` is healthy/ok/degraded/stopped in place of
-#     running/exited/stopped.
-# 31: apps carry `update_version`; `update` is a job verb; catalog apps carry
-#     `error` when their manifest does not parse.
-# 32: POST /jobs requires `started_by`, an identifier; jobs and activity runs
-#     carry it, empty for runs recorded before it existed.
-# 33: the console websockets require `started_by` too, and console runs no
-#     longer carry `via` in their args.
-# 34: an activity run's status may be `detached`: kelso stopped watching a
-#     command after 5 minutes. Commands and cron jobs no longer take `timeout`.
-API_VERSION = 34
+# Bumped when a response shape changes in a way a client would notice: the web
+# UI ships separately from the daemon, and checks it.
+API_VERSION = 1
 
 CtxFactory = Callable[[], KelsoCtx]
 

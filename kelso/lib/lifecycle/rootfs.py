@@ -15,8 +15,7 @@ from kelso.lib.docker import DOCKER
 
 logger = getLogger("kelso.lifecycle.rootfs")
 
-# Pinned like every other image kelso names. busybox's sh, tar, cp and rm are
-# the whole toolbox this needs.
+# busybox's sh, tar, cp and rm are the whole toolbox this needs.
 ROOTFS_IMAGE = "alpine:3.22"
 
 

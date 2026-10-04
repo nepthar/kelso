@@ -20,8 +20,7 @@ def _free_port() -> int:
 # These guard the guard: `block_real_docker` in conftest.py shadows the real
 # binary for every unmarked test. Without it, anything calling docker reads --
 # or disturbs -- whatever the developer has running, which silently couples
-# results to the machine (a real bug: test_curated_examples_materialize once
-# failed because an example bundle was genuinely running).
+# results to the machine.
 
 
 def test_docker_on_path_is_the_guard():
@@ -81,7 +80,7 @@ def test_a_streamed_failure_hands_the_error_a_tail(kelso_env, monkeypatch):
 
   The one test in the suite where docker is a real child process: everywhere
   else `use_fake_docker` answers in-process. This keeps kelso's own streaming
-  -- the pipe read in chunks into the sink, and the exit code after -- honest
+  -- the pipe read into the sink, and the exit code after -- honest
   against a process that actually writes and exits.
   """
   import io

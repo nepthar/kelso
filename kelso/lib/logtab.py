@@ -76,8 +76,6 @@ class LogTab:
       os.close(fd)
 
     if not one_call:
-      # This is unlikely, but possible if the filesystem is under heavy load,
-      # or is full, or over a network or something like that. Not typical.
       logger.error(
         "Adding entry %s to %s did not happen atomically - corruption possible",
         line,

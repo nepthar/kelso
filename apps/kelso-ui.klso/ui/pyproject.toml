@@ -1,6 +1,6 @@
 [project]
 name = "kelso-ui"
-version = "0.6.0"
+version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=44.0.0",

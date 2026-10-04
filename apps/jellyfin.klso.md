@@ -11,7 +11,7 @@ place metadata.
 ## manifest.toml
 ```toml klso_path="manifest.toml"
 [app]
-version      = "1.0.0"
+version      = "12.1"
 display_name = "Jellyfin Media Server"
 description  = "Stream your own movies, shows and music to any device"
 
@@ -25,7 +25,7 @@ cache    = { kind = "temp", desc = "Transcode and image cache; safe to lose" }
 media    = { kind = "host",  desc = "The library itself; bind to the media share", readonly = true }
 
 [run.main]
-image   = "jellyfin/jellyfin"
+image   = "jellyfin/jellyfin:12.1"
 volumes = { config = "/config", metadata = "/metadata", cache = "/cache", media = "/media" }
 
 [run.main.routes]

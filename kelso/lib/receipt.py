@@ -281,7 +281,7 @@ def danger_callouts(spec: AppSpec) -> list[str]:
     kind = CONNECTION_KINDS[connection.kind]
     callouts.append(f"connection '{name}' to {kind.desc}")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
-  # bind, and used to be the only one kelso made silently.
+  # bind.
   for warning in spec.compose_warnings:
     callouts.append(
       f"free-form docker options on {warning.run_unit}: "

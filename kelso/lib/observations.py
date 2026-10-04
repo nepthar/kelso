@@ -105,10 +105,8 @@ class AppObservation:
   def config_pending(self) -> bool:
     """Configuration written since the running containers were started.
 
-    `start` reads config values and route assignments fresh and hands them to
-    `compose up`, so a change made after that is on disk but not in the app
-    that is running. Both timestamps are second-resolution, so a change made
-    in the same second as the start reads as applied.
+    Both timestamps are to the second, so a change in the starting second reads
+    as applied.
     """
     if not (self.running_count and self.config_changed_at and self.started_at):
       return False

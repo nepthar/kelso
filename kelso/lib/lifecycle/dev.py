@@ -70,8 +70,6 @@ def dev_plan(
     if not path.exists():
       raise ValueError(f"App {app} - volume {name}: {path} does not exist")
 
-  # Same bar as `start`: a dev run is a normal run with the bundle mounted from
-  # somewhere else, so unset config, binds and routes block it identically.
   run_data = load_run_data(spec, ctx)
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))

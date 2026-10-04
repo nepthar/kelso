@@ -285,7 +285,7 @@ wheels = [
 
 [[package]]
 name = "kelso-ui"
-version = "0.6.0"
+version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "cryptography" },

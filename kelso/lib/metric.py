@@ -26,7 +26,6 @@ class KelsoDir:
     return f"{self.name}_size_bytes"
 
 
-# Hardcoded here because it's kelso's internal layout.
 KELSO_DIRS = (
   KelsoDir(
     "repos",
@@ -64,9 +63,7 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
         )
         n += 1
   # `app` volumes are not under a volume root: they are the loaded bundle's own
-  # files, symlinked into `var/run/<app>/volumes/app/`. Gauged here so that every
-  # volume a manifest declares has a size a reader can look up, rather than the
-  # app detail page walking the tree itself on every load.
+  # files, symlinked into `var/run/<app>/volumes/app/`.
   if ctx.config.run_root.is_dir():
     for app_dir in ctx.config.run_root.iterdir():
       app_volumes = app_dir / "volumes" / "app"

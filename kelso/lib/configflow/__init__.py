@@ -79,11 +79,8 @@ class ConfigRequest:
     ]
 
   def validate(self, values: dict[str, str]) -> list[str]:
-    """Errors that make a response unapplicable.
-
-    A required field left unset is not one of them: a partial answer is still
-    worth storing, and `start` is what refuses to run an under-configured app.
-    """
+    """Errors that make a response unapplicable. A required field left unset is
+    not one: `start` is what refuses an under-configured app."""
     errors = []
     for name, value in values.items():
       entry = self.field(name)

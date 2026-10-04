@@ -86,9 +86,7 @@ def _bind_unix(path: Path) -> socket.socket:
 
 def _bind_tcp(host: str, port: int) -> socket.socket:
   if host not in LOOPBACK:
-    # The admin API has no authentication: whoever reaches it runs kelso
-    # verbs. Off loopback that is the whole network, so say so rather than
-    # letting a dev convenience turn into an open door quietly.
+    # The admin API has no authentication: off loopback, that is the network.
     logger.warning(
       "kelsod is listening on %s:%d, which is NOT loopback. The admin API "
       "has no authentication -- anything that can reach this port can run "
@@ -189,8 +187,7 @@ def main() -> None:
     config = load_config()
     if config is None:
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
-    # Without docker every app would read as stopped, which is worse than
-    # not starting: refuse, and say why in the journal.
+    # Without docker every app would read as stopped.
     missing = tool_problems()
     if missing:
       raise RuntimeError(

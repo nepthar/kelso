@@ -29,16 +29,14 @@ from kelso.lib.store import AppStore, KelsoStore
 
 logger = logging.getLogger("kelso")
 
-# Long enough to ride out another kelso finishing a normal command, short
-# enough that a stale lockfile does not look like a hang.
 LOCK_TIMEOUT = 5.0
 
-ACTIVITY_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
+ACTIVITY_LOG_MAX_BYTES = 10 * 1024 * 1024
 ACTIVITY_LOG_HISTORY = 2000  # records
-METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10mb
-METRICS_LOG_HISTORY = 50_000  # records, days of readings
+METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024
+METRICS_LOG_HISTORY = 50_000  # records: days of readings
 
-LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2  # 2 hours
+LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2
 
 
 def lock_timeout() -> float:
@@ -80,12 +78,10 @@ def _resolve_app_query(candidates: list[AppID], query: str) -> list[AppID]:
   if version:
     logger.warning("resolve_app_query: version %s not supported yet", version)
 
-  # Attempt an exact match first
   found = [app for app in candidates if app == query]
   if found:
     return found
 
-  # Attempt a match on the last segment of app_id
   return [app for app in candidates if app.stem == query]
 
 
@@ -229,11 +225,7 @@ class KelsoCtx:
     return value or APP_OPTIONS[name].default(AppID(app))
 
   def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The loaded app's spec, or None when it is not loaded.
-
-    A manifest that no longer parses also reads as None, so one broken app cannot
-    take a whole listing down.
-    """
+    """The loaded app's spec, or None when it is not loaded or no longer parses."""
     paths = self.loaded_paths(app)
     if not paths.manifest_path.is_file():
       return None

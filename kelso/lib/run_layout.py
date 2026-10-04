@@ -122,10 +122,7 @@ class ConfigIssue:
 
   load_blocking: bool = False
 
-  # True when loading repairs this itself. `load()` reallocates every route
-  # before evaluating readiness, so an unallocated route is the normal pre-start
-  # state; counting these as blockers made `kelso ps` report CONFIG missing for
-  # apps that needed no configuration.
+  # True when loading repairs this itself, as it does an unallocated route.
   self_healing: bool = False
 
   def line(self) -> str:
@@ -188,8 +185,6 @@ class AppRunData:
   routes: Mapping[str, AssignedRoute]
   # URL of each route by name; what `${routes.<name>}` resolves to.
   route_urls: Mapping[str, str]
-  # Decided once here rather than at compose time, so what a host happens to have
-  # is looked at in one pass.
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
   connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
@@ -366,8 +361,6 @@ def _load_volume_links(
 def _compare_route(
   issues: list[ConfigIssue], spec_route: AppRoute, conf_route: AssignedRoute
 ) -> None:
-  # Note: In the current impl, we ALWAYS clear out all configured routes before loading/running
-  # so any stale data should be gone. I'm leaving this here out of caution for future work.
   def mismatch(field: str, from_spec: Any, from_config: Any):
     issues.append(
       ConfigIssue(

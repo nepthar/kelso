@@ -1,5 +1,5 @@
 [app]
-version      = "1.0.0"
+version      = "10.0.162"
 display_name = "Unifi Network Application"
 
 [adv_config]

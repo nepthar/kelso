@@ -4,10 +4,9 @@ Two ways in, one behaviour:
 
 - In-process. `FakeSubprocess` replaces the `subprocess` module that
   `kelso.lib.docker` and `kelso.lib.lifecycle.rootfs` use, so a docker call is
-  a function call. This is what almost every test gets: starting a Python
-  interpreter per docker call was most of the suite's run time, and all it
-  verified was that `Popen` works. Everything kelso does around the process --
-  arguments, streaming into a sink, error tails, JSON parsing -- still runs.
+  a function call. This is what almost every test gets. Everything kelso does
+  around the process -- arguments, streaming into a sink, error tails, JSON
+  parsing -- still runs.
 - As an executable. `kelso_env` also loads `bin/docker`, which calls `main`
   here, for the few tests that start kelso as a real child process (the lock
   tests), where no monkeypatch can reach.

@@ -28,7 +28,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
 
   # Refresh slightly ahead of the real expiry to avoid racing the clock.
   TOKEN_REFRESH_LEEWAY = 60  # seconds
-  # State keys under SystemDB.
+  # State keys in the kelso db.
   _TOKEN_KEY = "npm_token"
   _TOKEN_EXPIRE_KEY = "npm_token_expire"
 

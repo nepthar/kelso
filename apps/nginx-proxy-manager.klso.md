@@ -6,9 +6,9 @@ data volumes hold its config and certs.
 
 ```toml klso_path="manifest.toml"
 [app]
-version      = "1.0.0"
+version      = "2.16.0"
 display_name = "Nginx Proxy Manager"
-description  = "Reverse proxy, w/ ssl certs managed by letsencrypt. Pinned to :latest"
+description  = "Reverse proxy, w/ ssl certs managed by letsencrypt"
 network_mode = "host"
 
 [adv_config]
@@ -20,7 +20,7 @@ data    = { kind = "data" }
 letsenc = { kind = "data" }
 
 [run.main]
-image   = "jc21/nginx-proxy-manager:latest"
+image   = "jc21/nginx-proxy-manager:2.16.0"
 volumes = { data = "/data", letsenc = "/etc/letsencrypt" }
 # The image ships this script; it is what the project's own docs use.
 healthcheck = ["/usr/bin/check-health"]

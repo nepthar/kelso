@@ -204,8 +204,7 @@ def test_history_is_append_only(tmp_path):
 
 # ── header / comment / blank-line tolerance ───────────────────────────────
 def test_fresh_file_loads_clean(tmp_path):
-  # Regression: the created header must not leave a stray blank line that
-  # breaks load().
+  # The created header must not leave a stray blank line that breaks load().
   path = tmp_path / "t.logtab"
   LogTab(path)  # creates header only
   assert LogTab(path).load() == {}
@@ -218,8 +217,7 @@ def test_title_written_into_header(tmp_path):
 
 
 def test_load_ignores_comments_and_blank_lines(tmp_path):
-  # A file created by older/buggy writers may contain blank lines; load must
-  # skip comments and blanks rather than raising.
+  # Load skips comments and blank lines rather than raising.
   path = tmp_path / "legacy.logtab"
   path.write_text(
     "# header\n"

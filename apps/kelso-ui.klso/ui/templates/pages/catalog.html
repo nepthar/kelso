@@ -57,8 +57,6 @@
   {% set others = app.contested|reject('equalto', app.get('repo'))|list %}
   {% if others %}<p class="stale">Also carried by {{ others|join(', ') }}. Loading from here binds it to {{ app.get('repo') }}.</p>{% endif %}
   {% if app.get('manifest_stale') %}<p class="stale">The manifest shown here has changed since this app was loaded. Reload to pick up the new one.</p>{% endif %}
-  {#- Kelso cannot say what an arbitrary compose key does, so it says that it
-    does not know and shows exactly what was asked for. -#}
   {% for w in app.get('warnings') or [] %}
   <div class="passthru"><b>Warning</b><p>{{ w.get('message') }}:</p><ul>{% for o in w.get('options') or [] %}<li><span class="mono">{{ o }}</span></li>{% endfor %}</ul></div>
   {% endfor %}

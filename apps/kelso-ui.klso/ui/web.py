@@ -24,10 +24,9 @@ STATIC = HERE / "static"
 
 NO_STORE = {"Cache-Control": "no-store"}
 
-# The kelsod API this UI is written against. kelsod bumps its own number
-# when a response shape changes, so a mismatch means one of the two was
-# loaded without the other and fields this UI reads may be missing.
-NEEDS_API = 34
+# The kelsod API version this UI is written against; a mismatch means one of
+# the two was loaded without the other.
+NEEDS_API = 1
 
 # Random per load (kelso-ui's `instance_id`), so two kelso-ui tabs can be
 # told apart even when neither can reach its kelsod.
@@ -73,11 +72,7 @@ NAV = (
 
 
 def nav_active(path):
-  """The nav entry a path belongs to.
-
-  App detail pages have no nav entry of their own -- the list they belong to
-  lives on the dashboard -- so they light Dashboard instead of nothing.
-  """
+  """The nav entry a path belongs to; an app's page lights Dashboard, its list."""
   if path.startswith(("/apps", "/host")):
     return NAV[0]
   for item in NAV:

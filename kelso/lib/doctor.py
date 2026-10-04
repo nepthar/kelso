@@ -44,8 +44,7 @@ MIN_GIT = (2, 25)
 
 
 def tool_problems() -> list[Finding]:
-  """git, docker, and docker compose, each answering on this host, and docker
-  running as root."""
+  """git, docker, and docker compose answering on this host, docker as root."""
   findings = []
   try:
     version = git("--version")
