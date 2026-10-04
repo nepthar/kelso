@@ -25,7 +25,7 @@ def register(subparsers) -> None:
   parser.add_argument(
     "app",
     metavar="APP",
-    help="App ID of an loaded app, or of an app in the catalog",
+    help="App ID of a loaded app, or of an app in the catalog",
   )
   parser.add_argument(
     "--set",

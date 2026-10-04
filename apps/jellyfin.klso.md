@@ -63,9 +63,22 @@ kelso start jellyfin
 Until that bind exists, `kelso ps` reports jellyfin as needing config and
 refuses to start it.
 
-Note that at the moment, this app does not support hardware encoding/decoding.
-You may enable it by adding the following key:
+## Hardware transcoding
+
+This bundle does not pass a GPU through. To use Intel or AMD hardware
+transcoding (VA-API / QSV), add `devices` to the `[run.main.compose]` table the
+manifest already has. TOML allows a table only once, so add the key to it rather
+than writing a second `[run.main.compose]`:
+
 ```toml
 [run.main.compose]
-devcies = [ "/dev/dri/renderD128:/dev/dri/renderD128", "/dev/dri/card0:/dev/dri/card0" ]
+user    = "1000:1000"
+devices = ["/dev/dri/renderD128:/dev/dri/renderD128", "/dev/dri/card0:/dev/dri/card0"]
 ```
+
+`devices` is not on kelso's allowlist, so loading the edited bundle warns about
+it and asks before continuing. That is expected: a device is host hardware the
+container can reach. The user it runs as must be able to open the device, which
+on most distros means being in the `render` group; check with
+`ls -l /dev/dri`. Then enable hardware acceleration in Jellyfin's own
+dashboard.

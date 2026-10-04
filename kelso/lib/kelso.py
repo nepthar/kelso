@@ -72,12 +72,8 @@ def lock_holder_hint(path: Path) -> str:
 
 
 def _resolve_app_query(candidates: list[AppID], query: str) -> list[AppID]:
-  """Resolve a user-supplied app id (possibly ``app@version``) to a :class:`AppHandle`."""
-  query, _, version = query.partition("@")
-
-  if version:
-    logger.warning("resolve_app_query: version %s not supported yet", version)
-
+  """Resolve a user-supplied app id, ignoring an ``@<repo>`` suffix."""
+  query = query.partition("@")[0]
   found = [app for app in candidates if app == query]
   if found:
     return found
@@ -273,7 +269,7 @@ class KelsoCtx:
     return {app_id: tuple(entries) for app_id, entries in found.items()}
 
   def loaded_origin(self, app: AppID | str) -> Path | None:
-    """The bundle an loaded app was loaded from, as `load` recorded it."""
+    """The bundle a loaded app was loaded from, as `load` recorded it."""
     if not self.config.app_config_path(app).is_file():
       return None
     origin = self.app_store(app).get_meta("origin")
@@ -355,9 +351,7 @@ class KelsoCtx:
 
   def _resolve_state_id(self, app_id: str) -> str:
     """Like `resolve_app`, but over every id with run state."""
-    query, _, version = app_id.partition("@")
-    if version:
-      logger.warning("resolve_app_query: version %s not supported yet", version)
+    query = app_id.partition("@")[0]
     ids = self._observed_app_ids()
     if query in ids:
       return query

@@ -7,6 +7,6 @@
 {% set status = app.get('status') or 'unknown' %}
 {% set containers = app.get('containers') or {} %}
 {% set total = containers.get('total', 0) %}
-{{- pill(status, {'healthy': 'running', 'ok': 'running', 'degraded': 'exited'}.get(status, '')) -}}
+{{- pill(status, {'healthy': 'running', 'ok': 'running', 'finished': 'running', 'degraded': 'exited'}.get(status, '')) -}}
 {{- sub(containers.get('running', 0) ~ '/' ~ total if total else 'no containers') -}}
 {% endif %}

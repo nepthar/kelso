@@ -37,13 +37,14 @@ HEALTHY = "healthy"  # everything up, and every healthcheck passes
 OK = "ok"  # everything up, with no healthcheck to say more
 DEGRADED = "degraded"  # some unit is down, failed, or failing its healthcheck
 STOPPED = "stopped"
+FINISHED = "finished"  # nothing running, and every unit exited 0
 
 
 def _active(unit: KelsoRunUnitStatus) -> bool:
   """Up and not failing its healthcheck, or a one-shot that finished cleanly."""
   if unit.state.lower() == "running":
     return unit.health != "unhealthy"
-  return unit.state.lower() == "exited" and unit.status.startswith("Exited (0)")
+  return unit.finished
 
 
 # Where an app stands, as one word.
@@ -140,11 +141,16 @@ class AppObservation:
     )
 
   def status(self, units: Iterable[str] = ()) -> str:
-    """`healthy`, `ok`, `degraded` or `stopped`. `units` are the run units the
-    manifest declares; without them, only the containers that exist count."""
-    if not self.running_count:
-      return STOPPED
+    """`healthy`, `ok`, `degraded`, `finished` or `stopped`. `units` are the run
+    units the manifest declares; without them, only the containers that exist
+    count."""
     containers = {c.run_unit: c for c in self.containers}
+    if not self.running_count:
+      done = containers and all(
+        unit in containers and containers[unit].finished
+        for unit in {*units, *containers}
+      )
+      return FINISHED if done else STOPPED
     if any(
       unit not in containers or not _active(containers[unit])
       for unit in {*units, *containers}

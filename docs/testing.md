@@ -4,7 +4,7 @@
 uv run pytest
 ```
 
-Around 640 tests in ~15s. If the per-test cost starts climbing, something
+Around 780 tests in ~25s. If the per-test cost starts climbing, something
 below has been violated.
 
 ## How it works

@@ -4,7 +4,7 @@
 
 Kelso is a self-hosting management system where apps are packages that describe *what* they need rather than *how* they get it. This, combined with a small amount of one time configuration allows for easy distribution, secrets, management, and snapshotting of self-hosted apps.
 
-## How does it work? 
+## How does it work?
 Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
 
 unifi-network-application.klso/manifest.toml:
@@ -34,7 +34,7 @@ env     = { MONGO_HOST = "unifi-db", MONGO_PASS = "${mongo_pass}", ... }
 main = { port = "8443", scheme = "https" }
 ```
 
-This describes everything that the Unify Network Admin app needs to run on Kelso. You then bring it up with:
+This describes everything that the Unifi Network Application needs to run on Kelso. You then bring it up with:
 ```
 $ kelso load unifi-network-application
 $ kelso start unifi-network-application
@@ -46,7 +46,7 @@ Under the hood, Kelso is using the manifest + your configuration to create a doc
 
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
-## Getting Started:
+## Getting Started
 Kelso needs `git`, `docker` with the compose plugin, and `uv`. Docker must run
 as root, with your user in the `docker` group: rootless docker and podman are
 not supported yet. `kelso init` checks all of this and refuses to run until it
@@ -59,16 +59,32 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-Then log out and back in, so the `docker` group and uv's `PATH` take effect.
+Then log out and back in, so your shell picks up the `docker` group and uv's
+`PATH`.
 
 ### Install kelso
 ```bash
 uv tool install "git+https://github.com/nepthar/kelso@v1.0.0"
 kelso init --yes
-sudo reboot # Ensure all settings are picked up by kelsod
+sudo reboot
 ```
-`init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and starts
-`kelsod` as a systemd user service that comes back at boot. If you run `kelso init` you can set other options like install location.
+The install carries two commands: `kelso`, the CLI, and `kelsod`, the daemon
+that starts apps at boot, runs their cron jobs, records metrics, and serves the
+admin API the web UI talks to.
+
+`init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and runs
+`kelsod` as a systemd user service. Plain `kelso init` asks where to put the
+root instead.
+
+The reboot matters even though you just logged back in. kelsod runs under
+systemd's per-user manager, which keeps the groups it started with; if that
+manager started before you joined the `docker` group, kelsod cannot reach
+docker until it restarts. A reboot fixes that and shows that kelsod comes back
+on its own.
+
+Without systemd, `kelso init` skips the service: run `kelsod` in a terminal
+when you want apps resumed, cron run, or the web UI. `kelso system service`
+installs the service for a root that already exists.
 
 ### Try it
 `kelso init` sets up one repo, `staples`: the apps kelso maintains. Kelso's demo
@@ -89,12 +105,6 @@ done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
 For the web UI, choose its admin password and start it; it prints the address
 to open: `kelso start kelso-ui --set admin_pass=<password>`.
-
-That install carries both commands: `kelso`, the CLI, and `kelsod`, the
-admin API the web UI talks to.
-On a machine running systemd, `kelso init` also runs `kelsod` as a systemd user
-service; `kelso system service` does the same for a root that already exists.
-Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
 ### Upgrading kelso
 Install the release you want by its tag, then restart kelsod on it:
@@ -149,7 +159,7 @@ Kelso places each app's data where you tell it. Apps describe "what" they need i
 Kelso makes it trivial to create and use app repositories. It's just a folder pushed to github, and the apps in it run on any properly configured install of kelso.
 
 - **Running apps with docker compose by hand is time consuming.**
-Once you start using docker compose to run your own apps, you end up managing each compose file individually. It's difficult to version control a folder of them properly. Each new app (except for super simple ones) has to be hand-configured and wired in to your system. Oh, and I also HATE `.env` files and docker volumes. **Kelso provides a simple mechanism to store/inspect secrets, application data, and logs. You configure it once, it wires every app automatically**
+Once you start using docker compose to run your own apps, you end up managing each compose file individually. It's difficult to version control a folder of them properly. Each new app (except for super simple ones) has to be hand-configured and wired in to your system, with its secrets in `.env` files and its data in docker volumes you can't easily see into. **Kelso provides a simple mechanism to store/inspect secrets, application data, and logs. You configure it once, it wires every app automatically.**
 
 - **Other solutions exist, but require you to be a sysadmin.**
 Kelso is simple to reason about. It is mostly just a bunch of folders and text files.
@@ -171,7 +181,7 @@ You may not want to use kelso if:
 
 - The anatomy of a kelso app [manifest](docs/manifest.md)
 - A [case study](docs/case_study.md): building one from scratch
-- Our current [roadmap](docs/roadmap.md)
+- Our current [roadmap](docs/roadmap.md), with known issues and the todo list
 - How the [test suite](docs/testing.md) is put together
 
 
@@ -180,5 +190,3 @@ You may not want to use kelso if:
 
 ## Philosophy & Bigger Picture
 I want to enable more people to **run software like it's 1997**. Back in 1997, you bought a copy of Microsoft Word and MSFT had NO IDEA what crazy manifestos you were writing with it, because it was your copy running on hardware you controlled. You could pull the plug. You didn't lose access to your documents if you stopped paying a subscription. "I'm altering the deal, pray I don't alter it any further" was a fun line from Star Wars, not the *implication* of the latest "update" from Adobe Creative Cloud.
-
-Kelso is part of the P2 project, a batteries-included framework providing an OS-like experience for selfhosted, peer to peer apps

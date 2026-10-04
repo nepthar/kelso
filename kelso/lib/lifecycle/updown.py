@@ -147,4 +147,4 @@ def _unit_ready(unit: KelsoRunUnitStatus, settled: bool) -> bool:
     # With no healthcheck, still running once SETTLE has passed is the test.
     return unit.health == "healthy" or (unit.health == "" and settled)
   # A one-shot command that finished cleanly has done what it was started for.
-  return unit.state == "exited" and unit.status.startswith("Exited (0)")
+  return unit.finished

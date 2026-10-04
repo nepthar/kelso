@@ -15,6 +15,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
+from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
@@ -463,7 +464,7 @@ def _units(
         "name": name,
         "image": unit.image,
         "restart": unit.restart,
-        "state": container.state if container else None,
+        "state": _unit_state(container),
         "container_name": container.name if container else None,
         "container_id": container.container_id if container else None,
         # As the manifest wrote it, and as the container gets it. Never
@@ -484,6 +485,13 @@ def _units(
       }
     )
   return units
+
+
+def _unit_state(container: KelsoRunUnitStatus | None) -> str | None:
+  """docker's state, except that a clean exit reads as `finished`."""
+  if container is None:
+    return None
+  return "finished" if container.finished else container.state
 
 
 def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
