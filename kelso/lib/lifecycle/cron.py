@@ -70,7 +70,7 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
           name=name,
           command=entry.command,
           args=entry.args,
-          timeout=entry.timeout,
+          timeout=entry.timeout or spec.commands[entry.command].timeout,
           schedule=entry.schedule,
           next_at=_next(entry.schedule, _instant(since) if since else now),
           runnable=spec.commands[entry.command].run_unit in up,

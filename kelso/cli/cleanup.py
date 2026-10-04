@@ -21,7 +21,7 @@ def register(subparsers) -> None:
     help="Also empty the temp and logs volumes of every stopped app",
   )
   parser.add_argument("--apply", action="store_true", help="Delete what is shown")
-  parser.set_defaults(func=run)
+  parser.set_defaults(func=run, activity=lambda a: "cleanup" if a.apply else None)
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:

@@ -40,10 +40,13 @@ def register(subparsers) -> None:
     metavar="KEY",
     help="Set KEY from stdin (for secrets)",
   )
-  secret.set_defaults(func=run)
+  secret.set_defaults(
+    func=run,
+    activity=lambda a: "secret" if a.sets or a.unsets or a.stdin_key else None,
+  )
 
   gen = sub.add_parser("gen-masterkey", help="Generate a new master key")
-  gen.set_defaults(func=run_gen_masterkey)
+  gen.set_defaults(func=run_gen_masterkey, activity="gen-masterkey")
 
   hv = sub.add_parser(
     "host-volume",
@@ -64,7 +67,10 @@ def register(subparsers) -> None:
     action="store_true",
     help="With --add/--set: refuse to start unless the path is a mount point",
   )
-  hv.set_defaults(func=run_host_volume)
+  hv.set_defaults(
+    func=run_host_volume,
+    activity=lambda a: "host-volume" if a.add or a.set_ or a.rm else None,
+  )
 
   for command in (activity, decrypt, doctor, service, volumes):
     command.register(sub)

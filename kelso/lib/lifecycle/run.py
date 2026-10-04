@@ -1,9 +1,15 @@
 import io
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
-from kelso.lib.docker import DockerError, docker_run_command, sink_output
+from kelso.lib.docker import (
+  DockerError,
+  DockerTimeout,
+  docker_run_command,
+  sink_output,
+)
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import container_recovery_message, logger
 from kelso.lib.lifecycle.load import (
@@ -17,9 +23,10 @@ from kelso.lib.lifecycle.routes import (
   register_app_routes,
   unregister_app_routes,
 )
+from kelso.lib.manifest import MAX_COMMAND_TIMEOUT
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
-from kelso.lib.spec import AppSpec
+from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppSpec
 
 
 def recovery_lines(app_id: AppID, issues: tuple[ConfigIssue, ...]) -> list[str]:
@@ -101,6 +108,19 @@ def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
     return {}
 
 
+_CONFIG_REF = re.compile(r"\$\{(" + re.escape(KELSO_CONFIG_ENV_PREFIX) + r"_[^}]+)\}")
+
+
+def down_env(run_path: Path) -> dict[str, str]:
+  """Every config placeholder in the run dir's compose.yml, empty.
+
+  `compose down` interpolates the whole file and warns about each unset one,
+  but uses none of them -- so it gets no values, and no secret is decrypted.
+  """
+  text = (run_path / "compose.yml").read_text()
+  return dict.fromkeys(_CONFIG_REF.findall(text), "")
+
+
 def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
   """Stream ``docker compose logs`` for a loaded app."""
   state = ctx.run_state(app_id)
@@ -147,7 +167,8 @@ def run_command(
 ) -> int:
   """Run a manifest `[commands]` entry in its target unit.
 
-  Raises RuntimeError if it is still running after `timeout` seconds.
+  Raises RuntimeError if it is still running after `timeout` seconds, or the
+  command's own timeout when none is given.
   """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
@@ -162,37 +183,45 @@ def run_command(
       f"available: {available}. List with `kelso cmd {app_id}`"
     )
 
+  if timeout is None:
+    timeout = entry.timeout
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}
   argv = command_argv(spec.run_units[entry.run_unit], entry, args)
   env = compose_env(app_id, ctx)
 
-  if entry.run_unit in running:
-    return docker_run_command(
-      ["compose", "exec", entry.run_unit, *argv],
-      cwd=state.run_path,
-      json_output=False,
-      check=False,
-      env=env,
-      timeout=timeout,
-    ).returncode
-
-  # Host binds are only linked while an app runs; restore them for the one-off
-  # so compose mounts resolve, then tear them down again if nothing else is up.
-  was_fully_stopped = state.running_count == 0
-  if was_fully_stopped:
-    link_host_volumes(spec, load_run_data(spec, ctx))
   try:
-    return docker_run_command(
-      ["compose", "run", "--rm", "--no-deps", entry.run_unit, *argv],
-      cwd=state.run_path,
-      json_output=False,
-      check=False,
-      env=env,
-      timeout=timeout,
-    ).returncode
-  finally:
+    if entry.run_unit in running:
+      return docker_run_command(
+        ["compose", "exec", entry.run_unit, *argv],
+        cwd=state.run_path,
+        json_output=False,
+        check=False,
+        env=env,
+        timeout=timeout,
+      ).returncode
+
+    # Host binds are only linked while an app runs; restore them for the one-off
+    # so compose mounts resolve, then tear them down again if nothing else is up.
+    was_fully_stopped = state.running_count == 0
     if was_fully_stopped:
-      unlink_host_volumes(state.run_path)
+      link_host_volumes(spec, load_run_data(spec, ctx))
+    try:
+      return docker_run_command(
+        ["compose", "run", "--rm", "--no-deps", entry.run_unit, *argv],
+        cwd=state.run_path,
+        json_output=False,
+        check=False,
+        env=env,
+        timeout=timeout,
+      ).returncode
+    finally:
+      if was_fully_stopped:
+        unlink_host_volumes(state.run_path)
+  except DockerTimeout as e:
+    raise DockerTimeout(
+      f"{e}. If {cmd_name!r} needs longer, raise its `timeout` in "
+      f"[commands.{cmd_name}] (at most {MAX_COMMAND_TIMEOUT} seconds)."
+    ) from e
 
 
 @dataclass(frozen=True)
@@ -260,7 +289,7 @@ def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
       cwd=state.run_path,
       json_output=False,
       check=True,
-      env=compose_env(app_id, ctx),
+      env=down_env(state.run_path),
     )
     # Nothing is mounting them now, and leaving them behind is how a stopped
     # app keeps looking like it is still bound to somebody's data.

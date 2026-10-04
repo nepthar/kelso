@@ -7,14 +7,16 @@ import pytest
 from fastapi.testclient import TestClient
 from filelock import FileLock
 
+import kelso.lib.lifecycle.run
 from kelso.cli.cron import in_words
 from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib import activity
 from kelso.lib.config import load_config
 from kelso.lib.cronexpr import CronSchedule
+from kelso.lib.docker import DockerTimeout
 from kelso.lib.kelso import KelsoCtx, write_lock_holder
-from kelso.lib.lifecycle.cron import cron_lock_path
+from kelso.lib.lifecycle.cron import cron_lock_path, cron_runs
 
 APP = "cron-demo"
 
@@ -201,3 +203,55 @@ def test_cron_over_the_api(kelso_env):
   assert kelso_env.run("cron", "tick").returncode == 0
   [run] = client.get("/activity?verb=cron").json()["activity"]
   assert run["args"]["job"] == "every-minute"
+
+
+# --- command timeouts --------------------------------------------------------
+
+
+def a_timed_app(kelso_env, command: str, cron: str = EVERY_MINUTE) -> None:
+  """The cron app, with `hello` declared as `command` instead."""
+  a_cron_app(kelso_env, cron)
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
+  manifest.write_text(
+    manifest.read_text().replace('hello = { cmd = "echo hi" }', command)
+  )
+
+
+def test_a_command_timeout_is_bounded(kelso_env):
+  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 1801 }')
+  loaded = kelso_env.run("load", APP)
+  assert loaded.returncode == 1
+  assert "background process" in loaded.stderr
+
+
+@pytest.mark.parametrize(
+  "cron, expected",
+  [
+    (EVERY_MINUTE, 42),
+    ('every-minute = { schedule = "* * * * *", command = "hello", timeout = 7 }', 7),
+  ],
+)
+def test_a_cron_job_takes_its_commands_timeout_unless_it_sets_one(
+  kelso_env, cron, expected
+):
+  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 42 }', cron)
+  assert kelso_env.run("load", APP).returncode == 0
+  [run] = cron_runs(ctx())
+  assert run.timeout == expected
+
+
+def test_kelso_cmd_waits_only_as_long_as_the_command_allows(kelso_env, monkeypatch):
+  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 42 }')
+  assert kelso_env.run("start", APP).returncode == 0
+  waited = []
+
+  def docker(args, **kwargs):
+    waited.append(kwargs.get("timeout"))
+    raise DockerTimeout("docker compose exec was still running after 42 seconds")
+
+  monkeypatch.setattr(kelso.lib.lifecycle.run, "docker_run_command", docker)
+  ran = kelso_env.run("cmd", APP, "hello")
+
+  assert waited == [42]
+  assert ran.returncode == 1
+  assert "raise its `timeout` in [commands.hello]" in ran.stderr

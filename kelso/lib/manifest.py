@@ -7,9 +7,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
+  AfterValidator,
   BaseModel,
   ConfigDict,
   Field,
@@ -240,6 +241,18 @@ class RunEntry(BaseModel):
     return self
 
 
+MAX_COMMAND_TIMEOUT = 30 * 60
+
+
+def _check_timeout(value: int | None) -> int | None:
+  if value is not None and not 0 < value <= MAX_COMMAND_TIMEOUT:
+    raise ValueError(
+      f"must be 1 to {MAX_COMMAND_TIMEOUT} seconds; a job that needs longer "
+      f"belongs in a background process in the app itself"
+    )
+  return value
+
+
 class CommandEntry(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
@@ -247,9 +260,8 @@ class CommandEntry(BaseModel):
   cmd: str
   run_unit: Identifier = "main"
   desc: str = ""
-
-
-MAX_CRON_TIMEOUT = 30 * 60
+  # Seconds before kelso stops waiting and records the run as failed.
+  timeout: Annotated[int, AfterValidator(_check_timeout)] = 600
 
 
 class ConnectionEntry(BaseModel):
@@ -275,18 +287,8 @@ class CronEntry(BaseModel):
   # A [commands] entry; cron says when, the command says what.
   command: Identifier
   args: str = ""
-  # Seconds before kelso stops waiting and records the run as failed.
-  timeout: int = 600
-
-  @field_validator("timeout")
-  @classmethod
-  def check_timeout(cls, value: int) -> int:
-    if not 0 < value <= MAX_CRON_TIMEOUT:
-      raise ValueError(
-        f"must be 1 to {MAX_CRON_TIMEOUT} seconds; a job that needs longer "
-        f"belongs in a background process in the app itself"
-      )
-    return value
+  # Overrides the command's own timeout for these runs.
+  timeout: Annotated[int | None, AfterValidator(_check_timeout)] = None
 
 
 class Manifest(BaseModel):

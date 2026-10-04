@@ -55,7 +55,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   if not runs:
     where = f" for {app}" if app else ""
-    print(f"No recorded activity{where}. Runs land here as kelsod executes jobs.")
+    print(
+      f"No recorded activity{where}. Anything that changes an app or kelso lands here."
+    )
     return
 
   if args.show is not None:

@@ -32,7 +32,7 @@ def register(subparsers) -> None:
     metavar="LABEL",
     help="Optional label appended to the snapshot name",
   )
-  take.set_defaults(func=run_take)
+  take.set_defaults(func=run_take, activity="snapshot")
 
   listing = sub.add_parser("list", help="List an app's snapshots, newest first")
   listing.add_argument("app", metavar="APP", help="App ID")
@@ -54,7 +54,7 @@ def register(subparsers) -> None:
     action="store_true",
     help="Do not take a pre-restore snapshot of the current run dir",
   )
-  rest.set_defaults(func=run_restore)
+  rest.set_defaults(func=run_restore, activity="restore")
 
 
 def run_take(args: argparse.Namespace, ctx: KelsoCtx) -> None:

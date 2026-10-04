@@ -84,20 +84,28 @@ the invoking user and cannot touch what the app's containers wrote.
 them, so one runaway app can starve the box.
 
 ## Known issues
-- **A `cmd` job holds the app lock for the command's whole run.** Kelso-wide
-  ops can proceed; the same app cannot be loaded, started, or stopped until it
-  exits. Fine for the batch-style commands the UI is for; a long-runner still
-  wedges that app. The runner also allocates no TTY, so a command that waits
-  on stdin hangs rather than prompting.
-- **Most CLI commands file no activity output.** Only `kelso shell` and a
-  hand-run `kelso cron tick` record a run (`started_by: cli`); every other CLI
-  invocation prints to the operator's terminal and records only its status
-  line in `activity.logtab`, so the UI's Activity page shows what kelsod ran,
-  not what the operator typed. The mechanism to close this is in place — `Job.call(args, ctx,
-  echo=stream)` writes the run log and the terminal from one stream — and the
-  plan is to migrate CLI verbs onto their Job classes, verb by verb.
-- **Stopping an app warns about unset config variables.** `compose down` runs
-  without the config env, so compose prints `"__KELSO_CONFIG__<name>" variable
-  is not set`. Harmless, and alarming when the name is a password.
-- **Route registration logs a blank host.** It prints `-> http://:8096`; the
-  proxy entry itself has the right address.
+None right now.
+
+## Quirks we're keeping
+Kelso is for making self-hosting easier for most people, most of the time, not
+a bulletproof production platform. These behave as designed and are not
+planned to change.
+
+- **An app's commands hold its lock while they run.** That is `kelso cmd`, the
+  Run button, and cron alike. Stopping, reloading, updating or snapshotting the
+  app refuses until the command finishes, rather than cutting a backup or a
+  migration off halfway. Every command has a `timeout` (600 seconds unless its
+  manifest says otherwise, at most 1800), so the wait is bounded.
+- **A timed-out command keeps running in its container.** Kelso stops waiting,
+  records the run as failed and releases the lock, but docker cannot stop what
+  `compose exec` started; it runs on until it finishes or the app stops.
+- **kelsod runs jobs one at a time.** A long command started from the web UI
+  delays every job queued after it, for any app. Cron runs on its own thread
+  and is not held up.
+- **Commands get no terminal.** One that waits for input waits until its
+  timeout. For anything interactive, use `kelso shell` or the console.
+- **A CLI command that changes something is recorded, but not word for word.**
+  Its run log keeps kelso's narration and docker's output, not what it prints
+  to stdout, and not its arguments, since `--set` can carry a secret. Docker's
+  output goes through kelso on its way to the terminal, so `compose up` shows
+  plain lines instead of live progress bars.

@@ -24,7 +24,7 @@ def register(subparsers) -> None:
     nargs=argparse.REMAINDER,
     help="Arguments forwarded to the command",
   )
-  parser.set_defaults(func=run)
+  parser.set_defaults(func=run, activity=lambda a: "cmd" if a.cmd_name else None)
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:

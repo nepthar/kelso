@@ -18,6 +18,7 @@ import subprocess
 import time
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
 
 logger = logging.getLogger("kelso.activity")
+
+# The Activity this thread (or task) is inside, so a second one can refuse.
+_running: ContextVar[Activity | None] = ContextVar("activity", default=None)
 
 # Output files kept. The logtab index outlives them.
 KEEP_RUNS = 50
@@ -234,11 +238,13 @@ class Activity:
 
   Inside the block, `kelso.*` log records and streamed docker output land in
   the run's file under `$kelso/var/logs`; `echo` copies them to a second
-  stream. The exception from a failed block is recorded, then propagates.
+  stream -- docker's output only, with `echo_logs=False`, for a caller that
+  shows its own log records. The exception from a failed block is recorded,
+  then propagates.
 
   Resolve and validate arguments before entering: a run that could never have
-  started should leave no log. Do not nest blocks -- one block is one row in
-  the activity index.
+  started should leave no log. Blocks do not nest -- one block is one row in
+  the activity index -- and entering one inside another raises RuntimeError.
   """
 
   def __init__(
@@ -250,8 +256,10 @@ class Activity:
     app: AppID | str | None = None,
     args: dict[str, str] | None = None,
     echo: TextIO | None = None,
+    echo_logs: bool = True,
   ) -> None:
     self.ctx = ctx
+    self.echo_logs = echo_logs
     self.started_by = started_by
     self.verb = verb
     self.app = _as_app_id(app)
@@ -264,8 +272,14 @@ class Activity:
     self._file: TextIO | None = None
     self._sink: _Sink | None = None
     self._stack: ExitStack | None = None
+    self._token: Token | None = None
 
   def __enter__(self) -> Activity:
+    running = _running.get()
+    if running is not None:
+      raise RuntimeError(
+        f"{self.verb} cannot record an activity inside {running.verb}'s"
+      )
     self._started = datetime.now(UTC)
     self.log = begin_run(
       self.ctx, self.verb, self.args, app_id=self.app, started=self._started
@@ -274,12 +288,19 @@ class Activity:
       self.ctx.config.activity_root / self.log, "a", encoding="utf-8", buffering=1
     )
     self._sink = _Sink(self._file, self.echo)
+    logs = self._sink if self.echo_logs else _Sink(self._file)
     self._stack = ExitStack()
-    self._stack.enter_context(_capture_kelso_logging(self._sink))
+    self._stack.enter_context(_capture_kelso_logging(logs))
     self._stack.enter_context(sink_output(self._sink))
+    self._token = _running.set(self)
     return self
 
   def __exit__(self, exc_type, exc, tb) -> None:
+    if self._token is not None:
+      _running.reset(self._token)
+      self._token = None
+    if _succeeded(exc):
+      exc = None
     if self._stack is not None:
       self._stack.close()
     if self._sink is not None:
@@ -379,10 +400,17 @@ def _as_app_id(app: AppID | str | None) -> AppID | None:
     return None
 
 
+def _succeeded(exc: BaseException | None) -> bool:
+  """No exception, or a command exiting 0 the way `kelso cmd` does."""
+  return exc is None or (isinstance(exc, SystemExit) and exc.code in (0, None))
+
+
 def _describe(exc: BaseException) -> str:
   """How an exception reads in a run log and a job record."""
   if isinstance(exc, ValueError | RuntimeError):
     return str(exc)
+  if isinstance(exc, SystemExit):
+    return f"exited with status {exc.code}"
   return f"{type(exc).__name__}: {exc}"
 
 

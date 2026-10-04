@@ -26,7 +26,7 @@ def register(subparsers) -> None:
   )
   unload.add_argument("app_id", help="App ID to unload")
   _add_yes(unload)
-  unload.set_defaults(func=run, mode=UNLOAD)
+  unload.set_defaults(func=run, mode=UNLOAD, activity="unload")
 
   remove = subparsers.add_parser(
     "rm",
@@ -56,7 +56,7 @@ def register(subparsers) -> None:
     help="Delete everything: volumes, config, secrets, and routes",
   )
   _add_yes(remove)
-  remove.set_defaults(func=run, mode=RM)
+  remove.set_defaults(func=run, mode=RM, activity="rm")
 
 
 def _add_yes(parser: argparse.ArgumentParser) -> None:

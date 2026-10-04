@@ -233,6 +233,7 @@ consoles put `/kelso/bin` at the end of `PATH` and open with that list.
 | `cmd` | string | **required** | Run by the unit's `shell`, with any operator arguments added to the end as they were typed. |
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
+| `timeout` | integer | `600` | Seconds before kelso stops waiting and records the run as failed, at most 1800. A command started with `compose exec` keeps running in its container until it finishes. While a command runs it holds its app's lock, so stopping or reloading that app waits for it. |
 
 ```toml
 [commands.backup]
@@ -264,7 +265,7 @@ using kelo's cron to kick it off, but not run it directly.
 | `schedule` | string | **required** | Five-field cron: minute, hour, day of month, month, day of week, in the host's local time. Each field is `*` or a comma list of `n`, `a-b`, `*/s`, `a-b/s`. Day of week is 0-7, both 0 and 7 Sunday. |
 | `command` | identifier | **required** | A `[commands]` entry. |
 | `args` | string | `""` | Added to the command, as an operator's arguments would be. |
-| `timeout` | integer | `600` | Seconds before kelso stops waiting and records the run as failed, at most 1800. A job that needs longer belongs in a background process in the app itself. A command started with `compose exec` keeps running in its container until it finishes. |
+| `timeout` | integer | the command's | Overrides the command's `timeout` for these runs, at most 1800. A job that needs longer belongs in a background process in the app itself. |
 
 ```toml
 [cron.nightly-backup]
