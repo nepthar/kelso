@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import logs
 
 
 def register(subparsers) -> None:
-  parser = subparsers.add_parser("logs", help="Show logs for an loaded app")
+  parser = subparsers.add_parser("logs", help="Show logs for a loaded app")
   parser.add_argument(
     "-f",
     "--follow",

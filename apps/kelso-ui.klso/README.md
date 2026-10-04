@@ -35,7 +35,7 @@ connection, so kelso mounts the admin socket in and tells the app where it is;
 there is nothing to bind:
 
 ```
-kelso start kelso-ui
+kelso start kelso-ui --set admin_pass=<password>
 ```
 
 On a host whose bind mounts cannot carry a unix socket — Docker Desktop on
@@ -50,7 +50,9 @@ kelso config kelso-ui --set api_address=host.docker.internal:N
 ## Signing in
 
 One password, no accounts. It is the `admin_pass` config value, so it is set
-and reset the way every other kelso secret is:
+and reset the way every other kelso secret is. The first time, pass it to
+`kelso start` as above. To change it later, set it and reload, which restarts
+the app with the new value:
 
 ```
 kelso config kelso-ui --set admin_pass=<password>

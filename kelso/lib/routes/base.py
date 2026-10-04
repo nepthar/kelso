@@ -132,7 +132,7 @@ class NoopRouteProvider(RouteProvider):
       raise refuse_foreign_route(route, owner)
     self.routes[subdomain] = f":{port}"
     self.owners[subdomain] = app
-    logger.warning(f"Noop route provider - {app} Registere {route}")
+    logger.warning(f"Noop route provider - {app} registered {route}")
 
   def unregister_route(self, subdomain: str, domain: str):
     route = f"{subdomain}.{domain}"

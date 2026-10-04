@@ -3,7 +3,7 @@ import argparse
 from tabulate import tabulate
 
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.observations import OK, STOPPED, UNLOADED, AppObservation
+from kelso.lib.observations import FINISHED, OK, STOPPED, UNLOADED, AppObservation
 from kelso.lib.run_layout import load_run_data
 from kelso.lib.spec import AppSpec
 from kelso.lib.views import config_status
@@ -54,13 +54,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def _status(observation: AppObservation, spec: AppSpec | None) -> str:
-  """`running`, `running (healthy)`, `running (degraded)`, `stopped`, or the
-  state of an app that is not loaded."""
+  """`running`, `running (healthy)`, `running (degraded)`, `finished`,
+  `stopped`, or the state of an app that is not loaded."""
   if not observation.loaded:
     return observation.state
   status = observation.status(spec.run_units if spec else ())
-  if status == STOPPED:
-    return STOPPED
+  if status in (STOPPED, FINISHED):
+    return status
   return "running" if status == OK else f"running ({status})"
 
 

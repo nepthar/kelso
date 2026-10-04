@@ -8,6 +8,7 @@ from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.observations import (
   DEGRADED,
+  FINISHED,
   HEALTHY,
   OK,
   STOPPED,
@@ -98,7 +99,10 @@ def _with_units(*units: KelsoRunUnitStatus) -> AppObservation:
   "units, declared, status",
   [
     ((), ("main",), STOPPED),
-    ((_unit("main", "exited", "Exited (0) 1 minute ago"),), ("main",), STOPPED),
+    ((_unit("main", "exited", "Exited (0) 1 minute ago"),), ("main",), FINISHED),
+    ((_unit("main", "exited", "Exited (1) 1 minute ago"),), ("main",), STOPPED),
+    # Finished only when every declared unit is.
+    ((_unit("main", "exited", "Exited (0) 1 minute ago"),), ("main", "db"), STOPPED),
     ((_unit("main", "running", "Up 2 minutes"),), ("main",), OK),
     ((_unit("main", "running", "Up 2 minutes (healthy)"),), ("main",), HEALTHY),
     ((_unit("main", "running", "Up 9 seconds (health: starting)"),), ("main",), OK),

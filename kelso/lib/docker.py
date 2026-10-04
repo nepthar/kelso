@@ -46,6 +46,11 @@ class KelsoRunUnitStatus:
   status: str = ""
 
   @property
+  def finished(self) -> bool:
+    """Exited cleanly: a one-shot that did what it was started for."""
+    return self.state.lower() == "exited" and self.status.startswith("Exited (0)")
+
+  @property
   def health(self) -> str:
     """ "healthy", "unhealthy" or "starting" from a healthcheck; "" with none."""
     if "(health: starting)" in self.status:

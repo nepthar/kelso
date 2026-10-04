@@ -69,6 +69,8 @@ def _state_line(state: RunState) -> str:
   total = len(state.containers)
   if state.running_count:
     return f"running, {state.running_count}/{total or state.running_count} containers"
+  if total and all(c.finished for c in state.containers):
+    return f"finished, 0/{total} containers"
   if total:
     return f"exited, 0/{total} containers"
   return "not running"

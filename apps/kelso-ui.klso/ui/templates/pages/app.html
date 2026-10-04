@@ -15,7 +15,7 @@
 <span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a>
 {%- if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}<a class="btn icon" href="{{ here }}/console" title="Console" aria-label="Console">{{ mdi('console') }}</a>{% endif -%}
 <div class="row actions">
-{% if app.status not in ('stopped', None) %}
+{% if app.status not in ('stopped', 'finished', None) %}
   {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
       desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
 {% else %}
@@ -128,7 +128,7 @@
 {% for unit in app.get('units', []) %}
 {% set state = unit.get('state') %}
 <div class="card pad">
-  <div class="row between"><b>{{ unit.name }}</b>{{ pill(state or 'not created', 'running' if state == 'running' else ('exited' if state else '')) }}</div>
+  <div class="row between"><b>{{ unit.name }}</b>{{ pill(state or 'not created', 'running' if state in ('running', 'finished') else ('exited' if state else '')) }}</div>
   <div class="muted mono">{{ unit.image }}</div>
   {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
   <h3>Volumes</h3>

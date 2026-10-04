@@ -78,4 +78,55 @@ the invoking user and cannot touch what the app's containers wrote.
 them, so one runaway app can starve the box.
 
 ## Known issues
-None right now.
+
+- **An app whose loaded manifest no longer parses goes quiet.** A loaded app
+  keeps the manifest it was loaded with. When a newer kelso stops accepting
+  something in it, `ps` shows the app with blank columns, `inspect` says it is
+  neither loaded nor in a catalog, `cmd` and `config` print a validation error,
+  `kelso cron` silently drops its jobs, and `doctor` reports nothing.
+  `kelso update` fails too, since its pre-update snapshot reads that manifest.
+  Workaround: `kelso load <app>` from a source that parses.
+- **Two kelso roots on one docker daemon see each other's apps.** Compose
+  project names and the `kelso.app_id` label are not scoped to a root, so a
+  second root reports the first one's containers as needing manual recovery,
+  and its `cleanup` offers to remove images the other root still uses. Run one
+  kelso root per docker daemon.
+- **`kelso system gen-masterkey` orphans every existing secret.** It writes a
+  new key and nothing re-encrypts what the old one protected: app secrets,
+  route provider credentials, and cached tokens all stop decrypting. Do not run
+  it on a root that holds secrets.
+- **kelsod being down is invisible.** kelsod records the metrics behind volume
+  sizes, resumes apps at boot, and runs cron. With it stopped, `kelso status`
+  shows `0.0 B` for every volume kind, `doctor` says nothing, apps stay down
+  after a reboot, and cron jobs do not run. Check it with
+  `systemctl --user status kelsod`.
+
+## Todo
+
+- **Drop the Textual configuration mode; rethink interactive command-line
+  config.** `kelso config --edit` and `kelso dev` open a full-screen Textual
+  form on a terminal, which is the heaviest dependency for the least-used path.
+  Remove it, and decide what interactive config at the command line should be.
+- **Refuse volume names that are volume kinds.** A volume named `data`,
+  `bulk`, `logs`, `temp`, `app` or `host` reads ambiguously everywhere a volume
+  is shown next to its kind, and the `Data:` line `kelso start` prints picks a
+  volume by the name `data`.
+- **Screenshots in the README.** The web UI is a large part of using kelso and
+  the README never shows it.
+- **A routes guide.** Setting up each provider (Nginx Proxy Manager with its
+  wildcard certificate, Pangolin, Cloudflare Tunnel), what `kelso_address` is
+  for, and assigning, publishing and checking a route. Today the only
+  documentation is the comments in the generated `config.toml`.
+- **"What kelso does to your containers."** One section listing everything
+  kelso adds beyond the manifest: the `/etc/localtime` mount, log rotation
+  (10 MB x 3), `restart: on-failure` and kelsod resuming apps at boot, a private
+  network per app, the `kelso.*` labels, the `KLSO_*` variables, `/kelso/bin`
+  for apps with commands, and the host port range (`port_base` to
+  `port_base + 1000`) to open in a firewall.
+- **Doctor checks for the quiet failures** above: a loaded manifest that no
+  longer parses (naming the fix), and kelsod not listening or its metrics gone
+  stale.
+- **Release hygiene.** A changelog or GitHub release notes for each tag; a
+  platform statement in the README (Linux with systemd, amd64 and arm64, tested
+  on Ubuntu Server 26.04 and Raspberry Pi OS); a GitHub description and topics
+  that match the README.

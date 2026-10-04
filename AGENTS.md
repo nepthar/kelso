@@ -1,8 +1,8 @@
 # Kelso
 
 Kelso Server runs apps on hardware you own: an app says what it needs, and kelso
-provides it. **Pre-beta: one operator, no users
-to migrate, no backwards compatibility.** Delete old code paths rather than
+provides it. **Released as 1.0, but with one
+operator: no users to migrate, no backwards compatibility.** Delete old code paths rather than
 deprecating them. Don't write migration or compatibility code unless asked.
 
 ## How to work here
@@ -74,7 +74,7 @@ change; skip tests entirely for cosmetic ones.
   prints. Prompts are `input()`.
 - Tests must never reach the real docker daemon — `tests/conftest.py` enforces
   this. Test doubles live in `tests/`, never in `kelso/`.
-- The suite runs in ~65s and commands run in-process; see `docs/testing.md`
+- The suite runs in ~25s and commands run in-process; see `docs/testing.md`
   before adding a test that spawns a subprocess or waits on a timeout. What
   cannot be tested without a real daemon is a live test, listed in that doc.
 - Run `uv run ruff check kelso tests` and `uv run ruff format --check kelso tests`

@@ -6,7 +6,7 @@ import string
 logger = logging.getLogger("kelso.secrets")
 
 _ALNUM = string.ascii_letters + string.digits
-_PASSWORD = string.printable
+_PASSWORD = string.ascii_letters + string.digits + string.punctuation
 _HEX = string.digits + "abcdef"
 
 _DIRECTIVE_SPLIT = re.compile(r"(\{[^}]*\})")

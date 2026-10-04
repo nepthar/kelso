@@ -113,7 +113,8 @@ app names a kind, and kelso works out how to get it there on this machine. A
 run unit is given a connection by listing it in its `connections`; kelso then
 mounts what the kind needs at `/run/kelso/conn/<name>` and offers what the app
 needs to know as `${conn.<name>.<property>}`, which `[run.<unit>.env]` maps
-to whatever names the app reads. Kelso sets no environment of its own.
+to whatever names the app reads. A connection sets no environment variables
+itself.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -157,9 +158,19 @@ so a name may appear in only one of them.
 | `default` | string | none | With no default, the app will not start until the value is set. |
 | `secret` | bool | `false` | Stored encrypted, never returned by the API or shown in the UI. |
 
-`default = "auto"` on a secret means kelso generates one at load and the
-operator never sees or sets it — the right answer for a password two
-containers need to agree on and nobody else needs.
+On a secret, `default` is not a value but a recipe: kelso generates the
+secret at load and the operator never sees or sets it.
+
+| Default | Generates |
+| --- | --- |
+| `"auto"` | 32 letters and digits, the same as `"{alnum:32}"` |
+| `"{alnum:N}"` | N letters and digits (16 if `:N` is left off) |
+| `"{hex:N}"` | N lowercase hex digits (16 if `:N` is left off) |
+| `"{password:N}"` | N letters, digits and punctuation, no whitespace (16 if `:N` is left off) |
+
+Text outside the braces is kept as written, so `"kelso-{hex:8}"` gives
+`kelso-3f9a01c2`. A secret default with no `{…}` in it is refused at load:
+it would be the same secret on every install.
 
 ```toml
 [config]
@@ -182,7 +193,7 @@ share the config namespace and always have a default.
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
 | `start_order` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops; `kelso up` starts 1 to 9 in order, and `kelso down` stops them in reverse. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
-| `snapshot_max_count` | `0` | A whole number; keep this many snapshots, 0 for all. Not used yet. |
+| `snapshot_max_count` | `0` | A whole number; keep this many snapshots, 0 for all. The oldest beyond it are deleted after `kelso snapshot take` and `kelso update`, and `kelso cleanup` lists any left over. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the
@@ -288,10 +299,19 @@ an empty string:
 - `${<config key>}` — anything from `[config]` or `[adv_config]`, and the app
   options.
 - `${routes.<name>}` — the full public URL of a declared route.
-- `${klso.domain}`, `${klso.volumes}`, `${klso.cmd}`, `${klso.routes}` — the
-  app's own resolved values.
+- `${klso.…}` — the app's own resolved values:
 
-Every unit also gets `KLSO_ID`, `KLSO_VERSION`, and `KLSO_RUN_UNIT` for free.
+  | Key | Resolves to |
+  | --- | --- |
+  | `${klso.domain}` | `<subdomain>.<domain>` of the `main` route's provider, e.g. `recipes.example.com`; `<subdomain>.kelso.localhost` while unassigned |
+  | `${klso.volumes}` | This unit's volumes as `name:/path/in/container`, comma-separated |
+  | `${klso.routes}` | This unit's routes as `name:container_port`, comma-separated |
+  | `${klso.cmd}` | This unit's `cmd`, joined with spaces |
+
+These are substitutions, not environment variables: a container sees one only
+when its `[run.<unit>.env]` maps it to a name, e.g.
+`KLSO_DOMAIN = "${klso.domain}"`. The only variables every unit gets without
+asking are `KLSO_ID`, `KLSO_VERSION`, and `KLSO_RUN_UNIT`.
 
 ```toml
 [run.main.env]
