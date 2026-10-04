@@ -31,8 +31,15 @@
 {%- endmacro %}
 
 {#- A square status marker and its word. `dot`: running, exited, bad or none. -#}
-{% macro pill(text, dot="") -%}
-<span class="pill"><span class="{{ 'dot ' ~ dot if dot else 'dot' }}"></span>{{ text }}</span>
+{% macro pill(text, dot="", title="") -%}
+<span class="pill"{% if title %} title="{{ title }}"{% endif %}><span class="{{ 'dot ' ~ dot if dot else 'dot' }}"></span>{{ text }}</span>
+{%- endmacro %}
+
+{#- How a recorded run ended. -#}
+{% macro run_status(status) -%}
+{%- if status == 'ok' %}{{ pill(status, 'running') }}
+{%- elif status == 'detached' %}{{ pill(status, 'exited', title='This command ran for longer than 5 minutes and kelso stopped monitoring its progress') }}
+{%- else %}{{ pill(status, 'bad') }}{% endif -%}
 {%- endmacro %}
 
 {% macro sub(text, cls="") -%}

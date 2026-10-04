@@ -16,17 +16,17 @@ schedule once the app is started: watch them land on the Cron page, then use
 | `show [n]` | Prints the last `n` lines of the log (default 20) |
 | `clear` | Empties the log |
 | `fail [status]` | Exits with `status` (default 3), to show a failed run |
-| `slow [seconds]` | Sleeps, to show a run that times out |
+| `slow [seconds]` | Sleeps, to show a run kelso detaches from |
 
 The cron jobs: a stamp every five minutes, a `show` on the hour, a failure
-every half hour, and every two hours a `slow` that outlasts its 60-second
-timeout.
+every half hour, and every two hours a `slow` that runs past the 5 minutes
+kelso watches a command for, so its run is recorded as detached.
 
 ```toml klso_path="manifest.toml"
 [app]
 version      = "0.2.0"
 display_name = "Cron Demo"
-description  = "Commands and cron jobs that stamp, read, fail, and time out"
+description  = "Commands and cron jobs that stamp, read, fail, and run long"
 author       = "Kelso Server"
 url          = "https://github.com/nepthar/kelso"
 
@@ -66,8 +66,7 @@ command  = "fail"
 [cron.too-slow]
 schedule = "15 */2 * * *"
 command  = "slow"
-args     = "120"
-timeout  = 60
+args     = "360"
 ```
 
 `demo.sh`, mounted at `/demo/demo.sh`:

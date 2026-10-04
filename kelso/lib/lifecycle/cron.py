@@ -34,7 +34,6 @@ class CronRun:
   name: str
   command: str
   args: str
-  timeout: int
   schedule: str
   # Aware, in the host's local zone.
   next_at: datetime
@@ -70,7 +69,6 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
           name=name,
           command=entry.command,
           args=entry.args,
-          timeout=entry.timeout or spec.commands[entry.command].timeout,
           schedule=entry.schedule,
           next_at=_next(entry.schedule, _instant(since) if since else now),
           runnable=spec.commands[entry.command].run_unit in up,
@@ -124,9 +122,7 @@ def _run(run: CronRun, ctx: KelsoCtx, echo: TextIO | None, started_by: str) -> N
     with Activity(
       ctx, "cron", app=run.app_id, args=args, echo=echo, started_by=started_by
     ):
-      code = run_command(
-        run.app_id, run.command, shlex.split(run.args), ctx, timeout=run.timeout
-      )
+      code = run_command(run.app_id, run.command, shlex.split(run.args), ctx)
       if code != 0:
         raise RuntimeError(f"{run.command!r} exited with status {code}")
 

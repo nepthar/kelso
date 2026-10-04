@@ -47,6 +47,9 @@ FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.log")
 
 OK = "ok"
 ERROR = "error"
+# Kelso stopped watching a command that was still running; see `Detached`.
+DETACHED = "detached"
+DETACH_NOTE = "\n[kelso] detaching from running activity after 5 minutes\n"
 
 # Who started a run, as `started_by` records it. Every run records one; runs
 # recorded before the field existed read back as "".
@@ -233,6 +236,14 @@ class _Sink(io.TextIOBase):
       self._echo.flush()
 
 
+class Detached(RuntimeError):
+  """Kelso stopped watching a command it started, which may still be running.
+
+  An `Activity` that sees this records the run as detached rather than failed,
+  notes it in the run log, and does not let it propagate.
+  """
+
+
 class Activity:
   """One recorded run of kelso's own work.
 
@@ -299,7 +310,8 @@ class Activity:
     if self._token is not None:
       _running.reset(self._token)
       self._token = None
-    if _succeeded(exc):
+    detached = isinstance(exc, Detached)
+    if detached or _succeeded(exc):
       exc = None
     if self._stack is not None:
       self._stack.close()
@@ -313,6 +325,10 @@ class Activity:
       # terminal itself on the way out.
       if self.error is not None:
         self._file.write(f"Error: {self.error}\n")
+      if detached:
+        self._file.write(DETACH_NOTE)
+        if self.echo is not None:
+          self.echo.write(DETACH_NOTE)
       self._file.close()
     self._sink = None
     self._file = None
@@ -324,7 +340,7 @@ class Activity:
           self.log,
           self.verb,
           app_id=self.app,
-          status=OK if exc is None else ERROR,
+          status=DETACHED if detached else OK if exc is None else ERROR,
           args=self.args,
           started=self._started,
           finished=datetime.now(UTC),
@@ -332,6 +348,7 @@ class Activity:
         )
       except Exception:  # noqa: BLE001 - a log failure must not hide the block's own error
         logger.exception("could not record activity for `%s`", self.verb)
+    return detached
 
   def write(self, text: str) -> None:
     """Put `text` in the run log (and the echo stream) verbatim."""

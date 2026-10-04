@@ -7,16 +7,7 @@ Later, it should also be a real option for small businesses: a semi-technical ow
 
 Kubernetes and similar can be overkill, while raw Docker Compose files alone still leave missing pices of the puzzle.
 
-## v1
-What has to be true before v1, roughly in order of priority.
-
-### Updating apps
-`kelso update <app>` (and the dashboard's update icon) pulls the source's
-images, snapshots as `pre-update`, and re-loads; repos are still updated by
-hand. Still wanted: rolling back when the new version does not come up healthy,
-and a plain `load` that changes the version snapshotting first.
-
-## After v1
+## Current Roadmap
 
 ### App upgrade paths
 A manifest says which versions it can upgrade from (`upgrade_from`); without it,
@@ -56,6 +47,10 @@ out by opening the dashboard. For v1, one configurable webhook and two levels:
 
 Alerts queue in a logtab spool, so a webhook that is down gets them later.
 
+### Restricted Network Mode
+A mode where a sidecar hijacks dns and proxies ALL outgoing http/https requests,
+allowing only those that are explicity set up as a `[connection]` in the manifest.
+
 ### Off-host snapshots
 Snapshots stay on the box. Copying them elsewhere also needs a plan for
 `conf/master.key`: no snapshot carries it, so a restore on another machine
@@ -85,27 +80,3 @@ them, so one runaway app can starve the box.
 
 ## Known issues
 None right now.
-
-## Quirks we're keeping
-Kelso is for making self-hosting easier for most people, most of the time, not
-a bulletproof production platform. These behave as designed and are not
-planned to change.
-
-- **An app's commands hold its lock while they run.** That is `kelso cmd`, the
-  Run button, and cron alike. Stopping, reloading, updating or snapshotting the
-  app refuses until the command finishes, rather than cutting a backup or a
-  migration off halfway. Every command has a `timeout` (600 seconds unless its
-  manifest says otherwise, at most 1800), so the wait is bounded.
-- **A timed-out command keeps running in its container.** Kelso stops waiting,
-  records the run as failed and releases the lock, but docker cannot stop what
-  `compose exec` started; it runs on until it finishes or the app stops.
-- **kelsod runs jobs one at a time.** A long command started from the web UI
-  delays every job queued after it, for any app. Cron runs on its own thread
-  and is not held up.
-- **Commands get no terminal.** One that waits for input waits until its
-  timeout. For anything interactive, use `kelso shell` or the console.
-- **A CLI command that changes something is recorded, but not word for word.**
-  Its run log keeps kelso's narration and docker's output, not what it prints
-  to stdout, and not its arguments, since `--set` can carry a secret. Docker's
-  output goes through kelso on its way to the terminal, so `compose up` shows
-  plain lines instead of live progress bars.

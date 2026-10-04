@@ -154,7 +154,6 @@ class AppCommand:
   cmd: str
   run_unit: str
   desc: str
-  timeout: int
 
 
 @dataclass(frozen=True)
@@ -262,7 +261,6 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
       cmd=entry.cmd,
       run_unit=entry.run_unit,
       desc=entry.desc,
-      timeout=entry.timeout,
     )
     for name, entry in manifest.commands.items()
   }

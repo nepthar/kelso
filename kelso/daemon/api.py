@@ -87,7 +87,9 @@ from kelso.lib.util import Identifier, validate_identifier
 #     carry it, empty for runs recorded before it existed.
 # 33: the console websockets require `started_by` too, and console runs no
 #     longer carry `via` in their args.
-API_VERSION = 33
+# 34: an activity run's status may be `detached`: kelso stopped watching a
+#     command after 5 minutes. Commands and cron jobs no longer take `timeout`.
+API_VERSION = 34
 
 CtxFactory = Callable[[], KelsoCtx]
 

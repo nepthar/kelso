@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from kelso.lib.activity import Detached
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.docker import (
   DockerError,
@@ -23,7 +24,6 @@ from kelso.lib.lifecycle.routes import (
   register_app_routes,
   unregister_app_routes,
 )
-from kelso.lib.manifest import MAX_COMMAND_TIMEOUT
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
 from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppSpec
@@ -108,6 +108,10 @@ def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
     return {}
 
 
+# How long kelso watches a command before it detaches. Not configurable: a job
+# that needs longer belongs in a background process in the app itself.
+WATCH_SECONDS = 5 * 60
+
 _CONFIG_REF = re.compile(r"\$\{(" + re.escape(KELSO_CONFIG_ENV_PREFIX) + r"_[^}]+)\}")
 
 
@@ -162,13 +166,11 @@ def run_command(
   cmd_name: str,
   args: list[str],
   ctx: KelsoCtx,
-  *,
-  timeout: float | None = None,
 ) -> int:
   """Run a manifest `[commands]` entry in its target unit.
 
-  Raises RuntimeError if it is still running after `timeout` seconds, or the
-  command's own timeout when none is given.
+  Raises `Detached` if it is still running after `WATCH_SECONDS`: kelso stops
+  waiting, and the command runs on in its container.
   """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
@@ -183,8 +185,6 @@ def run_command(
       f"available: {available}. List with `kelso cmd {app_id}`"
     )
 
-  if timeout is None:
-    timeout = entry.timeout
   running = {c.run_unit for c in state.containers if c.state.lower() == "running"}
   argv = command_argv(spec.run_units[entry.run_unit], entry, args)
   env = compose_env(app_id, ctx)
@@ -197,7 +197,7 @@ def run_command(
         json_output=False,
         check=False,
         env=env,
-        timeout=timeout,
+        timeout=WATCH_SECONDS,
       ).returncode
 
     # Host binds are only linked while an app runs; restore them for the one-off
@@ -212,16 +212,13 @@ def run_command(
         json_output=False,
         check=False,
         env=env,
-        timeout=timeout,
+        timeout=WATCH_SECONDS,
       ).returncode
     finally:
       if was_fully_stopped:
         unlink_host_volumes(state.run_path)
   except DockerTimeout as e:
-    raise DockerTimeout(
-      f"{e}. If {cmd_name!r} needs longer, raise its `timeout` in "
-      f"[commands.{cmd_name}] (at most {MAX_COMMAND_TIMEOUT} seconds)."
-    ) from e
+    raise Detached(f"{cmd_name!r} is still running after {WATCH_SECONDS}s") from e
 
 
 @dataclass(frozen=True)

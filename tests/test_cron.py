@@ -16,7 +16,7 @@ from kelso.lib.config import load_config
 from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.docker import DockerTimeout
 from kelso.lib.kelso import KelsoCtx, write_lock_holder
-from kelso.lib.lifecycle.cron import cron_lock_path, cron_runs
+from kelso.lib.lifecycle.cron import cron_lock_path
 
 APP = "cron-demo"
 
@@ -114,10 +114,7 @@ def test_in_words_switches_units_past_two_of_the_next(seconds, words):
     ('nope = { schedule = "* * * * *", command = "missing" }', "not declared"),
     ('nope = { schedule = "0 0 30 2 *", command = "hello" }', "never matches"),
     ('nope = { schedule = "* * * * *", command = "hello", args = "\'" }', "args"),
-    (
-      'nope = { schedule = "* * * * *", command = "hello", timeout = 1801 }',
-      "background process",
-    ),
+    ('nope = { schedule = "* * * * *", command = "hello", timeout = 60 }', "timeout"),
   ],
 )
 def test_a_cron_entry_is_checked_against_the_manifest(kelso_env, cron, message):
@@ -205,53 +202,65 @@ def test_cron_over_the_api(kelso_env):
   assert run["args"]["job"] == "every-minute"
 
 
-# --- command timeouts --------------------------------------------------------
+# --- detaching from long commands --------------------------------------------
 
 
-def a_timed_app(kelso_env, command: str, cron: str = EVERY_MINUTE) -> None:
-  """The cron app, with `hello` declared as `command` instead."""
-  a_cron_app(kelso_env, cron)
-  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
-  manifest.write_text(
-    manifest.read_text().replace('hello = { cmd = "echo hi" }', command)
-  )
-
-
-def test_a_command_timeout_is_bounded(kelso_env):
-  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 1801 }')
-  loaded = kelso_env.run("load", APP)
-  assert loaded.returncode == 1
-  assert "background process" in loaded.stderr
-
-
-@pytest.mark.parametrize(
-  "cron, expected",
-  [
-    (EVERY_MINUTE, 42),
-    ('every-minute = { schedule = "* * * * *", command = "hello", timeout = 7 }', 7),
-  ],
-)
-def test_a_cron_job_takes_its_commands_timeout_unless_it_sets_one(
-  kelso_env, cron, expected
-):
-  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 42 }', cron)
-  assert kelso_env.run("load", APP).returncode == 0
-  [run] = cron_runs(ctx())
-  assert run.timeout == expected
-
-
-def test_kelso_cmd_waits_only_as_long_as_the_command_allows(kelso_env, monkeypatch):
-  a_timed_app(kelso_env, 'hello = { cmd = "echo hi", timeout = 42 }')
-  assert kelso_env.run("start", APP).returncode == 0
+def still_running(monkeypatch) -> list:
+  """Every command outlasts kelso's watch; the list records how long kelso waited."""
   waited = []
+  real = kelso.lib.lifecycle.run.docker_run_command
 
   def docker(args, **kwargs):
+    if args[:2] not in (["compose", "exec"], ["compose", "run"]):
+      return real(args, **kwargs)
     waited.append(kwargs.get("timeout"))
-    raise DockerTimeout("docker compose exec was still running after 42 seconds")
+    raise DockerTimeout(f"docker {' '.join(args)} was still running")
 
   monkeypatch.setattr(kelso.lib.lifecycle.run, "docker_run_command", docker)
+  return waited
+
+
+def test_kelso_cmd_detaches_after_five_minutes(kelso_env, monkeypatch):
+  a_cron_app(kelso_env)
+  assert kelso_env.run("start", APP).returncode == 0
+  waited = still_running(monkeypatch)
+
   ran = kelso_env.run("cmd", APP, "hello")
 
-  assert waited == [42]
-  assert ran.returncode == 1
-  assert "raise its `timeout` in [commands.hello]" in ran.stderr
+  assert waited == [300]
+  assert ran.returncode == 0, ran.stderr
+  assert "[kelso] detaching from running activity after 5 minutes" in ran.stderr
+  [run, *_] = activity.list_runs(ctx())
+  assert (run["verb"], run["status"]) == ("cmd", "detached")
+  log = activity.read_run_log(ctx(), run["log"])
+  # Last, before the footer every run log ends with.
+  assert (
+    "\n[kelso] detaching from running activity after 5 minutes\n# — detached" in log
+  )
+  # Detaching let go of the app, so it can be stopped right away.
+  assert kelso_env.run("stop", APP).returncode == 0
+
+
+def test_a_cron_job_that_runs_on_is_recorded_as_detached(kelso_env, monkeypatch):
+  a_cron_app(kelso_env)
+  assert kelso_env.run("start", APP).returncode == 0
+  last_ran_long_ago()
+  still_running(monkeypatch)
+
+  assert kelso_env.run("cron", "tick").returncode == 0
+
+  [run] = activity.list_runs(ctx(), verb="cron")
+  assert run["status"] == "detached"
+
+
+def test_a_command_takes_no_timeout(kelso_env):
+  a_cron_app(kelso_env)
+  manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
+  manifest.write_text(
+    manifest.read_text().replace(
+      'hello = { cmd = "echo hi" }', 'hello = { cmd = "echo hi", timeout = 60 }'
+    )
+  )
+  refused = kelso_env.run("load", APP)
+  assert refused.returncode == 1
+  assert "timeout" in refused.stderr
