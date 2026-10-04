@@ -159,8 +159,7 @@ so a name may appear in only one of them.
 | `secret` | bool | `false` | Stored encrypted, never returned by the API or shown in the UI. |
 
 On a secret, `default` is not a value but a recipe: kelso generates the
-secret at load and the operator never sees or sets it — the right answer for a
-password two containers need to agree on and nobody else needs.
+secret at load and the operator never sees or sets it.
 
 | Default | Generates |
 | --- | --- |

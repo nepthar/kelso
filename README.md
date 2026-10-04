@@ -159,7 +159,7 @@ Kelso places each app's data where you tell it. Apps describe "what" they need i
 Kelso makes it trivial to create and use app repositories. It's just a folder pushed to github, and the apps in it run on any properly configured install of kelso.
 
 - **Running apps with docker compose by hand is time consuming.**
-Once you start using docker compose to run your own apps, you end up managing each compose file individually. It's difficult to version control a folder of them properly. Each new app (except for super simple ones) has to be hand-configured and wired in to your system, with its secrets in `.env` files and its data in docker volumes you can't easily see into. **Kelso provides a simple mechanism to store/inspect secrets, application data, and logs. You configure it once, it wires every app automatically.**
+Once you start using docker compose to run your own apps, you end up managing each compose file individually. It's difficult to version control a folder of them properly. Each new app (except for super simple ones) has to be hand-configured and wired in to your system, with its secrets in `.env` files and its data in docker volumes you can't easily see into. I also personally hate .env files and never want to deal with them. **Kelso provides a simple mechanism to store/inspect secrets, application data, and logs. You configure it once, it wires every app automatically.**
 
 - **Other solutions exist, but require you to be a sysadmin.**
 Kelso is simple to reason about. It is mostly just a bunch of folders and text files.
