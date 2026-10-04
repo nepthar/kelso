@@ -245,13 +245,12 @@ def docker_run_command(
       timer.start()
     chunks: list[str] = []
     try:
-      while True:
-        chunk = stdout.read(4096)
-        if not chunk:
-          break
-        sink.write(chunk)
+      # By line: `read(n)` waits for n characters, holding back everything a
+      # slow pull prints until enough has piled up.
+      for line in iter(stdout.readline, ""):
+        sink.write(line)
         sink.flush()
-        chunks.append(chunk)
+        chunks.append(line)
     finally:
       if timer is not None:
         timer.cancel()

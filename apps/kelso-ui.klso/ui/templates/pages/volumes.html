@@ -77,7 +77,7 @@
 <p class="empty">Kelso reported no volume roots.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>Volume</th><th></th><th>Used</th><th>Available</th><th>Device</th>
+  <th>Volume</th><th></th><th>Used</th><th>Available</th><th>Disk</th>
 </tr></thead><tbody>
 {% for r in volume_roots %}
 <tr>
@@ -96,7 +96,7 @@
   {% else %}<span class="muted">path is missing</span>{% endif %}</td>
   <td class="muted">{{ r.get('bytes')|size }}</td>
   <td class="muted">{{ r.available|size }}</td>
-  <td class="muted path">{{ r.device or '—' }}</td>
+  <td class="muted path"{% if r.device %} title="{{ r.device }}"{% endif %}>{{ r.mountpoint or '—' }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>

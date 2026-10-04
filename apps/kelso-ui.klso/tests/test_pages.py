@@ -349,9 +349,17 @@ def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
     "30.0",
   ]
   assert "Host memory" in memory and "8.0 GB" in memory and "no samples yet" in memory
-  assert "/dev/sda2" in disk and "2.0 TB" in disk and "42%" in disk
+  # Named by where it is mounted; the device, often unreadable, on hover.
+  assert ">Disk /<" in disk and 'title="/dev/sda2"' in disk
+  assert "2.0 TB" in disk and "42%" in disk
   assert "bulk, snapshots, &lt;i" in disk
   assert "<option disabled>1 day</option>" in text
+
+
+def test_volume_roots_name_their_disk_by_mount_point(client, fake):
+  text = client.get("/volumes").text
+  assert '<td class="muted path" title="/dev/sda1 &lt;i' in text
+  assert ">/</td>" in text
 
 
 def test_dashboard_status_pills_by_health(client, fake):

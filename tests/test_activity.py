@@ -3,10 +3,12 @@
 import io
 import logging
 import re
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
+import kelso.lib.docker
 from kelso.lib import activity
 from kelso.lib.apps import AppID
 from kelso.lib.config import load_config
@@ -260,3 +262,26 @@ def test_a_command_exiting_zero_is_a_success(ctx):
   assert ok["status"] == "ok"
   assert failed["status"] == "error"
   assert "exited with status 3" in activity.read_run_log(ctx, failed["log"])
+
+
+def test_a_subprocess_streams_each_line_as_it_comes(ctx):
+  """Not once some buffer fills: a slow pull would look hung."""
+  seen = []
+
+  class Clock(io.StringIO):
+    def write(self, text):
+      seen.append((time.monotonic(), text))
+      return len(text)
+
+  start = time.monotonic()
+  with activity.Activity(ctx, "slow", echo=Clock(), started_by="test") as act:
+    act.subprocess(["sh", "-c", "echo first; sleep 0.5; echo second"])
+  first = next(when for when, text in seen if "first" in text)
+  assert first - start < 0.4
+
+
+def test_docker_can_be_left_uncaptured(ctx):
+  with activity.Activity(ctx, "start", capture_docker=False, started_by="test"):
+    assert kelso.lib.docker._output_sink.get() is None
+  with activity.Activity(ctx, "start", started_by="test"):
+    assert kelso.lib.docker._output_sink.get() is not None
