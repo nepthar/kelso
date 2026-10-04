@@ -23,6 +23,7 @@ from kelso.lib.repo import LOCAL_REPO
 logger = logging.getLogger("kelso.cli")
 
 DEFAULT_ROOT = Path("~/kelso")
+DEMO_REPO = "github://nepthar/kelso/main/demo-apps"
 
 CONFIG_TEMPLATE = """\
 # Kelso configuration — edit this file to change your setup.
@@ -53,17 +54,12 @@ port_base = 41000
 # and you load one by naming its repo, `kelso load <app>@<repo>`.
 #
 # Adding a repo is a standing commitment to whatever appears in it later, not
-# just to what is in it today. These two ship enabled; remove either table to
-# drop it, or run `kelso repo remove <name>`.
+# just to what is in it today. This one ships enabled; remove the table to drop
+# it, or run `kelso repo remove <name>`.
 
 # The apps kelso maintains and expects you to actually run.
 [repo.staples]
 url = "github://nepthar/kelso/main/apps"
-
-# Small apps that demonstrate one feature each. Useful while learning what a
-# manifest can do, and safe to remove once you are done.
-[repo.demos]
-url = "github://nepthar/kelso/main/demo-apps"
 
 # A directory on this machine, for bundles you are writing yourself:
 #
@@ -127,6 +123,33 @@ url = "github://nepthar/kelso/main/demo-apps"
 # readonly      = true
 # require_mount = true
 """
+
+
+TUTORIAL = f"""
+Take kelso for a spin with its demo apps, small ones that each show off a
+feature. Add them as a repo, then start one and run its commands:
+  kelso repo add {DEMO_REPO} --name demos
+  kelso start demo-cron              load and start it
+  kelso cmd demo-cron                list the commands it declares
+  kelso cmd demo-cron stamp hello    run one
+  kelso cmd demo-cron show           and another, to see what it wrote
+  kelso logs demo-cron               its containers' output
+  kelso stop demo-cron
+`kelso repo list` shows every app you can start. When you are done exploring,
+`kelso unload demo-cron` and `kelso repo remove demos` tidy up.
+
+For the web UI, choose its admin password and start it; it prints the address
+to open:
+  kelso start kelso-ui --set admin_pass=<password>"""
+
+
+# kelsod runs under systemd's user manager, which keeps the groups it started
+# with: one started before `usermod -aG docker` cannot reach docker until it
+# restarts, however many times you log in again.
+RESTART = """
+Finally, restart this machine before trying any of that (`sudo reboot`). It
+completes the installation: kelsod comes back up with every group it needs, and
+you see that it starts at boot on its own."""
 
 
 def lan_address() -> str | None:
@@ -276,19 +299,6 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
 
   print(f"\nTo change your configuration, edit {config_path}")
-  print(
-    "\nNext: pick something from `kelso repo list`, then\n"
-    "  kelso load <app>    load it without starting it\n"
-    "  kelso start <app>   start it (loading first if needed)\n"
-    "  kelso stop <app>    stop it\n"
-    "  kelso unload <app>  stop it and unload it, keeping data and config"
-  )
-  print(
-    "\nThe `demos` repo is there to explore what an app can do. You may wish "
-    "to remove\nit once you are finished: `kelso repo remove demos`."
-  )
-  print(
-    "\nFor the web UI, choose its admin password and start it; it prints the "
-    "address\nto open:\n"
-    "  kelso start kelso-ui --set admin_pass=<password>"
-  )
+  print(TUTORIAL)
+  if service.has_systemd():
+    print(RESTART)

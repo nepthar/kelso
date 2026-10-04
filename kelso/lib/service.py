@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 UNIT_NAME = "kelsod.service"
@@ -84,6 +85,19 @@ def write_unit(root: Path) -> Path:
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(UNIT_TEMPLATE.format(kelsod=kelsod_path(), root=root))
   return path
+
+
+def stays_up(settle: float = 2.0) -> bool:
+  """Whether kelsod is still running `settle` seconds after it was started.
+
+  kelsod checks docker and git on startup and exits if either is missing, so a
+  start that systemd accepted can still fail a moment later.
+  """
+  time.sleep(settle)
+  result = subprocess.run(
+    ("systemctl", "--user", "is-active", UNIT_NAME), capture_output=True, text=True
+  )
+  return result.stdout.strip() == "active"
 
 
 def activate() -> None:

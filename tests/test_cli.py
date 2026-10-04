@@ -15,10 +15,12 @@ import pytest
 import yaml
 
 import kelso.cli.init
+import kelso.daemon.server
 import kelso.lib.config
 import kelso.lib.doctor
 import kelso.lib.git
 import kelso.lib.lifecycle.run
+import kelso.lib.service
 from kelso.lib import activity, lifecycle
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
@@ -1433,9 +1435,12 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
 
   config = load_config_file(root / "config.toml")
 
-  assert set(config.repos) == {"local", "staples", "demos"}
+  assert set(config.repos) == {"local", "staples"}
   assert config.repos["staples"].remote.url == "github://nepthar/kelso/main/apps"
-  assert config.repos["demos"].remote.url == "github://nepthar/kelso/main/demo-apps"
+  # The demos are offered, not added: the tutorial at the end adds them.
+  assert (
+    "kelso repo add github://nepthar/kelso/main/demo-apps --name demos" in result.stdout
+  )
   # main is the hand-drop directory and is never mirrored.
   assert not config.repos["local"].mirrored
   # --no-mirror leaves them configured but unfetched, and says so.
@@ -1508,7 +1513,8 @@ def test_doctor_says_how_to_pick_up_the_docker_group(kelso_env, monkeypatch):
   monkeypatch.setattr(kelso.lib.doctor, "docker_run_command", docker)
   result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
-  assert "log out and back in, or run `newgrp docker`" in result.stdout
+  assert "log out of every session, console included" in result.stdout
+  assert "sudo systemctl restart user@$(id -u)" in result.stdout
 
 
 def test_doctor_refuses_a_git_too_old_to_mirror(kelso_env, monkeypatch):
@@ -1516,6 +1522,43 @@ def test_doctor_refuses_a_git_too_old_to_mirror(kelso_env, monkeypatch):
   result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "git version 2.20.1 is too old" in result.stdout
+
+
+def test_init_ends_by_asking_for_a_restart(kelso_env, tmp_path, monkeypatch):
+  monkeypatch.setattr(kelso.cli.init.service, "has_systemd", lambda: True)
+  monkeypatch.setattr(kelso.cli.init, "install_service", lambda root: None)
+  root = tmp_path / "fresh"
+  result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
+  assert result.returncode == 0, result.stderr
+  last = result.stdout.strip().split("\n\n")[-1]
+  assert last.startswith("Finally, restart this machine")
+  assert "`sudo reboot`" in last
+
+
+def test_kelsod_refuses_to_start_without_docker(kelso_env, monkeypatch, capsys):
+  monkeypatch.setattr(
+    kelso.daemon.server,
+    "tool_problems",
+    lambda: [Finding("the docker daemon", "this user cannot reach it")],
+  )
+  monkeypatch.setattr("sys.argv", ["kelsod"])
+  with pytest.raises(SystemExit) as exited:
+    kelso.daemon.server.main()
+  assert exited.value.code == 1
+  assert "kelsod cannot run without these" in capsys.readouterr().err
+
+
+def test_a_service_that_does_not_stay_up_is_reported(kelso_env, monkeypatch):
+  monkeypatch.setattr(kelso.lib.service, "has_systemd", lambda: True)
+  monkeypatch.setattr(kelso.lib.service, "write_unit", lambda root: root / "unit")
+  monkeypatch.setattr(kelso.lib.service, "activate", lambda: None)
+  monkeypatch.setattr(kelso.lib.service, "stays_up", lambda: False)
+
+  result = kelso_env.run("system", "service")
+
+  assert result.returncode == 1
+  assert "did not stay running" in result.stderr
+  assert "journalctl --user-unit kelsod.service" in result.stderr
 
 
 def test_init_writes_the_address_it_detects(kelso_env, tmp_path, monkeypatch):

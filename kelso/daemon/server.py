@@ -20,6 +20,7 @@ from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.activity import BY_KELSOD
 from kelso.lib.config import Config, load_config
+from kelso.lib.doctor import tool_problems
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import updown
 from kelso.lib.util import refuse_root
@@ -188,6 +189,14 @@ def main() -> None:
     config = load_config()
     if config is None:
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
+    # Without docker every app would read as stopped, which is worse than
+    # not starting: refuse, and say why in the journal.
+    missing = tool_problems()
+    if missing:
+      raise RuntimeError(
+        "kelsod cannot run without these:\n"
+        + "\n".join(f"  {f.subject}: {f.message}" for f in missing)
+      )
     serve(
       config,
       socket_path=Path(args.socket).expanduser() if args.socket else None,

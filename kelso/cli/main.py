@@ -195,14 +195,16 @@ def _dispatch(args: argparse.Namespace) -> None:
       if verb is None:
         args.func(args, ctx)
       else:
-        # The CLI's own handler already shows kelso's log lines; echo only
-        # what docker streams, which would otherwise go to the file alone.
+        # The CLI's own handler already shows kelso's log lines. On a terminal,
+        # docker writes straight to it, keeping its live progress display;
+        # anywhere else its output is captured and echoed line by line.
         with Activity(
           ctx,
           verb,
           app=_app_named(args, ctx),
           echo=sys.stderr,
           echo_logs=False,
+          capture_docker=not sys.stderr.isatty(),
           started_by=BY_CLI,
         ):
           args.func(args, ctx)

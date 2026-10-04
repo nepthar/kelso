@@ -18,7 +18,7 @@
 </tr></thead><tbody>
 {% for r in resources %}
 <tr>
-  <td class="name">{{ r.name }}</td>
+  <td class="name"{% if r.title %} title="{{ r.title }}"{% endif %}>{{ r.name }}</td>
   <td class="trend">
     {%- if r.line %}<svg class="spark" viewBox="{{ spark_box }}" preserveAspectRatio="none" aria-hidden="true">
       {%- for y in spark_grid %}<line x1="0" x2="{{ spark_w }}" y1="{{ y }}" y2="{{ y }}"/>{% endfor -%}

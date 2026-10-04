@@ -250,7 +250,8 @@ class Activity:
   Inside the block, `kelso.*` log records and streamed docker output land in
   the run's file under `$kelso/var/logs`; `echo` copies them to a second
   stream -- docker's output only, with `echo_logs=False`, for a caller that
-  shows its own log records. The exception from a failed block is recorded,
+  shows its own log records. With `capture_docker=False` docker writes where it
+  would have anyway, and the file never sees it. The exception from a failed block is recorded,
   then propagates.
 
   Resolve and validate arguments before entering: a run that could never have
@@ -268,9 +269,11 @@ class Activity:
     args: dict[str, str] | None = None,
     echo: TextIO | None = None,
     echo_logs: bool = True,
+    capture_docker: bool = True,
   ) -> None:
     self.ctx = ctx
     self.echo_logs = echo_logs
+    self.capture_docker = capture_docker
     self.started_by = started_by
     self.verb = verb
     self.app = _as_app_id(app)
@@ -302,7 +305,8 @@ class Activity:
     logs = self._sink if self.echo_logs else _Sink(self._file)
     self._stack = ExitStack()
     self._stack.enter_context(_capture_kelso_logging(logs))
-    self._stack.enter_context(sink_output(self._sink))
+    if self.capture_docker:
+      self._stack.enter_context(sink_output(self._sink))
     self._token = _running.set(self)
     return self
 
@@ -392,11 +396,8 @@ class Activity:
     stdout = proc.stdout
     assert stdout is not None
     try:
-      while True:
-        chunk = stdout.read(4096)
-        if not chunk:
-          break
-        self._sink.write(chunk)
+      for line in iter(stdout.readline, ""):
+        self._sink.write(line)
     finally:
       stdout.close()
       code = proc.wait()

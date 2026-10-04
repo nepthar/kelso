@@ -26,6 +26,12 @@ def install_service(root: Path) -> None:
   unit = service.write_unit(root)
   print(f"Wrote {unit}")
   service.activate()
+  if not service.stays_up():
+    raise RuntimeError(
+      f"kelsod started but did not stay running. See why with "
+      f"`journalctl --user-unit {service.UNIT_NAME}`, fix it, then run "
+      f"`kelso system service` again."
+    )
   print(f"kelsod is running as {service.UNIT_NAME}, and will start at boot.")
   print(f"  Logs: journalctl --user-unit {service.UNIT_NAME}")
 

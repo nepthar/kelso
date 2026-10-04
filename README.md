@@ -70,21 +70,36 @@ Then log out and back in, so the `docker` group and uv's `PATH` take effect.
 ```bash
 uv tool install "git+https://github.com/nepthar/kelso"
 kelso init --yes
+sudo reboot
 ```
-`init --yes` sets kelso up in `~/kelso`, fetches the default repos, and starts
-`kelsod` as a systemd user service that comes back at boot. To keep kelso
+`init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and starts
+`kelsod` as a systemd user service that comes back at boot. The reboot completes
+it: kelsod runs under systemd's per-user manager, which keeps the groups it
+started with, so one started before you joined the `docker` group cannot reach
+docker until it restarts. To keep kelso
 somewhere else, set `KELSO_ROOT` (in your shell profile, so every later command
 finds it too) before running `kelso init`. Without it, kelso looks in `~/kelso`,
 then `~/.local/kelso`, then `/kelso`.
 
 ### Try it
-1. `$ kelso start hello-world`
-2. `$ kelso logs hello-world`
-3. Examine `repos/demos/demo-apps/hello-world.klso.md` to see how the example is constructed.
+`kelso init` sets up one repo, `staples`: the apps kelso maintains. Kelso's demo
+apps are small ones that each show off a feature; add them, then start one and
+run its commands:
+```bash
+kelso repo add github://nepthar/kelso/main/demo-apps --name demos
+kelso start demo-cron
+kelso cmd demo-cron
+kelso cmd demo-cron stamp hello
+kelso cmd demo-cron show
+kelso logs demo-cron
+kelso stop demo-cron
+```
+Each demo is one readable file: `repos/demos/demo-apps/demo-cron.klso.md` is the
+one above. `kelso repo list` shows every app you can start, and when you are
+done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
-`kelso init` sets up two repos for you: `staples`, the apps kelso maintains,
-and `demos`, small apps that each demonstrate one feature. Remove the second
-once you are done exploring: `kelso repo remove demos`.
+For the web UI, choose its admin password and start it; it prints the address
+to open: `kelso start kelso-ui --set admin_pass=<password>`.
 
 That install carries both commands: `kelso`, the CLI, and `kelsod`, the
 admin API the web UI talks to.

@@ -16,10 +16,11 @@ def dashboard(page: PageDep):
   body = api("/metrics?prefix=host_&hours=1")
   metrics = body.get("metrics") or {}
 
-  def resource(name, gauge, total, notes=""):
+  def resource(name, gauge, total, notes="", title=""):
     points = metrics.get(gauge) or []
     return {
       "name": name,
+      "title": title,
       "line": _line(points, body["since"], body["until"]),
       "current": round(points[-1]["v"] * 100) if points else None,
       "total": total,
@@ -31,10 +32,11 @@ def dashboard(page: PageDep):
     resource("Host memory", "host_mem_used_ratio", fmt_size(host["memory_bytes"])),
     *(
       resource(
-        disk["device"],
+        f"Disk {disk['mountpoint']}",
         disk["gauge"],
         fmt_size(disk["total_bytes"]),
         ", ".join(disk["holds"]),
+        title=disk["device"],
       )
       for disk in host.get("disks", [])
     ),

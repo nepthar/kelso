@@ -97,8 +97,10 @@ def _docker_unreachable(stderr: str) -> str:
   if "permission denied" in stderr.lower():
     return (
       "this user cannot reach the docker daemon. If you just added it to the "
-      "docker group (`sudo usermod -aG docker $USER`), log out and back in, "
-      "or run `newgrp docker`, for that to take effect."
+      "docker group (`sudo usermod -aG docker $USER`), only processes started "
+      "since have it: log out of every session, console included, and back "
+      "in. kelsod runs under systemd's user manager, which keeps the groups it "
+      "started with until `sudo systemctl restart user@$(id -u)` or a reboot."
     )
   detail = stderr.strip().splitlines()[-1] if stderr.strip() else "no output"
   return f"`{DOCKER} info` failed ({detail}). Is docker installed and running?"
