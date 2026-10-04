@@ -579,7 +579,8 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       service["volumes"] = mounts
 
     if run_unit.command:
-      service["command"] = list(run_unit.command)
+      # `$` is the container's, as in a healthcheck; compose would interpolate it.
+      service["command"] = [arg.replace("$", "$$") for arg in run_unit.command]
 
     if run_unit.routes:
       service["ports"] = [
