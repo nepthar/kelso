@@ -21,8 +21,7 @@ KELSO_SUBDOMAIN_LABEL = "kelso.app_subdomain"
 
 KELSO_CONFIG_ENV_PREFIX = "__KELSO_CONFIG_"
 
-# The route name that maps to the bare app subdomain (rather than a
-# "<name>-<appsub>" label). See docs/ingress.md.
+# The route name that maps to the bare app subdomain, not "<name>-<subdomain>".
 PRIMARY_ROUTE_NAME = "main"
 
 # Where a config value was declared: [config], [adv_config], or kelso's own
@@ -125,10 +124,7 @@ class AppRunUnit:
 class ComposeWarning:
   """One run unit's `[run.<unit>.compose]` keys that kelso does not model.
 
-  Not an error: the manifest is valid and kelso will run it. It exists so the
-  escape hatch is legible -- kelso cannot say what an arbitrary compose key
-  does, so it says that it does not know, and shows the operator what was
-  asked for.
+  Not an error: kelso runs them, and shows the operator what was asked for.
   """
 
   run_unit: str
@@ -184,11 +180,7 @@ class AppSpec:
 
   @property
   def compose_warnings(self) -> tuple[ComposeWarning, ...]:
-    """Every off-allowlist compose key this manifest passes through.
-
-    A property rather than a stored field: it is derived from `run_units` and
-    nothing else, so it cannot drift from what compose is actually handed.
-    """
+    """Every off-allowlist compose key this manifest passes through."""
     warnings = []
     for unit_name, unit in self.run_units.items():
       options = unlisted_compose_options(unit.compose_extra)
@@ -222,9 +214,7 @@ class AppSpec:
 
 
 def _build(manifest: Manifest, app: AppID) -> AppSpec:
-  # Both sections and the app options land in one flat namespace -- everything
-  # downstream (env substitution, the config store, `kelso config`) sees a
-  # single dict. `_validate_config` has already refused a name declared in both
+  # One flat namespace: `_validate_config` has already refused a name in both
   # sections. A manifest entry shadows the app option of the same name, keeping
   # the option's description if it gives none.
   config = {
@@ -245,9 +235,8 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
     config.setdefault(
       name, AppConfig(name, False, option.default(app), option.desc, "option")
     )
-  # `app` volumes carry the bundle's own files and are always read-only, so a
-  # container write fails at mount time instead of being silently discarded
-  # by the next `load` (docs/run-layout.md L4).
+  # `app` volumes are always read-only: a write would be silently discarded by
+  # the next `load`.
   volumes = {
     name: AppVolume(
       name, v.kind, True if v.kind == "app" else v.readonly, v.src, v.desc

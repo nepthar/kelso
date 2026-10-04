@@ -17,11 +17,8 @@
   }
   root.dataset.theme = theme;
 
-  // IBM Plex, if the internet is there to serve it. Added from script, not as a
-  // <link> in the page, because a stylesheet in <head> holds up rendering until
-  // it loads or fails -- and on a network that drops outbound traffic, failing
-  // takes a TCP timeout. This way the page draws at once in the fallback faces
-  // kelso.css names, and swaps to Plex if and when it arrives.
+  // IBM Plex, added from script: a <link> in <head> would hold up rendering
+  // until it loads, and offline that is a TCP timeout.
   var fonts = document.createElement("link");
   fonts.rel = "stylesheet";
   fonts.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500" +

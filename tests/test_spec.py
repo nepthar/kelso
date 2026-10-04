@@ -1,10 +1,7 @@
 """Manifest bytes in, `AppSpec` out.
 
 `app_spec` is the whole path: parse the TOML, validate it against the app id,
-resolve it into a definition independent of any loaded copy. What a manifest *means*
--- which defaults appear, how config interpolates into env, how a port string
-becomes a route -- was previously only observable through generated compose
-files in the CLI tests.
+resolve it into a definition independent of any loaded copy.
 """
 
 import pytest

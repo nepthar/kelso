@@ -79,9 +79,7 @@
     menu.hidden = !open;
     themeBtn.setAttribute("aria-expanded", String(open));
     if (!open) return;
-    // Beside the nav, bottom-aligned with the button. Fixed rather than
-    // inside the nav, whose overflow would clip it. Runtime geometry is the
-    // one thing set as a style from script; everything else is in kelso.css.
+    // Fixed beside the nav rather than inside it, whose overflow would clip it.
     var nav = themeBtn.closest("nav").getBoundingClientRect();
     var btn = themeBtn.getBoundingClientRect();
     menu.style.left = (nav.right + 8) + "px";

@@ -1,15 +1,11 @@
 # Kelso Server
 
-**Your apps, your hardware. No rack required.**
+**Self host, distribute, enjoy!**
 
-Immich, Jellyfin, Mealie and more can be up and running in one (okay, maybe two) clicks. Apps describe what resources and connections they need and Kelso turns that into a functioning container stack.
-
-Kelso is for folks who want to spend their time *using* their apps instead of *sys-administering* them. Point it at a machine you already have, tell it once where data should live, and every app you load gets wired in automatically. Apps are easy to distribute, inspect, snapshot, and restore.
-
-An app describes *what* it needs rather than *how* it is wired up. It says it "needs a volume to store user data and a master password", rather than "mount /mnt/zxy at this point and read secrets from this .env file".
+Kelso is a self-hosting management system where apps are packages that describe *what* they need rather than *how* they get it. This, combined with a small amount of one time configuration allows for easy distribution, secrets, management, and snapshotting of self-hosted apps.
 
 ## How does it work? 
-Kelso provides the missing link between app containers and the "infrastructure as code" required to distributed and run it. Each app is packaged as a kelso app "bundle" that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
+Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
 
 unifi-network-application.klso/manifest.toml:
 ```toml
@@ -38,8 +34,7 @@ env     = { MONGO_HOST = "unifi-db", MONGO_PASS = "${mongo_pass}", ... }
 main = { port = "8443", scheme = "https" }
 ```
 
-
-Load it from the catalog, then start it:
+This describes everything that the Unify Network Admin app needs to run on Kelso. You then bring it up with:
 ```
 $ kelso load unifi-network-application
 $ kelso start unifi-network-application
@@ -68,18 +63,12 @@ Then log out and back in, so the `docker` group and uv's `PATH` take effect.
 
 ### Install kelso
 ```bash
-uv tool install "git+https://github.com/nepthar/kelso"
+uv tool install "git+https://github.com/nepthar/kelso@v1.0.0"
 kelso init --yes
-sudo reboot
+sudo reboot # Ensure all settings are picked up by kelsod
 ```
 `init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and starts
-`kelsod` as a systemd user service that comes back at boot. The reboot completes
-it: kelsod runs under systemd's per-user manager, which keeps the groups it
-started with, so one started before you joined the `docker` group cannot reach
-docker until it restarts. To keep kelso
-somewhere else, set `KELSO_ROOT` (in your shell profile, so every later command
-finds it too) before running `kelso init`. Without it, kelso looks in `~/kelso`,
-then `~/.local/kelso`, then `/kelso`.
+`kelsod` as a systemd user service that comes back at boot. If you run `kelso init` you can set other options like install location.
 
 ### Try it
 `kelso init` sets up one repo, `staples`: the apps kelso maintains. Kelso's demo
@@ -108,8 +97,9 @@ service; `kelso system service` does the same for a root that already exists.
 Elsewhere, run `kelsod` in a terminal if you need the admin socket and daemon.
 
 ### Upgrading kelso
+Install the release you want by its tag, then restart kelsod on it:
 ```bash
-uv tool upgrade kelso
+uv tool install --force "git+https://github.com/nepthar/kelso@<tag>"
 kelso system service
 ```
 The second command rewrites kelsod's systemd unit for the new install and

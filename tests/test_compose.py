@@ -608,12 +608,8 @@ restart = "no"
 
 
 def test_start_blockers_leave_out_what_loading_repairs_itself():
-  """`load()` reallocates every route before judging readiness.
-
-  An unallocated route is therefore the normal pre-start state, not something
-  the operator has to fix -- counting it made `kelso ps` report CONFIG as
-  missing for an app that needed none.
-  """
+  """`load()` reallocates every route before judging readiness, so an
+  unallocated route is not something the operator has to fix."""
   operator = ConfigIssue("config api_key is unset", "Set with `kelso config`")
   allocation = ConfigIssue("route web: not allocated", "…", self_healing=True)
   fatal = ConfigIssue("volume data: unreadable", "…", load_blocking=True)

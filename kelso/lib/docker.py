@@ -21,8 +21,7 @@ DOCKER = "docker"
 # inherits kelso's stdio.
 _output_sink: ContextVar[TextIO | None] = ContextVar("docker_output_sink", default=None)
 
-# How much captured output a DockerError carries. The full text is in the
-# sink; the error only needs enough for a one-line failure to make sense.
+# How much captured output a DockerError carries; the full text is in the sink.
 _ERROR_TAIL = 1500
 
 
@@ -206,13 +205,9 @@ def docker_run_command(
   env: dict[str, str] | None = None,
   timeout: float | None = None,
 ) -> DockerReturn:
-  """Run `docker <cmd>`.
+  """Run `docker <cmd>`: captured and parsed with `json_output`, else streamed.
 
-  `json_output` decides both the format and who sees it: True captures and
-  parses into `DockerReturn.data`, False lets the child write straight to the
-  terminal, because swallowing a minutes-long `compose up` is indistinguishable
-  from a hang. Past `timeout` seconds the docker client is killed and this
-  raises RuntimeError.
+  Raises DockerTimeout once `timeout` seconds pass, after killing the client.
   """
   full = [DOCKER, *cmd]
   if json_output:

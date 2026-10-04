@@ -156,11 +156,8 @@ _COMPOSE_MANAGED_KEYS = frozenset(
   }
 )
 
-# Compose keys that pass through without comment: they shape how a container
-# runs, not what it can reach outside itself. An allowlist rather than a
-# denylist, so a key nobody has considered yet is remarked on rather than
-# sailing through -- which also catches typos, since a misspelled key is
-# silently ignored by compose today.
+# Compose keys that pass through without a warning: they shape how a container
+# runs, not what it can reach outside itself. Any other key is warned about.
 _COMPOSE_ALLOWED_KEYS = frozenset(
   {
     # Lifecycle.
@@ -223,7 +220,7 @@ class RunEntry(BaseModel):
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
   healthcheck: str | list[str] | None = Field(default=None, min_length=1)
-  # `[connections]` this unit is given; each mounts under /kelso/conn/<name>.
+  # `[connections]` this unit is given; each mounts at /run/kelso/conn/<name>.
   connections: list[Identifier] = Field(default_factory=list)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (ulimits, mem_limit, ...).
@@ -279,10 +276,8 @@ class Manifest(BaseModel):
 
   model_config = ConfigDict(extra="forbid")
 
-  # Bundle-specific sections:
   app: AppSection
 
-  # Shared sections:
   run: dict[Identifier, RunEntry] = Field(default_factory=dict)
   config: dict[Identifier, ConfigEntry] = Field(default_factory=dict)
   adv_config: dict[Identifier, ConfigEntry] = Field(default_factory=dict)
@@ -326,7 +321,6 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   """Checks that span sections, which the per-section models cannot make."""
   errors: list[str] = []
 
-  ## TODO: Don't spend much time on this now. Just get the basics, which creating a compse file might miss.
   if manifest.app.app_id is not None and manifest.app.app_id != app:
     errors.append(
       f"[app]: app_id {manifest.app.app_id!r} does not match app_id {app!r}"
@@ -504,7 +498,6 @@ def _validate_routes(manifest: Manifest) -> list[str]:
 
   has_routes = any(run_entry.routes for run_entry in manifest.run.values())
 
-  # network_mode = "host" cannot publish ports or attach routes.
   if manifest.app.network_mode == "host":
     if has_routes:
       errors.append("[run]: network_mode 'host' forbids [run.*.routes]")

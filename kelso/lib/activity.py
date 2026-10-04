@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("kelso.activity")
 
-# The Activity this thread (or task) is inside, so a second one can refuse.
 _running: ContextVar[Activity | None] = ContextVar("activity", default=None)
 
 # Output files kept. The logtab index outlives them.
@@ -47,7 +46,6 @@ FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.log")
 
 OK = "ok"
 ERROR = "error"
-# Kelso stopped watching a command that was still running; see `Detached`.
 DETACHED = "detached"
 DETACH_NOTE = "\n[kelso] detaching from running activity after 5 minutes\n"
 
@@ -69,8 +67,7 @@ def _run_file(
   stamp = started.strftime("%Y-%m-%dT%H%M%SZ")
   middle = f"{app_id}." if app_id else ""
   path = directory / f"{stamp}.{middle}{verb}.log"
-  # Two runs of one verb in one second only happen in tests, but a collision
-  # silently appending to the older run's file would be corruption, not noise.
+  # A second run of one verb in the same second must not append to the first's.
   counter = 2
   while path.exists():
     path = directory / f"{stamp}.{middle}{verb}-{counter}.log"
@@ -197,7 +194,6 @@ def _capture_kelso_logging(stream: io.TextIOBase) -> Iterator[None]:
   """Tee `kelso.*` log records into `stream` for the duration."""
   handler = logging.StreamHandler(stream)
   handler.setLevel(logging.INFO)
-  # UTC with a Z, like the header and trailer lines around it.
   formatter = logging.Formatter(
     "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%SZ"
   )
@@ -239,24 +235,14 @@ class _Sink(io.TextIOBase):
 class Detached(RuntimeError):
   """Kelso stopped watching a command it started, which may still be running.
 
-  An `Activity` that sees this records the run as detached rather than failed,
-  notes it in the run log, and does not let it propagate.
+  An `Activity` records the run as detached and does not let this propagate.
   """
 
 
 class Activity:
-  """One recorded run of kelso's own work.
+  """One recorded run of kelso's own work: its log records and docker output.
 
-  Inside the block, `kelso.*` log records and streamed docker output land in
-  the run's file under `$kelso/var/logs`; `echo` copies them to a second
-  stream -- docker's output only, with `echo_logs=False`, for a caller that
-  shows its own log records. With `capture_docker=False` docker writes where it
-  would have anyway, and the file never sees it. The exception from a failed block is recorded,
-  then propagates.
-
-  Resolve and validate arguments before entering: a run that could never have
-  started should leave no log. Blocks do not nest -- one block is one row in
-  the activity index -- and entering one inside another raises RuntimeError.
+  Blocks do not nest; entering one inside another raises RuntimeError.
   """
 
   def __init__(

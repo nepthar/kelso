@@ -8,8 +8,6 @@
   var url = out.getAttribute("data-src");
   var live = true;
 
-  // Only follow the tail while the reader is already at it. Scrolling up to
-  // read something is otherwise undone by the next refresh.
   function atBottom() {
     return out.scrollHeight - out.scrollTop - out.clientHeight < 24;
   }

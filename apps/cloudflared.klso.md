@@ -19,7 +19,7 @@ API token, a tunnel id and an account id; see `[route_provider.<tag>]` in
 
 ```toml klso_path="manifest.toml"
 [app]
-version      = "1.0.0"
+version      = "2026.9.1"
 display_name = "Cloudflared"
 description  = "Cloudflare Tunnel connector for the cloudflare_tunnel route provider"
 

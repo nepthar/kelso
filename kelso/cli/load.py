@@ -59,11 +59,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
-  """This bundle's off-allowlist compose keys, or none if it does not parse.
-
-  A manifest that cannot be read has nothing to warn about yet -- `load` is
-  about to fail on it with a better message than a prompt could give.
-  """
+  """This bundle's off-allowlist compose keys, or none if it does not parse."""
   try:
     return load_bundle(bundle).app_spec().compose_warnings
   except (ValueError, RuntimeError, OSError):

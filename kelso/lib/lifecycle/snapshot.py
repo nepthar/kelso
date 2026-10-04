@@ -168,8 +168,6 @@ def snapshot(
       f"run `kelso stop {app}` first"
     )
 
-  # Required files for the snapshot. If these don't exist, something is wrong
-  # with the app.
   for file in (paths.manifest_path, ctx.config.app_config_path(app)):
     if not file.is_file():
       raise ValueError(
@@ -242,9 +240,6 @@ def snapshot(
         sources.append(source)
 
       if sources:
-        # -a: recursive, keep ownership/mode/times, preserve inner symlinks &
-        # hardlinks. The sources are already-resolved link targets; -a must not
-        # dereference the symlinks *inside* them.
         quoted = " ".join(shlex.quote(str(s)) for s in sources)
         script = f"cp -a -- {quoted} {shlex.quote(str(data_dest.resolve()))}"
         try:

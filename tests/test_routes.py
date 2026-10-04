@@ -317,7 +317,7 @@ bad = { port = "8080", scheme = "ftp" }
 
 
 def test_removed_top_level_routes_section_rejected():
-  # [routes] is gone; it must no longer be accepted at the top level.
+  # A top-level [routes] is refused.
   with pytest.raises(ConfigError):
     _spec(
       """

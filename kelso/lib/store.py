@@ -14,7 +14,7 @@ logger = logging.getLogger("kelso.store")
 
 PORT_RANGE_SIZE = 1000
 
-STORE_MAX_BYTES = 1 * 1024 * 1024  # 1mb
+STORE_MAX_BYTES = 1 * 1024 * 1024
 
 
 class ConfigStore(Protocol):
@@ -72,9 +72,7 @@ class KelsoStore:
     self._crypto = crypto
     self._port_base = port_base
 
-  # Routes stay central because allocating a host port is contention between
-  # apps, not state belonging to one. Fetch provenance (`app_source/`) is
-  # catalog state: it outlives `kelso rm --purge`, which only deletes what was loaded.
+  # Routes stay central: a host port is contended for between apps.
   def list_routes(self, app_id: str) -> dict[str, dict[str, Any]]:
     return self._store.scan(f"routes/{app_id}/")
 

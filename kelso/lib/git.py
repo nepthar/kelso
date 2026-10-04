@@ -42,7 +42,7 @@ def checkout_folder(checkout: Path, url: str, ref: str, folder: str) -> str:
   Fetches one commit, and only the blobs under `folder`. Returns its sha.
   """
   if not (checkout / ".git").is_dir():
-    # Anything else here is an older kelso's mirror; it holds nothing git needs.
+    # Not a checkout, so nothing here is git's: start over.
     shutil.rmtree(checkout, ignore_errors=True)
     checkout.mkdir(parents=True)
     git("init", "-q", cwd=checkout)

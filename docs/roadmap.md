@@ -10,26 +10,25 @@ Kubernetes and similar can be overkill, while raw Docker Compose files alone sti
 ## Current Roadmap
 
 ### App upgrade paths
-A manifest says which versions it can upgrade from (`upgrade_from`); without it,
-any version. Loading version 6 over data last loaded at version 3, when 6 only
-upgrades from 4, refuses: "Upgrade failed while attempting to upgrade to version
-6: This only supports upgrading from versions >= 4. Please upgrade to an
-intermediate version first."
+`kelso update` is the only way an app changes version; `kelso load` refuses to.
+Today `update` takes any new version. Wanted: a manifest says which versions it
+can upgrade from (`upgrade_from`); without it, any version. Updating to version
+6 over data last loaded at version 3, when 6 only upgrades from 4, refuses:
+"Upgrade failed while attempting to upgrade to version 6: This only supports
+upgrading from versions >= 4. Please upgrade to an intermediate version first."
 
 Going back a version is only ever `restore` from a snapshot, which brings the
-matching data with it. `load` refuses a version older than the data's.
+matching data with it. `update` refuses a version older than the data's.
 
 Versions compare as lists of numbers: split on any of `-.|/`, compare left to
 right, and a missing place counts as zero. `24-45.23|3` is `[24, 45, 23, 3]`,
 and `1.2` equals `1.2.0`. A version must start with a number; what follows the
 leading numbers, as in `1.0.0-beta`, is not compared.
 
-`load` records the version as `loaded_version` in the app's config store, the
-record upgrades act on: it survives `unload`, goes with `rm --purge`, and comes
-back with a snapshot on `restore`. The activity log carries it too, on the load
-itself (`{"verb": "loaded", "version": "1.0.1"}`), for the history only. Apps loaded before this have no
-`loaded_version`, and upgrade as if from any version. `kelso dev` runs a
-working copy whose version is "dev": it skips these checks and records nothing.
+The version these checks act on is `loaded_version` in the app's config store,
+which every load records: it survives `unload`, goes with `rm --purge`, and
+comes back with a snapshot on `restore`. `kelso dev` runs a working copy and
+skips these checks.
 
 A bundle may carry a `migrations.toml`: manifest-level changes to apply between
 versions, ending at the current one. The app migrates its own data; these cover

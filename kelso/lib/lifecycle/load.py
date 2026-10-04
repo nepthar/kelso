@@ -446,6 +446,27 @@ def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> No
   ctx.app_store(app).set_bind(volname, host_volume_tag)
 
 
+def _refuse_version_change(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
+  loaded = ctx.loaded_spec(app)
+  if loaded is not None and loaded.version != spec.version:
+    raise ValueError(
+      f"App {app} is loaded at version {loaded.version}, and this would load "
+      f"{spec.version}. Run `kelso update {app}`, which snapshots it first."
+    )
+
+
+def check_same_version(app: AppID, bundle: Path, ctx: KelsoCtx) -> None:
+  """Raise ValueError if loading `bundle` would change the app's version.
+
+  A bundle that does not parse passes: `load` reports that better.
+  """
+  try:
+    spec = load_bundle(bundle).app_spec()
+  except ValueError:
+    return
+  _refuse_version_change(app, spec, ctx)
+
+
 def load(
   app: AppID,
   bundle: Path,
@@ -454,10 +475,12 @@ def load(
   sets: list[tuple[str, str]] | None = None,
   binds: list[tuple[str, str]] | None = None,
   bound: str | None = None,
+  version_change: bool = False,
 ) -> LoadResult:
   """Load `bundle` into `var/run/<id>/` without starting it.
 
-  `bound` is the source to record; None leaves the recorded one alone.
+  `bound` is the source to record; None leaves the recorded one alone. Raises
+  ValueError if the app is loaded at another version, unless `version_change`.
   """
   paths = ctx.loaded_paths(app)
 
@@ -490,6 +513,8 @@ def load(
   try:
     incoming = _load_incoming(bundle, run_path)
     spec = AppSpec.from_file(incoming / "manifest.toml", app)
+    if not version_change:
+      _refuse_version_change(app, spec, ctx)
   except Exception:
     _discard_incoming(run_path)
     raise
@@ -500,11 +525,9 @@ def load(
   if bound is not None:
     store.set_meta(BOUND_TO_META, bound)
 
-  # Apply configuration sets if we're given them
   if sets:
     apply_config_sets(spec, sets, ctx)
 
-  # Apply binds, if we're given them
   if binds:
     for volname, host_volume_tag in binds:
       bind(spec, volname, host_volume_tag, ctx)

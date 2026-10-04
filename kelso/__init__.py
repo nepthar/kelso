@@ -1,3 +1,6 @@
 """Kelso — app runtime and tooling."""
 
-VERSION = "0.1.0"
+from importlib.metadata import version
+
+# pyproject.toml is the one place the version is set.
+VERSION = version("kelso")

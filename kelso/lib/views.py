@@ -98,11 +98,7 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def compose_warnings_view(spec: AppSpec) -> list[dict[str, Any]]:
-  """`[run.<unit>.compose]` keys kelso does not model, for the UI to show.
-
-  Sent whether or not the app is loaded: it is a property of the manifest,
-  and the point is to be readable *before* deciding to load.
-  """
+  """`[run.<unit>.compose]` keys kelso does not model, for the UI to show."""
   return [
     {
       "run_unit": w.run_unit,
@@ -244,9 +240,7 @@ def route_providers_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Kelso's own directories, as last recorded by volume-metrics.
 
-  The list comes from `metric.KELSO_DIRS`, so a caller renders whatever
-  kelsod names rather than knowing the set in advance. `bytes` is None until
-  volume-metrics has run over that directory at least once.
+  `bytes` is None until volume-metrics has run over a directory.
   """
   return [
     {

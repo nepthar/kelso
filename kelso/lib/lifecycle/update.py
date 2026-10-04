@@ -82,7 +82,7 @@ def update(app: AppID, ctx: KelsoCtx) -> UpdateResult:
 
     with ctx.kelso_lock(by):
       try:
-        load(app, source, ctx)
+        load(app, source, ctx, version_change=True)
       except Exception as e:
         raise RuntimeError(
           f"{e}\n{app} is stopped. To go back to {previous or 'the old version'}, "

@@ -346,14 +346,14 @@ def _compose_calls(kelso_env) -> list[list[str]]:
 def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=root")
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
-  manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
+  manifest.write_text(manifest.read_text().replace("Basic Features", "Renamed"))
 
   job = submit(client, jobs, "load", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert f"Restarted {APP}" in read_log(job)
   assert client.get(f"/apps/{APP}").json()["status"] == "ok"
   loaded = (kelso_env.run_root / APP / "app_bundle" / "manifest.toml").read_text()
-  assert 'version      = "0.2.0"' in loaded
+  assert 'display_name = "Renamed"' in loaded
   assert _compose_calls(kelso_env) == [
     ["compose", "up", "-d"],
     ["compose", "down"],
@@ -364,14 +364,14 @@ def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
 def test_load_reloads_a_stopped_app_without_starting(kelso_env, client, jobs):
   kelso_env.run("load", APP)
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
-  manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
+  manifest.write_text(manifest.read_text().replace("Basic Features", "Renamed"))
 
   job = submit(client, jobs, "load", {"app": APP})
   assert job["state"] == "done", job["error"]
   assert "Restarted" not in read_log(job)
   assert client.get("/apps").json()["apps"][0]["status"] == "stopped"
   loaded = (kelso_env.run_root / APP / "app_bundle" / "manifest.toml").read_text()
-  assert 'version      = "0.2.0"' in loaded
+  assert 'display_name = "Renamed"' in loaded
   assert _compose_calls(kelso_env) == []
 
 
@@ -852,7 +852,7 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
   assert volumes["config"]["bytes"] == 2
   dirs = {d["name"]: d for d in body["kelso_dirs"]}
   assert dirs["var"]["bytes"] > 0
-  # repos/main holds the fixture bundles, so it is gauged and non-empty.
+  # repos/local holds the fixture bundles, so it is gauged and non-empty.
   assert dirs["repos"]["bytes"] > 0
   media = {v["tag"]: v for v in client.get("/host-volumes").json()["host_volumes"]}
   assert media["media"]["bytes"] == 4

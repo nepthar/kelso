@@ -56,7 +56,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       return
 
     bound = None if bound_to(app, ctx) else str(source)
-    result = load(app, source, ctx, bound=bound)
+    result = load(app, source, ctx, bound=bound, version_change=True)
     for name in result.dropped_volumes:
       logger.warning(
         f"volume {name} is no longer declared in the manifest; "

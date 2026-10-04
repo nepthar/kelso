@@ -71,13 +71,11 @@ def test_editing_the_catalog_then_reloading_recopies(kelso_env):
   assert kelso_env.run("load", app_id).returncode == 0
 
   catalog = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
-  catalog.write_text(
-    catalog.read_text().replace('version      = "0.1.0"', 'version = "9"')
-  )
+  catalog.write_text(catalog.read_text().replace("Ports Demo", "Renamed"))
 
   assert kelso_env.run("load", app_id).returncode == 0
   assert (
-    'version = "9"'
+    "Renamed"
     in (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
   )
 

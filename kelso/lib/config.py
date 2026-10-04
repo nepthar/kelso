@@ -19,7 +19,6 @@ from kelso.lib.util import validate_identifier
 
 VOLUME_KINDS = ("data", "temp", "bulk", "logs")
 
-# Under `$kelso/var/`: loaded apps, sockets, activity files, scratch, locks.
 VAR_DIRS = ("run", "conn", "logs", "temp", "lock")
 
 # Under `$kelso/conf/`: the master key, kelsodb, and one logtab per app in apps/.
@@ -138,8 +137,6 @@ class Config:
     extra_repos: dict[str, Repo] | None = None,
     host_volumes: dict[str, HostVolume] | None = None,
   ) -> None:
-    # Not derivable from kelso_root: an explicit --config may be named anything,
-    # and editing has to write back to the file kelso actually loaded.
     self.config_path = config_path
     self.kelso_root = kelso_root
     self.repos_root = repos_root
@@ -291,7 +288,6 @@ def load_config_file(config_file: str | Path) -> Config:
 
   master_keyfile = kelso_root / CONF_DIR / MASTER_KEYFILE
 
-  # NB: Should we technically hold the lock here? Eh.
   master_key_entry = (
     LogTab(master_keyfile).read("master_key") if master_keyfile.is_file() else None
   )
@@ -363,8 +359,6 @@ def _validate_config(parsed: ConfigFile) -> list[str]:
     except ValueError as e:
       errors.append(f"route_provider tag {tag!r} is not a valid name: {e}")
 
-  # Every provider that actually proxies traffic has to be told where kelso
-  # is; only noop, which configures nothing, can do without it.
   if not parsed.kelso_address:
     proxying = sorted(
       tag for tag, entry in parsed.route_provider.items() if entry.kind != "noop"
@@ -446,8 +440,6 @@ def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
         remote = parse_github_url(parsed.url)
       except ValueError as e:
         return refuse(f"repo {name!r} has an unusable url: {e}")
-      # A mirror lives under repos_root by name, so its location is not the
-      # operator's to choose -- only the remote it tracks is.
       checkout = repos_root / name
       repos[name] = Repo(
         name, checkout.joinpath(*remote.path), "github", remote, checkout

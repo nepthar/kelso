@@ -524,14 +524,32 @@ def test_load_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   manifest = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
-  manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
+  manifest.write_text(manifest.read_text().replace("Ports Demo", "Renamed"))
 
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr
   assert f"Restarted {app_id}" in loaded.stdout
 
   loaded = (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
-  assert "0.2.0" in loaded
+  assert "Renamed" in loaded
+  assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
+
+
+def test_load_refuses_a_new_version_and_names_update(kelso_env):
+  app_id = "ports-demo"
+  assert kelso_env.run("start", app_id).returncode == 0
+  manifest = kelso_env.local_repo / f"{app_id}.klso" / "manifest.toml"
+  manifest.write_text(manifest.read_text().replace("0.1.0", "0.2.0"))
+
+  refused = kelso_env.run("load", app_id)
+
+  assert refused.returncode == 1
+  assert "loaded at version 0.1.0, and this would load 0.2.0" in refused.stderr
+  assert f"kelso update {app_id}" in refused.stderr
+  loaded = (kelso_env.run_root / app_id / "app_bundle" / "manifest.toml").read_text()
+  assert "0.1.0" in loaded
+  assert not (kelso_env.run_root / app_id / ".app_bundle.incoming").exists()
+  # Refused before anything was stopped.
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "running"
 
 
@@ -542,7 +560,6 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr
   assert f"Start it with: kelso start {app_id}" in loaded.stdout
-  # Loaded but never started reads as "-", not "stopped".
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
 
 
@@ -828,9 +845,8 @@ def test_host_bind_one_shot_via_start(kelso_env):
 def test_host_links_belong_to_the_run_not_the_load(kelso_env):
   """`bind` records; `start` links; `stop` unlinks.
 
-  A bind that only ever reached the config store was the original bug: compose
-  mounts `volumes/host/<name>` regardless, so docker created it as an empty
-  directory and the app came up against that instead of the host path.
+  compose mounts `volumes/host/<name>` regardless, so without the link docker
+  creates an empty directory there and the app comes up against that.
   """
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
@@ -1063,9 +1079,8 @@ def test_a_required_non_secret_value_blocks_start_and_shows_as_missing_config(
 ):
   """The non-secret counterpart of the missing-secret case.
 
-  A value with no default must be supplied whether or not it is secret; this
-  was once silently treated as satisfied, so an app could start with it empty.
-  A dedicated bundle whose only config is non-secret and default-less, so the
+  A value with no default must be supplied whether or not it is secret. A
+  dedicated bundle whose only config is non-secret and default-less, so the
   blocker cannot be attributed to some other value.
   """
   app_id = "needs-value"
@@ -1441,7 +1456,7 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
   assert (
     "kelso repo add github://nepthar/kelso/main/demo-apps --name demos" in result.stdout
   )
-  # main is the hand-drop directory and is never mirrored.
+  # local is the hand-drop directory and is never mirrored.
   assert not config.repos["local"].mirrored
   # --no-mirror leaves them configured but unfetched, and says so.
   assert "Skipped mirroring" in result.stdout
@@ -1668,11 +1683,7 @@ def test_gen_masterkey_appends_to_the_keyfile(kelso_env):
 
 
 def test_every_shipped_bundle_loads(kelso_env):
-  """Every bundle this repo ships must parse -- real apps and demos alike.
-
-  This previously pointed at an `examples/` directory that does not exist, so
-  it globbed nothing and passed unconditionally.
-  """
+  """Every bundle this repo ships must parse -- real apps and demos alike."""
   root = Path(__file__).parents[1]
   shipped = [
     (app_id, apps_dir / rel_path)
@@ -1834,8 +1845,7 @@ def test_kelsod_refuses_to_run_as_root(monkeypatch, capsys):
 
 
 def _seed_activity(kelso_env, **kwargs):
-  """File one activity run straight through the lib, as kelsod's job runner
-  would. CLI flows do not record activity themselves -- only daemon jobs do."""
+  """File one activity run straight through the lib, as a job would."""
   from datetime import UTC, datetime, timedelta
 
   from kelso.lib import activity

@@ -118,14 +118,8 @@ class PangolinRouteProvider(RouteProvider):
 
     message = (body or {}).get("message") or resp.reason
     if resp.status_code == 403:
-      # Pangolin's own 403 does not name the action it refused, and the key's
-      # permissions are a checklist in the dashboard -- so name it here.
-      #
-      # Don't send the operator off to check org scoping: Pangolin runs its
-      # org-access middleware *before* the per-action one, so a 403 that got
-      # as far as the action check already proves the key is in the org. The
-      # checklist is grouped by noun ("Resource", "Resource Policy", "Site"),
-      # and the group is not always the one the endpoint's URL suggests.
+      # Pangolin's 403 does not name the action it refused, so name it here. It
+      # checks org access before the action, so this is never an org problem.
       return (
         f"Pangolin refused {method} {path} ({resp.status_code}: {message}). The "
         f"API key is missing the {action!r} permission; enable it on the key "

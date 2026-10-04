@@ -30,9 +30,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     raise ValueError("Nothing on stdin to decrypt")
 
   try:
-    # A Fernet token carries an HMAC over its own contents, so this either
-    # returns the original plaintext or raises -- there is no wrong-key result
-    # that decrypts to plausible garbage.
+    # Fernet is authenticated: a wrong key raises, never returns garbage.
     plaintext = FernetCryptoEngine(ctx.config.master_key).decrypt(blob)
   except InvalidToken:
     raise ValueError(

@@ -1,10 +1,4 @@
-"""Focused tests for the [config] manifest schema and store migration.
-
-Covers the params -> config rename plus the new field schema
-(kind -> secret bool) and store persistence (secret bool).
-
-Self-contained: does not depend on the broader e2e suite.
-"""
+"""The [config] manifest schema, and how config values persist in the store."""
 
 from pathlib import Path
 
@@ -48,7 +42,7 @@ def test_unknown_key_rejected():
 
 
 def test_legacy_kind_key_rejected():
-  # The old `kind = "str"` form is no longer valid.
+  # A `kind` key is refused.
   with pytest.raises(ValidationError):
     ConfigEntry.model_validate({"kind": "str"})
 
