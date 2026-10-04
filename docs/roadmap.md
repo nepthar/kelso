@@ -7,16 +7,7 @@ Later, it should also be a real option for small businesses: a semi-technical ow
 
 Kubernetes and similar can be overkill, while raw Docker Compose files alone still leave missing pices of the puzzle.
 
-## v1
-What has to be true before v1, roughly in order of priority.
-
-### Updating apps
-`kelso update <app>` (and the dashboard's update icon) pulls the source's
-images, snapshots as `pre-update`, and re-loads; repos are still updated by
-hand. Still wanted: rolling back when the new version does not come up healthy,
-and a plain `load` that changes the version snapshotting first.
-
-## After v1
+## Current Roadmap
 
 ### App upgrade paths
 A manifest says which versions it can upgrade from (`upgrade_from`); without it,
@@ -56,6 +47,10 @@ out by opening the dashboard. For v1, one configurable webhook and two levels:
 
 Alerts queue in a logtab spool, so a webhook that is down gets them later.
 
+### Restricted Network Mode
+A mode where a sidecar hijacks dns and proxies ALL outgoing http/https requests,
+allowing only those that are explicity set up as a `[connection]` in the manifest.
+
 ### Off-host snapshots
 Snapshots stay on the box. Copying them elsewhere also needs a plan for
 `conf/master.key`: no snapshot carries it, so a restore on another machine
@@ -84,20 +79,4 @@ the invoking user and cannot touch what the app's containers wrote.
 them, so one runaway app can starve the box.
 
 ## Known issues
-- **A `cmd` job holds the app lock for the command's whole run.** Kelso-wide
-  ops can proceed; the same app cannot be loaded, started, or stopped until it
-  exits. Fine for the batch-style commands the UI is for; a long-runner still
-  wedges that app. The runner also allocates no TTY, so a command that waits
-  on stdin hangs rather than prompting.
-- **Most CLI commands file no activity output.** Only `kelso shell` and a
-  hand-run `kelso cron tick` record a run (`started_by: cli`); every other CLI
-  invocation prints to the operator's terminal and records only its status
-  line in `activity.logtab`, so the UI's Activity page shows what kelsod ran,
-  not what the operator typed. The mechanism to close this is in place — `Job.call(args, ctx,
-  echo=stream)` writes the run log and the terminal from one stream — and the
-  plan is to migrate CLI verbs onto their Job classes, verb by verb.
-- **Stopping an app warns about unset config variables.** `compose down` runs
-  without the config env, so compose prints `"__KELSO_CONFIG__<name>" variable
-  is not set`. Harmless, and alarming when the name is a password.
-- **Route registration logs a blank host.** It prints `-> http://:8096`; the
-  proxy entry itself has the right address.
+None right now.

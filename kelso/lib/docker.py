@@ -184,10 +184,14 @@ def _parse_json_output(stdout: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _timed_out(cmd: list[str], timeout: float | None) -> RuntimeError:
+class DockerTimeout(RuntimeError):
+  """A docker invocation ran past its timeout and kelso stopped waiting."""
+
+
+def _timed_out(cmd: list[str], timeout: float | None) -> DockerTimeout:
   # Killing the client does not stop what `compose exec` started in the
   # container; that runs on until it finishes or the container stops.
-  return RuntimeError(
+  return DockerTimeout(
     f"docker {' '.join(cmd)} was still running after {timeout:g} seconds; "
     f"kelso stopped waiting for it"
   )

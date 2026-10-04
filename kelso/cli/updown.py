@@ -16,13 +16,13 @@ def register(subparsers) -> None:
     metavar="SECONDS",
     help=f"How long to wait for a group to be ready (default: {DEFAULT_WAIT})",
   )
-  up_parser.set_defaults(func=run_up)
+  up_parser.set_defaults(func=run_up, activity="up")
 
   down_parser = subparsers.add_parser(
     "down",
     help="Stop every running app in start_order groups 9 down to 1",
   )
-  down_parser.set_defaults(func=run_down)
+  down_parser.set_defaults(func=run_down, activity="down")
 
 
 def run_up(args: argparse.Namespace, ctx: KelsoCtx) -> None:

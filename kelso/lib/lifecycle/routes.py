@@ -64,12 +64,13 @@ def register_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
       run_data.app, host_port, route.subdomain, domain, scheme=route.scheme
     )
     logger.info(
-      "registered route %s via %s: %s.%s -> %s://:%d",
+      "registered route %s via %s: %s.%s -> %s://%s:%d",
       route_name,
       tag,
       route.subdomain,
       domain,
       route.scheme,
+      ctx.config.kelso_address or "<kelso_address unset>",
       host_port,
     )
 

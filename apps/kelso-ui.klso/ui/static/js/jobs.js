@@ -150,7 +150,9 @@
       if (log) {
         bar.hidden = true;
         dismiss.hidden = false;
-        outEl.classList.add(btn.getAttribute("data-status") === "ok" ? "ok" : "bad");
+        const status = btn.getAttribute("data-status");
+        // A detached run neither passed nor failed; kelso stopped watching it.
+        if (status !== "detached") outEl.classList.add(status === "ok" ? "ok" : "bad");
         pullLog(log);
         return;
       }

@@ -236,3 +236,27 @@ def test_activity_outside_its_block_is_refused(ctx):
   with pytest.raises(RuntimeError, match="not running"):
     act.subprocess(["true"])
   assert activity.list_runs(ctx) == []
+
+
+def test_activities_do_not_nest(ctx):
+  with activity.Activity(ctx, "outer", started_by="test"):
+    with pytest.raises(RuntimeError, match="inside outer's"):
+      with activity.Activity(ctx, "inner", started_by="test"):
+        pass
+  # The outer one finished, so the next is not refused.
+  with activity.Activity(ctx, "after", started_by="test"):
+    pass
+  assert [run["verb"] for run in activity.list_runs(ctx)] == ["after", "outer"]
+
+
+def test_a_command_exiting_zero_is_a_success(ctx):
+  with pytest.raises(SystemExit):
+    with activity.Activity(ctx, "cmd", started_by="test"):
+      raise SystemExit(0)
+  with pytest.raises(SystemExit):
+    with activity.Activity(ctx, "cmd", started_by="test"):
+      raise SystemExit(3)
+  failed, ok = activity.list_runs(ctx)
+  assert ok["status"] == "ok"
+  assert failed["status"] == "error"
+  assert "exited with status 3" in activity.read_run_log(ctx, failed["log"])

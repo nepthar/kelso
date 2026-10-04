@@ -16,7 +16,7 @@ def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "service", help="Write kelsod's systemd user unit, then start it now and at boot"
   )
-  parser.set_defaults(func=_install)
+  parser.set_defaults(func=_install, activity="service")
 
 
 def install_service(root: Path) -> None:

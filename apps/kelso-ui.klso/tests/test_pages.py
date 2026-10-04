@@ -276,6 +276,13 @@ def test_snapshots_page_totals_every_archive(client, fake):
   assert "Application snapshots · 4.7 KB in total" in client.get("/snapshots").text
 
 
+def test_a_detached_run_says_why(client, fake):
+  rows = client.get("/activity").text.split("<tr>")
+  detached = next(row for row in rows if ">cmd<" in row)
+  assert "detached" in detached
+  assert "ran for longer than 5 minutes and kelso stopped monitoring" in detached
+
+
 def test_activity_says_who_started_each_run(client, fake):
   rows = client.get("/activity").text.split("<tr>")
   snapshot = next(row for row in rows if ">snapshot<" in row)

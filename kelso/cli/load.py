@@ -32,7 +32,7 @@ def register(subparsers) -> None:
     action="store_true",
     help="Skip the confirmation for compose keys kelso does not model",
   )
-  parser.set_defaults(func=run)
+  parser.set_defaults(func=run, activity="load")
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:

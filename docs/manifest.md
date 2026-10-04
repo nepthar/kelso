@@ -234,6 +234,12 @@ consoles put `/kelso/bin` at the end of `PATH` and open with that list.
 | `run_unit` | identifier | `"main"` | Which container to run it in. Must exist in `[run]`. |
 | `desc` | string | `""` | Shown in `kelso cmd <app>` and in the UI. |
 
+If a command runs longer than 5 minutes, kelso stops monitoring it and logging
+its output: it notes that it detached at the end of the run log and records the
+run as `detached`. The command keeps running in its container until it
+finishes. Until then -- for those first 5 minutes -- a running command holds its
+app's lock, so stopping or reloading the app waits for it.
+
 ```toml
 [commands.backup]
 cmd      = "mealie-cli backup create"
@@ -256,15 +262,15 @@ that has never run counts from when its app was loaded. Each run is recorded
 on the Activity and Cron pages, with its output and whether it exited 0.
 `kelso cron` lists what is next and `kelso cron tick` runs what is due now.
 
-Jobs should generally be short (~1 minute). If you have a long-running job, consider
-using kelo's cron to kick it off, but not run it directly.
+Jobs should generally be short (~1 minute). Like any command, a job that runs
+longer than 5 minutes is detached from. A long-running job belongs in a
+background process in the app itself, which cron can kick off.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `schedule` | string | **required** | Five-field cron: minute, hour, day of month, month, day of week, in the host's local time. Each field is `*` or a comma list of `n`, `a-b`, `*/s`, `a-b/s`. Day of week is 0-7, both 0 and 7 Sunday. |
 | `command` | identifier | **required** | A `[commands]` entry. |
 | `args` | string | `""` | Added to the command, as an operator's arguments would be. |
-| `timeout` | integer | `600` | Seconds before kelso stops waiting and records the run as failed, at most 1800. A job that needs longer belongs in a background process in the app itself. A command started with `compose exec` keeps running in its container until it finishes. |
 
 ```toml
 [cron.nightly-backup]

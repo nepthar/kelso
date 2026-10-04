@@ -68,7 +68,10 @@ def register(subparsers) -> None:
     action="store_true",
     help="With --get, print secret values in plaintext",
   )
-  parser.set_defaults(func=run)
+  parser.set_defaults(
+    func=run,
+    activity=lambda a: "config" if a.sets or a.routes or a.binds or a.edit else None,
+  )
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:

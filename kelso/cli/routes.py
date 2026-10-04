@@ -37,7 +37,7 @@ def register(subparsers) -> None:
     dest="provider",
     help="Provider tag (default: default_route_provider)",
   )
-  add.set_defaults(func=run_add)
+  add.set_defaults(func=run_add, activity="route-add")
 
   remove = sub.add_parser("remove", help="Unregister a manual route")
   remove.add_argument("subdomain", help="Subdomain under the provider domain")
@@ -47,7 +47,7 @@ def register(subparsers) -> None:
     dest="provider",
     help="Provider tag (default: default_route_provider)",
   )
-  remove.set_defaults(func=run_remove)
+  remove.set_defaults(func=run_remove, activity="route-remove")
 
   add_provider = sub.add_parser(
     "add-provider", help="Configure a route provider interactively"
@@ -58,7 +58,7 @@ def register(subparsers) -> None:
     default="",
     help="Provider implementation, e.g. cloudflare_tunnel",
   )
-  add_provider.set_defaults(func=run_add_provider)
+  add_provider.set_defaults(func=run_add_provider, activity="route-provider-add")
 
   list_parser = sub.add_parser("list", help="List registered routes")
   list_parser.add_argument(

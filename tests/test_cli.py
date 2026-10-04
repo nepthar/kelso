@@ -18,7 +18,8 @@ import kelso.cli.init
 import kelso.lib.config
 import kelso.lib.doctor
 import kelso.lib.git
-from kelso.lib import lifecycle
+import kelso.lib.lifecycle.run
+from kelso.lib import activity, lifecycle
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
@@ -1377,6 +1378,40 @@ def test_stop_uses_loaded_manifest_when_bundle_is_missing(
   ]
 
 
+def test_registering_a_route_names_where_it_points(kelso_env, stub_provider):
+  stub_provider()
+  kelso_env.config.write_text(
+    'kelso_address = "192.0.2.10"\n' + kelso_env.config.read_text()
+  )
+  started = kelso_env.run("start", "routes-demo")
+  assert started.returncode == 0, started.stderr
+  assert "kelso.localhost -> http://192.0.2.10:" in started.stderr
+
+
+def test_stop_hands_compose_down_every_config_value_empty(kelso_env, monkeypatch):
+  """`down` reads none of them, and an unset one makes compose warn, naming it."""
+  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  compose = (kelso_env.run_root / BASIC / "compose.yml").read_text()
+  downs = []
+  real = kelso.lib.lifecycle.run.docker_run_command
+
+  def docker(args, **kwargs):
+    if args == ["compose", "down"]:
+      downs.append(kwargs["env"])
+    return real(args, **kwargs)
+
+  monkeypatch.setattr(kelso.lib.lifecycle.run, "docker_run_command", docker)
+  assert kelso_env.run("stop", BASIC).returncode == 0
+
+  [env] = downs
+  assert env, "basic-features declares config"
+  assert set(env.values()) == {""}
+  assert all(f"${{{name}}}" in compose for name in env)
+  assert compose.count("${__KELSO_CONFIG__") == sum(
+    compose.count(f"${{{name}}}") for name in env
+  )
+
+
 # --- bootstrap -------------------------------------------------------------
 
 
@@ -1669,6 +1704,49 @@ def test_removal_is_recorded_when_an_app_is_removed(kelso_env):
   assert not (kelso_env.run_root / app_id).exists()
   assert read_last_app_action(app_id, ctx) == "purged"
   assert f"apps/{app_id}/status" in ctx.activity_log.load()
+
+
+def _runs(kelso_env) -> list[dict]:
+  return activity.list_runs(KelsoCtx(load_config_file(kelso_env.config)))
+
+
+def test_a_cli_write_is_recorded_as_started_by_the_cli(kelso_env):
+  started = kelso_env.run("start", BASIC, "--set", "admin_user=sekrit-name")
+  assert started.returncode == 0, started.stderr
+
+  [run] = _runs(kelso_env)
+  assert (run["verb"], run["app_id"], run["status"]) == ("start", BASIC, "ok")
+  assert run["started_by"] == "cli"
+  # Arguments are not recorded: `--set` can carry a secret.
+  assert run["args"] == {}
+  log = (kelso_env.root / "var" / "logs" / run["log"]).read_text()
+  assert "sekrit-name" not in log
+
+
+def test_reading_records_nothing(kelso_env):
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  before = len(_runs(kelso_env))
+  for argv in (["ps"], ["inspect", "ports-demo"], ["cleanup"], ["cmd", "ports-demo"]):
+    assert kelso_env.run(*argv).returncode == 0, argv
+  assert len(_runs(kelso_env)) == before
+
+
+def test_a_failed_cli_write_is_recorded_as_an_error(kelso_env):
+  assert kelso_env.run("stop", "ports-demo").returncode == 1
+  [run] = _runs(kelso_env)
+  assert (run["verb"], run["status"]) == ("stop", "error")
+
+
+def test_a_cli_write_shows_each_log_line_once(kelso_env):
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  assert kelso_env.run("stop", "ports-demo").returncode == 0
+  removed = kelso_env.run("rm", "ports-demo", "-y")
+  assert removed.returncode == 0, removed.stderr
+  assert removed.stderr.count("Removed run directory") == 1
+  [run, *_] = _runs(kelso_env)
+  log = (kelso_env.root / "var" / "logs" / run["log"]).read_text()
+  assert run["verb"] == "rm"
+  assert "Removed run directory" in log
 
 
 # --- running as root -------------------------------------------------------

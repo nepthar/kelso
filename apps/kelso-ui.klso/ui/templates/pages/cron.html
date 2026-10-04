@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import pill, when, log_button %}
+{% from "macros.html" import pill, run_status, when, log_button %}
 
 {% block content %}
 <p class="lede">Scheduled commands from each app's manifest, checked every five minutes</p>
@@ -26,7 +26,7 @@
   <td class="muted">{{ when(run.ts) }}</td>
   <td>{{ run.app_id }}</td>
   <td class="name">{{ run.args.get('job', '') }}</td>
-  <td>{{ pill(run.status, 'running' if run.status == 'ok' else 'bad') }}</td>
+  <td>{{ run_status(run.status) }}</td>
   <td class="muted">{{ '%.1fs'|format(run.duration_ms / 1000) if run.duration_ms is not none else '—' }}</td>
   <td>
     {%- if run.available %}{{ log_button('view', run.log, run.status, title='cron ' ~ run.app_id ~ ' ' ~ run.args.get('job', '')) }}

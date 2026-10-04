@@ -27,15 +27,15 @@ def register(subparsers) -> None:
   add.add_argument(
     "--name", default="", help="Name it something other than the default"
   )
-  add.set_defaults(func=_add)
+  add.set_defaults(func=_add, activity="repo-add")
 
   update = sub.add_parser("update", help="Bring mirrored repos up to the remote")
   update.add_argument("name", nargs="?", default="", help="One repo, or all of them")
-  update.set_defaults(func=_update)
+  update.set_defaults(func=_update, activity="repo-update")
 
   remove = sub.add_parser("remove", help="Drop a repo and its mirrored copy")
   remove.add_argument("name", help="Repo to remove")
-  remove.set_defaults(func=_remove)
+  remove.set_defaults(func=_remove, activity="repo-remove")
 
   listing = sub.add_parser("list", help="Show configured repos and their apps")
   listing.set_defaults(func=_list)

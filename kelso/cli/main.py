@@ -2,6 +2,7 @@ import argparse
 import gc
 import logging
 import sys
+from pathlib import Path
 
 from kelso import VERSION
 from kelso.cli import (
@@ -27,6 +28,8 @@ from kelso.cli import (
   update,
   updown,
 )
+from kelso.lib.activity import BY_CLI, Activity
+from kelso.lib.bundle import app_id_from_path, is_pathlike
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
@@ -149,6 +152,33 @@ def build_parser() -> argparse.ArgumentParser:
   return parser
 
 
+def _activity(args: argparse.Namespace) -> str | None:
+  """The verb a command that changes something records itself under.
+
+  A command sets `activity` with `set_defaults`: a verb, or a function of its
+  arguments for one that only sometimes writes. Unset, nothing is recorded.
+  """
+  activity = getattr(args, "activity", None)
+  return activity(args) if callable(activity) else activity
+
+
+def _app_named(args: argparse.Namespace, ctx: KelsoCtx) -> str | None:
+  """The app a command acts on, as the activity log files it."""
+  raw = getattr(args, "app", None) or getattr(args, "app_id", None)
+  if not raw:
+    return None
+  if is_pathlike(raw):
+    try:
+      return app_id_from_path(Path(raw).expanduser())
+    except ValueError:
+      return None
+  name = raw.partition("@")[0]
+  try:
+    return ctx.resolve_app(name)
+  except (ValueError, RuntimeError):
+    return name
+
+
 def _dispatch(args: argparse.Namespace) -> None:
   try:
     # Before anything else, and before `init` in particular: the first command
@@ -160,7 +190,22 @@ def _dispatch(args: argparse.Namespace) -> None:
       cfg = load_config()
       if not cfg:
         raise ValueError("Kelso is not initialized; run `kelso init` first")
-      args.func(args, KelsoCtx(cfg))
+      ctx = KelsoCtx(cfg)
+      verb = _activity(args)
+      if verb is None:
+        args.func(args, ctx)
+      else:
+        # The CLI's own handler already shows kelso's log lines; echo only
+        # what docker streams, which would otherwise go to the file alone.
+        with Activity(
+          ctx,
+          verb,
+          app=_app_named(args, ctx),
+          echo=sys.stderr,
+          echo_logs=False,
+          started_by=BY_CLI,
+        ):
+          args.func(args, ctx)
   except KeyboardInterrupt:
     raise SystemExit(130) from None
   except (RuntimeError, ValueError) as error:
