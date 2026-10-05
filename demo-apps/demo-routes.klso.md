@@ -19,6 +19,8 @@ app = { kind = "app", src = "app", readonly = true }
 image  = "nginx:alpine"
 volumes = { app = "/etc/nginx/templates" }
 healthcheck = "wget -q -O /dev/null http://localhost:8081/ || exit 1"
+# The address the main route answers at, e.g. demo-routes.example.com.
+env    = { KLSO_DOMAIN = "${klso.domain}" }
 
 [run.main.routes]
 # "main" is the bare subdomain; non-private routes auto-assign to default_route_provider
@@ -30,7 +32,9 @@ host_only = { port = "8083", private = true }
 ```
 
 One nginx server per route. nginx:alpine runs envsubst over `*.template`
-files, filling in `${KLSO_DOMAIN}` (injected by kelso) before nginx starts.
+files before nginx starts, filling in `${KLSO_DOMAIN}`, which the manifest maps
+from `${klso.domain}`. Until a route provider is assigned, that domain is the
+`kelso.localhost` placeholder.
 
 ```nginx klso_path="app/site.conf.template"
 server {

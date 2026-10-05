@@ -4,6 +4,14 @@ One volume of each kind: `app` (files shipped with the bundle, read-only),
 `data` (persisted), `temp` (scratch), and `host` (a tagged host directory you
 must bind before starting). The script just lists what got mounted.
 
+Before starting it, declare a host volume and bind `files` to it:
+
+```
+kelso system host-volume --add files=/some/dir --readonly
+kelso start demo-volumes --bind files=files
+kelso logs demo-volumes
+```
+
 ```toml klso_path="manifest.toml"
 [app]
 version      = "0.1.0"
@@ -21,13 +29,16 @@ image   = "alpine:latest"
 cmd     = ["/bin/sh", "-c", "/demo/app/list_volumes.sh"]
 volumes = { app = "/demo/app", state = "/demo/state", files = "/demo/host_files", temp = "/demo/tmp" }
 restart = "no"
+# ${klso.volumes} is this unit's volumes as "name:/path,name:/path". Kelso
+# substitutes it here; the script reads it as an ordinary variable.
+env     = { KLSO_VOLUMES = "${klso.volumes}" }
 ```
 
 The script, extracted to `app/list_volumes.sh` and marked executable:
 
 ```bash klso_path="app/list_volumes.sh:+x"
 #!/bin/sh
-# volumes are mounted via KLSO_VOLUMES ("name:/guest/path,name:/guest/path").
+# KLSO_VOLUMES is "name:/guest/path,name:/guest/path", mapped in by the manifest.
 
 date
 

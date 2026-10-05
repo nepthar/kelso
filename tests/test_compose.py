@@ -341,6 +341,25 @@ compose = { stop_grace_period = "30s" }
   assert services["side"]["stop_grace_period"] == "30s"
 
 
+def test_a_dollar_in_cmd_reaches_the_container(tmp_path):
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine"
+cmd   = ["/bin/sh", "-c", "echo $MESSAGE"]
+""",
+  )
+
+  services = make_compose_dict(spec, run_data(spec))["services"]
+
+  # `$$` is compose's literal dollar, so the shell sees `$MESSAGE`.
+  assert services["main"]["command"] == ["/bin/sh", "-c", "echo $$MESSAGE"]
+
+
 def test_a_healthcheck_is_the_command_with_kelsos_timing(tmp_path):
   """The bundle says what to run; kelso says how often."""
   spec = spec_of(

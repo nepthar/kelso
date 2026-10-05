@@ -46,7 +46,7 @@ creates.
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `image` | string | **required** | Pin a tag. `latest` makes a bundle unreproducible. |
-| `cmd` | list of strings | image default | Overrides the image's command. |
+| `cmd` | list of strings | image default | Overrides the image's command. Passed as written: a `$VAR` in it is the container's to expand, not kelso's or compose's. |
 | `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which is kelso's. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
@@ -375,9 +375,9 @@ inspect`, and on the app's card in the web UI:
 Nothing is refused: the machine belongs to the operator, and `privileged =
 true` is a legitimate thing for a bundle to need. But kelso cannot know what an
 arbitrary compose key does, so it says so and shows the operator exactly what
-was asked for. This also catches typos — compose silently ignores a key it
-does not know, so a misspelled `devcies` would otherwise do nothing at all
-and say nothing about it. See [demo-danger](../demo-apps/demo-danger.klso.md).
+was asked for. A misspelled key is listed too, and compose then refuses to
+start the app with its own error. See
+[demo-danger](../demo-apps/demo-danger.klso.md).
 
 ## A bundle in one file
 
