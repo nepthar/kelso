@@ -1,7 +1,7 @@
 # Runs a service that pauses adguard, which is bookmarkable
 
 [app]
-version      = "1.0.0"
+version      = "1.0.1"
 display_name = "Adguard Pause Button"
 description  = "A service that pauses adguard DNS blocking for a while via giant button"
 

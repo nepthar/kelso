@@ -84,7 +84,7 @@ The [demo apps](demo-apps) are small ones that each show off a feature, one read
 ## Getting Started
 Kelso needs `git`, `docker` with the compose plugin, and `uv`, on Linux with your user in the `docker` group. Then:
 ```bash
-uv tool install "git+https://github.com/nepthar/kelso@v1.0.0"
+uv tool install "git+https://github.com/nepthar/kelso@v1.0.1"
 kelso init --yes
 sudo reboot
 ```
