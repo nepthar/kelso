@@ -32,7 +32,6 @@ def routes(page: PageDep):
 
 @router.post("/routes")
 async def post_routes(request: Request):
-  """Unpublish one route by hand."""
   form = await request.form()
   tag, subdomain = field(form, "provider"), field(form, "subdomain")
   try:

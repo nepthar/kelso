@@ -269,7 +269,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/route-providers/{tag}/routes", tags=["routes"])
   def list_published_routes(tag: str, ctx: Ctx) -> dict:
-    """What the provider publishes now. Asks the provider, so it can be slow."""
     if tag not in ctx.config.route_providers:
       raise HTTPException(404, f"No route provider {tag!r}")
     try:
@@ -279,7 +278,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.delete("/route-providers/{tag}/routes/{subdomain}", tags=["routes"])
   def delete_published_route(tag: str, subdomain: str, ctx: Ctx) -> dict:
-    """Unpublish a route kelso published; its app keeps wanting it until loaded."""
     if tag not in ctx.config.route_providers:
       raise HTTPException(404, f"No route provider {tag!r}")
     try:
