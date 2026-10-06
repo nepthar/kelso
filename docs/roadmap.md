@@ -333,6 +333,9 @@ the invoking user and cannot touch what the app's containers wrote.
   `bulk`, `logs`, `temp`, `app` or `host` reads ambiguously everywhere a volume
   is shown next to its kind, and the `Data:` line `kelso start` prints picks a
   volume by the name `data`.
+- **A loaded manifest viewer on the app page.** The web UI's app page shows a
+  brief "manifest" section of a few key-value pairs. There should be a way to
+  pop open a view of the whole loaded manifest, as kelso loaded it.
 - **Screenshots in the README.** The web UI is a large part of using kelso and
   the README never shows it.
 - **A routes guide.** Leading with Cloudflare Tunnel, then Nginx Proxy Manager

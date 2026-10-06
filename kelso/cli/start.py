@@ -5,7 +5,6 @@ from kelso.cli.kv import parse_kv
 from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, start
-from kelso.lib.observations import observe
 from kelso.lib.receipt import capability_receipt, location_receipt
 
 logger = logging.getLogger("kelso.cli")
@@ -67,12 +66,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if loading and not args.yes and not confirm_compose_warnings(app, bundle):
     print("Nothing started.")
     return
-
-  if not loading and observe(app, ctx).config_pending:
-    logger.warning(
-      f"{app}'s config has changed since it was loaded, and starting does not "
-      f"apply it. Reload instead: kelso load {app}"
-    )
 
   with ctx.locked(f"start {app}", app):
     result = start(

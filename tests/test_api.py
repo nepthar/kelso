@@ -351,6 +351,19 @@ def _compose_calls(kelso_env) -> list[list[str]]:
   ]
 
 
+def test_restart_runs_as_a_job(kelso_env, client, jobs):
+  kelso_env.run("start", APP, "--set", "admin_user=root")
+  kelso_env.run("config", APP, "--set", "admin_user=alice")
+  assert client.get(f"/apps/{APP}").json()["changes_pending"] is True
+
+  job = submit(client, jobs, "restart", {"app": APP})
+  assert job["state"] == "done", job["error"]
+  assert f"Restarted {APP}" in read_log(job)
+  view = client.get(f"/apps/{APP}").json()
+  assert view["status"] == "ok"
+  assert view["changes_pending"] is False
+
+
 def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
   kelso_env.run("start", APP, "--set", "admin_user=root")
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
@@ -1174,16 +1187,26 @@ def test_removal_verbs_refuse_an_unknown_app(kelso_env, client):
 
 def test_a_freshly_started_app_has_nothing_pending(kelso_env, client):
   kelso_env.run("start", APP, "--set", "admin_user=alice")
-  assert client.get(f"/apps/{APP}").json()["config_pending"] is False
+  assert client.get(f"/apps/{APP}").json()["changes_pending"] is False
 
 
-def test_config_set_after_a_load_is_pending_until_reloaded(kelso_env, client):
-  """Running or not: config applies on reload, so it is pending until then."""
-  kelso_env.run("load", APP)
-  kelso_env.run("config", APP, "--set", "admin_user=alice")
-  assert client.get(f"/apps/{APP}").json()["config_pending"] is True
-  kelso_env.run("load", APP)
-  assert client.get(f"/apps/{APP}").json()["config_pending"] is False
+def test_config_set_after_a_start_is_pending_until_the_next_one(kelso_env, client):
+  """A start reads config, so what is running is behind until it restarts."""
+  kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.run("config", APP, "--set", "admin_user=bob")
+  assert client.get(f"/apps/{APP}").json()["changes_pending"] is True
+  kelso_env.run("restart", APP)
+  assert client.get(f"/apps/{APP}").json()["changes_pending"] is False
+
+
+def test_a_subdomain_change_is_pending_until_a_start_rederives_routes(
+  kelso_env, client
+):
+  kelso_env.run("load", "routes-demo")
+  kelso_env.run("config", "routes-demo", "--set", "subdomain=pics")
+  assert client.get("/apps/routes-demo").json()["changes_pending"] is True
+  kelso_env.run("start", "routes-demo")
+  assert client.get("/apps/routes-demo").json()["changes_pending"] is False
 
 
 def test_route_assignment_is_recorded_without_calling_the_provider(
@@ -1195,7 +1218,7 @@ def test_route_assignment_is_recorded_without_calling_the_provider(
   )
   assert response.status_code == 200, response.text
   # The default provider again, so nothing changed and nothing is pending.
-  assert client.get("/apps/routes-demo").json()["config_pending"] is False
+  assert client.get("/apps/routes-demo").json()["changes_pending"] is False
 
 
 # --- metrics ---------------------------------------------------------------

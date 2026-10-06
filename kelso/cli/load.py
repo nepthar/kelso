@@ -2,10 +2,12 @@ import argparse
 import logging
 from pathlib import Path
 
+from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, reload_app
 from kelso.lib.receipt import capability_receipt, route_receipt_lines
+from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import ComposeWarning
 
 logger = logging.getLogger("kelso.cli")
@@ -43,7 +45,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
-    reloading = ctx.is_loaded(app)
     result = reload_app(app, bundle, ctx, bound=target.bound_to)
   load = result.load
   for name in load.dropped_volumes:
@@ -55,11 +56,22 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if result.was_running:
     print(f"Restarted {app}")
     print(capability_receipt(load.spec, load.run_data, ctx, compact=True))
-  else:
-    print(f"Start it with: kelso start {app}")
-  if reloading:
+    # Routes were re-published just now; a stopped app has none to show.
     for line in route_receipt_lines(load.spec, load.run_data, ctx):
       print(line)
+  else:
+    print(start_hint(app, load.run_data))
+
+
+def start_hint(app: AppID, run_data: AppRunData) -> str:
+  """How to start a freshly loaded app, naming the config it still needs."""
+  unset = [
+    name for name, value in run_data.config_values.items() if value.value is None
+  ]
+  if not unset:
+    return f"Start it with: kelso start {app}"
+  flags = " ".join(f"--set {name}=<{name}>" for name in unset)
+  return f"Set {', '.join(unset)}, then start it with: kelso start {app} {flags}"
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:

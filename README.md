@@ -1,8 +1,14 @@
 # Kelso Server
 
-**Self host, distribute, enjoy!**
+**A declarative selfhosting platform for managing and distributing apps.**
 
 Kelso is a self-hosting management system where apps are packages that describe *what* they need rather than *how* they get it. This, combined with a small amount of one time configuration allows for easy distribution, secrets, management, and snapshotting of self-hosted apps.
+
+![The kelso web UI: host resources and loaded apps](docs/images/kelso-ui.jpg)
+
+- **Configure your system layout once, load any app.** Kelso places each app's data where you tell it. Apps describe "what" they need instead of "how" it's wired up.
+- **There is no lock-in by design.** Under the hood, each app is a docker compose project. If you remove the `kelso` binary from your system, you'll still have an organized, functional folder tree of docker compose projects that you can directly interact with.
+- **Snapshots you can actually trust.** `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again, so what you get back is a coherent point in time.
 
 ## How does it work?
 Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
@@ -40,115 +46,54 @@ $ kelso load unifi-network-application
 $ kelso start unifi-network-application
 ```
 
-Under the hood, Kelso is using the manifest + your configuration to create a docker compose project.
+<!-- terminal recording goes here: docs/images/kelso-demo.gif -->
 
-**There is no lock-in by design.** If you remove the `kelso` binary from your system, you'll still have an organized, functional folder tree of docker compose projects that you can directly interact with.
+Under the hood, Kelso is using the manifest + your configuration to create a docker compose project.
 
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
+## What you get
+
+- **A web UI.** Host resources, loaded apps, volumes, snapshots, routes, cron and activity, served by the [kelso-ui](apps/kelso-ui.klso) app over kelsod's admin socket.
+- **Secrets.** Declared in the manifest, generated on load, stored encrypted. No `.env` files.
+- **Volumes.** Each app's data, bulk, temp and log volumes land where you configured, as plain folders you can see into.
+- **Snapshots.** Whole-app archives of volumes and run state, taken at a coherent point in time, restored the same way.
+- **Cron.** Scheduled commands inside an app, run by kelsod.
+- **Routes.** Expose an app's ports through Cloudflare Tunnel, Nginx Proxy Manager or Pangolin.
+- **App repos.** A repo is a folder of bundles pushed to git. `kelso repo add` makes every app in it a `kelso start` away.
+
+The full list of what a manifest can say is in the [manifest](docs/manifest.md) docs.
+
+## Apps today
+
+`kelso init` adds the [staples](apps) repo, the apps kelso maintains:
+
+| App | |
+| --- | --- |
+| [kelso-ui](apps/kelso-ui.klso) | Web interface for kelso, over the kelsod admin socket |
+| [immich](apps/immich.klso.md) | Self-hosted photo and video backup |
+| [jellyfin](apps/jellyfin.klso.md) | Stream your own movies, shows and music to any device |
+| [mealie](apps/mealie.klso.md) | Manage, save, share recipes and make shopping lists |
+| [nginx-proxy-manager](apps/nginx-proxy-manager.klso.md) | Reverse proxy, w/ ssl certs managed by letsencrypt |
+| [cloudflared](apps/cloudflared.klso.md) | Cloudflare Tunnel connector for the cloudflare_tunnel route provider |
+| [unifi-network-application](apps/unifi-network-application.klso) | Unifi Network Application from linuxserver.io |
+| [adguard-pause](apps/adguard-pause.klso) | A service that pauses adguard DNS blocking for a while via giant button |
+
+The [demo apps](demo-apps) are small ones that each show off a feature, one readable file apiece. Writing your own takes a few minutes: see the [case study](docs/case_study.md).
+
 ## Getting Started
-Kelso needs `git`, `docker` with the compose plugin, and `uv`. Docker must run
-as root, with your user in the `docker` group: rootless docker and podman are
-not supported yet. `kelso init` checks all of this and refuses to run until it
-holds.
-
-### Prerequisites on a fresh Ubuntu Server
-```bash
-sudo apt-get update && sudo apt-get install -y git curl
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-Then log out and back in, so your shell picks up the `docker` group and uv's
-`PATH`.
-
-### Install kelso
+Kelso needs `git`, `docker` with the compose plugin, and `uv`, on Linux with your user in the `docker` group. Then:
 ```bash
 uv tool install "git+https://github.com/nepthar/kelso@v1.0.0"
 kelso init --yes
 sudo reboot
 ```
-The install carries two commands: `kelso`, the CLI, and `kelsod`, the daemon
-that starts apps at boot, runs their cron jobs, records metrics, and serves the
-admin API the web UI talks to.
-
-`init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and runs
-`kelsod` as a systemd user service. Plain `kelso init` asks where to put the
-root instead.
-
-The reboot matters even though you just logged back in. kelsod runs under
-systemd's per-user manager, which keeps the groups it started with; if that
-manager started before you joined the `docker` group, kelsod cannot reach
-docker until it restarts. A reboot fixes that and shows that kelsod comes back
-on its own.
-
-Without systemd, `kelso init` skips the service: run `kelsod` in a terminal
-when you want apps resumed, cron run, or the web UI. `kelso system service`
-installs the service for a root that already exists.
-
-### Try it
-`kelso init` sets up one repo, `staples`: the apps kelso maintains. Kelso's demo
-apps are small ones that each show off a feature; add them, then start one and
-run its commands:
+`init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and runs `kelsod` as a systemd user service. For the web UI, choose its admin password and start it; it prints the address to open:
 ```bash
-kelso repo add github://nepthar/kelso/main/demo-apps --name demos
-kelso start demo-cron
-kelso cmd demo-cron
-kelso cmd demo-cron stamp hello
-kelso cmd demo-cron show
-kelso logs demo-cron
-kelso stop demo-cron
-```
-Each demo is one readable file: `repos/demos/demo-apps/demo-cron.klso.md` is the
-one above. `kelso repo list` shows every app you can start, and when you are
-done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
-
-For the web UI, choose its admin password and start it; it prints the address
-to open: `kelso start kelso-ui --set admin_pass=<password>`.
-
-### Upgrading kelso
-Install the release you want by its tag, then restart kelsod on it:
-```bash
-uv tool install --force "git+https://github.com/nepthar/kelso@<tag>"
-kelso system service
-```
-The second command rewrites kelsod's systemd unit for the new install and
-restarts it. Apps keep running throughout, except those in start group 0, which
-stop and start with kelsod. Loaded apps keep the version they were loaded at;
-`kelso update <app>` moves one to what its repo holds now.
-
-### Uninstalling kelso
-```bash
-kelso down
-systemctl --user disable --now kelsod.service
-rm ~/.config/systemd/user/kelsod.service
-uv tool uninstall kelso
-sudo rm -rf ~/kelso
-```
-`kelso down` stops every app. The last command deletes all of kelso's data,
-app volumes included; `sudo`, because containers write volume files as root.
-Skip it to keep the root, which stays a folder of ordinary compose projects.
-Docker images kelso pulled stay until you remove them (`docker image prune -a`).
-
-### Volume Storage Locations
-
-App volumes live in `<kelso_root>/volumes/<kind>/<app>/<volume>` where `<kind>`
-is one of `data`, `temp`, `bulk` and `logs`. You probably want to change where
-some of these volumes are stored and you can do so with symlinks.
-
-For example:
-```
-mv ~/kelso/volumes/bulk/* /mnt/nas/kelso-bulk/
-rmdir ~/kelso/volumes/bulk
-ln -s /mnt/nas/kelso-bulk ~/kelso/volumes/bulk
+kelso start kelso-ui --set admin_pass=<password>
 ```
 
-**Note: On a share that may not be mounted, link to a directory *inside* the share,
-never to the mount point itself.** Kelso checks for dangling links and this is its
-only signal that the volume has not been mounted yet.
-
-If kelso finds dangling links to volume roots, it will refuse to start apps
-rather than re-populate with empty folders.
+The [install guide](docs/install.md) has the prerequisites for a fresh Ubuntu Server, why the reboot matters, a tour of the demo apps, and how to upgrade, uninstall, and move volumes onto other disks.
 
 ## Why kelso?
 
@@ -178,12 +123,14 @@ You may not want to use kelso if:
 
 ## See Also
 
-
+- [Installing kelso](docs/install.md): prerequisites, upgrading, uninstalling, volume locations
 - The anatomy of a kelso app [manifest](docs/manifest.md)
 - A [case study](docs/case_study.md): building one from scratch
 - Our current [roadmap](docs/roadmap.md), with known issues and the todo list
 - How the [test suite](docs/testing.md) is put together
 
+## Contributing
+Contributions are welcome under the Apache License 2.0; see [CONTRIBUTING.md](CONTRIBUTING.md) for the sign-off (DCO) and the checks to run before a PR.
 
 ## Why "Kelso"?
 [Kelso](https://www.nps.gov/moja/learn/historyculture/kelso-depot.htm) was a small, unremarkable but important train stop in the Mojave desert. Like this app, it served a purpose with little to no fanfare.

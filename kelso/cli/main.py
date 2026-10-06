@@ -19,6 +19,7 @@ from kelso.cli import (
   ps,
   remove,
   repo,
+  restart,
   routes,
   shell,
   snapshot,
@@ -44,6 +45,7 @@ COMMANDS = [
   ps,
   start,
   stop,
+  restart,
   config,
   cmd,
   load,
@@ -67,6 +69,7 @@ Apps
   ps          List loaded apps and their state
   start       Start an app, loading it first if needed
   stop        Stop a running app
+  restart     Stop an app and start it again, applying any config changes
   config      View or set an app's config, routes, and volume binds
   cmd         List or run an app's commands
   load        Load or re-load an app, restarting it if running

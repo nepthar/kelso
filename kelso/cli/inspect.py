@@ -52,10 +52,11 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
           f"manifest has changed, `kelso load {app}` may be required to reflect "
           f"changes",
         )
-      if observe(app, ctx).config_pending:
+      observation = observe(app, ctx)
+      if observation.changes_pending and observation.running_count:
         notes += (
-          f"config has changed since {app} was loaded; reload to apply: "
-          f"`kelso load {app}`",
+          f"config has changed since {app} started; restart to apply: "
+          f"`kelso restart {app}`",
         )
 
     print(
