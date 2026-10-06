@@ -228,7 +228,6 @@ Fix what an agent would trip over first, since every one of these is a place
 where it cannot tell what went wrong:
 
 - The known issues below, starting with the two that fail silently.
-- The doctor checks in the todo list.
 - `load` naming the real cause when an app's repo no longer carries it (today
   it says `No app found`).
 
@@ -307,8 +306,8 @@ and the result. Revisit if people without an agent ask for it.
   keeps the manifest it was loaded with. When a newer kelso stops accepting
   something in it, `ps` shows the app with blank columns, `inspect` says it is
   neither loaded nor in a catalog, `cmd` and `config` print a validation error,
-  `kelso cron` silently drops its jobs, and `doctor` reports nothing.
-  `kelso update` fails too, since its pre-update snapshot reads that manifest.
+  `kelso cron` silently drops its jobs, and `kelso update` fails, since its
+  pre-update snapshot reads that manifest. `kelso system doctor` reports it.
   Workaround: `kelso load <app>` from a source that parses.
 - **Two kelso roots on one docker daemon see each other's apps.** Compose
   project names and the `kelso.app_id` label are not scoped to a root, so a
@@ -321,9 +320,8 @@ and the result. Revisit if people without an agent ask for it.
   it on a root that holds secrets.
 - **kelsod being down is invisible.** kelsod records the metrics behind volume
   sizes, resumes apps at boot, and runs cron. With it stopped, `kelso status`
-  shows `0.0 B` for every volume kind, `doctor` says nothing, apps stay down
-  after a reboot, and cron jobs do not run. Check it with
-  `systemctl --user status kelsod`.
+  shows `0.0 B` for every volume kind, apps stay down after a reboot, and cron
+  jobs do not run. `kelso system doctor` reports it.
 - **`load` says `No app found` when an app's repo no longer carries it.** If the
   repo a loaded app came from is gone or not mirrored, `kelso load <app>` falls
   back to the loaded copy, finds no source, and reports the app as missing.
@@ -351,9 +349,6 @@ and the result. Revisit if people without an agent ask for it.
   network per app, the `kelso.*` labels, the `KLSO_*` variables, `/kelso/bin`
   for apps with commands, and the host port range (`port_base` to
   `port_base + 1000`) to open in a firewall.
-- **Doctor checks for the quiet failures** above: a loaded manifest that no
-  longer parses (naming the fix), and kelsod not listening or its metrics gone
-  stale.
 - **Release hygiene.** A changelog or GitHub release notes for each tag; a
   platform statement in the README (Linux with systemd, amd64 and arm64, tested
   on Ubuntu Server 26.04 and Raspberry Pi OS); a GitHub description and topics

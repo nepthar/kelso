@@ -9,6 +9,7 @@ instead.
 import json
 import os
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,7 @@ from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
 from kelso.lib.docker import DockerError, DockerReturn
-from kelso.lib.doctor import Finding, diagnose
+from kelso.lib.doctor import STALE_METRICS_SECONDS, Finding, diagnose, kelsod_problems
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
 
@@ -1312,6 +1313,37 @@ def test_doctor_lists_problems_then_warnings(kelso_env):
     "Warnings:\n"
     "  io.example.abandoned: orphaned route allocation; `kelso cleanup` releases it\n"
   )
+
+
+def test_doctor_reports_a_loaded_manifest_that_no_longer_parses(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  ctx.loaded_paths("ports-demo").manifest_path.write_text("not = [valid")
+
+  (problem,) = _diagnose(kelso_env).problems
+  assert problem.subject == "ports-demo"
+  assert "loaded manifest no longer parses" in problem.message
+  assert "`kelso load ports-demo`" in problem.message
+
+
+def test_doctor_reports_kelsod_not_listening(kelso_env):
+  (problem,) = kelsod_problems(KelsoCtx(load_config_file(kelso_env.config)))
+  assert "nothing is listening on" in problem.message
+  assert "systemctl --user start kelsod" in problem.message
+
+
+def test_doctor_reports_kelsod_metrics_gone_stale(kelso_env, monkeypatch):
+  monkeypatch.setattr(kelso.lib.doctor, "_listening", lambda path: True)
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  (problem,) = kelsod_problems(ctx)
+  assert "scheduler is stuck" in problem.message
+
+  ctx.record_gauge("host_cpu_used_ratio", 0.1)
+  assert kelsod_problems(ctx) == []
+
+  later = time.time() + STALE_METRICS_SECONDS + 1
+  monkeypatch.setattr(kelso.lib.doctor.time, "time", lambda: later)
+  assert kelsod_problems(ctx) != []
 
 
 def _diagnose(kelso_env):

@@ -4,12 +4,18 @@ Diagnosis only reads; the caller holds the kelso lock and renders the result.
 """
 
 import re
+import socket
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
+from kelso.lib.apps import AppID
 from kelso.lib.docker import DOCKER, DockerError, docker_run_command
 from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
+from kelso.lib.lifecycle.load import bound_entry
 from kelso.lib.observations import AppObservation
+from kelso.lib.spec import AppSpec
 
 
 @dataclass(frozen=True)
@@ -30,7 +36,12 @@ class DoctorPrognosis:
 
 def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
   """Collect problems and warnings across volumes, the catalog, and every app."""
-  problems = [*tool_problems(), *_volume_problems(ctx), *_catalog_problems(ctx)]
+  problems = [
+    *tool_problems(),
+    *kelsod_problems(ctx),
+    *_volume_problems(ctx),
+    *_catalog_problems(ctx),
+  ]
   warnings = []
   for observation in ctx.observations():
     subject = observation.app_id
@@ -111,6 +122,50 @@ def _rootless(info: list[dict]) -> bool:
   return any("name=rootless" in option for option in options)
 
 
+# kelsod records host metrics when it starts and every 5 minutes after.
+STALE_METRICS_SECONDS = 15 * 60
+
+
+def kelsod_problems(ctx: KelsoCtx) -> list[Finding]:
+  """kelsod listening on its admin socket, and its scheduler still running."""
+  path = ctx.config.admin_socket_path
+  if not _listening(path):
+    return [
+      Finding(
+        "kelsod",
+        f"nothing is listening on {path}, so apps do not resume at boot, cron "
+        "jobs do not run, and volume sizes go blank. Start it with "
+        "`systemctl --user start kelsod`; `journalctl --user -u kelsod` says "
+        "why it stopped.",
+      )
+    ]
+  readings = ctx.metrics_log.scan("gauge/host_cpu_used_ratio").values()
+  newest = max((entry.unix_seconds for entry in readings), default=0)
+  if time.time() - newest > STALE_METRICS_SECONDS:
+    return [
+      Finding(
+        "kelsod",
+        f"it is listening but has recorded no host metrics for over "
+        f"{STALE_METRICS_SECONDS // 60} minutes, so its scheduler is stuck and "
+        "cron jobs are not running either. Restart it with "
+        "`systemctl --user restart kelsod`.",
+      )
+    ]
+  return []
+
+
+def _listening(path: Path) -> bool:
+  probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+  try:
+    probe.settimeout(1.0)
+    probe.connect(str(path))
+  except OSError:
+    return False
+  finally:
+    probe.close()
+  return True
+
+
 def _volume_problems(ctx: KelsoCtx) -> list[Finding]:
   findings = []
   for kind, root in ctx.config.volume_roots.items():
@@ -142,13 +197,22 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
   catalog = ctx.app_catalog()
   for app_id in sorted(catalog):
     entries = catalog[app_id]
-    if len(entries) > 1:
+    if len(entries) > 1 and bound_entry(ctx, AppID(app_id), entries) is None:
       findings.append(Finding("", ambiguity_message(app_id, entries)))
   return findings
 
 
 def _app_problems(observation: AppObservation, ctx: KelsoCtx) -> list[str]:
   notes = []
+  manifest = ctx.loaded_paths(observation.app_id).manifest_path
+  if observation.run_dir_exists and manifest.is_file():
+    try:
+      AppSpec.from_file(manifest, observation.app_id)
+    except ValueError as e:
+      notes.append(
+        f"its loaded manifest no longer parses; `kelso load "
+        f"{observation.app_id}` from a bundle that does. {e}"
+      )
   # A route entry alone is the orphaned allocation warned about, not this.
   if observation.bundle_path is None and (
     observation.run_dir_exists or observation.containers

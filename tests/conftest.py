@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 import kelso.lib.docker
+import kelso.lib.doctor
 import kelso.lib.lifecycle.rootfs
 from kelso.cli.main import run as cli_run
 from kelso.lib.apps import AppID
@@ -330,4 +331,6 @@ def kelso_env(
   monkeypatch.setenv("KELSO_ROOT", str(root))
   monkeypatch.setenv("KELSO_LOCK_TIMEOUT", str(LOCK_TIMEOUT))
   monkeypatch.chdir(root)
+  # No kelsod runs under test; its own tests call `kelsod_problems` directly.
+  monkeypatch.setattr(kelso.lib.doctor, "kelsod_problems", lambda ctx: [])
   return env
