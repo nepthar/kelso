@@ -101,14 +101,14 @@ nav a:hover { color: var(--fg); border-left-color: var(--line); }
 nav a.active { color: var(--coral); border-left-color: var(--coral); font-weight: 500; }
 .nav-foot { margin-top: auto; }
 .nav-out button, .nav-theme {
-  display: block; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   padding: 5px 10px; margin-bottom: 1px;
   background: none; border: 0; border-left: 2px solid transparent;
   color: var(--muted); text-transform: lowercase; font: inherit; font-size: 14px;
   cursor: pointer;
 }
 .nav-out button:hover, .nav-theme:hover { color: var(--fg); border-left-color: var(--line); }
-.nav-out .mark, .nav-theme .mark { display: none; }
+.nav-out .mdi, .nav-theme .mdi { width: 18px; height: 18px; fill: currentColor; flex: none; }
 /* `.nav-foot` holds the auto margin that pushes the foot and the toggle down;
    two auto margins in one column would split the slack between them instead. */
 .nav-toggle {
@@ -124,14 +124,9 @@ html.nav-collapsed .brand .who,
 html.nav-collapsed nav a .label, html.nav-collapsed .nav-out .label,
 html.nav-collapsed .nav-theme .label { display: none; }
 .brand .mark .mdi { display: block; width: 36px; height: 36px; fill: currentColor; }
-html.nav-collapsed nav a { padding: 5px 0; justify-content: center; }
-html.nav-collapsed .nav-out button { padding: 5px 0 5px 8px; }
-html.nav-collapsed .nav-out .mark { display: inline; }
-html.nav-collapsed .nav-theme {
-  display: flex; justify-content: center; padding: 5px 0;
-}
-html.nav-collapsed .nav-theme .mark { display: flex; }
-.nav-theme .mdi { width: 18px; height: 18px; fill: currentColor; }
+html.nav-collapsed nav a,
+html.nav-collapsed .nav-out button,
+html.nav-collapsed .nav-theme { padding: 5px 0; justify-content: center; }
 
 /* The theme menu: a raised list beside the nav, opened from the theme button.
    Items read like nav links -- lowercase, with a coral edge on the current one. */

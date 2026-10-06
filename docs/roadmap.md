@@ -294,10 +294,6 @@ Both break the same assumption: `lib/lifecycle/rootfs.py` reads and deletes
 volume files as the container's root, which under a user namespace maps back to
 the invoking user and cannot touch what the app's containers wrote.
 
-### Editing config.toml in the web UI
-Probably superseded: in v2 an agent edits files and the web UI shows the plan
-and the result. Revisit if people without an agent ask for it.
-
 ---
 
 ## Known issues

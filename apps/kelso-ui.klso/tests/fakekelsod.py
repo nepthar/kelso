@@ -572,7 +572,12 @@ HOST = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 1, "hostname": f"tycho {EVIL}"},
+  "/version": {
+    "kelso": "0.1.0",
+    "api": 1,
+    "hostname": f"tycho {EVIL}",
+    "kelso_root": f"/home/kelso {EVIL}",
+  },
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,

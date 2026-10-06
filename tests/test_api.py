@@ -75,6 +75,7 @@ def test_version(kelso_env, client):
   body = client.get("/version").json()
   assert body["api"] == API_VERSION
   assert body["hostname"] == socket.gethostname()
+  assert body["kelso_root"] == str(kelso_env.root)
   assert body["kelso"]
   # The root is the same answer, so a bare curl at the socket says something.
   assert client.get("/").json() == body

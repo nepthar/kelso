@@ -69,11 +69,15 @@ NAV = (
   NavItem("/cron", "Cron", "clock-outline"),
   NavItem("/activity", "Activity", "file-document-multiple-outline"),
 )
+# In the nav's foot, with theme and sign out: the way onto the host itself.
+HOST = NavItem("/host/console", "Host", "console")
 
 
 def nav_active(path):
   """The nav entry a path belongs to; an app's page lights Dashboard, its list."""
-  if path.startswith(("/apps", "/host")):
+  if path.startswith("/host"):
+    return HOST
+  if path.startswith("/apps"):
     return NAV[0]
   for item in NAV:
     if path == item.href or (item.href != "/" and path.startswith(item.href + "/")):
@@ -121,6 +125,7 @@ templates.globals.update(
   asset=asset,
   mdi=mdi,
   nav=NAV,
+  host=HOST,
   themes=THEMES,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,

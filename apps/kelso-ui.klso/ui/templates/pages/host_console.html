@@ -4,10 +4,9 @@
 {% block head %}<link rel="stylesheet" href="{{ asset('vendor/xterm-6.0.0/xterm.css') }}">{% endblock %}
 
 {% block refresh %}{% endblock %}
-{% block actions %}<span class="head-actions"><a class="btn" href="/">Back to dashboard</a></span>{% endblock %}
 
 {% block content %}
-{% call terminal('/host/console/ws') %}A login shell on <span class="mono">{{ hostname }}</span>, as the user kelsod runs as.{% endcall %}
+{% call terminal('/host/console/ws') %}<span class="mono">{{ host_name }}</span> - <span class="mono">$KELSO_ROOT</span> is <span class="mono">{{ kelso_root }}</span>{% endcall %}
 {% endblock %}
 
 {% block scripts %}

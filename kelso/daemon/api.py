@@ -157,8 +157,13 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/", tags=["meta"])
   @app.get("/version", tags=["meta"])
-  def get_version() -> dict:
-    return {"kelso": VERSION, "api": API_VERSION, "hostname": socket.gethostname()}
+  def get_version(ctx: Ctx) -> dict:
+    return {
+      "kelso": VERSION,
+      "api": API_VERSION,
+      "hostname": socket.gethostname(),
+      "kelso_root": str(ctx.config.kelso_root),
+    }
 
   @app.get("/apps", tags=["apps"])
   def list_apps(ctx: Ctx) -> dict:
