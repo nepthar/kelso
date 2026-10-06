@@ -8,7 +8,12 @@ import yaml
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
-from kelso.lib.kelso import KelsoCtx, LoadedAppPaths, ambiguity_message
+from kelso.lib.kelso import (
+  CatalogEntry,
+  KelsoCtx,
+  LoadedAppPaths,
+  ambiguity_message,
+)
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.lifecycle.routes import take_down_routes
 from kelso.lib.options import validate_option
@@ -308,8 +313,22 @@ def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
       return LoadTarget(app, None, None)
     raise ValueError(f'No app found for "{app}"')
   if len(entries) > 1:
-    raise ValueError(ambiguity_message(app, entries))
+    entry = bound_entry(ctx, app, entries)
+    if entry is None:
+      raise ValueError(ambiguity_message(app, entries))
+    return LoadTarget(app, entry.path, entry.source)
   return LoadTarget(app, entries[0].path, entries[0].source)
+
+
+def bound_entry(
+  ctx: KelsoCtx, app: AppID, entries: tuple[CatalogEntry, ...]
+) -> CatalogEntry | None:
+  """The one of `entries` from the repo `app` is bound to, if any."""
+  was = bound_to(app, ctx)
+  for entry in entries:
+    if was == f"repo {entry.source}":
+      return entry
+  return None
 
 
 def _same_source(was: str, now: str) -> bool:

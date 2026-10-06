@@ -1,8 +1,8 @@
 """Extra repos: `[repo.<name>]` entries beyond `repos/local`.
 
-Several repos can carry the same app id. Kelso never picks between them:
-`bundle_path` refuses, `doctor` reports, and `<app>@<repo>` or a full path is
-how you say which one you mean.
+Several repos can carry the same app id. Kelso never guesses between them: a
+bare id resolves to the repo the app is bound to, and otherwise `<app>@<repo>`
+or a full path is how you say which one you mean; `doctor` reports the rest.
 """
 
 import logging
@@ -373,6 +373,23 @@ def test_a_repo_can_be_named_to_settle_an_ambiguous_id(kelso_env):
   loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "From dev" in loaded.read_text()
   assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo hrbr-dev"
+
+
+def test_a_bound_app_answers_to_its_bare_id(kelso_env):
+  dev = kelso_env.root / "dev-apps"
+  a_bundle(dev, "ports-demo", display="From dev")
+  add_repo_block(kelso_env, "hrbr-dev", dev)
+  assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
+  assert kelso_env.run("unload", "ports-demo", "-y").returncode == 0
+
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
+  assert "From dev" in loaded.read_text()
+  assert diagnose(ctx_for(kelso_env)).healthy
+
+  assert kelso_env.run("load", "ports-demo@local", "--force").returncode == 0
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  assert "From dev" not in loaded.read_text()
 
 
 def test_naming_a_repo_that_does_not_carry_the_app_says_which_do(kelso_env):
