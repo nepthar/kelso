@@ -17,7 +17,7 @@ Then log out and back in, so your shell picks up the `docker` group and uv's
 
 ## Install kelso
 ```bash
-uv tool install "git+https://github.com/nepthar/kelso@v1.0.0"
+uv tool install "git+https://github.com/nepthar/kelso@v1.0.1"
 kelso init --yes
 sudo reboot
 ```

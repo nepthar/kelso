@@ -1,5 +1,5 @@
 [app]
-version      = "1.0.0"
+version      = "1.0.1"
 display_name = "Kelso UI"
 description  = "Web interface for kelso, over the kelsod admin socket"
 
