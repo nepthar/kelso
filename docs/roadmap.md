@@ -336,8 +336,6 @@ the invoking user and cannot touch what the app's containers wrote.
 - **A loaded manifest viewer on the app page.** The web UI's app page shows a
   brief "manifest" section of a few key-value pairs. There should be a way to
   pop open a view of the whole loaded manifest, as kelso loaded it.
-- **Screenshots in the README.** The web UI is a large part of using kelso and
-  the README never shows it.
 - **A routes guide.** Leading with Cloudflare Tunnel, then Nginx Proxy Manager
   (with its wildcard certificate) and Pangolin: what `kelso_address` is for, and
   assigning, publishing and checking a route. Today the only documentation is
