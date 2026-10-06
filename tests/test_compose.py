@@ -68,6 +68,10 @@ def run_data(
   named keeps whatever the manifest pinned.
   """
   host_ports = host_ports or {}
+  if assignments is None:
+    assignments = {
+      name: "web" for name, route in spec.routes.items() if not route.private
+    }
   routes = {
     name: AssignedRoute(
       name=name,
@@ -77,13 +81,10 @@ def run_data(
       container_port=route.container_port,
       proto=route.proto,
       scheme=route.scheme,
+      provider=assignments.get(name, "none"),
     )
     for name, route in spec.routes.items()
   }
-  if assignments is None:
-    assignments = {
-      name: "web" for name, route in spec.routes.items() if not route.private
-    }
   config = type(
     "Cfg",
     (),
@@ -100,7 +101,7 @@ def run_data(
     volume_links={},
     config_values=config_values or {},
     routes=routes,
-    route_urls=_route_urls(routes, assignments, config),
+    route_urls=_route_urls(routes, config),
     host_mounts=host_mounts,
     issues=issues,
   )

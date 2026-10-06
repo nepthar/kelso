@@ -175,11 +175,10 @@ metrics = { port = "9090" }
 
 # ── assigned-route filtering (lifecycle) ───────────────────────────────────
 def test_assigned_routes_skips_none_and_unassigned():
+  """By the provider each route was loaded with, not the assignment now."""
   spec = _spec(ROUTES)
-  run_data = _run_data(spec)
-  store = SimpleNamespace(
-    list_route_assignments=lambda: {"main": "web", "api": NONE_ROUTE_PROVIDER_TAG}
-  )
+  run_data = _run_data(spec, providers={"main": "web", "api": NONE_ROUTE_PROVIDER_TAG})
+  store = SimpleNamespace(list_route_assignments=lambda: {"api": "web"})
   ctx = SimpleNamespace(app_store=lambda _app: store)
   names = {name for name, _, _ in assigned_routes(run_data, ctx)}
   assert names == {"main"}
@@ -1215,7 +1214,9 @@ def test_pangolin_validate_reports_missing_shared_policy():
 
 
 # ── preflight against the route provider ───────────────────────────────────
-def _assigned(spec, route_name: str, host_port: int = 41000) -> AssignedRoute:
+def _assigned(
+  spec, route_name: str, host_port: int = 41000, provider: str = "none"
+) -> AssignedRoute:
   route = spec.routes[route_name]
   return AssignedRoute(
     name=route_name,
@@ -1225,13 +1226,22 @@ def _assigned(spec, route_name: str, host_port: int = 41000) -> AssignedRoute:
     container_port=route.container_port,
     proto=route.proto,
     scheme=route.scheme,
+    provider=provider,
   )
 
 
-def _run_data(spec, host_ports: dict[str, int] | None = None) -> AppRunData:
+def _run_data(
+  spec,
+  host_ports: dict[str, int] | None = None,
+  providers: dict[str, str] | None = None,
+) -> AppRunData:
   ports = host_ports or {}
+  if providers is None:
+    providers = {
+      name: "web" for name, route in spec.routes.items() if not route.private
+    }
   assigned = {
-    name: _assigned(spec, name, ports.get(name, 41000 + i))
+    name: _assigned(spec, name, ports.get(name, 41000 + i), providers.get(name, "none"))
     for i, name in enumerate(spec.routes)
   }
   config = SimpleNamespace(
@@ -1239,9 +1249,6 @@ def _run_data(spec, host_ports: dict[str, int] | None = None) -> AppRunData:
       "home.example" if tag and tag != "none" else PLACEHOLDER_DOMAIN
     )
   )
-  assignments = {
-    name: "web" for name, route in spec.routes.items() if not route.private
-  }
   return AppRunData(
     app=spec.app,
     run_path=Path("/tmp/unused"),
@@ -1249,7 +1256,7 @@ def _run_data(spec, host_ports: dict[str, int] | None = None) -> AppRunData:
     volume_links={},
     config_values={},
     routes=assigned,
-    route_urls=_route_urls(assigned, assignments, config),
+    route_urls=_route_urls(assigned, config),
     host_mounts=(),
     issues=(),
   )

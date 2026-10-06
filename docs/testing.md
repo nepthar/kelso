@@ -122,7 +122,8 @@ health dependency.
 **Nginx Proxy Manager route provider.** `test_cli.py` stubs the provider and
 only pins down *when* kelso calls it. Against a real NPM: token fetch, cache
 and expiry, the wildcard certificate lookup, refusing a route another app
-already owns, and teardown on `kelso stop`.
+already owns, that `kelso stop` leaves the route up, and teardown on reload
+and `kelso unload`.
 
 **`logs -f`.** Streaming and TTY behavior, and that Ctrl-C exits 130 without a
 traceback.

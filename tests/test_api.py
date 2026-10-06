@@ -1122,10 +1122,12 @@ def test_a_freshly_started_app_has_nothing_pending(kelso_env, client):
   assert client.get(f"/apps/{APP}").json()["config_pending"] is False
 
 
-def test_config_pending_is_false_when_not_running(kelso_env, client):
-  """Nothing is pending on a stopped app: the next start reads config fresh."""
+def test_config_set_after_a_load_is_pending_until_reloaded(kelso_env, client):
+  """Running or not: config applies on reload, so it is pending until then."""
   kelso_env.run("load", APP)
   kelso_env.run("config", APP, "--set", "admin_user=alice")
+  assert client.get(f"/apps/{APP}").json()["config_pending"] is True
+  kelso_env.run("load", APP)
   assert client.get(f"/apps/{APP}").json()["config_pending"] is False
 
 
@@ -1137,6 +1139,7 @@ def test_route_assignment_is_recorded_without_calling_the_provider(
     "/apps/routes-demo/config-response", json={"values": {"route.main": "web"}}
   )
   assert response.status_code == 200, response.text
+  # The default provider again, so nothing changed and nothing is pending.
   assert client.get("/apps/routes-demo").json()["config_pending"] is False
 
 

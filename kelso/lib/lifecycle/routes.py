@@ -7,17 +7,16 @@ from kelso.lib.routes import (
   get_route_provider,
   refuse_foreign_route,
 )
-from kelso.lib.run_layout import AppRunData, AssignedRoute
+from kelso.lib.run_layout import AppRunData, AssignedRoute, loaded_routes
 
 
 def assigned_routes(
   run_data: AppRunData, ctx: KelsoCtx
 ) -> list[tuple[str, AssignedRoute, str]]:
-  """Routes with a non-none provider assignment: (name, route, provider_tag)."""
-  assignments = ctx.app_store(run_data.app).list_route_assignments()
+  """Routes loaded with a provider other than none: (name, route, provider_tag)."""
   out: list[tuple[str, AssignedRoute, str]] = []
   for route_name, route in run_data.routes.items():
-    tag = assignments.get(route_name)
+    tag = route.provider
     if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
       logger.debug(
         "route %s has no provider assignment (or none); skipping", route_name
@@ -75,29 +74,54 @@ def register_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
     )
 
 
+def take_down_routes(app: AppID, ctx: KelsoCtx) -> None:
+  """Unpublish an app's routes, best effort: a provider that will not answer
+  must not stop a reload or a removal."""
+  try:
+    unregister_app_routes(app, ctx)
+  except Exception as e:
+    logger.error("failed to unregister routes for %s: %s", app, e)
+
+
 def unregister_app_routes(app: AppID, ctx: KelsoCtx) -> None:
-  hdb_routes = ctx.kelso_db.list_routes(app)
-  assignments = ctx.app_store(app).list_route_assignments()
-  for route_name, route_dict in hdb_routes.items():
-    tag = assignments.get(route_name)
+  """Unpublish what kelsodb records for `app`, skipping what the provider no
+  longer has or what belongs to someone else."""
+  owners: dict[str, dict[str, str | None]] = {}
+  try:
+    routes = loaded_routes(app, ctx)
+  except TypeError as e:
+    logger.error("skipping malformed route records for %s: %s", app, e)
+    return
+  for route in routes.values():
+    tag = route.provider
     if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
-      continue
-    try:
-      route = AssignedRoute(
-        name=route_dict["name"],
-        subdomain=route_dict["subdomain"],
-        run_unit_name=route_dict["run_unit_name"],
-        host_port=route_dict["host_port"],
-        container_port=route_dict["container_port"],
-        proto=route_dict["proto"],
-        scheme=route_dict["scheme"],
-      )
-    except (KeyError, TypeError) as e:
-      logger.error("skipping malformed route record %s for %s: %s", route_name, app, e)
       continue
 
     provider = get_route_provider(ctx, tag)
     domain = ctx.config.provider_domain(tag)
+    if tag not in owners:
+      owners[tag] = provider.route_owners()
+    if route.subdomain not in owners[tag]:
+      logger.warning(
+        "route %s of %s: no route found for %s.%s at %s; nothing to remove",
+        route.name,
+        app,
+        route.subdomain,
+        domain,
+        tag,
+      )
+      continue
+    if owners[tag][route.subdomain] != app:
+      logger.warning(
+        "route %s of %s: %s.%s at %s belongs to %s now; leaving it alone",
+        route.name,
+        app,
+        route.subdomain,
+        domain,
+        tag,
+        owners[tag][route.subdomain] or "something outside kelso",
+      )
+      continue
     try:
       provider.unregister_route(route.subdomain, domain)
       logger.info(

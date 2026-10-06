@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from kelso.lib.apps import AppID
-from kelso.lib.config import Config
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS, guest_path
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.spec import (
@@ -171,6 +171,9 @@ class AssignedRoute:
   container_port: int
   proto: str
   scheme: Literal["http", "https"]
+  # The route provider tag it was loaded with: what start publishes to and what
+  # a reload or removal unpublishes from, whatever the assignment says now.
+  provider: str = NONE_ROUTE_PROVIDER_TAG
 
 
 @dataclass(frozen=True)
@@ -395,10 +398,18 @@ def _compare_route(
     mismatch("scheme", spec_route.scheme, conf_route.scheme)
 
 
+def loaded_routes(app: AppID | str, ctx: KelsoCtx) -> dict[str, AssignedRoute]:
+  """The routes kelsodb holds for `app`, as its last load allocated them."""
+  return {
+    name: AssignedRoute(**entry)
+    for name, entry in ctx.kelso_db.list_routes(str(app)).items()
+  }
+
+
 def _load_routes(
   spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
 ) -> dict[str, AssignedRoute]:
-  found_routes = ctx.kelso_db.list_routes(spec.app)
+  found_routes = loaded_routes(spec.app, ctx)
 
   missing_routes = set(spec.routes.keys()) - set(found_routes.keys())
   extra_routes = set(found_routes.keys()) - set(spec.routes.keys())
@@ -421,8 +432,7 @@ def _load_routes(
     )
 
   loaded = {}
-  for name, route_entry in found_routes.items():
-    configd = AssignedRoute(**route_entry)
+  for name, configd in found_routes.items():
     from_spec = spec.routes.get(name)
     if from_spec is None:
       # We already added an issue for extra/missing routes.
@@ -441,18 +451,13 @@ def _host_mounts() -> tuple[dict[str, Any], ...]:
   return (_mount(LOCALTIME_PATH, LOCALTIME_PATH, readonly=True),)
 
 
-def _route_urls(
-  routes: Mapping[str, AssignedRoute],
-  assignments: Mapping[str, str],
-  config: Config,
-) -> dict[str, str]:
+def _route_urls(routes: Mapping[str, AssignedRoute], config: Config) -> dict[str, str]:
   """Where each route answers: provider domain, or kelso.localhost placeholder."""
   urls: dict[str, str] = {}
   for name, route in routes.items():
     if not route.subdomain:
       continue
-    tag = assignments.get(name)
-    domain = config.provider_domain(tag or "")
+    domain = config.provider_domain(route.provider)
     urls[name] = f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain}.{domain}"
   return urls
 
@@ -464,15 +469,12 @@ def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
 
 
 def _app_domain(
-  spec: AppSpec,
-  assignments: Mapping[str, str],
-  config: Config,
-  subdomain: str | None,
+  routes: Mapping[str, AssignedRoute], config: Config, subdomain: str | None
 ) -> str | None:
   if subdomain is None:
     return None
-  tag = assignments.get(PRIMARY_ROUTE_NAME) or ""
-  return f"{subdomain}.{config.provider_domain(tag)}"
+  main = routes.get(PRIMARY_ROUTE_NAME)
+  return f"{subdomain}.{config.provider_domain(main.provider if main else '')}"
 
 
 def _env_substitutions(
@@ -618,17 +620,14 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
-  assignments = ctx.app_store(spec.app).list_route_assignments()
   return AppRunData(
     app=spec.app,
     run_path=run_path,
-    app_domain=_app_domain(
-      spec, assignments, ctx.config, resolved_subdomain(spec, ctx)
-    ),
+    app_domain=_app_domain(routes, ctx.config, resolved_subdomain(spec, ctx)),
     volume_links=vol_links,
     config_values=config_values,
     routes=routes,
-    route_urls=_route_urls(routes, assignments, ctx.config),
+    route_urls=_route_urls(routes, ctx.config),
     host_mounts=_host_mounts(),
     connections=_load_connections(spec, issues, ctx),
     issues=tuple(issues),
