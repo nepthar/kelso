@@ -424,6 +424,23 @@ ROUTE_PROVIDERS = {
   "kinds": ["cloudflare_tunnel", "nginx_proxy_manager", "pangolin"],
 }
 
+PUBLISHED_ROUTES = {
+  "routes": [
+    {
+      "subdomain": "mealie",
+      "url": "https://mealie.example.test",
+      "destination": "10.0.0.5:41001",
+      "app": "mealie",
+    },
+    {
+      "subdomain": "nas",
+      "url": f"https://nas.example.test/{EVIL}",
+      "destination": EVIL,
+      "app": None,
+    },
+  ]
+}
+
 PROVIDER_CONFIG = {
   "title": "route provider web (nginx_proxy_manager)",
   "note": f"Check it with `kelso route check web` {EVIL}",
@@ -561,6 +578,7 @@ GET = {
   "/snapshots": SNAPSHOTS,
   "/route-providers": ROUTE_PROVIDERS,
   "/route-providers/web/config-request": PROVIDER_CONFIG,
+  "/route-providers/web/routes": PUBLISHED_ROUTES,
   "/route-providers/fresh/config-request?kind=pangolin": NEW_PROVIDER_CONFIG,
   "/activity?limit=100": ACTIVITY,
   "/cron": CRON,

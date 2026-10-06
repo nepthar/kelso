@@ -138,3 +138,24 @@ def unregister_app_routes(app: AppID, ctx: KelsoCtx) -> None:
         app,
         e,
       )
+
+
+def remove_published_route(tag: str, subdomain: str, ctx: KelsoCtx) -> None:
+  """Unpublish one route kelso published, whichever app it was for.
+
+  Raises ValueError for a route the provider does not have, or one that is not
+  kelso's to remove.
+  """
+  provider = get_route_provider(ctx, tag)
+  domain = ctx.config.provider_domain(tag)
+  owners = provider.route_owners()
+  if subdomain not in owners:
+    raise ValueError(f"No route {subdomain}.{domain} at {tag}")
+  owner = owners[subdomain]
+  if owner is None:
+    raise ValueError(
+      f"{subdomain}.{domain} at {tag} was not published by kelso; "
+      f"remove it in the provider itself"
+    )
+  provider.unregister_route(subdomain, domain)
+  logger.info("removed route %s.%s of %s via %s", subdomain, domain, owner, tag)

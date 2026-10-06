@@ -11,9 +11,11 @@ from fastapi.testclient import TestClient
 
 from kelso.daemon.api import API_VERSION, create_app
 from kelso.jobs import JobRunner
+from kelso.lib.apps import AppID
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import record_volume_sizes
+from kelso.lib.routes import NoopRouteProvider
 
 APP = "io.p2net.basic-features"
 # Who these tests' jobs say started them; POST /jobs requires one.
@@ -1012,6 +1014,53 @@ def test_route_providers_lists_what_can_be_added_but_not_noop(kelso_env, client)
   assert "cloudflare_tunnel" in body["kinds"]
   assert "noop" not in body["kinds"]
   assert all(p["tag"] != "none" for p in body["route_providers"])
+
+
+@pytest.fixture
+def noop_routes(monkeypatch) -> NoopRouteProvider:
+  """One noop provider for every lookup, so a route outlives its request."""
+  provider = NoopRouteProvider(domain="kelso.localhost")
+  monkeypatch.setattr(NoopRouteProvider, "from_config", lambda *a: provider)
+  return provider
+
+
+def test_published_routes_name_their_app(kelso_env, client, noop_routes):
+  noop_routes.register_route(AppID("demo"), 41001, "demo", "kelso.localhost")
+  noop_routes.routes["stray"] = ":80"
+
+  body = client.get("/route-providers/web/routes").json()
+
+  assert body["routes"] == [
+    {
+      "subdomain": "demo",
+      "url": "https://demo.kelso.localhost",
+      "destination": ":41001",
+      "app": "demo",
+    },
+    {
+      "subdomain": "stray",
+      "url": "https://stray.kelso.localhost",
+      "destination": ":80",
+      "app": None,
+    },
+  ]
+  assert client.get("/route-providers/nope/routes").status_code == 404
+
+
+def test_removing_a_published_route(kelso_env, client, noop_routes):
+  noop_routes.register_route(AppID("demo"), 41001, "demo", "kelso.localhost")
+  noop_routes.routes["stray"] = ":80"
+
+  assert client.delete("/route-providers/web/routes/demo").status_code == 200
+  assert "demo" not in noop_routes.routes
+
+  missing = client.delete("/route-providers/web/routes/demo")
+  assert missing.status_code == 400
+  assert "No route demo.kelso.localhost" in missing.json()["error"]
+  foreign = client.delete("/route-providers/web/routes/stray")
+  assert foreign.status_code == 400
+  assert "not published by kelso" in foreign.json()["error"]
+  assert "stray" in noop_routes.routes
 
 
 def test_binding_a_host_volume_through_the_api(kelso_env, client):

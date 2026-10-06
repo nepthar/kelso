@@ -58,6 +58,12 @@ def test_route_provider_saved(client, fake):
   assert fake.posts[0][1] == "/route-providers/web/config-response"
 
 
+def test_published_route_removed(client, fake):
+  response = client.post("/routes", data={"provider": "odd name", "subdomain": "a"})
+  assert response.headers["location"] == "/routes?ok=Removed+route+a+at+odd+name"
+  assert fake.posts == [("DELETE", "/route-providers/odd name/routes/a", None)]
+
+
 def test_job_submit_and_poll(client, fake):
   response = client.post("/jobs", json={"verb": "stop", "args": {"app": "kelso-ui"}})
   assert response.status_code == 202
