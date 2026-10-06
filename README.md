@@ -1,4 +1,4 @@
-# Kelso Server
+# Kelso Hosting Platform
 
 **A declarative selfhosting platform for managing and distributing apps.**
 
@@ -6,9 +6,9 @@ Kelso is a self-hosting management system where apps are packages that describe 
 
 ![The kelso web UI: host resources and loaded apps](docs/images/kelso-ui.jpg)
 
-- **Configure your system layout once, load any app.** Kelso places each app's data where you tell it. Apps describe "what" they need instead of "how" it's wired up.
-- **There is no lock-in by design.** Under the hood, each app is a docker compose project. If you remove the `kelso` binary from your system, you'll still have an organized, functional folder tree of docker compose projects that you can directly interact with.
-- **Snapshots you can actually trust.** `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again, so what you get back is a coherent point in time.
+- **Configure your system layout once, load any app.** Kelso uses the system layout you specify along with each app's manifest to talior each app to your hardware.
+- **No vendor lock-in by design.** Under the hood, each app is a docker compose project. If you erase `kelso` from your system, you'll still have an organized, functional folder tree of docker compose stacks that you can directly interact with. Try it!
+- **Comprehensive snapshot and rollback** `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again, so what you get back is a coherent point in time. If your app doesn't require 100% uptime 24/7, you can confidentaly snapshot your app in a frozen state.
 
 ## How does it work?
 Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
@@ -46,17 +46,17 @@ $ kelso load unifi-network-application
 $ kelso start unifi-network-application
 ```
 
-<!-- terminal recording goes here: docs/images/kelso-demo.gif -->
+![kelso load, start and logs in a terminal](docs/images/kelso-demo.gif)
 
 Under the hood, Kelso is using the manifest + your configuration to create a docker compose project.
 
 Manifests are small enough to be digested in a few seconds. For a full, functioning example, see my [case study](docs/case_study.md) on the Unifi Network Application where we build the manifest from scratch in a few minutes.
 
-## What you get
+## What Kelso provides
 
 - **A web UI.** Host resources, loaded apps, volumes, snapshots, routes, cron and activity, served by the [kelso-ui](apps/kelso-ui.klso) app over kelsod's admin socket.
-- **Secrets.** Declared in the manifest, generated on load, stored encrypted. No `.env` files.
-- **Volumes.** Each app's data, bulk, temp and log volumes land where you configured, as plain folders you can see into.
+- **Secrets.** Declared in the manifest, generated on load, stored encrypted. No hidden `.env` files.
+- **Volumes.** Each app specifies what class of storage it needs: normal data, bulk data, logs, and temp.
 - **Snapshots.** Whole-app archives of volumes and run state, taken at a coherent point in time, restored the same way.
 - **Cron.** Scheduled commands inside an app, run by kelsod.
 - **Routes.** Expose an app's ports through Cloudflare Tunnel, Nginx Proxy Manager or Pangolin.
