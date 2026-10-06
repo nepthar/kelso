@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import icon_button %}
+{% from "macros.html" import icon_button, sub %}
 
 {% block content %}
 <h2>Route providers</h2>
@@ -22,5 +22,34 @@
     <select name="kind" required>{% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
     {{ icon_button('add', 'plus-box-outline', submit=true) }}
   </form>
+</div>
+
+<h2>Published routes</h2>
+<p class="lede">What each provider publishes now. A removed route comes back the next time its app is loaded.</p>
+{% for tag, err in unreachable %}
+<div class="error"><p>Could not list the routes at {{ tag }}: {{ err }}</p></div>
+{% endfor %}
+<div class="card">
+{% if not published %}
+<p class="empty">No routes published{{ ' that kelso could list' if unreachable }}.</p>
+{% else %}
+<div class="scroll"><table><thead><tr>
+  <th>URL</th><th>Destination</th><th>App</th><th>Provider</th><th class="act"></th>
+</tr></thead><tbody>
+{% for r in published %}
+<tr>
+  <td class="name"><a href="{{ r.url }}">{{ r.url }}</a></td>
+  <td class="muted">{{ r.destination }}</td>
+  <td class="muted">{% if r.app %}{{ r.app }}{% else %}{{ sub('not published by kelso') }}{% endif %}</td>
+  <td class="muted">{{ r.provider }}</td>
+  <td class="act">{% if r.app %}<form method="post" action="/routes" data-confirm="Are you sure you want to remove {{ r.url }}? It stays down until {{ r.app }} is next loaded.">
+    <input type="hidden" name="provider" value="{{ r.provider }}">
+    <input type="hidden" name="subdomain" value="{{ r.subdomain }}">
+    {{- icon_button('remove', 'delete-outline', submit=true, danger=true) -}}
+  </form>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
 </div>
 {% endblock %}

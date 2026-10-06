@@ -66,6 +66,14 @@ def test_nothing_loads_from_off_the_box(client, fake, path):
     assert url.startswith(("/static/", "data:")), url
 
 
+def test_routes_page_lists_published_routes(client, fake):
+  """One provider answers and one does not; the page shows both."""
+  text = client.get("/routes").text
+  assert "https://mealie.example.test" in text
+  assert text.count('name="subdomain"') == 1
+  assert "Could not list the routes at odd name" in text
+
+
 @pytest.mark.parametrize(
   "path, location",
   [

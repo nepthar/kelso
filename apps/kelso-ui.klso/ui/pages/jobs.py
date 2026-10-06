@@ -21,9 +21,7 @@ async def submit(request: Request):
   if not verb or not isinstance(args, dict):
     return JSONResponse({"error": "Expected verb and args"}, status_code=400)
   try:
-    job = api(
-      "/jobs", "POST", {"verb": verb, "args": args, "started_by": STARTED_BY}
-    )
+    job = api("/jobs", "POST", {"verb": verb, "args": args, "started_by": STARTED_BY})
   except ApiError as e:
     return JSONResponse({"error": str(e)}, status_code=400)
   return JSONResponse(job, status_code=202)

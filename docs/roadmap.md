@@ -160,11 +160,6 @@ is simpler than any of them, and Cloudflare keeps adding useful pieces to it.
 - **Access in front of private apps.** A route can ask for Cloudflare Access, so
   an app meant for the household is published behind a login without the app
   knowing about it.
-- **Active routes in the web UI.** The Routes page lists every route each
-  provider has published, with which app owns it, and a button to remove one
-  by hand. A removed route that an app still wants stays down until the next
-  `kelso load <app>`: on the way down that reports "no route found" and moves
-  on, and on the way up it publishes the route again.
 - **The others stay.** Nginx Proxy Manager and Pangolin keep working for people
   who want everything self-hosted. The routes guide (in the todo list) leads with
   Cloudflare.

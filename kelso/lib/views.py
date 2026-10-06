@@ -30,6 +30,7 @@ from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
 from kelso.lib.receipt import host_url, published_route_urls
 from kelso.lib.repo import LOCAL_REPO, bound_apps
+from kelso.lib.routes import get_route_provider
 from kelso.lib.run_layout import (
   AppRunData,
   load_run_data,
@@ -235,6 +236,22 @@ def route_providers_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
     {"tag": tag, "kind": entry.kind, "domain": entry.domain}
     for tag, entry in sorted(ctx.config.route_providers.items())
     if tag != NONE_ROUTE_PROVIDER_TAG
+  ]
+
+
+def published_routes_view(ctx: KelsoCtx, tag: str) -> list[dict[str, Any]]:
+  """What the provider `tag` publishes under its domain; `app` None if not kelso's."""
+  provider = get_route_provider(ctx, tag)
+  domain = ctx.config.provider_domain(tag)
+  owners = provider.route_owners()
+  return [
+    {
+      "subdomain": subdomain,
+      "url": f"https://{subdomain}.{domain}",
+      "destination": destination,
+      "app": owners.get(subdomain),
+    }
+    for subdomain, destination in provider.list_routes()
   ]
 
 

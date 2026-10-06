@@ -144,7 +144,7 @@ class NoopRouteProvider(RouteProvider):
     return sorted(self.routes.items())
 
   def route_owners(self) -> dict[str, str | None]:
-    return dict(self.owners)
+    return {subdomain: self.owners.get(subdomain) for subdomain in self.routes}
 
   def validate(self) -> list[str]:
     return []

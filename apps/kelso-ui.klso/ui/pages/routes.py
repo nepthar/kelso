@@ -1,4 +1,4 @@
-"""The Routes page: configured route providers, and the form that sets one up."""
+"""The Routes page: route providers, what each publishes, and the form that sets one up."""
 
 from urllib.parse import quote
 
@@ -12,12 +12,36 @@ router = APIRouter()
 @router.get("/routes")
 def routes(page: PageDep):
   body = api("/route-providers")
+  published, unreachable = [], []
+  for p in body["route_providers"]:
+    try:
+      listed = api(f"/route-providers/{quote(p['tag'], safe='')}/routes")["routes"]
+    except ApiError as e:
+      unreachable.append((p["tag"], str(e)))
+      continue
+    published += [{**r, "provider": p["tag"]} for r in listed]
   return page.render(
     "pages/routes.html",
     "Routes",
     providers=body["route_providers"],
     kinds=body["kinds"],
+    published=published,
+    unreachable=unreachable,
   )
+
+
+@router.post("/routes")
+async def post_routes(request: Request):
+  form = await request.form()
+  tag, subdomain = field(form, "provider"), field(form, "subdomain")
+  try:
+    api(
+      f"/route-providers/{quote(tag, safe='')}/routes/{quote(subdomain, safe='')}",
+      "DELETE",
+    )
+  except ApiError as e:
+    return see("/routes", err=str(e))
+  return see("/routes", ok=f"Removed route {subdomain} at {tag}")
 
 
 @router.get("/routes/new")

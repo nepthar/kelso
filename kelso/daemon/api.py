@@ -38,6 +38,7 @@ from kelso.lib.configflow.route_provider import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
+from kelso.lib.lifecycle.routes import remove_published_route
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import Identifier, validate_identifier
@@ -265,6 +266,26 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
     return {"route_providers": views.route_providers_view(_ctx_again(ctx))}
+
+  @app.get("/route-providers/{tag}/routes", tags=["routes"])
+  def list_published_routes(tag: str, ctx: Ctx) -> dict:
+    if tag not in ctx.config.route_providers:
+      raise HTTPException(404, f"No route provider {tag!r}")
+    try:
+      return {"routes": views.published_routes_view(ctx, tag)}
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(502, str(e)) from e
+
+  @app.delete("/route-providers/{tag}/routes/{subdomain}", tags=["routes"])
+  def delete_published_route(tag: str, subdomain: str, ctx: Ctx) -> dict:
+    if tag not in ctx.config.route_providers:
+      raise HTTPException(404, f"No route provider {tag!r}")
+    try:
+      with ctx.kelso_lock(f"route remove {subdomain} {tag}"):
+        remove_published_route(tag, subdomain, ctx)
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(400, str(e)) from e
+    return {"removed": subdomain}
 
   @app.get("/host", tags=["host"])
   def get_host(ctx: Ctx) -> dict:
