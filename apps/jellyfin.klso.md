@@ -19,14 +19,15 @@ description  = "Stream your own movies, shows and music to any device"
 subdomain = { default = "jelly" }
 
 [volumes]
-config   = { kind = "data", desc = "Server config, users, playback state" }
-metadata = { kind = "bulk", desc = "Artwork, trickplay images, subtitles" }
-cache    = { kind = "temp", desc = "Transcode and image cache; safe to lose" }
-media    = { kind = "host",  desc = "The library itself; bind to the media share", readonly = true }
+config     = { kind = "data", desc = "Server config, users, playback state" }
+metadata   = { kind = "bulk", desc = "Artwork, trickplay images, subtitles" }
+cache      = { kind = "temp", desc = "Transcode and image cache; safe to lose" }
+tricklplay = { kind = "temp", desc = "Trickplay images so you can seek through the timeline" }
+media      = { kind = "host",  desc = "The library itself; bind to the media share", readonly = true }
 
 [run.main]
 image   = "jellyfin/jellyfin:12.1"
-volumes = { config = "/config", metadata = "/metadata", cache = "/cache", media = "/media" }
+volumes = { config = "/config", metadata = "/metadata", cache = "/cache", media = "/media", trickplay = "/config/data/trickplay" }
 
 [run.main.routes]
 # Pinned rather than kelso-allocated: TVs and phones already point at :8096,
