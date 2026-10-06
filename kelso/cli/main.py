@@ -6,6 +6,7 @@ from pathlib import Path
 
 from kelso import VERSION
 from kelso.cli import (
+  app,
   cleanup,
   cmd,
   config,
@@ -49,6 +50,7 @@ COMMANDS = [
   update,
   remove,
   inspect,
+  app,
   logs,
   shell,
   dev,
@@ -73,6 +75,7 @@ Apps
   rm          Unload a stopped app and delete its temp and logs
               (--temp, --data, --purge: more or less)
   inspect     Show an app's state, ports, routes, volumes, and config
+  app edit    Edit an app's manifest in its repo, check it, and commit it
   logs        Show an app's logs
   shell       Open a shell in one of an app's containers
 

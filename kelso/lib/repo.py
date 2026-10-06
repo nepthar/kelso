@@ -230,7 +230,11 @@ def add(ctx, location: str, *, name: str = "") -> AddResult:
     # `ctx.config` predates the entry just written.
     fresh = KelsoCtx(load_config_file(ctx.config.config_path))
     repo = fresh.config.repos[name]
-    return AddResult(repo, mirror(repo, fresh) if remote else None)
+    if remote:
+      return AddResult(repo, mirror(repo, fresh))
+    if repo.path.is_dir() and git.adopt(repo.path.resolve()):
+      logger.info("put %s under git, so its apps can be edited", repo.path)
+    return AddResult(repo, None)
 
 
 def update(ctx, name: str = "") -> tuple[MirrorResult, ...]:

@@ -179,6 +179,16 @@ def manifest_text(path: Path) -> str:
   return ""
 
 
+def bundle_text(path: Path) -> str:
+  """What a person edits: a .klso.md whole, or a folder's manifest.toml."""
+  if path.name.endswith(KLSO_MD_SUFFIX):
+    try:
+      return path.read_text()
+    except OSError:
+      return ""
+  return manifest_text(path)
+
+
 def load_bundle(path: Path) -> KelsoApp:
   if not could_be_bundle(path):
     raise ValueError(f"{path.name} does not seem to be a valid kelso app.")
@@ -245,38 +255,42 @@ def extract_md_files(content: str) -> MdFileList:
 
 
 def load_bundle_md(path: Path, app_id: AppID) -> BundleMdFile:
-  st_size_kb = path.stat().st_size / 1024
-  if st_size_kb > KLSO_MD_CUTOFF_KB:
-    raise ValueError(
-      f"{path.name} is too large to load as a .klso.md file ({st_size_kb} > {KLSO_MD_CUTOFF_KB})kb"
-    )
-
   with open(path) as f:
     content = f.read()
+  return BundleMdFile(path, app_id, md_bundle_files(path.name, content))
+
+
+def md_bundle_files(name: str, content: str) -> list[MdFile]:
+  """The files a .klso.md carries, refusing one that `load` would refuse."""
+  size_kb = len(content.encode()) / 1024
+  if size_kb > KLSO_MD_CUTOFF_KB:
+    raise ValueError(
+      f"{name} is too large to load as a .klso.md file ({size_kb} > {KLSO_MD_CUTOFF_KB})kb"
+    )
 
   files = extract_md_files(content)
 
   problems = []
   if files.unclosed_block:
-    problems.append(f"{path.name} has an unclosed file block {files.files[-1].path}")
+    problems.append(f"{name} has an unclosed file block {files.files[-1].path}")
   if not files.files:
-    problems.append(f"{path.name} does not contain any files")
+    problems.append(f"{name} does not contain any files")
   if not any(f.path == "manifest.toml" for f in files.files):
-    problems.append(f"{path.name} is missing a manifest.toml file")
+    problems.append(f"{name} is missing a manifest.toml file")
 
   for md_file in files.files:
     p = Path(md_file.path)
     if p.is_absolute():
-      problems.append(f"{path.name} has absolute file paths ({p})")
+      problems.append(f"{name} has absolute file paths ({p})")
     if ".." in p.parts:
-      problems.append(f"{path.name} has files paths that traverse up ({p})")
+      problems.append(f"{name} has files paths that traverse up ({p})")
     if len(md_file.content) == 0:
-      problems.append(f"{path.name} has empty file ({p})")
+      problems.append(f"{name} has empty file ({p})")
 
   if problems:
-    raise ValueError(f"{path.name} invalid .klso.md file: {', '.join(problems)}")
+    raise ValueError(f"{name} invalid .klso.md file: {', '.join(problems)}")
 
-  return BundleMdFile(path, app_id, files.files)
+  return files.files
 
 
 def load_bundle_tar_gz(path: Path, app_id: AppID) -> BundleTarFile:

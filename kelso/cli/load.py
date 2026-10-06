@@ -5,7 +5,7 @@ from pathlib import Path
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, reload_app
-from kelso.lib.receipt import capability_receipt
+from kelso.lib.receipt import capability_receipt, route_receipt_lines
 from kelso.lib.spec import ComposeWarning
 
 logger = logging.getLogger("kelso.cli")
@@ -43,6 +43,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
+    reloading = ctx.is_loaded(app)
     result = reload_app(app, bundle, ctx, bound=target.bound_to)
   load = result.load
   for name in load.dropped_volumes:
@@ -56,6 +57,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print(capability_receipt(load.spec, load.run_data, ctx, compact=True))
   else:
     print(f"Start it with: kelso start {app}")
+  if reloading:
+    for line in route_receipt_lines(load.spec, load.run_data, ctx):
+      print(line)
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:

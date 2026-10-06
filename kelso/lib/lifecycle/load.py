@@ -287,13 +287,14 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
     resolved = LoadTarget(app_id_from_path(bundle), bundle, None)
   else:
     name, _, repo = target.partition("@")
-    resolved = _from_catalog(ctx, name, repo or None)
+    resolved = catalog_target(ctx, name, repo or None)
 
   _check_binding(ctx, resolved, force=force)
   return resolved
 
 
-def _from_catalog(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
+def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
+  """The catalog entry a bare id or `<id>@<repo>` names."""
   app = ctx.resolve_app(name)
   entries = ctx.app_catalog().get(str(app), ())
 
