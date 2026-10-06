@@ -406,3 +406,23 @@ def test_dashboard_offers_an_update_when_the_source_moved_on(client, fake):
 def test_catalog_marks_a_bundle_that_does_not_parse(client, fake):
   page = client.get("/catalog").text
   assert 'title="manifest broken.klso/manifest.toml: not valid TOML"' in page
+
+
+def test_app_page_asks_for_a_restart_only_while_running(client, fake, monkeypatch):
+  from fakekelsod import APP_DETAIL, GET
+
+  notice = "Restart to apply configuration changes."
+
+  # The fixture: config changed while one container runs.
+  text = client.get("/apps/kelso-ui").text
+  assert notice in text
+  assert 'value="restart"' in text or "Restart" in text
+
+  stopped = {
+    **APP_DETAIL,
+    "status": "stopped",
+    "containers": {"running": 0, "total": 1},
+  }
+  monkeypatch.setitem(GET, "/apps/kelso-ui", stopped)
+  text = client.get("/apps/kelso-ui").text
+  assert notice not in text

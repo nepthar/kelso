@@ -473,7 +473,7 @@ def _summary(
       "total": len(observation.containers),
     },
     "configured": _configured(observation, spec, ctx),
-    "config_pending": observation.config_pending,
+    "changes_pending": observation.changes_pending,
     "volume_count": len(spec.volumes) if spec else 0,
     "last_action": observation.last_action,
   }

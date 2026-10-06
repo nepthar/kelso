@@ -14,7 +14,8 @@ from kelso.lib.observations import (
   OK,
   STOPPED,
   AppObservation,
-  config_changed_since_load,
+  PendingChanges,
+  changes_since_start,
   observe,
 )
 
@@ -51,24 +52,33 @@ def _log(tmp_path, *keys: str):
 
 
 def test_config_written_after_the_load_is_pending(tmp_path):
-  path = _log(tmp_path, "config/a", "meta/loaded_at", "config/subdomain")
-  assert config_changed_since_load(path)
+  path = _log(tmp_path, "config/a", "meta/loaded_at", "config/b")
+  pending = changes_since_start(path)
+  assert pending.config and pending.any
+  assert not pending.routes
 
 
 def test_config_written_during_the_load_is_applied(tmp_path):
   """Load writes generated secrets and route defaults before `loaded_at`."""
   path = _log(tmp_path, "config/a", "routes/main", "meta/loaded_at", "meta/x")
-  assert not config_changed_since_load(path)
+  assert changes_since_start(path) == PendingChanges()
 
 
-@pytest.mark.parametrize("key", ["binds/media", "routes/main"])
-def test_binds_and_route_assignments_are_config_too(tmp_path, key):
-  assert config_changed_since_load(_log(tmp_path, "meta/loaded_at", key))
+def test_binds_are_config_too(tmp_path):
+  assert changes_since_start(_log(tmp_path, "meta/loaded_at", "binds/media")).config
 
 
-def test_a_reload_applies_what_was_pending(tmp_path):
-  path = _log(tmp_path, "meta/loaded_at", "config/a", "meta/loaded_at")
-  assert not config_changed_since_load(path)
+@pytest.mark.parametrize("key", ["config/subdomain", "routes/main"])
+def test_the_subdomain_and_route_assignments_are_route_changes(tmp_path, key):
+  pending = changes_since_start(_log(tmp_path, "meta/loaded_at", key))
+  assert pending.routes and pending.any
+  assert not pending.config
+
+
+@pytest.mark.parametrize("applied", ["meta/loaded_at", "meta/started_at"])
+def test_a_load_or_a_start_applies_what_was_pending(tmp_path, applied):
+  path = _log(tmp_path, "meta/loaded_at", "config/a", "routes/x", applied)
+  assert changes_since_start(path) == PendingChanges()
 
 
 def test_observing_an_app_kelso_holds_nothing_for_is_refused(kelso_env):

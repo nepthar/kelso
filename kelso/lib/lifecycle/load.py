@@ -360,7 +360,7 @@ def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
 def apply_config_sets(
   spec: AppSpec, sets: list[tuple[str, str]], ctx: KelsoCtx
 ) -> None:
-  """Validate and store config values. A loaded app picks them up on reload."""
+  """Validate and store config values. A loaded app reads them at its next start."""
   store = ctx.app_store(spec.app)
   for name, value in sets:
     config = spec.config.get(name)

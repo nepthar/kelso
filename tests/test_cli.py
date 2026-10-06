@@ -564,16 +564,28 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
 
 
-def test_a_reload_ends_with_the_apps_routes(kelso_env):
+def test_load_names_the_config_a_start_still_needs(kelso_env):
+  loaded = kelso_env.run("load", BASIC)
+  assert loaded.returncode == 0, loaded.stderr
+  last = loaded.stdout.splitlines()[-1]
+  assert last.startswith("Set admin_user, then start it with: ")
+  assert f"kelso start {BASIC} --set admin_user=<admin_user>" in last
+
+  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  again = kelso_env.run("load", BASIC)
+  assert again.stdout.splitlines()[-1] == f"Start it with: kelso start {BASIC}"
+
+
+def test_a_reload_of_a_stopped_app_shows_no_routes(kelso_env):
+  """Routes are published on start, so only a restart has any to report."""
   first = kelso_env.run("load", "routes-demo")
   assert first.returncode == 0, first.stderr
   assert "Routes:" not in first.stdout
 
   again = kelso_env.run("load", "routes-demo")
   assert again.returncode == 0, again.stderr
-  routes = again.stdout.splitlines()[-3:]
-  assert routes[0].strip().startswith("Routes:")
-  assert all("main:" in line and " <- " in line for line in routes)
+  assert "Routes:" not in again.stdout
+  assert again.stdout.splitlines()[-1] == "Start it with: kelso start routes-demo"
 
 
 # --- config ----------------------------------------------------------------
@@ -686,14 +698,58 @@ def test_config_set_secret(kelso_env):
   assert "(set)" in listed.stdout
 
 
-def test_config_set_on_a_loaded_app_says_to_reload(kelso_env):
+def test_config_set_on_a_running_app_says_to_restart(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   result = kelso_env.run("config", BASIC, "--set", "admin_user=bob")
   assert result.returncode == 0, result.stderr
-  assert f"kelso load {BASIC}" in result.stderr
+  assert f"Takes effect on restart: kelso restart {BASIC}" in result.stderr
+  assert _ps_row(kelso_env.run("ps").stdout, BASIC)[2] == "restart"
 
-  started = kelso_env.run("start", BASIC)
-  assert f"kelso load {BASIC}" in started.stderr
+  restarted = kelso_env.run("restart", BASIC)
+  assert restarted.returncode == 0, restarted.stderr
+  assert restarted.stdout.splitlines()[0] == f"Restarted {BASIC}"
+  assert _ps_row(kelso_env.run("ps").stdout, BASIC)[2] == "ready"
+  assert kelso_env.run("config", BASIC, "--get", "admin_user").stdout.strip() == "bob"
+
+
+def test_config_set_on_a_stopped_app_says_nothing_more(kelso_env):
+  """The next start reads it; there is no restart to ask for."""
+  assert kelso_env.run("load", BASIC).returncode == 0
+  result = kelso_env.run("config", BASIC, "--set", "admin_user=bob")
+  assert result.returncode == 0, result.stderr
+  assert "restart" not in result.stderr
+  assert "kelso load" not in result.stderr
+  assert _ps_row(kelso_env.run("ps").stdout, BASIC)[2] == "ready"
+
+
+def test_start_rederives_routes_changed_since_the_load(kelso_env):
+  app_id = "ports-demo"
+  assert kelso_env.run("load", app_id).returncode == 0
+  assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
+
+  result = kelso_env.run("config", app_id, "--set", "subdomain=lab")
+  assert result.returncode == 0, result.stderr
+  assert "kelso load" not in result.stderr
+
+  started = kelso_env.run("start", app_id)
+  assert started.returncode == 0, started.stderr
+  assert "kelso load" not in started.stderr
+  assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-lab"
+  assert kelso_env.read_db()["routes"][app_id]["admin"]["subdomain"] == "admin-lab"
+
+
+def test_restart_of_a_stopped_app_just_starts_it(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  assert kelso_env.run("config", BASIC, "--set", "admin_user=bob").returncode == 0
+  result = kelso_env.run("restart", BASIC)
+  assert result.returncode == 0, result.stderr
+  assert _ps_row(kelso_env.run("ps").stdout, BASIC)[1] == "running"
+
+
+def test_restart_of_an_unloaded_app_is_refused(kelso_env):
+  result = kelso_env.run("restart", BASIC)
+  assert result.returncode != 0
+  assert f"kelso start {BASIC}" in result.stderr
 
 
 def test_config_set_subdomain_overrides_the_manifest(kelso_env):
@@ -701,10 +757,10 @@ def test_config_set_subdomain_overrides_the_manifest(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
-  # Accepted while running, and applied by the next reload, not right away.
+  # Accepted while running, and applied by the next start, not right away.
   set_result = kelso_env.run("config", app_id, "--set", "subdomain=lab")
   assert set_result.returncode == 0, set_result.stderr
-  assert f"kelso load {app_id}" in set_result.stderr
+  assert f"kelso restart {app_id}" in set_result.stderr
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
   got = kelso_env.run("config", app_id, "--get", "subdomain")
@@ -910,7 +966,7 @@ def test_rebinding_takes_effect_at_the_next_start(kelso_env):
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
   rebound = kelso_env.run("config", app_id, "--bind", "hostvol1=other")
   assert rebound.returncode == 0, rebound.stderr
-  assert f"kelso load {app_id}" in rebound.stderr
+  assert f"kelso restart {app_id}" in rebound.stderr
   assert link.resolve() == first, "a running app's links must not move"
 
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1144,10 +1200,10 @@ def test_ps_reports_config_readiness_and_volume_count(kelso_env):
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
   assert row[1:4] == ["stopped", "missing", "3"]
 
-  # Complete now, but changed since the load: a reload applies it.
+  # Complete now; the next start reads it, so nothing is pending while stopped.
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
-  assert row[1:4] == ["stopped", "pending", "3"]
+  assert row[1:4] == ["stopped", "ready", "3"]
 
   assert kelso_env.run("load", BASIC).returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)

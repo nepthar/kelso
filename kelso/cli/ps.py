@@ -76,8 +76,10 @@ def _config(observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx) ->
     return EMPTY
   if load_run_data(spec, ctx).start_blockers:
     return "missing"
-  # Complete, but changed since the app was loaded: a reload applies it.
-  return "pending" if observation.config_pending else "ready"
+  # Complete; a start applies it, so only what is running can be behind.
+  if observation.changes_pending and observation.running_count:
+    return "restart"
+  return "ready"
 
 
 def _version(observation: AppObservation, spec: AppSpec | None) -> str:

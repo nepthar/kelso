@@ -1,7 +1,7 @@
 [project]
 name = "kelso"
 version = "1.0.0"
-description = "Kelso Server: your apps, your hardware. No rack required."
+description = "A declarative selfhosting platform for managing and distributing apps"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

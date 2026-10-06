@@ -59,8 +59,8 @@ def _apps(ctx: KelsoCtx) -> str:
   for app in views.apps_view(ctx):
     running, total = app["containers"]["running"], app["containers"]["total"]
     config = app["configured"] or "-"
-    if app["config_pending"]:
-      config += ", reload to apply"
+    if app["changes_pending"] and running:
+      config += ", restart to apply"
     rows.append(
       (
         app["app_id"],

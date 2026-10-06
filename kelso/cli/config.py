@@ -11,6 +11,7 @@ from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
+from kelso.lib.observations import observe
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
 
@@ -21,8 +22,8 @@ def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "config",
     help="List or set app config, route assignments, and host volume binds",
-    description="Changes to a loaded app take effect when it is reloaded "
-    "(`kelso load <app>`), which restarts it if it is running.",
+    description="Changes to a loaded app take effect when it next starts; "
+    "`kelso restart <app>` applies them to a running one.",
   )
   parser.add_argument(
     "app",
@@ -115,6 +116,8 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
 
   written = apply_app_config(spec, response, ctx)
   print(f"Set {', '.join(written)}" if written else "No changes")
+  if written:
+    _what_applies_it(app, ctx)
 
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
@@ -169,8 +172,13 @@ def _apply(
   if routes:
     _apply_routes(app, spec, routes, ctx)
 
-  if ctx.is_loaded(app):
-    logger.info(f"Saved. Reload {app} to apply: kelso load {app}")
+  _what_applies_it(app, ctx)
+
+
+def _what_applies_it(app: AppID, ctx: KelsoCtx) -> None:
+  """The next start applies a change; say so only when one is not coming."""
+  if ctx.is_loaded(app) and observe(app, ctx).running_count:
+    logger.info(f"Takes effect on restart: kelso restart {app}")
 
 
 def _apply_routes(

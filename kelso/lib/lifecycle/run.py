@@ -18,15 +18,19 @@ from kelso.lib.lifecycle.load import (
   check_same_version,
   link_host_volumes,
   load,
+  materialize,
   unlink_host_volumes,
 )
 from kelso.lib.lifecycle.routes import (
   preflight_app_routes,
   register_app_routes,
+  take_down_routes,
 )
+from kelso.lib.observations import changes_since_start
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
 from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppSpec
+from kelso.lib.util import now_ts
 
 
 def recovery_lines(app_id: AppID, issues: tuple[ConfigIssue, ...]) -> list[str]:
@@ -48,14 +52,24 @@ def start(
   binds: list[tuple[str, str]] | None = None,
   bound: str | None = None,
 ) -> LoadResult:
-  """Load if needed, then bring the app up and register assigned routes."""
+  """Load if needed, then bring the app up and register assigned routes.
+
+  Config is read here, so every value on file is what the containers get. The
+  routes are derived at load; if the subdomain or an assignment changed since,
+  they are derived again first, so a start applies everything.
+  """
   paths = ctx.loaded_paths(app)
 
   if sets or binds or not ctx.is_loaded(app):
     result = load(app, bundle, ctx, sets=sets, binds=binds, bound=bound)
   else:
     spec = AppSpec.from_file(paths.manifest_path, app)
-    result = LoadResult(spec, load_run_data(spec, ctx))
+    if changes_since_start(ctx.config.app_config_path(app)).routes:
+      take_down_routes(app, ctx)
+      run_data, _ = materialize(spec, ctx)
+      result = LoadResult(spec, run_data)
+    else:
+      result = LoadResult(spec, load_run_data(spec, ctx))
 
   spec, run_data = result.spec, result.run_data
   if run_data.start_blockers:
@@ -94,8 +108,23 @@ def start(
       f"{e}. Containers may still be running; run `kelso stop {app}` to stop them."
     ) from e
 
+  # Everything on file is now what runs; `changes_since_start` counts from here.
+  ctx.app_store(app).set_meta("started_at", now_ts())
   record_app_action("started", app, ctx)
   return result
+
+
+def restart(app: AppID, ctx: KelsoCtx) -> LoadResult:
+  """Stop a loaded app if it is running, then start it from its run copy.
+
+  The caller holds the app lock. This is how a change to a running app's
+  config takes effect: a load is not needed, the run copy is kept.
+  """
+  if not ctx.is_loaded(app):
+    raise ValueError(f"App {app} is not loaded; run `kelso start {app}` instead")
+  if ctx.run_state(app).running_count:
+    stop(app, ctx)
+  return start(app, ctx.config.app_run_path(app), ctx)
 
 
 def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:

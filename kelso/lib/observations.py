@@ -82,8 +82,13 @@ class AppObservation:
   containers: tuple[KelsoRunUnitStatus, ...]
   db_present: bool
   last_action: str | None
-  # Config, binds or route assignments written since the app was last loaded.
-  config_pending: bool = False
+  # Config, binds or route assignments written since the app last started (or
+  # was loaded). The next start applies them, so only a running app has
+  # anything to do: restart.
+  changes_pending: bool = False
+  # The subdomain or a route assignment is among them. `start` re-derives the
+  # routes when so; nothing a user needs to act on.
+  routes_pending: bool = False
   loaded_version: str | None = None
   # The version in the bundle it was loaded from; None if that is gone or broken.
   source_version: str | None = None
@@ -169,22 +174,43 @@ def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
   return store.get_meta("loaded_version"), source
 
 
-# What a reload applies: the app store keys an operator changes.
-_CONFIG_KEYS = ("config/", "binds/", "routes/")
+# The app store keys an operator changes, by what applies them.
+_START_KEYS = ("config/", "binds/")
+_LOAD_KEYS = ("config/subdomain", "routes/")
 
 
-def config_changed_since_load(path: Path) -> bool:
-  """Whether the app store at `path` has config written after its last load.
+# A load or a start applies everything written before it.
+_APPLIED_AT = ("meta/loaded_at", "meta/started_at")
+
+
+@dataclass(frozen=True)
+class PendingChanges:
+  """What was written to an app store after it was last loaded or started."""
+
+  # Config and binds: the next start reads them.
+  config: bool = False
+  # The subdomain and route assignments: the next start re-derives the routes.
+  routes: bool = False
+
+  @property
+  def any(self) -> bool:
+    return self.config or self.routes
+
+
+def changes_since_start(path: Path) -> PendingChanges:
+  """What the app store at `path` has had written after its last load or start.
 
   By order in the log rather than by timestamp, which is only to the second.
   """
-  changed = False
+  config = routes = False
   for key, _ in LogTab(path).history():
-    if key == "meta/loaded_at":
-      changed = False
-    elif key.startswith(_CONFIG_KEYS):
-      changed = True
-  return changed
+    if key in _APPLIED_AT:
+      config = routes = False
+    elif key.startswith(_LOAD_KEYS):
+      routes = True
+    elif key.startswith(_START_KEYS):
+      config = True
+  return PendingChanges(config=config, routes=routes)
 
 
 def collect_observations(
@@ -217,6 +243,11 @@ def collect_observations(
       if run_dir_exists and raw_id in config_ids
       else (None, None)
     )
+    pending = (
+      changes_since_start(ctx.config.app_config_path(app_id))
+      if run_dir_exists and raw_id in config_ids
+      else PendingChanges()
+    )
     observations[app_id] = AppObservation(
       app_id=app_id,
       bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
@@ -231,11 +262,8 @@ def collect_observations(
       containers=docker.get(raw_id, ()),
       db_present=raw_id in db_ids,
       last_action=action[1] if action else None,
-      config_pending=(
-        run_dir_exists
-        and raw_id in config_ids
-        and config_changed_since_load(ctx.config.app_config_path(app_id))
-      ),
+      changes_pending=pending.any,
+      routes_pending=pending.routes,
       loaded_version=loaded_version,
       source_version=source_version,
     )
