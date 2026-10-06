@@ -62,21 +62,37 @@
   {% endfor %}
 </div>
 {#- Opening this card chose the repo, so it is always named. -#}
-{% if readable %}
 {% set repo = app.get('repo') or '' %}
 {% set target = app_id ~ '@' ~ repo if repo else app_id %}
 <div class="row actions">
-{% if app.get('state') == 'loaded' %}
+<button type="button" class="card-close">Close</button>
+{% if not readable %}
+{% elif app.get('state') == 'loaded' %}
   {{ job_button('Reload', 'load', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
       desc='Rebuilds ' ~ app_id ~ ' from ' ~ repo ~ ', restarting it if it is running. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% else %}
   {{ job_button('Load', 'load', title='Load ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
       desc='Loads ' ~ app_id ~ ' from ' ~ repo ~ ' so it can be started. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% endif %}
+{%- if app.get('editable') %}<button type="button" class="edit-open">Edit</button>{% endif %}
+</div>
+</div>
+<pre class="app-card-manifest"><code class="language-{{ 'markdown' if app.get('markdown') else 'toml' }}">{{ app.get('text') or '' }}</code></pre>
+{#- The editor and, once saved, the diff kelso committed. js/edit.js swaps them
+  in for the manifest. The newline after <textarea> is eaten by the parser, so
+  a file that starts with a blank line keeps it. -#}
+{% if app.get('editable') %}
+<form class="app-card-edit" hidden data-target="{{ target }}" data-base="{{ app.base }}" data-app="{{ app_id }}">
+  <textarea name="text" spellcheck="false" aria-label="{{ 'Bundle' if app.get('markdown') else 'Manifest' }}">
+{{ app.get('text') or '' }}</textarea>
+  <div class="error" hidden><p></p></div>
+  <div class="row"><input name="message" class="grow" placeholder="what changed (optional)" aria-label="What changed"><button type="button" class="edit-cancel">Cancel</button><button type="submit" class="edit-save">Save</button></div>
+</form>
+<div class="app-card-saved" hidden>
+  <pre class="app-card-manifest"><code class="language-diff"></code></pre>
+  <div class="row"><span class="muted mono saved-note"></span><button type="button" class="edit-done">Done</button></div>
 </div>
 {% endif %}
-</div>
-<pre class="app-card-manifest"><code class="language-toml">{{ app.get('manifest') or '' }}</code></pre>
 </article>
 {%- endmacro %}
 
@@ -133,4 +149,5 @@
 {% block scripts %}
 <script src="{{ asset('vendor/highlight-11.11.1/highlight.min.js') }}"></script>
 <script src="{{ asset('js/catalog.js') }}"></script>
+<script src="{{ asset('js/edit.js') }}"></script>
 {% endblock %}

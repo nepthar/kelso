@@ -38,6 +38,7 @@ from kelso.lib.configflow.route_provider import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
+from kelso.lib.lifecycle.edit import ManifestMoved, edit_manifest
 from kelso.lib.lifecycle.routes import remove_published_route
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.spec import AppSpec
@@ -75,6 +76,16 @@ class ConfigValues(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
   values: dict[str, str] = Field(default_factory=dict)
+
+
+class ManifestEdit(BaseModel):
+  """A bundle's new text, and the hash of the text the edit started from."""
+
+  model_config = ConfigDict(extra="forbid")
+
+  text: str
+  base: str
+  message: str = ""
 
 
 class JobSubmission(BaseModel):
@@ -146,8 +157,13 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/", tags=["meta"])
   @app.get("/version", tags=["meta"])
-  def get_version() -> dict:
-    return {"kelso": VERSION, "api": API_VERSION, "hostname": socket.gethostname()}
+  def get_version(ctx: Ctx) -> dict:
+    return {
+      "kelso": VERSION,
+      "api": API_VERSION,
+      "hostname": socket.gethostname(),
+      "kelso_root": str(ctx.config.kelso_root),
+    }
 
   @app.get("/apps", tags=["apps"])
   def list_apps(ctx: Ctx) -> dict:
@@ -235,6 +251,21 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
     return views.config_request_view(app_config_request(spec, _ctx_again(ctx)))
+
+  @app.post("/manifests/{target}", tags=["catalog"])
+  def post_manifest(target: str, body: ManifestEdit, ctx: Ctx) -> dict:
+    """Replace a bundle's manifest in its repo, and commit it if kelso may.
+
+    `target` is `<app>` or `<app>@<repo>`; `base` is the catalog's hash of the
+    text being replaced. `diff` is empty when nothing changed.
+    """
+    try:
+      result = edit_manifest(ctx, target, body.text, body.base, body.message)
+    except ManifestMoved as e:
+      raise HTTPException(409, str(e)) from e
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(400, str(e)) from e
+    return {"diff": result.diff, "commit": result.commit}
 
   @app.get("/route-providers", tags=["config"])
   def list_route_providers(ctx: Ctx) -> dict:

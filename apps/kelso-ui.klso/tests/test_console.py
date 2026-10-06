@@ -130,10 +130,14 @@ def test_the_host_shell_is_relayed_too(client, kelsod):
   assert kelsod.paths == ["/host/console?started_by=kelso_ui"]
 
 
-def test_the_dashboard_names_the_host_and_offers_its_shell(client, fake):
-  text = client.get("/").text
-  assert "tycho " in text
-  assert 'href="/host/console"' in text
+def test_the_nav_offers_the_host_shell_and_lights_it(client, fake):
+  assert "tycho " in client.get("/").text
+  assert 'href="/host/console" title="Host shell">' in client.get("/").text
+  shell = client.get("/host/console").text
+  assert 'href="/host/console" title="Host shell" class="active"' in shell
+  assert '<span class="mono">$KELSO_ROOT</span> is' in shell
+  assert "/home/kelso " in shell
+  assert "Back to dashboard" not in shell
   assert (
     "unsafe-inline" in client.get("/host/console").headers["content-security-policy"]
   )

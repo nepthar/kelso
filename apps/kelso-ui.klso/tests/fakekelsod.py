@@ -229,6 +229,10 @@ CATALOG = {
           "state": "loaded",
           "configured": "ready",
           "manifest": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
+          "text": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
+          "markdown": False,
+          "editable": True,
+          "base": f"hash {EVIL}",
           "manifest_stale": True,
           "warnings": [
             {
@@ -260,6 +264,10 @@ CATALOG = {
           "state": "available",
           "configured": None,
           "manifest": None,
+          "text": f"\nnot toml {EVIL}",
+          "markdown": True,
+          "editable": True,
+          "base": "b",
           "manifest_stale": False,
           "warnings": [],
         },
@@ -564,7 +572,12 @@ HOST = {
 LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
 
 GET = {
-  "/version": {"kelso": "0.1.0", "api": 1, "hostname": f"tycho {EVIL}"},
+  "/version": {
+    "kelso": "0.1.0",
+    "api": 1,
+    "hostname": f"tycho {EVIL}",
+    "kelso_root": f"/home/kelso {EVIL}",
+  },
   "/apps": {"apps": APPS},
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,

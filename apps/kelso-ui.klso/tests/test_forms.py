@@ -64,6 +64,23 @@ def test_published_route_removed(client, fake):
   assert fake.posts == [("DELETE", "/route-providers/odd name/routes/a", None)]
 
 
+def test_manifest_edit_is_forwarded(client, fake):
+  edit = {"target": "odd app@examples", "text": "x", "base": "b", "message": "m"}
+  assert client.post("/catalog/edit", json=edit).json() == {"ok": True}
+  assert fake.posts == [
+    ("POST", "/manifests/odd app@examples", {"text": "x", "base": "b", "message": "m"})
+  ]
+
+
+def test_a_refused_manifest_edit_comes_back_as_json(client, fake):
+  fake.fail = "manifest: 1 validation error"
+  edit = {"target": "kelso-ui@examples", "text": "x", "base": "b"}
+  response = client.post("/catalog/edit", json=edit)
+  assert response.status_code == 400
+  assert response.json() == {"error": "manifest: 1 validation error"}
+  assert client.post("/catalog/edit", json={"text": 3}).status_code == 400
+
+
 def test_job_submit_and_poll(client, fake):
   response = client.post("/jobs", json={"verb": "stop", "args": {"app": "kelso-ui"}})
   assert response.status_code == 202

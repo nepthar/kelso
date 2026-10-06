@@ -63,6 +63,21 @@ def route_lines(
   return lines
 
 
+def route_receipt_lines(
+  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
+) -> list[str]:
+  """The `Routes:` block of a receipt; empty for an app with no routes."""
+  reach = route_lines(
+    spec,
+    run_data,
+    published_route_urls(spec, run_data, ctx),
+    host=ctx.config.kelso_address or "localhost",
+  )
+  return [
+    _labeled_line("Routes:" if i == 0 else "", line) for i, line in enumerate(reach)
+  ]
+
+
 def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
   """Per-key config status, same wording as `kelso config`."""
   if not spec.config:
@@ -217,16 +232,7 @@ def capability_receipt(
         lines.append(_labeled_line("", extra))
 
     if run_data is not None:
-      reach = route_lines(
-        spec,
-        run_data,
-        published_route_urls(spec, run_data, ctx),
-        host=ctx.config.kelso_address or "localhost",
-      )
-      if reach:
-        lines.append(_labeled_line("Routes:", reach[0]))
-        for extra in reach[1:]:
-          lines.append(_labeled_line("", extra))
+      lines += route_receipt_lines(spec, run_data, ctx)
     elif spec.routes and (subdomain := resolved_subdomain(spec, ctx)):
       lines.append(_labeled_line("Routes:", f"subdomain={subdomain}"))
 

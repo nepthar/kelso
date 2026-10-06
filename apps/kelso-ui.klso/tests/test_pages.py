@@ -66,6 +66,17 @@ def test_nothing_loads_from_off_the_box(client, fake, path):
     assert url.startswith(("/static/", "data:")), url
 
 
+def test_an_editable_card_carries_its_editor(client, fake):
+  text = client.get("/catalog").text
+  assert text.count('class="edit-open"') == 2
+  assert 'data-target="kelso-ui@examples"' in text
+  # The parser eats one newline after <textarea>; the one the file starts with stays.
+  assert (
+    '<textarea name="text" spellcheck="false" aria-label="Bundle">\n\nnot toml' in text
+  )
+  assert 'class="language-markdown"' in text
+
+
 def test_routes_page_lists_published_routes(client, fake):
   """One provider answers and one does not; the page shows both."""
   text = client.get("/routes").text

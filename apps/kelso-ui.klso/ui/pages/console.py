@@ -44,7 +44,14 @@ async def console_socket(ws: WebSocket, app_id: str, unit: str = "main"):
 
 @router.get("/host/console")
 def host_console_page(page: PageDep):
-  response = page.render("pages/host_console.html", "Host shell")
+  page.title = "Host shell"
+  version = api("/version")
+  response = page.render(
+    "pages/host_console.html",
+    "Host shell",
+    host_name=version.get("hostname") or "",
+    kelso_root=version.get("kelso_root") or "",
+  )
   response.headers["Content-Security-Policy"] = TERMINAL_CSP
   return response
 

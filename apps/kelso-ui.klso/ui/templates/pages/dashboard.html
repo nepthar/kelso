@@ -4,7 +4,6 @@
 {% block content %}
 <h2>kelso host</h2>
 <div class="row host-line">
-  <a class="btn icon" href="/host/console" title="Host shell" aria-label="Host shell">{{ mdi('console') }}</a>
   <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
   {#- Longer spans wait on rolled-up metrics; only the last hour is kept at full detail. -#}
   <select class="timeframe" aria-label="Time frame">

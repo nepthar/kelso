@@ -75,6 +75,7 @@ def test_version(kelso_env, client):
   body = client.get("/version").json()
   assert body["api"] == API_VERSION
   assert body["hostname"] == socket.gethostname()
+  assert body["kelso_root"] == str(kelso_env.root)
   assert body["kelso"]
   # The root is the same answer, so a bare curl at the socket says something.
   assert client.get("/").json() == body
@@ -176,6 +177,11 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "state": "available",
     "configured": None,
     "manifest": "not toml",
+    "text": "not toml",
+    "markdown": False,
+    # repos/local has no git repository of its own here.
+    "editable": False,
+    "base": None,
     "manifest_stale": False,
     # A bundle that does not parse has no spec, so nothing to warn about.
     "warnings": [],

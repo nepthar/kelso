@@ -41,6 +41,9 @@ MAX_HISTORY = 200
 # defining an app means arbitrary bind mounts, which means root. Path-style
 # `load`, and adding a local directory as a repo, stay CLI-only for exactly
 # that reason; `job.app_target` is where the app-side refusal happens.
+# `POST /manifests` is the one way in: it rewrites a bundle already in a local
+# repo, and commits it there. That is root too, but so is the host shell the
+# API already offers, so it adds no reach the socket did not have.
 JOBS: dict[str, type[Job]] = {
   "start": StartJob,
   "stop": StopJob,

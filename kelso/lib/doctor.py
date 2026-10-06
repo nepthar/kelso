@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from kelso.lib import git as git_lib
 from kelso.lib.apps import AppID
 from kelso.lib.docker import DOCKER, DockerError, docker_run_command
 from kelso.lib.git import git
@@ -42,7 +43,7 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_volume_problems(ctx),
     *_catalog_problems(ctx),
   ]
-  warnings = []
+  warnings = _repo_warnings(ctx)
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
@@ -199,6 +200,27 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
     entries = catalog[app_id]
     if len(entries) > 1 and bound_entry(ctx, AppID(app_id), entries) is None:
       findings.append(Finding("", ambiguity_message(app_id, entries)))
+  return findings
+
+
+def _repo_warnings(ctx: KelsoCtx) -> list[Finding]:
+  """Local repos with a git repository of their own and changes not committed."""
+  findings = []
+  for name, repo in ctx.config.repos.items():
+    checkout = repo.path.resolve()
+    if repo.mirrored or not (checkout / ".git").exists():
+      continue
+    try:
+      changed = git_lib.uncommitted(checkout)
+    except RuntimeError:
+      continue
+    if changed:
+      findings.append(
+        Finding(
+          f"repo {name}",
+          f"{changed} uncommitted change(s) in {checkout}; commit them with git.",
+        )
+      )
   return findings
 
 

@@ -564,6 +564,18 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
 
 
+def test_a_reload_ends_with_the_apps_routes(kelso_env):
+  first = kelso_env.run("load", "routes-demo")
+  assert first.returncode == 0, first.stderr
+  assert "Routes:" not in first.stdout
+
+  again = kelso_env.run("load", "routes-demo")
+  assert again.returncode == 0, again.stderr
+  routes = again.stdout.splitlines()[-3:]
+  assert routes[0].strip().startswith("Routes:")
+  assert all("main:" in line and " <- " in line for line in routes)
+
+
 # --- config ----------------------------------------------------------------
 
 

@@ -18,10 +18,11 @@
   <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
   {% endfor %}
   <div class="nav-foot">
+  <a href="{{ host.href }}" title="Host shell"{% if host == active %} class="active"{% endif %}>{{ mdi(host.icon) }}<span class="label">{{ host.label }}</span></a>
   {#- The theme menu. shell.js opens it beside the nav; each item previews its
     theme by carrying that theme's data-theme, which scopes its tokens. -#}
   <button type="button" class="nav-theme" title="theme" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-menu">
-    <span class="label">theme</span><span class="mark" aria-hidden="true">{{ mdi("palette-outline") }}</span>
+    {{- mdi("palette-outline") }}<span class="label">theme</span>
   </button>
   <div class="theme-menu" id="theme-menu" role="menu" aria-label="Theme" hidden>
     {% for theme in themes %}
@@ -31,7 +32,7 @@
   </div>
   <form class="nav-out" method="post" action="/logout">
     <button type="submit" title="Sign out">
-      <span class="label">sign out</span><span class="mark" aria-hidden="true">⏻</span>
+      {{- mdi("logout") }}<span class="label">sign out</span>
     </button>
   </form>
   </div>

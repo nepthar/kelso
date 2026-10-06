@@ -6,7 +6,7 @@ import socket
 from pathlib import Path
 
 from kelso.cli.service import NO_SYSTEMD, install_service
-from kelso.lib import service
+from kelso.lib import git, service
 from kelso.lib.config import (
   CONF_DIR,
   MASTER_KEYFILE,
@@ -233,6 +233,7 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
 
   (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
+  git.adopt(root / "repos" / LOCAL_REPO)
   (root / CONF_DIR / "apps").mkdir(parents=True, exist_ok=True)
   for kind in VOLUME_KINDS:
     # A link made before init is where the operator wants this kind to live.
