@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kelso.lib.apps import AppID, read_app_actions, read_app_starts
+from kelso.lib.apps import AppID, read_app_actions
 from kelso.lib.bundle import load_bundle
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
@@ -82,8 +82,8 @@ class AppObservation:
   containers: tuple[KelsoRunUnitStatus, ...]
   db_present: bool
   last_action: str | None
-  config_changed_at: str | None = None
-  started_at: str | None = None
+  # Config, binds or route assignments written since the app was last loaded.
+  config_pending: bool = False
   loaded_version: str | None = None
   # The version in the bundle it was loaded from; None if that is gone or broken.
   source_version: str | None = None
@@ -101,17 +101,6 @@ class AppObservation:
       volumes_exist=self.volumes_exist,
       has_containers=bool(self.containers),
     )
-
-  @property
-  def config_pending(self) -> bool:
-    """Configuration written since the running containers were started.
-
-    Both timestamps are to the second, so a change in the starting second reads
-    as applied.
-    """
-    if not (self.running_count and self.config_changed_at and self.started_at):
-      return False
-    return self.config_changed_at > self.started_at
 
   @property
   def update_version(self) -> str | None:
@@ -180,6 +169,24 @@ def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
   return store.get_meta("loaded_version"), source
 
 
+# What a reload applies: the app store keys an operator changes.
+_CONFIG_KEYS = ("config/", "binds/", "routes/")
+
+
+def config_changed_since_load(path: Path) -> bool:
+  """Whether the app store at `path` has config written after its last load.
+
+  By order in the log rather than by timestamp, which is only to the second.
+  """
+  changed = False
+  for key, _ in LogTab(path).history():
+    if key == "meta/loaded_at":
+      changed = False
+    elif key.startswith(_CONFIG_KEYS):
+      changed = True
+  return changed
+
+
 def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
@@ -198,7 +205,6 @@ def collect_observations(
     app_ids &= {str(only)}
 
   actions = read_app_actions(ctx)
-  starts = read_app_starts(ctx)
 
   observations: dict[str, AppObservation] = {}
   for raw_id in app_ids:
@@ -225,12 +231,11 @@ def collect_observations(
       containers=docker.get(raw_id, ()),
       db_present=raw_id in db_ids,
       last_action=action[1] if action else None,
-      config_changed_at=(
-        LogTab(ctx.config.app_config_path(app_id)).last_ts()
-        if raw_id in config_ids
-        else None
+      config_pending=(
+        run_dir_exists
+        and raw_id in config_ids
+        and config_changed_since_load(ctx.config.app_config_path(app_id))
       ),
-      started_at=starts.get(raw_id),
       loaded_version=loaded_version,
       source_version=source_version,
     )

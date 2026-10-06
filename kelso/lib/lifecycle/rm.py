@@ -8,6 +8,7 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import container_recovery_message, logger
 from kelso.lib.lifecycle.rootfs import run_as_root
+from kelso.lib.lifecycle.routes import take_down_routes
 from kelso.lib.lifecycle.run import stop
 
 # Deleting config while keeping data regenerates an app's secrets against a
@@ -110,6 +111,9 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
   if plan.stop_first:
     logger.info("Stopping %s", app_id)
     stop(app_id, ctx)
+
+  if plan.run_path is not None:
+    take_down_routes(app_id, ctx)
 
   if plan.run_path is not None and plan.run_path.exists():
     shutil.rmtree(plan.run_path)

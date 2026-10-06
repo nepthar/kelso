@@ -17,7 +17,7 @@
 <div class="row actions">
 {% if app.status not in ('stopped', 'finished', None) %}
   {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
-      desc='Stops ' ~ app_id ~ "'s containers. Its data and configuration are untouched.") }}
+      desc='Stops ' ~ app_id ~ "'s containers. Its data, configuration and published routes are untouched.") }}
 {% else %}
   {{ job_button('Start', 'start', icon='play', title='Start ' ~ name, args={'app': app_id},
       desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
@@ -32,7 +32,7 @@
       desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and take a Snapshot.',
       choices=[
         {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
-         'desc': 'Stops it and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
+         'desc': 'Stops it, unpublishes its routes and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
         {'label': 'Empty temp and logs', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'temp'},
          'desc': 'Empties its temp and logs volumes. It must be stopped, and stays loaded.'},
         {'label': 'Empty all data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'},
@@ -82,7 +82,7 @@
 {% endif %}
 {% if app.get('config_pending') %}
 <div class="notice"><b>Reload to apply pending configuration changes.</b>
-  {{- sub('Settings and route assignments were changed after this app was started, so what is running does not have them yet.') }}</div>
+  {{- sub('Settings, volume binds or route assignments changed since this app was loaded. Reload picks them up, restarting the app if it is running.') }}</div>
 {% endif %}
 {% if app.get('issues') %}
 <div class="error"><h2>Not ready to start</h2><ul>

@@ -496,7 +496,6 @@ def _unit_state(container: KelsoRunUnitStatus | None) -> str | None:
 
 def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
   published = published_route_urls(spec, run_data, ctx)
-  assignments = ctx.app_store(spec.app).list_route_assignments()
   routes = []
   for name, route in spec.routes.items():
     assigned = run_data.routes.get(name)
@@ -514,7 +513,7 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
         "host_url": host_url(
           spec, run_data, name, ctx.config.kelso_address or "localhost"
         ),
-        "provider": assignments.get(name),
+        "provider": assigned.provider if assigned else None,
       }
     )
   return routes

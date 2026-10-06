@@ -23,7 +23,6 @@ from kelso.lib.lifecycle.load import (
 from kelso.lib.lifecycle.routes import (
   preflight_app_routes,
   register_app_routes,
-  unregister_app_routes,
 )
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
@@ -257,7 +256,8 @@ def reload_app(
 
 
 def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
-  """Tear down routes, then bring an app's containers down.
+  """Bring an app's containers down. Its routes stay published: only a reload
+  or a removal takes them down.
 
   `action` is what the app's last action becomes; `up` skips an app whose last
   action is "stopped", so anything that expects `up` to restart it says
@@ -268,11 +268,6 @@ def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
     if state.containers:
       raise ValueError(container_recovery_message(app_id, ctx))
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
-
-  try:
-    unregister_app_routes(app_id, ctx)
-  except Exception as e:
-    logger.error("failed to unregister routes for %s: %s", app_id, e)
 
   try:
     docker_run_command(

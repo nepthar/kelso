@@ -21,6 +21,8 @@ def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "config",
     help="List or set app config, route assignments, and host volume binds",
+    description="Changes to a loaded app take effect when it is reloaded "
+    "(`kelso load <app>`), which restarts it if it is running.",
   )
   parser.add_argument(
     "app",
@@ -167,22 +169,8 @@ def _apply(
   if routes:
     _apply_routes(app, spec, routes, ctx)
 
-  try:
-    state = ctx.run_state(app)
-  except ValueError:
-    state = None
-  if state is not None and state.running_count:
-    if sets or binds:
-      logger.warning(
-        f"App {app} is running; run `kelso stop {app}` "
-        f"&& `kelso start {app}` to apply new config"
-      )
-    if routes:
-      logger.warning(
-        f"App {app} is running; route provider updates were applied, but "
-        f"containers still have the previous route URLs in their environment. "
-        f"Run `kelso stop {app}` && `kelso start {app}` to refresh them."
-      )
+  if ctx.is_loaded(app):
+    logger.info(f"Saved. Reload {app} to apply: kelso load {app}")
 
 
 def _apply_routes(
@@ -193,7 +181,7 @@ def _apply_routes(
 ) -> None:
   for route_name, tag in routes:
     assign_route(spec, route_name, tag, ctx)
-    print(f"route {route_name} -> {tag} (applied on next start)")
+    print(f"route {route_name} -> {tag}")
 
 
 def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:

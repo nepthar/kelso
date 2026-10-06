@@ -4,7 +4,7 @@ from pathlib import Path
 from kelso.lib.apps import read_last_app_action
 from kelso.lib.bundle import is_pathlike, load_bundle
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.observations import RunState
+from kelso.lib.observations import RunState, observe
 from kelso.lib.receipt import capability_receipt
 from kelso.lib.run_layout import load_run_data
 
@@ -46,10 +46,17 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
         f"{app} is not loaded; this is the manifest it would be loaded "
         f"from. Load it with `kelso load {app}`",
       )
-    elif ctx.manifest_stale(app):
-      notes = (
-        f"manifest has changed, `kelso load {app}` may be required to reflect changes",
-      )
+    else:
+      if ctx.manifest_stale(app):
+        notes += (
+          f"manifest has changed, `kelso load {app}` may be required to reflect "
+          f"changes",
+        )
+      if observe(app, ctx).config_pending:
+        notes += (
+          f"config has changed since {app} was loaded; reload to apply: "
+          f"`kelso load {app}`",
+        )
 
     print(
       capability_receipt(

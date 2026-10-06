@@ -48,22 +48,6 @@ def read_last_app_action(app_id: AppID, ctx: KelsoCtx) -> str | None:
   return _verb(entry.value) if entry else None
 
 
-def read_app_starts(ctx: KelsoCtx) -> dict[str, str]:
-  """When kelso last started each app, in one pass over the activity log.
-
-  The activity log is compacted, so an app started long enough ago may not
-  appear; callers read that as "unknown", never as "never started".
-  """
-  starts: dict[str, str] = {}
-  for key, entry in ctx.activity_log.history(prefix="apps/", suffix="/status"):
-    if _verb(entry.value) != "started":
-      continue
-    app_id = key.removeprefix("apps/").removesuffix("/status")
-    if app_id:
-      starts[app_id] = entry.ts
-  return starts
-
-
 def read_app_actions(ctx: KelsoCtx) -> dict[str, tuple[datetime, str]]:
   """Last recorded action for every app, in one pass over the activity log."""
   actions: dict[str, tuple[datetime, str]] = {}

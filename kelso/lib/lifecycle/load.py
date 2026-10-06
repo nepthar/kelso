@@ -7,8 +7,10 @@ import yaml
 
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.kelso import KelsoCtx, LoadedAppPaths, ambiguity_message
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
+from kelso.lib.lifecycle.routes import take_down_routes
 from kelso.lib.options import validate_option
 from kelso.lib.run_layout import (
   KELSO_CMD,
@@ -100,6 +102,7 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
     )
 
   hdb = ctx.kelso_db
+  store = ctx.app_store(spec.app)
   hdb.clear_routes(spec.app)
   for route_name, route in spec.routes.items():
     if route.needs_allocation:
@@ -115,6 +118,7 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
       container_port=route.container_port,
       proto=route.proto,
       scheme=route.scheme,
+      provider=store.get_route_assignment(route_name) or NONE_ROUTE_PROVIDER_TAG,
     )
 
     hdb.set_route(spec.app, route_name, assigned.__dict__)
@@ -336,13 +340,8 @@ def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
 def apply_config_sets(
   spec: AppSpec, sets: list[tuple[str, str]], ctx: KelsoCtx
 ) -> None:
+  """Validate and store config values. A loaded app picks them up on reload."""
   store = ctx.app_store(spec.app)
-  running = False
-  try:
-    running = ctx.run_state(spec.app).running_count > 0
-  except ValueError:
-    pass
-
   for name, value in sets:
     config = spec.config.get(name)
     if not config:
@@ -350,32 +349,7 @@ def apply_config_sets(
     if not value:
       raise ValueError(f"Empty value for config {name!r}")
     validate_option(name, value)
-    if name == "subdomain":
-      if running:
-        raise ValueError(
-          f"App {spec.app} is running; run `kelso stop {spec.app}` first"
-        )
     store.set_config(name, config.secret, value)
-    if name == "subdomain":
-      _relabel_routes(spec, value, ctx)
-
-
-def _relabel_routes(spec: AppSpec, app_subdomain: str, ctx: KelsoCtx) -> None:
-  """Rewrite allocated route labels to match a new app subdomain."""
-  hdb = ctx.kelso_db
-  for name, entry in hdb.list_routes(spec.app).items():
-    route = spec.routes.get(name)
-    if route is None:
-      continue
-    updated = dict(entry)
-    updated["subdomain"] = route.subdomain(app_subdomain)
-    hdb.set_route(spec.app, name, updated)
-
-  compose_path = ctx.loaded_paths(spec.app).compose_path
-  if compose_path.is_file():
-    run_data = load_run_data(spec, ctx)
-    with open(compose_path, "w") as f:
-      yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
 
 def assign_route(spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx) -> None:
@@ -483,6 +457,7 @@ def load(
   ValueError if the app is loaded at another version, unless `version_change`.
   """
   paths = ctx.loaded_paths(app)
+  was_loaded = paths.exists()
 
   try:
     running_count = ctx.run_state(app).running_count
@@ -531,6 +506,11 @@ def load(
   if binds:
     for volname, host_volume_tag in binds:
       bind(spec, volname, host_volume_tag, ctx)
+
+  # On the way down: routes are re-derived below, and may come back under a
+  # different name, so what was published goes first.
+  if was_loaded:
+    take_down_routes(app, ctx)
 
   _generate_missing_config(spec, ctx)
   _apply_default_route_assignments(spec, ctx)

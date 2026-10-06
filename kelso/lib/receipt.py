@@ -5,7 +5,6 @@ from kelso.lib.connections import CONNECTION_KINDS
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData, resolved_subdomain
 from kelso.lib.spec import AppSpec
-from kelso.lib.util import PUBLIC_ROUTE_SCHEME
 
 # Every label in these receipts pads to at least this, so the capability block
 # and the location block under it line up in one `kelso start`.
@@ -15,22 +14,14 @@ LABEL_WIDTH = len("Containers:")
 def published_route_urls(
   spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> dict[str, str]:
-  """Route name -> public URL, for routes assigned to a non-none provider."""
-  assignments = ctx.app_store(spec.app).list_route_assignments()
-  urls: dict[str, str] = {}
-  for route_name, route in spec.routes.items():
-    tag = assignments.get(route_name)
-    if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
-      continue
-    if route_name in run_data.route_urls:
-      urls[route_name] = run_data.route_urls[route_name]
-      continue
-    subdomain = resolved_subdomain(spec, ctx)
-    if not subdomain:
-      continue
-    domain = ctx.config.provider_domain(tag)
-    urls[route_name] = f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(subdomain)}.{domain}"
-  return urls
+  """Route name -> public URL, for routes loaded with a non-none provider."""
+  return {
+    name: run_data.route_urls[name]
+    for name in spec.routes
+    if (loaded := run_data.routes.get(name)) is not None
+    and loaded.provider != NONE_ROUTE_PROVIDER_TAG
+    and name in run_data.route_urls
+  }
 
 
 def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:

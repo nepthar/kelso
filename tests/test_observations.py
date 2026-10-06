@@ -6,6 +6,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.config import load_config_file
 from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.logtab import LogTab
 from kelso.lib.observations import (
   DEGRADED,
   FINISHED,
@@ -13,6 +14,7 @@ from kelso.lib.observations import (
   OK,
   STOPPED,
   AppObservation,
+  config_changed_since_load,
   observe,
 )
 
@@ -40,35 +42,33 @@ def _observed(**kwargs) -> AppObservation:
   return AppObservation(**{**base, **kwargs})
 
 
-def test_config_written_after_the_start_is_pending():
-  assert _observed(
-    started_at="2026-08-27T10:00:00Z", config_changed_at="2026-08-27T10:05:00Z"
-  ).config_pending
+def _log(tmp_path, *keys: str):
+  path = tmp_path / "app.logtab"
+  table = LogTab(path)
+  for key in keys:
+    table.write(key, '"x"')
+  return path
 
 
-def test_config_written_before_the_start_is_applied():
-  assert not _observed(
-    started_at="2026-08-27T10:05:00Z", config_changed_at="2026-08-27T10:00:00Z"
-  ).config_pending
+def test_config_written_after_the_load_is_pending(tmp_path):
+  path = _log(tmp_path, "config/a", "meta/loaded_at", "config/subdomain")
+  assert config_changed_since_load(path)
 
 
-def test_nothing_is_pending_on_an_app_that_is_not_running():
-  """The next start reads config fresh, so there is nothing to warn about."""
-  assert not _observed(
-    containers=(),
-    started_at="2026-08-27T10:00:00Z",
-    config_changed_at="2026-08-27T10:05:00Z",
-  ).config_pending
+def test_config_written_during_the_load_is_applied(tmp_path):
+  """Load writes generated secrets and route defaults before `loaded_at`."""
+  path = _log(tmp_path, "config/a", "routes/main", "meta/loaded_at", "meta/x")
+  assert not config_changed_since_load(path)
 
 
-def test_unknown_timestamps_are_not_pending():
-  """A start the activity log has compacted away is unknown, not stale."""
-  assert not _observed(
-    started_at=None, config_changed_at="2026-08-27T10:05:00Z"
-  ).config_pending
-  assert not _observed(
-    started_at="2026-08-27T10:00:00Z", config_changed_at=None
-  ).config_pending
+@pytest.mark.parametrize("key", ["binds/media", "routes/main"])
+def test_binds_and_route_assignments_are_config_too(tmp_path, key):
+  assert config_changed_since_load(_log(tmp_path, "meta/loaded_at", key))
+
+
+def test_a_reload_applies_what_was_pending(tmp_path):
+  path = _log(tmp_path, "meta/loaded_at", "config/a", "meta/loaded_at")
+  assert not config_changed_since_load(path)
 
 
 def test_observing_an_app_kelso_holds_nothing_for_is_refused(kelso_env):

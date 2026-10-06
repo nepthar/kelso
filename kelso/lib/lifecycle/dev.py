@@ -12,7 +12,7 @@ from kelso.lib.lifecycle.routes import (
   assigned_routes,
   preflight_app_routes,
   register_app_routes,
-  unregister_app_routes,
+  take_down_routes,
 )
 from kelso.lib.lifecycle.run import down_env, recovery_lines
 from kelso.lib.routes import RouteProviderError
@@ -118,15 +118,6 @@ def source_volume_links(plan: DevPlan) -> Iterator[None]:
       link.symlink_to(original)
 
 
-def _unpublish(app: AppID, ctx: KelsoCtx) -> None:
-  """Best effort, like `stop`: a provider that will not answer must not keep
-  the containers up or the links borrowed."""
-  try:
-    unregister_app_routes(app, ctx)
-  except Exception as e:
-    logger.error("failed to unregister routes for %s: %s", app, e)
-
-
 def _compose_down(plan: DevPlan) -> None:
   """Best effort: the links go back whether or not teardown succeeds."""
   try:
@@ -169,7 +160,7 @@ def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
         )
       finally:
         if plan.published:
-          _unpublish(app, ctx)
+          take_down_routes(app, ctx)
         _compose_down(plan)
   finally:
     unlink_host_volumes(plan.run_path)

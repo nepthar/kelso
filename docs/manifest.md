@@ -184,6 +184,12 @@ mongo_pass  = { secret = true, default = "auto" }
 Set them with `kelso config <app> --set timezone=America/Denver`, or from the
 app's page in the web UI.
 
+A change to a loaded app takes effect when the app is reloaded with
+`kelso load <app>`, which restarts it if it is running. Until then `kelso ps`
+shows its config as `pending`, and the web UI says a reload is needed. The same
+goes for volume binds and route assignments. `kelso start <app> --set …` on an
+app that is not loaded yet needs no reload: loading is part of the start.
+
 ### App options
 
 Every app also has these, whether its manifest mentions them or not. They

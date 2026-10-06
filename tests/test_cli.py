@@ -641,7 +641,7 @@ def test_assigning_a_route_before_load_is_recorded(kelso_env):
   """The provider is contacted by `start`, so an assignment can be made first."""
   assigned = kelso_env.run("config", "routes-demo", "--route", "main=web")
   assert assigned.returncode == 0, assigned.stderr
-  assert "applied on next start" in assigned.stdout
+  assert "route main -> web" in assigned.stdout
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   assert ctx.app_store("routes-demo").get_route_assignment("main") == "web"
@@ -673,13 +673,14 @@ def test_config_set_secret(kelso_env):
   assert "(set)" in listed.stdout
 
 
-def test_config_set_while_running_warns(kelso_env):
+def test_config_set_on_a_loaded_app_says_to_reload(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   result = kelso_env.run("config", BASIC, "--set", "admin_user=bob")
   assert result.returncode == 0, result.stderr
-  assert "is running" in result.stderr
-  assert f"kelso stop {BASIC}" in result.stderr
-  assert f"kelso start {BASIC}" in result.stderr
+  assert f"kelso load {BASIC}" in result.stderr
+
+  started = kelso_env.run("start", BASIC)
+  assert f"kelso load {BASIC}" in started.stderr
 
 
 def test_config_set_subdomain_overrides_the_manifest(kelso_env):
@@ -687,17 +688,16 @@ def test_config_set_subdomain_overrides_the_manifest(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
-  running = kelso_env.run("config", app_id, "--set", "subdomain=lab")
-  assert running.returncode == 1
-  assert f"kelso stop {app_id}" in running.stderr
-  assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
-
-  assert kelso_env.run("stop", app_id).returncode == 0
+  # Accepted while running, and applied by the next reload, not right away.
   set_result = kelso_env.run("config", app_id, "--set", "subdomain=lab")
   assert set_result.returncode == 0, set_result.stderr
+  assert f"kelso load {app_id}" in set_result.stderr
+  assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
   got = kelso_env.run("config", app_id, "--get", "subdomain")
   assert got.stdout.strip() == "lab"
+
+  assert kelso_env.run("load", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-lab"
   assert kelso_env.read_db()["routes"][app_id]["admin"]["subdomain"] == "admin-lab"
 
@@ -897,7 +897,7 @@ def test_rebinding_takes_effect_at_the_next_start(kelso_env):
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
   rebound = kelso_env.run("config", app_id, "--bind", "hostvol1=other")
   assert rebound.returncode == 0, rebound.stderr
-  assert "is running" in rebound.stderr
+  assert f"kelso load {app_id}" in rebound.stderr
   assert link.resolve() == first, "a running app's links must not move"
 
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1131,7 +1131,12 @@ def test_ps_reports_config_readiness_and_volume_count(kelso_env):
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
   assert row[1:4] == ["stopped", "missing", "3"]
 
+  # Complete now, but changed since the load: a reload applies it.
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  row = _ps_row(kelso_env.run("ps").stdout, BASIC)
+  assert row[1:4] == ["stopped", "pending", "3"]
+
+  assert kelso_env.run("load", BASIC).returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
   assert row[1:4] == ["stopped", "ready", "3"]
 
@@ -1327,9 +1332,11 @@ class _RecordingRouteProvider:
 
   def register_route(self, app, port, subdomain, domain, scheme="http"):
     self.registered.append((app, port, subdomain, domain, scheme))
+    self._owners[subdomain] = app
 
   def unregister_route(self, subdomain, domain):
     self.unregistered.append((subdomain, domain))
+    self._owners.pop(subdomain, None)
 
   def route_owners(self):
     return self._owners
@@ -1372,27 +1379,105 @@ def test_duplicate_fqdn_is_rejected_before_compose_up(
   assert ["compose", "up", "-d"] not in docker_calls
 
 
-def test_stop_uses_loaded_manifest_when_bundle_is_missing(
-  kelso_env, monkeypatch, stub_provider
-):
-  provider = stub_provider()
+def _started_routes_demo(monkeypatch, kelso_env, stub_provider, owners=None):
+  provider = stub_provider(owners)
   monkeypatch.setattr(
     "kelso.lib.lifecycle.run.docker_run_command",
     lambda args, **kwargs: "",
   )
-  load_ctx = KelsoCtx(load_config_file(kelso_env.config))
-  app = load_ctx.resolve_app("routes-demo")
-  lifecycle.load(app, load_ctx.bundle_path(app), load_ctx)
-  start_ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, start_ctx.bundle_path(app), start_ctx)
-  shutil.rmtree(kelso_env.local_repo / "routes-demo.klso")
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app("routes-demo")
+  lifecycle.load(app, ctx.bundle_path(app), ctx)
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.start(app, ctx.bundle_path(app), ctx)
+  return provider, app
 
-  fresh_ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.stop("routes-demo", fresh_ctx)
-  assert provider.unregistered == [
-    ("photos", "kelso.localhost"),
-    ("api-photos", "kelso.localhost"),
+
+ROUTES_DEMO_PUBLISHED = [
+  ("photos", "kelso.localhost"),
+  ("api-photos", "kelso.localhost"),
+]
+
+
+def test_stop_leaves_routes_published(kelso_env, monkeypatch, stub_provider):
+  """Only a reload or a removal unpublishes; `compose up` by hand still works."""
+  provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
+  lifecycle.stop(app, KelsoCtx(load_config_file(kelso_env.config)))
+  assert provider.unregistered == []
+
+
+def test_reload_takes_routes_down_then_publishes_them_again(
+  kelso_env, monkeypatch, stub_provider
+):
+  provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
+  provider.registered.clear()
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.reload_app(app, ctx.bundle_path(app), ctx)
+  assert provider.unregistered == ROUTES_DEMO_PUBLISHED
+  assert provider.registered == []  # Stopped, so back on its next start.
+
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  assert [r[2] for r in provider.registered] == ["photos", "api-photos"]
+
+
+def test_unload_uses_loaded_state_when_bundle_is_missing(
+  kelso_env, monkeypatch, stub_provider
+):
+  provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
+  shutil.rmtree(kelso_env.local_repo / "routes-demo.klso")
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.rm(lifecycle.removal_plan(app, ctx, mode=lifecycle.UNLOAD), ctx)
+  assert provider.unregistered == ROUTES_DEMO_PUBLISHED
+
+
+def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
+  kelso_env, monkeypatch
+):
+  """Reassigning a route changes where the next load publishes it, not where
+  the current one is unpublished from."""
+  kelso_env.config.write_text(
+    kelso_env.config.read_text()
+    + '\n[route_provider.other]\nkind = "noop"\ndomain = "other.example"\n'
+  )
+  providers = {"web": _RecordingRouteProvider(), "other": _RecordingRouteProvider()}
+  monkeypatch.setattr(
+    "kelso.lib.lifecycle.routes.get_route_provider", lambda ctx, tag: providers[tag]
+  )
+  monkeypatch.setattr("kelso.lib.kelso.load_kelso_run_unit_status", lambda: {})
+  monkeypatch.setattr(
+    "kelso.lib.lifecycle.run.docker_run_command", lambda args, **kwargs: ""
+  )
+
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app("routes-demo")
+  lifecycle.load(app, ctx.bundle_path(app), ctx)
+  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  assert [r[2] for r in providers["web"].registered] == ["photos", "api-photos"]
+
+  spec = ctx.loaded_spec(app)
+  lifecycle.assign_route(spec, "main", "other", ctx)
+  lifecycle.reload_app(app, ctx.bundle_path(app), ctx)
+  assert ("photos", "kelso.localhost") in providers["web"].unregistered
+  assert providers["other"].unregistered == []
+
+  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  assert [r[2:4] for r in providers["other"].registered] == [
+    ("photos", "other.example")
   ]
+
+
+def test_a_route_removed_by_hand_is_warned_about_and_skipped(
+  kelso_env, monkeypatch, stub_provider, caplog
+):
+  provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
+  provider._owners.pop("photos")
+  provider._owners["api-photos"] = "someone-else"
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.rm(lifecycle.removal_plan(app, ctx, mode=lifecycle.UNLOAD), ctx)
+  assert provider.unregistered == []
+  assert "no route found for photos.kelso.localhost" in caplog.text
+  assert "belongs to someone-else now" in caplog.text
 
 
 def test_registering_a_route_names_where_it_points(kelso_env, stub_provider):

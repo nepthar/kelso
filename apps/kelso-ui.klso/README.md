@@ -45,6 +45,7 @@ reaches the host's loopback, so kelsod stays off the network:
 
 ```
 kelso config kelso-ui --set api_address=host.docker.internal:N
+kelso load kelso-ui
 ```
 
 ## Signing in

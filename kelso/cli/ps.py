@@ -74,7 +74,10 @@ def _config(observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx) ->
     return config_status(spec, ctx.app_store(observation.app_id))
   if spec is None:
     return EMPTY
-  return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
+  if load_run_data(spec, ctx).start_blockers:
+    return "missing"
+  # Complete, but changed since the app was loaded: a reload applies it.
+  return "pending" if observation.config_pending else "ready"
 
 
 def _version(observation: AppObservation, spec: AppSpec | None) -> str:
