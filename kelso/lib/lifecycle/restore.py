@@ -7,6 +7,7 @@ from logging import getLogger
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
+from kelso.lib.crypto import CryptoEngine, crypto_from_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.load import materialize
 from kelso.lib.lifecycle.rootfs import run_as_root
@@ -17,6 +18,7 @@ from kelso.lib.lifecycle.snapshot import (
   snapshot,
   snapshot_archive,
 )
+from kelso.lib.rekey import reencrypt_app_store
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import validate_identifier
@@ -162,7 +164,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
   )
 
 
-def _rebuild_run_dir(plan: RestorePlan) -> None:
+def _rebuild_run_dir(plan: RestorePlan, crypto: CryptoEngine) -> None:
   """Drop the live run dir and rebuild it from the snapshot."""
   if plan.run_path.exists():
     shutil.rmtree(plan.run_path)
@@ -170,6 +172,8 @@ def _rebuild_run_dir(plan: RestorePlan) -> None:
   shutil.copytree(plan.snapshot_path / "app_bundle", plan.run_path / "app_bundle")
   plan.config_path.parent.mkdir(parents=True, exist_ok=True)
   shutil.copy2(plan.snapshot_path / "config.logtab", plan.config_path)
+  # The snapshot may predate a rekey; its secrets move onto the current key.
+  reencrypt_app_store(plan.config_path, crypto)
 
 
 def _restore_data_volumes(plan: RestorePlan, ctx: KelsoCtx) -> None:
@@ -248,7 +252,7 @@ def _restore_extracted(
   # and failing here leaves the run dir untouched.
   _restore_data_volumes(plan, ctx)
 
-  _rebuild_run_dir(plan)
+  _rebuild_run_dir(plan, crypto_from_config(ctx.config))
 
   try:
     run_data, _ = materialize(spec, ctx)

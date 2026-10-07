@@ -1,12 +1,12 @@
 import argparse
 import logging
 import os
-import secrets
 import socket
 from pathlib import Path
 
+from kelso.cli import phrase
 from kelso.cli.service import NO_SYSTEMD, install_service
-from kelso.lib import git, service
+from kelso.lib import git, recovery, service
 from kelso.lib.config import (
   CONF_DIR,
   MASTER_KEYFILE,
@@ -16,7 +16,6 @@ from kelso.lib.config import (
   load_config_file,
 )
 from kelso.lib.doctor import tool_problems
-from kelso.lib.logtab import LogTab
 from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
 
@@ -251,11 +250,10 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
   config_path.write_text(template)
 
+  # A new root has no secrets, so making its key is all a rekey would do.
   master_key_path = root / CONF_DIR / MASTER_KEYFILE
-  LogTab(master_key_path, title="Kelso Master Key").write(
-    "master_key", secrets.token_hex(128)
-  )
-  master_key_path.chmod(0o600)
+  entropy = recovery.new_entropy()
+  recovery.write_seed(master_key_path, entropy)
 
   config = load_config_file(config_path)
 
@@ -301,5 +299,18 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   print(f"\nTo change your configuration, edit {config_path}")
   print(TUTORIAL)
+
+  # Last, so it is what is on screen when init is done.
+  print("")
+  words = recovery.phrase(entropy)
+  phrase.show(words)
+  if not args.yes and phrase.check(words):
+    recovery.mark_confirmed(master_key_path)
+  else:
+    print(
+      "\nOnce they are saved, confirm it with: kelso system recovery-phrase "
+      "--confirm\n`kelso system doctor` reminds you until you do."
+    )
+
   if service.has_systemd():
     print(RESTART)

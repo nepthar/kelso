@@ -16,6 +16,7 @@ from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
 from kelso.lib.lifecycle.load import bound_entry
 from kelso.lib.observations import AppObservation
+from kelso.lib.recovery import read_keyfile
 from kelso.lib.spec import AppSpec
 
 
@@ -43,12 +44,34 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_volume_problems(ctx),
     *_catalog_problems(ctx),
   ]
-  warnings = _repo_warnings(ctx)
+  warnings = [*_repo_warnings(ctx), *_key_warnings(ctx)]
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
     warnings += [Finding(subject, m) for m in _app_warnings(observation)]
   return DoctorPrognosis(tuple(problems), tuple(warnings))
+
+
+def _key_warnings(ctx: KelsoCtx) -> list[Finding]:
+  """Whether this root's secrets could be read on another machine."""
+  keyfile = read_keyfile(ctx.config.master_keyfile)
+  if keyfile.seed is None:
+    return [
+      Finding(
+        "the master key",
+        "it predates recovery phrases, so a backup of this kelso could not be "
+        "restored on another machine. Make one with `kelso system rekey`.",
+      )
+    ]
+  if not keyfile.confirmed:
+    return [
+      Finding(
+        "the recovery phrase",
+        "it has not been confirmed as saved. Check it with "
+        "`kelso system recovery-phrase --confirm`.",
+      )
+    ]
+  return []
 
 
 # `git sparse-checkout set`, which mirroring needs, arrived in 2.25.

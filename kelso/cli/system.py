@@ -1,14 +1,14 @@
 import argparse
-import secrets
 import sys
 
 from tabulate import tabulate
 
-from kelso.cli import activity, decrypt, doctor, service, volumes
+from kelso.cli import activity, decrypt, doctor, phrase, service, volumes
 from kelso.cli.kv import parse_kv
+from kelso.lib import recovery
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.logtab import LogTab
+from kelso.lib.rekey import rekey
 
 
 def register(subparsers) -> None:
@@ -45,8 +45,31 @@ def register(subparsers) -> None:
     activity=lambda a: "secret" if a.sets or a.unsets or a.stdin_key else None,
   )
 
-  gen = sub.add_parser("gen-masterkey", help="Generate a new master key")
-  gen.set_defaults(func=run_gen_masterkey, activity="gen-masterkey")
+  rekey = sub.add_parser(
+    "rekey",
+    help="Make a new recovery phrase and re-encrypt every secret under it",
+    description="Shows a new recovery phrase, checks you saved it, then "
+    "re-encrypts every app secret and system secret under the key it derives. "
+    "The old key is kept, to read snapshots taken under it. Rekeying does not "
+    "undo an exposed key: whoever had it could already read every secret, so "
+    "change the secrets themselves too.",
+  )
+  rekey.add_argument(
+    "--phrase",
+    action="store_true",
+    help="Enter an existing recovery phrase instead of making a new one",
+  )
+  rekey.set_defaults(func=run_rekey, activity="rekey")
+
+  phrase_cmd = sub.add_parser(
+    "recovery-phrase", help="Show this kelso's recovery phrase"
+  )
+  phrase_cmd.add_argument(
+    "--confirm",
+    action="store_true",
+    help="Check you saved it, instead of showing it",
+  )
+  phrase_cmd.set_defaults(func=run_recovery_phrase)
 
   hv = sub.add_parser(
     "host-volume",
@@ -158,8 +181,45 @@ def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     )
 
 
-def run_gen_masterkey(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  with ctx.kelso_lock("gen-masterkey"):
-    mkey_file = ctx.config.master_keyfile
-    LogTab.write_entry(mkey_file, "master_key", "set", secrets.token_hex(128))
-    print(f"New master key appended to: {mkey_file}")
+def run_rekey(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if args.phrase:
+    entered = input(f"Enter the {recovery.WORDS} words, separated by spaces: ")
+    entropy = recovery.entropy_from_phrase(entered.split())
+    confirmed = True
+  else:
+    entropy = recovery.new_entropy()
+    words = recovery.phrase(entropy)
+    phrase.show(words)
+    if not phrase.check(words):
+      raise ValueError("The phrase was not confirmed, so nothing was changed")
+    confirmed = True
+
+  result = rekey(ctx, entropy)
+  if confirmed:
+    recovery.mark_confirmed(ctx.config.master_keyfile)
+  print(
+    f"Re-encrypted {result.values} value(s) across {result.apps} app(s) and "
+    f"kelsodb under the new key."
+  )
+  if result.unreadable:
+    raise ValueError(
+      f"{len(result.unreadable)} value(s) could not be decrypted with any key on "
+      "file and were left as they were. Set them again with `kelso config`."
+    )
+
+
+def run_recovery_phrase(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  keyfile = recovery.read_keyfile(ctx.config.master_keyfile)
+  if keyfile.seed is None:
+    raise ValueError(
+      "This kelso's master key predates recovery phrases, so there is none to "
+      "show. Make one with `kelso system rekey`."
+    )
+  words = recovery.phrase(keyfile.seed)
+  if not args.confirm:
+    print(recovery.format_phrase(words))
+    return
+  if not phrase.check(words):
+    raise ValueError("That does not match the recovery phrase on file")
+  with ctx.kelso_lock("recovery-phrase"):
+    recovery.mark_confirmed(ctx.config.master_keyfile)

@@ -29,6 +29,17 @@ admin API the web UI talks to.
 `kelsod` as a systemd user service. Plain `kelso init` asks where to put the
 root instead.
 
+The last thing `init` shows is a twelve-word recovery phrase. Every key kelso
+encrypts your apps' secrets with is derived from it, and it is the only way to
+read them, or a backup of them, on another machine. Save it in a password
+manager. Plain `kelso init` asks for two of the words back to check; after
+`init --yes`, run `kelso system recovery-phrase --confirm` once it is saved.
+`kelso system recovery-phrase` shows it again.
+
+A root made before 1.0.2 has a master key with no phrase behind it.
+`kelso system rekey` makes a phrase and re-encrypts every secret under the key
+it derives; `kelso system doctor` reminds you until you do.
+
 The reboot matters even though you just logged back in. kelsod runs under
 systemd's per-user manager, which keeps the groups it started with; if that
 manager started before you joined the `docker` group, kelsod cannot reach

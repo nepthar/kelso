@@ -22,7 +22,7 @@ import kelso.lib.doctor
 import kelso.lib.git
 import kelso.lib.lifecycle.run
 import kelso.lib.service
-from kelso.lib import activity, lifecycle
+from kelso.lib import activity, lifecycle, recovery
 from kelso.lib.apps import read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
@@ -1857,14 +1857,13 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
   after = run_at(kelso_env, root, "ps")
   assert after.returncode == 0, after.stderr
 
-
-def test_gen_masterkey_appends_to_the_keyfile(kelso_env):
-  before = kelso_env.master_keyfile.read_text()
-  result = kelso_env.run("system", "gen-masterkey")
-
-  assert result.returncode == 0, result.stderr
-  after = kelso_env.master_keyfile.read_text()
-  assert after.startswith(before) and len(after) > len(before)
+  # It comes from a recovery phrase, shown last. Nothing answered the check, so
+  # it is left unconfirmed and init says how to confirm it.
+  keyfile = recovery.read_keyfile(root / "conf" / "master.key")
+  assert keyfile.seed is not None and not keyfile.confirmed
+  for word in recovery.phrase(keyfile.seed):
+    assert word in result.stdout
+  assert "recovery-phrase --confirm" in result.stdout
 
 
 def test_every_shipped_bundle_loads(kelso_env):

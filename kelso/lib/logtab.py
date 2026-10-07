@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -250,6 +250,46 @@ class LogTab:
 
     os.replace(compact_path, self.path)
     compact_path.unlink(missing_ok=True)
+
+  def rewrite(self, transform: Callable[[str, str], str]) -> int:
+    """Replace each `set` value with `transform(key, value)`, in place.
+
+    Every other line -- comments, deletes, timestamps, the order of records --
+    is kept as it was, so history reads the same afterwards. Returns how many
+    values changed. The caller must keep writers off the file.
+    """
+    out: list[str] = []
+    changed = 0
+    with open(self.path) as f:
+      for line in f:
+        body = line.rstrip("\n")
+        split = body.split(LogTab.FS, 3)
+        if body.startswith("#") or len(split) != 4 or split[1] != "set":
+          out.append(body)
+          continue
+        ts, operation, key, value = split
+        new = transform(key, value)
+        LogTab.validate_value(new)
+        if new != value:
+          changed += 1
+        out.append(LogTab.FS.join((ts, operation, key, new)))
+    if not changed:
+      return 0
+
+    mode = self.path.stat().st_mode & 0o777
+    staged = self.path.with_name(self.path.name + ".rewrite")
+    data = ("\n".join(out) + "\n").encode()
+    fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    try:
+      offset = 0
+      while offset < len(data):
+        offset += os.write(fd, data[offset:])
+      os.fsync(fd)
+    finally:
+      os.close(fd)
+    os.chmod(staged, mode)
+    os.replace(staged, self.path)
+    return changed
 
   def scan(self, prefix: str = "", suffix: str = "") -> dict[str, Entry]:
     """Entries matching a prefix and suffix; both empty is `load()`."""

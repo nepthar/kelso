@@ -18,7 +18,6 @@ from kelso.cli.main import run as cli_run
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS
-from kelso.lib.logtab import LogTab
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import JsonLogtabStore
 
@@ -27,6 +26,17 @@ from .fakedocker import FakeDocker, FakeSubprocess, GuardDocker
 # The contention tests wait this out in full; 5s each is more than the rest of
 # the suite costs. Anything that asserts on the wait should read it from here.
 LOCK_TIMEOUT = 0.25
+
+
+# A fixed phrase, confirmed: what a root made and set up by `kelso init` holds.
+TEST_SEED = bytes(range(16))
+
+
+def write_test_seed(path: Path) -> None:
+  from kelso.lib.recovery import mark_confirmed, write_seed
+
+  write_seed(path, TEST_SEED)
+  mark_confirmed(path)
 
 
 def spec_of(tmp_path: Path, manifest: str, app_id: str = "demo") -> AppSpec:
@@ -303,7 +313,7 @@ def kelso_env(
     else:
       shutil.copy2(source, apps / source.name)
 
-  LogTab(root / "conf" / "master.key").write("master_key", "0" * 64)
+  write_test_seed(root / "conf" / "master.key")
   config = root / "config.toml"
   config.write_text(CONFIG)
 

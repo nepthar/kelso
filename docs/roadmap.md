@@ -265,9 +265,12 @@ in `migrations.toml`, and N+2 can drop that migration with `upgrade_from = N+1`,
 so every install passed through the version that removed it.
 
 ### Off-host snapshots
-Snapshots stay on the box. Copying them elsewhere also needs a plan for
-`conf/master.key`: no snapshot carries it, so a restore on another machine
-cannot read its secrets.
+Snapshots stay on the box. The key half is done: the master key derives from
+a twelve-word recovery phrase (`kelso system recovery-phrase`), so a fresh
+install given the phrase reads the same secrets. What remains is the backup
+itself: restic against the live data volumes and kelso's state, run from a
+`kelso-backup` app with its own schedule and retention, and a restore that
+starts from the phrase and the bucket.
 
 ### Restricted network mode
 A mode where a sidecar takes over DNS and proxies all outgoing HTTP and HTTPS,
@@ -310,10 +313,6 @@ the invoking user and cannot touch what the app's containers wrote.
   second root reports the first one's containers as needing manual recovery,
   and its `cleanup` offers to remove images the other root still uses. Run one
   kelso root per docker daemon.
-- **`kelso system gen-masterkey` orphans every existing secret.** It writes a
-  new key and nothing re-encrypts what the old one protected: app secrets,
-  route provider credentials, and cached tokens all stop decrypting. Do not run
-  it on a root that holds secrets.
 - **kelsod being down is invisible.** kelsod records the metrics behind volume
   sizes, resumes apps at boot, and runs cron. With it stopped, `kelso status`
   shows `0.0 B` for every volume kind, apps stay down after a reboot, and cron

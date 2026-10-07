@@ -22,7 +22,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if not ctx.config.master_key:
     raise ValueError(
       f"No master key in {ctx.config.master_keyfile}, so nothing was encrypted "
-      f"with one. Run: kelso system gen-masterkey"
+      f"with one. Run: kelso system rekey"
     )
 
   blob = sys.stdin.read().strip()
@@ -31,7 +31,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   try:
     # Fernet is authenticated: a wrong key raises, never returns garbage.
-    plaintext = FernetCryptoEngine(ctx.config.master_key).decrypt(blob)
+    plaintext = FernetCryptoEngine(
+      ctx.config.master_key, ctx.config.retired_master_keys
+    ).decrypt(blob)
   except InvalidToken:
     raise ValueError(
       "Could not decrypt that value. It is not a kelso-encrypted blob, or it "
