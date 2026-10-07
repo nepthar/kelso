@@ -9,6 +9,7 @@ Kelso is a self-hosting management system where apps are packages that describe 
 - **Configure your system layout once, load any app.** Kelso uses the system layout you specify along with each app's manifest to talior each app to your hardware.
 - **No vendor lock-in by design.** Under the hood, each app is a docker compose project. If you erase `kelso` from your system, you'll still have an organized, functional folder tree of docker compose stacks that you can directly interact with. Try it!
 - **Comprehensive snapshot and rollback** `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again, so what you get back is a coherent point in time. If your app doesn't require 100% uptime 24/7, you can confidentaly snapshot your app in a frozen state.
+- **LLMs can build and deploy apps in minutes** Kelso is uncomplicated and well documented. LLMs have no trouble reading the docs and creating deployment-ready, custom applications for you.
 
 ## How does it work?
 Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
