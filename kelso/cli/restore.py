@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from tabulate import tabulate
@@ -57,11 +58,20 @@ def _restore_everything(path: Path, ctx: KelsoCtx, *, yes: bool) -> None:
     if layout.differs(ctx) and not yes and not _go_ahead():
       print("Nothing restored. Re-link what should move, then restore again.")
       return
+  # Restore's progress goes to stderr; the layout belongs before it.
+  sys.stdout.flush()
+  own = path.resolve() == ctx.config.backups_root.resolve()
   result = recover(ctx, path)
   print(f"Restored kelso {result.kelso_id}'s configuration and state")
+  for name in result.mirrored:
+    print(f"Fetched repo {name}")
   for app in result.restored:
     print(f"Restored {app}")
-  if result.linked:
+  for failure in result.unmirrored:
+    print(f"Could not fetch repo {failure}; `kelso repo update` tries again.")
+  if own:
+    print(f"New backups keep going to {path.resolve()}.")
+  elif result.linked:
     print(f"backups/ now points at {path.resolve()}; new backups go there too.")
   else:
     print(

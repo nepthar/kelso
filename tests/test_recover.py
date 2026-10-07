@@ -220,3 +220,45 @@ def test_the_same_layout_restores_without_asking(kelso_env, tmp_path):
   assert restored.returncode == 0, restored.stderr
   assert "Restore anyway?" not in restored.stdout
   assert "same here" in restored.stdout
+
+
+def test_restore_fetches_the_repos_the_restored_config_names(
+  kelso_env, tmp_path, monkeypatch
+):
+  from kelso.lib import repo as repo_lib
+
+  config = kelso_env.config
+  config.write_text(
+    config.read_text()
+    + '\n[repo.demos]\nurl = "github://nepthar/kelso/backups/demo-apps"\n'
+    + '\n[repo.gone]\nurl = "github://nepthar/kelso/nowhere/apps"\n'
+  )
+  backups = _backed_up_root(kelso_env)
+  kelso_env.run("stop", BASIC)
+
+  fetched = []
+
+  def mirror(repo, ctx):
+    if repo.name == "gone":
+      raise ValueError("no such ref")
+    fetched.append((repo.name, repo.describe()))
+
+  monkeypatch.setattr(repo_lib, "mirror", mirror)
+  root = tmp_path / "new"
+  assert _init_with(kelso_env, root, WORDS).returncode == 0
+  restored = run_at(kelso_env, root, "restore", str(backups), "-y")
+  assert restored.returncode == 0, restored.stderr
+  # The branch the restored config names, not whatever init fetched.
+  assert fetched == [("demos", "github://nepthar/kelso/backups/demo-apps")]
+  assert "Fetched repo demos" in restored.stdout
+  assert "Could not fetch repo gone: no such ref" in restored.stdout
+  assert f"Restored {BASIC}" in restored.stdout
+
+
+def test_restoring_from_the_roots_own_backups_says_so(kelso_env):
+  backups = _backed_up_root(kelso_env)
+  kelso_env.run("stop", BASIC)
+  assert kelso_env.run("system", "purge", "-y").returncode == 0
+  restored = kelso_env.run("restore", str(backups), "-y")
+  assert restored.returncode == 0, restored.stderr
+  assert f"New backups keep going to {backups.resolve()}." in restored.stdout

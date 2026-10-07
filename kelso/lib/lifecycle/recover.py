@@ -94,6 +94,9 @@ class RecoverResult:
   failed: list[str] = field(default_factory=list)
   # Whether backups/ now points at where the backups were restored from.
   linked: bool = False
+  # Mirrored repos fetched again, and "<repo>: <error>" for those that were not.
+  mirrored: list[str] = field(default_factory=list)
+  unmirrored: list[str] = field(default_factory=list)
 
 
 def open_backups(ctx: KelsoCtx, path: Path) -> Restic:
@@ -242,6 +245,7 @@ def recover(ctx: KelsoCtx, path: Path) -> RecoverResult:
 
   result = RecoverResult(kelso_id=states[-1].tags.get("kelso_id", ""))
   result.linked = _link_backups(ctx, path)
+  _mirror_repos(ctx, result)
 
   newest = {}
   for backup in backups(restic):
@@ -257,6 +261,26 @@ def recover(ctx: KelsoCtx, path: Path) -> RecoverResult:
       result.failed.append(f"{app}: {e}")
 
   return result
+
+
+def _mirror_repos(ctx: KelsoCtx, result: RecoverResult) -> None:
+  """Fetch each mirrored repo the restored config.toml names.
+
+  A backup holds the local repo, not mirrors: those are git's to fetch again,
+  and what `init` fetched may be another branch than the restored config says.
+  Best effort, as at init: a repo that cannot be fetched now is still configured.
+  """
+  from kelso.lib import repo as repo_lib
+
+  for repo in ctx.config.repos.values():
+    if not repo.mirrored:
+      continue
+    try:
+      repo_lib.mirror(repo, ctx)
+      result.mirrored.append(repo.name)
+    except Exception as e:
+      logger.warning("could not fetch repo %s: %s", repo.name, e)
+      result.unmirrored.append(f"{repo.name}: {e}")
 
 
 def _remove_as_root(path: Path) -> None:
