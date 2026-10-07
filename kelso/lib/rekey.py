@@ -17,10 +17,8 @@ from cryptography.fernet import InvalidToken
 
 from kelso.lib.crypto import CryptoEngine, FernetCryptoEngine
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.observations import REKEYED_AT, changes_since_start
 from kelso.lib.recovery import read_keyfile, write_seed
 from kelso.lib.store import JsonLogtabStore
-from kelso.lib.util import now_ts
 
 logger = logging.getLogger("kelso.rekey")
 
@@ -90,17 +88,13 @@ def reencrypt_app_store(
 ) -> int:
   """Append one app's secrets re-encrypted under `crypto`'s current key.
 
-  The plaintext does not change, so neither does what is pending: an app that
-  was current before is marked current again. The caller holds the app's lock.
+  The plaintext does not change, so no change is recorded and nothing becomes
+  pending. The caller holds the app's lock.
   """
   result = result if result is not None else RekeyResult()
   if not path.is_file():
     return 0
-  was_current = not changes_since_start(path).any
-  written = _append_reencrypted(path, crypto, _app_record, result)
-  if written and was_current:
-    JsonLogtabStore(path).write(REKEYED_AT, now_ts())
-  return written
+  return _append_reencrypted(path, crypto, _app_record, result)
 
 
 def rekey(ctx: KelsoCtx, entropy: bytes) -> RekeyResult:

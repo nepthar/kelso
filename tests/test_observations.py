@@ -43,41 +43,47 @@ def _observed(**kwargs) -> AppObservation:
   return AppObservation(**{**base, **kwargs})
 
 
-def _log(tmp_path, *keys: str):
+def _log(tmp_path, *records: str):
+  """A store with these records, in order: `config` and `routes` are change
+  markers, anything else a key written with a placeholder value."""
   path = tmp_path / "app.logtab"
   table = LogTab(path)
-  for key in keys:
-    table.write(key, '"x"')
+  for record in records:
+    if record in ("config", "routes"):
+      table.write("meta/changed", f'"{record}"')
+    else:
+      table.write(record, '"x"')
   return path
 
 
-def test_config_written_after_the_load_is_pending(tmp_path):
-  path = _log(tmp_path, "config/a", "meta/loaded_at", "config/b")
+def test_a_change_after_the_load_is_pending(tmp_path):
+  path = _log(tmp_path, "config/a", "meta/loaded_at", "config/b", "config")
   pending = changes_since_start(path)
   assert pending.config and pending.any
   assert not pending.routes
 
 
-def test_config_written_during_the_load_is_applied(tmp_path):
+def test_a_change_during_the_load_is_applied(tmp_path):
   """Load writes generated secrets and route defaults before `loaded_at`."""
-  path = _log(tmp_path, "config/a", "routes/main", "meta/loaded_at", "meta/x")
+  path = _log(tmp_path, "config", "routes", "meta/loaded_at", "meta/x")
   assert changes_since_start(path) == PendingChanges()
 
 
-def test_binds_are_config_too(tmp_path):
-  assert changes_since_start(_log(tmp_path, "meta/loaded_at", "binds/media")).config
+def test_a_record_with_no_change_marker_leaves_nothing_pending(tmp_path):
+  """What a rekey writes: the same values, encrypted under another key."""
+  path = _log(tmp_path, "meta/started_at", "config/a", "routes/main")
+  assert changes_since_start(path) == PendingChanges()
 
 
-@pytest.mark.parametrize("key", ["config/subdomain", "routes/main"])
-def test_the_subdomain_and_route_assignments_are_route_changes(tmp_path, key):
-  pending = changes_since_start(_log(tmp_path, "meta/loaded_at", key))
+def test_a_routes_change_is_its_own_kind(tmp_path):
+  pending = changes_since_start(_log(tmp_path, "meta/loaded_at", "routes"))
   assert pending.routes and pending.any
   assert not pending.config
 
 
 @pytest.mark.parametrize("applied", ["meta/loaded_at", "meta/started_at"])
 def test_a_load_or_a_start_applies_what_was_pending(tmp_path, applied):
-  path = _log(tmp_path, "meta/loaded_at", "config/a", "routes/x", applied)
+  path = _log(tmp_path, "meta/loaded_at", "config", "routes", applied)
   assert changes_since_start(path) == PendingChanges()
 
 

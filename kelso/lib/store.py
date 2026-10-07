@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
+from cryptography.fernet import InvalidToken
+
 from kelso.lib.config import Config
 
 from .crypto import CryptoEngine, crypto_from_config
@@ -15,6 +17,16 @@ logger = logging.getLogger("kelso.store")
 PORT_RANGE_SIZE = 1000
 
 STORE_MAX_BYTES = 1 * 1024 * 1024
+
+# Appended to an app's store after each real change to what a start uses. Its
+# value says what the change needs: the next start reads config and binds, and
+# re-derives routes when a route change is pending. Records written for any
+# other reason -- a rekey re-encrypting a secret -- leave nothing pending.
+CHANGED_META = "changed"
+CHANGE_CONFIG = "config"
+CHANGE_ROUTES = "routes"
+# The one config value routes are derived from.
+SUBDOMAIN_CONFIG = "subdomain"
 
 
 class ConfigStore(Protocol):
@@ -169,8 +181,21 @@ class AppStore:
     self._crypto = crypto
 
   def set_config(self, name: str, secret: bool, value: str) -> None:
+    """Store a value. Setting what is already on file writes nothing."""
+    if self._config_is(name, secret, value):
+      return
     stored = self._crypto.encrypt(value) if secret else value
     self._store.write(f"config/{name}", {"secret": secret, "value": stored})
+    self._changed(CHANGE_ROUTES if name == SUBDOMAIN_CONFIG else CHANGE_CONFIG)
+
+  def _config_is(self, name: str, secret: bool, value: str) -> bool:
+    try:
+      return self.get_config(name) == (secret, value)
+    except InvalidToken:
+      return False
+
+  def _changed(self, kind: str) -> None:
+    self.set_meta(CHANGED_META, kind)
 
   def get_config(self, name: str) -> tuple[bool, str] | tuple[None, None]:
     """Return (secret, plaintext_value), or (None, None) if not set."""
@@ -187,7 +212,10 @@ class AppStore:
 
   def set_bind(self, volume_name: str, host_volume: str) -> None:
     """Record that app volume ``volume_name`` is bound to host volume tag."""
+    if self._store.read(f"binds/{volume_name}") == host_volume:
+      return
     self._store.write(f"binds/{volume_name}", host_volume)
+    self._changed(CHANGE_CONFIG)
 
   def list_binds(self) -> dict[str, str]:
     """app volume name -> host_volume tag."""
@@ -196,7 +224,10 @@ class AppStore:
 
   def set_route_assignment(self, route_name: str, provider_tag: str) -> None:
     """Record which route-provider tag publishes ``route_name``."""
+    if self.get_route_assignment(route_name) == provider_tag:
+      return
     self._store.write(f"routes/{route_name}", provider_tag)
+    self._changed(CHANGE_ROUTES)
 
   def get_route_assignment(self, route_name: str) -> str | None:
     """Return the assigned provider tag, or None if never set."""

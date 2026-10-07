@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from kelso.lib.apps import AppID, read_app_actions
 from kelso.lib.bundle import load_bundle
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
+from kelso.lib.store import CHANGE_CONFIG, CHANGE_ROUTES, CHANGED_META
 
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
@@ -174,16 +176,9 @@ def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
   return store.get_meta("loaded_version"), source
 
 
-# The app store keys an operator changes, by what applies them.
-_START_KEYS = ("config/", "binds/")
-_LOAD_KEYS = ("config/subdomain", "routes/")
-
-
-# A rekey re-appends secrets with the same plaintext; on an app that was
-# current, it records that it still is.
-REKEYED_AT = "meta/rekeyed_at"
-# A load or a start applies everything written before it.
-_APPLIED_AT = ("meta/loaded_at", "meta/started_at", REKEYED_AT)
+# A load or a start applies every change recorded before it.
+_APPLIED_AT = ("meta/loaded_at", "meta/started_at")
+_CHANGED = f"meta/{CHANGED_META}"
 
 
 @dataclass(frozen=True)
@@ -201,18 +196,18 @@ class PendingChanges:
 
 
 def changes_since_start(path: Path) -> PendingChanges:
-  """What the app store at `path` has had written after its last load or start.
+  """The changes the app store at `path` records after its last load or start.
 
   By order in the log rather than by timestamp, which is only to the second.
   """
   config = routes = False
-  for key, _ in LogTab(path).history():
+  for key, entry in LogTab(path).history():
     if key in _APPLIED_AT:
       config = routes = False
-    elif key.startswith(_LOAD_KEYS):
-      routes = True
-    elif key.startswith(_START_KEYS):
-      config = True
+    elif key == _CHANGED:
+      kind = json.loads(entry.value)
+      routes = routes or kind == CHANGE_ROUTES
+      config = config or kind == CHANGE_CONFIG
   return PendingChanges(config=config, routes=routes)
 
 

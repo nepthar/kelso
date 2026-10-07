@@ -255,3 +255,47 @@ def test_rekey_keeps_a_change_that_was_already_pending(kelso_env, monkeypatch):
   ps = kelso_env.run("ps").stdout
   row = next(line for line in ps.splitlines() if line.startswith(BASIC)).split()
   assert row[2] == "restart"
+
+
+# --- what counts as a change ---------------------------------------------------
+
+
+def _store(tmp_path):
+  from kelso.lib.crypto import FernetCryptoEngine
+  from kelso.lib.store import AppStore
+
+  path = tmp_path / "app.logtab"
+  return path, AppStore.from_path(path, FernetCryptoEngine(OLD_KEY))
+
+
+def test_setting_what_is_on_file_records_no_change(tmp_path):
+  path, store = _store(tmp_path)
+  store.set_config("pw", True, "a")
+  store.set_bind("media", "nas")
+  store.set_route_assignment("main", "web")
+  store.set_meta("started_at", "now")
+  store.set_config("pw", True, "a")
+  store.set_bind("media", "nas")
+  store.set_route_assignment("main", "web")
+  from kelso.lib.observations import changes_since_start
+
+  assert not changes_since_start(path).any
+
+
+@pytest.mark.parametrize(
+  "change, kind",
+  [
+    (lambda s: s.set_config("pw", True, "b"), "config"),
+    (lambda s: s.set_bind("media", "other"), "config"),
+    (lambda s: s.set_config("subdomain", False, "lab"), "routes"),
+    (lambda s: s.set_route_assignment("main", "cloud"), "routes"),
+  ],
+)
+def test_each_real_change_records_its_kind(tmp_path, change, kind):
+  from kelso.lib.observations import changes_since_start
+
+  path, store = _store(tmp_path)
+  store.set_meta("started_at", "now")
+  change(store)
+  pending = changes_since_start(path)
+  assert getattr(pending, kind)
