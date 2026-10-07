@@ -32,7 +32,7 @@ logger = getLogger("kelso.lifecycle.restore")
 
 @dataclass(frozen=True)
 class RestorePlan:
-  """What `kelso backup restore` will overwrite, and with which backup."""
+  """What `kelso restore <app> <backup>` will overwrite, and with which backup."""
 
   app_id: AppID
   backup: Backup

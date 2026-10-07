@@ -13,7 +13,8 @@ Inside the repository every path is fixed, whatever this machine's layout:
     /kelso/app/<id>/app_bundle      the bundle it was loaded from
     /kelso/app/<id>/config.logtab   its config, secrets still encrypted
     /kelso/state/...                config.toml, kelsodb, every app's config,
-                                    and the local repo
+                                    the local repo, and links.toml: where
+                                    each volume root and backups/ pointed
 """
 
 from collections.abc import Iterable
@@ -214,6 +215,41 @@ def bulk_sources(ctx: KelsoCtx, app: AppID) -> dict[Path, str]:
   }
 
 
+LINKS_FILE = f"{STATE_ROOT}/links.toml"
+
+
+def root_links(ctx: KelsoCtx) -> dict[str, str]:
+  """Where each volume root and backups/ points, and any other link at the top
+  of the kelso root: path under the root to its link target, or "" for a plain
+  directory there."""
+  root = ctx.config.kelso_root
+  named = [f"volumes/{kind}" for kind in ctx.config.volume_roots]
+  named.append("backups")
+  named += sorted(
+    entry.name
+    for entry in root.iterdir()
+    if entry.is_symlink() and entry.name not in named
+  )
+  return {
+    name: str((root / name).readlink()) if (root / name).is_symlink() else ""
+    for name in named
+    if (root / name).exists() or (root / name).is_symlink()
+  }
+
+
+def links_toml(ctx: KelsoCtx) -> str:
+  """`root_links` as the file a state backup carries."""
+  lines = [
+    "# Where the kelso root's links pointed when this backup was taken.",
+    '# "" is a plain directory in the root.',
+    f'kelso_root = "{ctx.config.kelso_root}"',
+    "",
+    "[links]",
+  ]
+  lines += [f'"{name}" = "{target}"' for name, target in root_links(ctx).items()]
+  return "\n".join(lines) + "\n"
+
+
 def state_sources(ctx: KelsoCtx) -> dict[Path, str]:
   config = ctx.config
   sources = {
@@ -297,8 +333,16 @@ def backup_state(ctx: KelsoCtx, restic: Restic, *, reason: str, run: str) -> str
     "reason": reason,
     "run": run,
   }
+  scratch = ctx.config.temp_root / "backup-state"
+  scratch.mkdir(parents=True, exist_ok=True)
+  links = scratch / "links.toml"
   with ctx.kelso_lock("back up kelso's state"):
-    return restic.backup(state_sources(ctx), tags, what="back up kelso's own state")
+    links.write_text(links_toml(ctx))
+    try:
+      sources = {**state_sources(ctx), links: LINKS_FILE}
+      return restic.backup(sources, tags, what="back up kelso's own state")
+    finally:
+      links.unlink(missing_ok=True)
 
 
 def run_backups(

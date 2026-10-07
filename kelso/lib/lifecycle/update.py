@@ -99,9 +99,7 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
         load(app, source, ctx, version_change=True)
       except Exception as e:
         back = (
-          f"run `kelso backup restore {app} {name}`."
-          if name
-          else "load the old bundle again."
+          f"run `kelso restore {app} {name}`." if name else "load the old bundle again."
         )
         raise RuntimeError(
           f"{e}\n{app} is stopped. To go back to "

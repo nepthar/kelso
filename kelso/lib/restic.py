@@ -33,9 +33,26 @@ REPO = "/repo"
 CACHE = "/cache"
 TARGET = "/restore"
 
+# Restic runs as root, to read volume files containers wrote as root. What it
+# writes into the repository and its cache would be root's too, so after every
+# command the same container gives them to the user kelso runs as. The exit
+# status stays restic's; a chown that fails (a share that squashes root, say)
+# does not fail the command it follows.
+OWNED_BY_KELSO = (
+  'restic "$@"; status=$?; '
+  f'chown -R "$KELSO_UID:$KELSO_GID" {REPO} {CACHE} 2>/dev/null; '
+  "exit $status"
+)
+
+
+# Restic's exit status when the password opens no key in the repository.
+WRONG_PASSWORD = 12
+
 
 class ResticError(RuntimeError):
-  pass
+  def __init__(self, message: str, returncode: int | None = None) -> None:
+    super().__init__(message)
+    self.returncode = returncode
 
 
 @dataclass(frozen=True)
@@ -73,10 +90,19 @@ def _tags(raw: Iterable[str]) -> dict[str, str]:
 class Restic:
   """One restic repository at a local path."""
 
-  def __init__(self, repo: Path, password: str, cache: Path) -> None:
+  def __init__(
+    self,
+    repo: Path,
+    password: str,
+    cache: Path,
+    owner: tuple[int, int] | None = None,
+  ) -> None:
+    """`owner` is the (uid, gid) the repository and cache are left owned by:
+    the user kelso and kelsod run as, unless a test says otherwise."""
     self.repo = repo
     self._password = password
     self._cache = cache
+    self.owner = owner or (os.getuid(), os.getgid())
 
   def run(
     self,
@@ -109,10 +135,19 @@ class Restic:
       f"RESTIC_REPOSITORY={REPO}",
       "-e",
       f"RESTIC_CACHE_DIR={CACHE}",
+      "-e",
+      f"KELSO_UID={self.owner[0]}",
+      "-e",
+      f"KELSO_GID={self.owner[1]}",
       *(
         arg for host, guest, mode in mounts for arg in ("-v", f"{host}:{guest}:{mode}")
       ),
+      "--entrypoint",
+      "sh",
       RESTIC_IMAGE,
+      "-c",
+      OWNED_BY_KELSO,
+      "restic",
       *args,
     ]
     logger.debug("restic: %s", " ".join(args))
@@ -122,7 +157,8 @@ class Restic:
       detail = result.stderr.strip()
       raise ResticError(
         f"Unable to {what}: restic exited {result.returncode}"
-        + (f"\n{detail}" if detail else "")
+        + (f"\n{detail}" if detail else ""),
+        result.returncode,
       )
     return result.stdout
 
@@ -180,6 +216,10 @@ class Restic:
       what=what,
       writable=True,
     )
+
+  def dump(self, snapshot_id: str, path: str, *, what: str) -> str:
+    """One file from a snapshot, by the path it was backed up at."""
+    return self.run(["dump", snapshot_id, path], what=what)
 
   def forget(self, snapshot_ids: Iterable[str], *, what: str) -> None:
     ids = list(snapshot_ids)

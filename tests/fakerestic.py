@@ -37,8 +37,16 @@ def _parse_docker(args: list[str]) -> tuple[dict[str, str], dict[str, Path], lis
       host, guest, _mode = args[i + 1].split(":")
       binds[guest] = Path(host)
       i += 2
+    elif arg == "--entrypoint":
+      i += 2
     else:
-      return env, binds, args[i + 1 :]
+      # IMAGE -c SCRIPT $0 ARGS: kelso wraps restic in a shell that hands the
+      # repository back to its user afterwards. Files here are already the
+      # test's own, so only restic's part is played.
+      rest = args[i + 1 :]
+      if rest[:1] == ["-c"]:
+        rest = rest[3:]
+      return env, binds, rest
   return env, binds, []
 
 
@@ -110,6 +118,13 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
     snap_id, target = rest[0], binds[rest[rest.index("--target") + 1]]
     shutil.copytree(repo / "trees" / snap_id, target, symlinks=True, dirs_exist_ok=True)
     return 0, "", ""
+
+  if command == "dump":
+    snap_id, path = rest[0], rest[1]
+    found = repo / "trees" / snap_id / path.lstrip("/")
+    if not found.is_file():
+      return 1, "", f"Fatal: cannot dump file: path {path!r} not found in snapshot\n"
+    return 0, found.read_text(), ""
 
   if command == "forget":
     for snap_id in rest:

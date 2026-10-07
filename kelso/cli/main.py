@@ -21,6 +21,7 @@ from kelso.cli import (
   remove,
   repo,
   restart,
+  restore,
   routes,
   shell,
   start,
@@ -50,6 +51,7 @@ COMMANDS = [
   cmd,
   load,
   update,
+  restore,
   remove,
   inspect,
   app,
@@ -91,13 +93,14 @@ This box
   cleanup     List what kelso no longer needs; --apply deletes it
               (unused images, orphaned routes; --temp)
 
-Backups       kelso backup | backup run | list | restore
+Backups       kelso backup | backup run | backup list
+              kelso restore <app> <backup> | restore <backups directory>
 Cron          kelso cron | cron tick
 Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
 System        kelso system doctor | activity | volumes | secret | host-volume
-                           service | rekey | recovery-phrase | decrypt
-Setup         kelso init
+                           service | rekey | recovery-phrase | decrypt | purge
+Setup         kelso init | init --with-phrase
 
 Run `kelso COMMAND --help` for details on any command.
 """

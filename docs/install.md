@@ -113,8 +113,8 @@ rather than re-populate with empty folders.
 Every night at 3am, kelsod backs up each app's data volumes, configuration and
 loaded copy, and kelso's own state, into `backups/` in the kelso root. What is
 included is in [volumes](volumes.md). `kelso backup` shows where they go and
-how the last run went; `kelso backup run` takes one now; `kelso backup restore
-<app> <backup>` puts an app back.
+how the last run went; `kelso backup run` takes one now; `kelso restore <app>
+<backup>` puts an app back.
 
 Like a volume root, `backups/` is meant to be linked to another disk:
 
@@ -134,3 +134,25 @@ require_mount = true
 
 Backups are encrypted, and your recovery phrase is the only way to read them on
 another machine. Keep it somewhere other than this machine.
+
+## Recovering a machine
+
+To bring kelso back on a new machine, or a rebuilt one, from its backups:
+
+1. Install kelso, then `kelso init --with-phrase`. It asks for your recovery
+   phrase instead of making a new one, so it can read the backups.
+2. Point volume roots that should live on another disk at it, as above. This
+   machine's disks need not match the old one's. Restore shows where each
+   volume root and `backups/` pointed when the backup was taken, next to where
+   they point here, and asks before going on if a volume root differs.
+3. `kelso restore <backups directory>`, for example
+   `kelso restore /mnt/nas/kelso-backups`. It restores kelso's configuration
+   and state, then every app, and points `backups/` at that directory so the
+   next backup adds to it.
+4. Check `config.toml`'s host volumes and `kelso_address` for this machine;
+   `kelso system doctor` reports paths that are not there. Then `kelso up`.
+
+Restore refuses a kelso that already holds apps. `kelso system purge` deletes
+every app, its data and its config, leaving config.toml, the phrase, repos,
+`backups/` and the volume roots as they are; restore one app at a time instead
+with `kelso restore <app> <backup>`.

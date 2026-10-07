@@ -165,7 +165,7 @@ def test_bulk_volumes_are_only_backed_up_when_turned_on(kelso_env):
   assert set(second.snapshots) == {"data", "bulk"}
 
   movie.write_text("re-encoded")
-  restored = kelso_env.run("backup", "restore", "bulk-demo", backup_id, "-y")
+  restored = kelso_env.run("restore", "bulk-demo", backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   assert movie.read_text() == "frames"
 
@@ -240,7 +240,7 @@ def test_restore_brings_a_data_volume_back(kelso_env):
   (volume / "db.txt").write_text("v2")
   (volume / "stray.txt").write_text("written since")
 
-  restored = kelso_env.run("backup", "restore", BASIC, backup_id, "-y")
+  restored = kelso_env.run("restore", BASIC, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   assert (volume / "db.txt").read_text() == "v1"
   assert not (volume / "stray.txt").exists()
@@ -266,7 +266,7 @@ def test_restore_rebuilds_a_removed_app(kelso_env):
   assert kelso_env.run("rm", app_id, "-y").returncode == 0
   assert not (kelso_env.run_root / app_id).exists()
 
-  restored = kelso_env.run("backup", "restore", app_id, backup_id, "-y")
+  restored = kelso_env.run("restore", app_id, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   assert kelso_env.app_logtab(app_id).is_file()
 
@@ -285,7 +285,7 @@ def test_restore_replaces_config_and_backs_up_what_was_there(kelso_env):
   assert kelso_env.run("stop", app_id).returncode == 0
   assert kelso_env.run("config", app_id, "--set", "subdomain=albums").returncode == 0
 
-  restored = kelso_env.run("backup", "restore", app_id, backup_id, "-y")
+  restored = kelso_env.run("restore", app_id, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   shown = kelso_env.run("config", app_id, "--get", "subdomain")
   assert shown.stdout.strip() == "photos"
@@ -296,7 +296,7 @@ def test_restore_no_backup_takes_none_first(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("load", app_id).returncode == 0
   backup_id = _back_up(kelso_env, app_id)
-  restored = kelso_env.run("backup", "restore", app_id, backup_id, "-y", "--no-backup")
+  restored = kelso_env.run("restore", app_id, backup_id, "-y", "--no-backup")
   assert restored.returncode == 0, restored.stderr
   assert [b.reason for b in _backups(kelso_env, app_id)] == ["manual"]
 
@@ -305,10 +305,10 @@ def test_undoing_the_last_restore_takes_no_new_pre_restore_backup(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("load", app_id).returncode == 0
   backup_id = _back_up(kelso_env, app_id)
-  assert kelso_env.run("backup", "restore", app_id, backup_id, "-y").returncode == 0
+  assert kelso_env.run("restore", app_id, backup_id, "-y").returncode == 0
   [pre] = [b for b in _backups(kelso_env, app_id) if b.reason == "pre-restore"]
 
-  undo = kelso_env.run("backup", "restore", app_id, pre.id, "-y")
+  undo = kelso_env.run("restore", app_id, pre.id, "-y")
   assert undo.returncode == 0, undo.stderr
   assert [b.id for b in _backups(kelso_env, app_id) if b.reason == "pre-restore"] == [
     pre.id
@@ -319,7 +319,7 @@ def test_restore_refuses_while_containers_are_running(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   backup_id = _back_up(kelso_env, app_id)
-  refused = kelso_env.run("backup", "restore", app_id, backup_id, "-y")
+  refused = kelso_env.run("restore", app_id, backup_id, "-y")
   assert refused.returncode == 1
   assert f"kelso stop {app_id}" in refused.stderr
 
@@ -328,7 +328,7 @@ def test_restore_names_the_backups_it_could_have_used(kelso_env):
   app_id = "ports-demo"
   assert kelso_env.run("load", app_id).returncode == 0
   backup_id = _back_up(kelso_env, app_id)
-  missing = kelso_env.run("backup", "restore", app_id, "19990101-000000", "-y")
+  missing = kelso_env.run("restore", app_id, "19990101-000000", "-y")
   assert missing.returncode == 1
   assert backup_id in missing.stderr
 
@@ -339,7 +339,7 @@ def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
   backup_id = _back_up(kelso_env, app_id)
   marker = kelso_env.run_root / app_id / "app_bundle" / "marker.txt"
   marker.write_text("still here")
-  declined = kelso_env.run("backup", "restore", app_id, backup_id, input="n\n")
+  declined = kelso_env.run("restore", app_id, backup_id, input="n\n")
   assert declined.returncode == 0, declined.stderr
   assert "Nothing restored." in declined.stdout
   assert marker.exists()
@@ -508,3 +508,15 @@ def test_the_config_form_turns_a_bulk_volume_on(kelso_env):
   written = apply_app_config(spec, ConfigResponse({"backup.movies": "on"}), ctx)
   assert written == ["backup.movies"]
   assert ctx.app_store("bulk-demo").backed_up_bulk() == {"movies"}
+
+
+def test_restic_hands_the_repository_back_to_kelsos_user(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  _back_up(kelso_env, "ports-demo")
+  for args in _runs(kelso_env, RESTIC_IMAGE):
+    assert f"KELSO_UID={os.getuid()}" in args
+    assert f"KELSO_GID={os.getgid()}" in args
+    script = args[args.index("-c") + 1]
+    assert script.startswith('restic "$@"; status=$?;')
+    assert 'chown -R "$KELSO_UID:$KELSO_GID" /repo /cache' in script
+    assert script.endswith("exit $status")

@@ -4,9 +4,8 @@ from tabulate import tabulate
 
 from kelso.lib import backup as backups_lib
 from kelso.lib.apps import AppID
-from kelso.lib.backup import MANUAL, PRE_RESTORE, Backup
+from kelso.lib.backup import MANUAL, Backup
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import RestorePlan, restore, restore_plan
 
 FIRST_BACKUP = """\
 
@@ -24,7 +23,7 @@ FIRST_BACKUP = """\
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "backup",
-    help="Back up apps and kelso, list backups, and restore an app from one",
+    help="Back up apps and kelso now, list backups, and show where they go",
   )
   parser.set_defaults(func=run_status)
   sub = parser.add_subparsers(dest="backup_command")
@@ -36,17 +35,6 @@ def register(subparsers) -> None:
   listing = sub.add_parser("list", help="List backups, of one app or all")
   listing.add_argument("app", nargs="?", metavar="APP")
   listing.set_defaults(func=run_list)
-
-  rest = sub.add_parser("restore", help="Put an app back as a backup holds it")
-  rest.add_argument("app", metavar="APP")
-  rest.add_argument("backup", metavar="BACKUP", help="The backup's id, from `list`")
-  rest.add_argument("-y", "--yes", action="store_true", help="Do not ask first")
-  rest.add_argument(
-    "--no-backup",
-    action="store_true",
-    help="Do not back up what is there now before overwriting it",
-  )
-  rest.set_defaults(func=run_restore, activity="restore")
 
 
 def run_status(args: argparse.Namespace, ctx: KelsoCtx) -> None:
@@ -127,41 +115,3 @@ def run_list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       disable_numparse=True,
     )
   )
-
-
-def run_restore(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  # Not resolved against the catalog: an app removed since can come back.
-  app = AppID(args.app)
-  restic = backups_lib.repository(ctx)
-  plan = restore_plan(app, args.backup, ctx, restic)
-  backup_first = not args.no_backup
-  if not args.yes and not _confirmed(plan, backup_first):
-    print("Nothing restored.")
-    return
-  with ctx.locked(f"restore {app}", app):
-    restore(plan, ctx, restic, backup_first=backup_first)
-  print(f"Restored {app} from backup {plan.backup.id}")
-
-
-def _confirmed(plan: RestorePlan, backup_first: bool) -> bool:
-  app = plan.app_id
-  print(f"Restoring {app} from backup {plan.backup.id} ({plan.backup.time}) replaces:")
-  print(
-    f"  its data volumes{', bulk volumes' if 'bulk' in plan.backup.snapshots else ''}"
-  )
-  print(f"  {plan.config_path} (config, secrets)")
-  print(f"  {plan.run_path} (loaded bundle, compose)")
-  print("  its route and host-port allocations")
-
-  exists = plan.run_path.exists() or plan.config_path.exists()
-  if exists and not backup_first:
-    print(f"What {app} holds right now is destroyed, not backed up (--no-backup).")
-  if backup_first and exists and plan.is_latest_pre_restore:
-    print(f"This is the newest {PRE_RESTORE} backup, so no new one is taken first.")
-  elif backup_first and exists:
-    print(f"What {app} holds now is backed up first.")
-  try:
-    answer = input(f"Restore {app} to {plan.backup.id}? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")

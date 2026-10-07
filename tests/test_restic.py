@@ -1,5 +1,7 @@
 """Restic in its pinned container, against a real docker daemon."""
 
+import os
+
 import pytest
 
 from kelso.lib import recovery
@@ -45,6 +47,14 @@ def test_a_backup_round_trips(tmp_path):
   restic.forget([second], what="forget")
   restic.prune()
   assert [s.id for s in restic.snapshots()] == [first]
+
+  # Everything restic wrote, as root, is left to the user kelso runs as.
+  owners = {
+    (p.stat().st_uid, p.stat().st_gid)
+    for root in (tmp_path / "repo", tmp_path / "cache")
+    for p in [root, *root.rglob("*")]
+  }
+  assert owners == {(os.getuid(), os.getgid())}
 
   restic.change_password("pw2", tmp_path / "scratch")
   assert len(Restic(tmp_path / "repo", "pw2", tmp_path / "cache").snapshots()) == 1

@@ -157,7 +157,7 @@ def test_a_backup_from_before_a_rekey_restores(kelso_env, monkeypatch, backup_cl
   # The repository moved to the password the new phrase derives.
   assert [b.id for b in _backups(kelso_env, BASIC)] == [backup_id]
 
-  restored = kelso_env.run("backup", "restore", BASIC, backup_id, "-y")
+  restored = kelso_env.run("restore", BASIC, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   ctx = _ctx(kelso_env)
   assert ctx.app_store(BASIC).get_config("admin_pass") == (True, admin_pass)
