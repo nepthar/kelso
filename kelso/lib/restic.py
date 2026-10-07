@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 
 from kelso.lib.docker import DOCKER
+from kelso.lib.util import fmt_size
 
 logger = getLogger("kelso.restic")
 
@@ -83,6 +84,19 @@ def _timestamp(raw: str) -> str:
   return moment.isoformat().replace("+00:00", "Z")
 
 
+def _summary(message: dict) -> str:
+  """What one backup read and added: `12 files, 3.4 MB new of 1.2 GB, 4.1s`."""
+  files = sum(
+    int(message.get(key, 0))
+    for key in ("files_new", "files_changed", "files_unmodified")
+  )
+  added = fmt_size(float(message.get("data_added", 0)))
+  total = fmt_size(float(message.get("total_bytes_processed", 0)))
+  seconds = float(message.get("total_duration", 0))
+  noun = "file" if files == 1 else "files"
+  return f"{files} {noun}, {added} new of {total}, {seconds:.1f}s"
+
+
 def _tags(raw: Iterable[str]) -> dict[str, str]:
   return dict(tag.partition("=")[::2] for tag in raw)
 
@@ -111,12 +125,16 @@ class Restic:
     *,
     what: str,
     writable: bool = False,
+    say: bool = False,
   ) -> str:
     """Run `restic <args>`; return its stdout.
 
     `binds` maps host paths to where they appear in the container, read-only
-    unless `writable`. The repository and the cache are always writable.
+    unless `writable`. The repository and the cache are always writable. With
+    `say`, the terminal is told `what` first: for the steps that take a while.
     """
+    if say:
+      logger.info("restic: %s", what)
     self._cache.mkdir(parents=True, exist_ok=True)
     mounts = [(self.repo.resolve(), REPO, "rw"), (self._cache.resolve(), CACHE, "rw")]
     for host, guest in (binds or {}).items():
@@ -170,7 +188,7 @@ class Restic:
     if self.exists():
       return False
     self.repo.mkdir(parents=True, exist_ok=True)
-    self.run(["init"], what=f"create a backup repository at {self.repo}")
+    self.run(["init"], what=f"create a backup repository at {self.repo}", say=True)
     return True
 
   def backup(
@@ -180,10 +198,11 @@ class Restic:
     args = ["backup", "--json", "--host", socket.gethostname()]
     for key, value in tags.items():
       args += ["--tag", f"{key}={value}"]
-    out = self.run([*args, *sources.values()], sources, what=what)
+    out = self.run([*args, *sources.values()], sources, what=what, say=True)
     for line in out.splitlines():
       message = json.loads(line)
       if message.get("message_type") == "summary":
+        logger.info("restic: %s", _summary(message))
         return str(message["snapshot_id"])
     raise ResticError(f"Unable to {what}: restic reported no snapshot")
 
@@ -215,6 +234,7 @@ class Restic:
       {target: TARGET},
       what=what,
       writable=True,
+      say=True,
     )
 
   def dump(self, snapshot_id: str, path: str, *, what: str) -> str:
@@ -224,10 +244,10 @@ class Restic:
   def forget(self, snapshot_ids: Iterable[str], *, what: str) -> None:
     ids = list(snapshot_ids)
     if ids:
-      self.run(["forget", *ids], what=what)
+      self.run(["forget", *ids], what=what, say=True)
 
   def prune(self) -> None:
-    self.run(["prune"], what="free the space of forgotten backups")
+    self.run(["prune"], what="free the space of forgotten backups", say=True)
 
   def change_password(self, new_password: str, scratch: Path) -> None:
     """Make `new_password` the repository's password in place of this one."""
@@ -243,6 +263,7 @@ class Restic:
         ["key", "passwd", "--new-password-file", f"{TARGET}/new-password"],
         {scratch: TARGET},
         what="change the backup repository's password",
+        say=True,
       )
     finally:
       secret.unlink(missing_ok=True)

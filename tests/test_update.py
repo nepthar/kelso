@@ -79,3 +79,12 @@ def test_update_refuses_a_source_that_no_longer_parses(kelso_env):
   assert not (kelso_env.root / "backups" / "config").exists()
   assert not any(c[:2] == ["compose", "down"] for c in docker_calls(kelso_env))
   assert "invalid" in kelso_env.run("repo", "list").stdout
+
+
+def test_an_update_to_the_same_version_says_it_reloaded(kelso_env):
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("load", APP).returncode == 0
+  write_bundle(kelso_env, "1.0", tag="3.20")
+  updated = kelso_env.run("update", APP, "-y")
+  assert updated.returncode == 0, updated.stderr
+  assert "Reloaded upd-app at 1.0: its source changed without a new" in updated.stdout

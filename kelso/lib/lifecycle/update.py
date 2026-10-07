@@ -29,10 +29,17 @@ class UpdateResult:
   was_running: bool
 
   def summary(self, app: AppID) -> str:
-    lines = [
-      f"Updated {app} from {self.previous or 'an unrecorded version'} to "
-      f"{self.version}",
-    ]
+    if self.previous == self.version:
+      first = (
+        f"Reloaded {app} at {self.version}: its source changed without a new "
+        f"version number"
+      )
+    else:
+      first = (
+        f"Updated {app} from {self.previous or 'an unrecorded version'} to "
+        f"{self.version}"
+      )
+    lines = [first]
     if self.backup:
       lines.append(f"  backup {self.backup} holds the version it replaced")
     if self.was_running:

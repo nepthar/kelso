@@ -262,3 +262,13 @@ def test_restoring_from_the_roots_own_backups_says_so(kelso_env):
   restored = kelso_env.run("restore", str(backups), "-y")
   assert restored.returncode == 0, restored.stderr
   assert f"New backups keep going to {backups.resolve()}." in restored.stdout
+
+
+def test_a_restored_kelso_names_the_run_it_came_from_as_its_last(kelso_env, tmp_path):
+  backups = _backed_up_root(kelso_env)
+  kelso_env.run("stop", BASIC)
+  run = KelsoCtx(load_config_file(kelso_env.config)).kelso_db.last_backup_run()["run"]
+  root = tmp_path / "new"
+  assert _init_with(kelso_env, root, WORDS).returncode == 0
+  assert run_at(kelso_env, root, "restore", str(backups), "-y").returncode == 0
+  assert _ctx_at(root).kelso_db.last_backup_run()["run"] == run

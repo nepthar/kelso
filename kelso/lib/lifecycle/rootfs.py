@@ -48,8 +48,8 @@ def run_as_root(
 
   cmd = [DOCKER, "run", "--rm", *binds, ROOTFS_IMAGE, "sh", "-c", script]
 
-  # At warning level: the only sign of life during a step that can take minutes.
-  logger.warning("Using a throwaway %s container to %s", ROOTFS_IMAGE, what)
+  # Debug only: the step that calls this says what it is doing itself.
+  logger.debug("using a throwaway %s container to %s", ROOTFS_IMAGE, what)
   logger.debug("running as root in a container: %s", " ".join(cmd))
   # stderr is captured for the error below, so a first-run image pull is silent.
   result = subprocess.run(cmd, stdout=stdout, stderr=subprocess.PIPE)

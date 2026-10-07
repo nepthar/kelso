@@ -520,3 +520,12 @@ def test_restic_hands_the_repository_back_to_kelsos_user(kelso_env):
     assert script.startswith('restic "$@"; status=$?;')
     assert 'chown -R "$KELSO_UID:$KELSO_GID" /repo /cache' in script
     assert script.endswith("exit $status")
+
+
+def test_a_backup_says_what_restic_is_doing(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  taken = kelso_env.run("backup", "run", "ports-demo")
+  assert "restic: back up ports-demo" in taken.stderr
+  assert "files," in taken.stderr and " new of " in taken.stderr
+  # The containers kelso runs as root are its own business.
+  assert "throwaway" not in taken.stderr

@@ -365,23 +365,30 @@ def run_backups(
     except Exception as e:
       logger.error("could not back up %s: %s", app, e)
       result.failed.append(f"{app}: {e}")
+
+  def record() -> None:
+    ctx.kelso_db.record_backup_run(
+      {
+        "run": result.run,
+        "time": now().isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "reason": reason,
+        "everything": everything,
+        "backed_up": result.backed_up,
+        "failed": result.failed,
+      }
+    )
+
   if everything:
+    # Recorded before kelsodb is backed up as well as after, so a kelso
+    # restored from this run says this run was its last.
+    record()
     try:
       backup_state(ctx, restic, reason=reason, run=result.run)
     except Exception as e:
       logger.error("could not back up kelso's state: %s", e)
       result.failed.append(f"kelso's state: {e}")
   forget_expired(ctx, restic)
-  ctx.kelso_db.record_backup_run(
-    {
-      "run": result.run,
-      "time": now().isoformat(timespec="seconds").replace("+00:00", "Z"),
-      "reason": reason,
-      "everything": everything,
-      "backed_up": result.backed_up,
-      "failed": result.failed,
-    }
-  )
+  record()
   return result
 
 
