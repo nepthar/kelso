@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
-from kelso.lib.logtab import LogTab
+from kelso.lib.recovery import read_keyfile
 from kelso.lib.repo import LOCAL_REPO, Repo, parse_github_url
 from kelso.lib.util import validate_identifier
 
@@ -288,15 +288,11 @@ def load_config_file(config_file: str | Path) -> Config:
 
   master_keyfile = kelso_root / CONF_DIR / MASTER_KEYFILE
 
-  master_key_entry = (
-    LogTab(master_keyfile).read("master_key") if master_keyfile.is_file() else None
-  )
-  master_key = master_key_entry.value if master_key_entry else ""
+  keyfile = read_keyfile(master_keyfile)
+  master_key = keyfile.master_key
 
-  if master_key:
-    logger.debug(f"Using master key from {master_keyfile}")
-  else:
-    logger.warning("Using empty master key")
+  if not master_key:
+    logger.debug("No recovery phrase in %s", master_keyfile)
 
   repos_root = ep(parsed.repos_root)
   extra_repos = _resolve_repos(repo_raw, repos_root, ep)

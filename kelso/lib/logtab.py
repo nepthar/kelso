@@ -131,10 +131,17 @@ class LogTab:
           continue
         yield split
 
-  def load(self) -> dict[str, Entry]:
-    """Materialize the table into a dictionary of Entries."""
+  def load(self, at: str | None = None) -> dict[str, Entry]:
+    """Materialize the table into a dictionary of Entries.
+
+    With `at`, as it stood at that timestamp: records written after it are
+    left out.
+    """
+    until = datetime.fromisoformat(at) if at is not None else None
     results: dict[str, LogTab.Entry] = {}
     for ts, operation, key, value in self._records():
+      if until is not None and datetime.fromisoformat(ts) > until:
+        break
       match operation:
         case "set":
           results[key] = LogTab.Entry(ts=ts, value=value)

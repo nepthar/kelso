@@ -96,7 +96,7 @@ Cron          kelso cron | cron tick
 Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
 System        kelso system doctor | activity | volumes | secret | host-volume
-                           service | gen-masterkey | decrypt
+                           service | rekey | recovery-phrase | decrypt
 Setup         kelso init
 
 Run `kelso COMMAND --help` for details on any command.

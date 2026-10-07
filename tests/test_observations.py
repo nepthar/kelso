@@ -43,11 +43,14 @@ def _observed(**kwargs) -> AppObservation:
   return AppObservation(**{**base, **kwargs})
 
 
-def _log(tmp_path, *keys: str):
+def _log(tmp_path, *keys: str, rekeyed: tuple[str, ...] = ()):
+  """A store with these keys written in order; those in `rekeyed` as a rekey
+  writes them."""
   path = tmp_path / "app.logtab"
   table = LogTab(path)
   for key in keys:
-    table.write(key, '"x"')
+    value = '{"secret":true,"value":"x","rekey":true}' if key in rekeyed else '"x"'
+    table.write(key, value)
   return path
 
 
@@ -73,6 +76,11 @@ def test_the_subdomain_and_route_assignments_are_route_changes(tmp_path, key):
   pending = changes_since_start(_log(tmp_path, "meta/loaded_at", key))
   assert pending.routes and pending.any
   assert not pending.config
+
+
+def test_a_secret_a_rekey_appended_is_not_a_change(tmp_path):
+  path = _log(tmp_path, "meta/started_at", "config/pw", rekeyed=("config/pw",))
+  assert changes_since_start(path) == PendingChanges()
 
 
 @pytest.mark.parametrize("applied", ["meta/loaded_at", "meta/started_at"])

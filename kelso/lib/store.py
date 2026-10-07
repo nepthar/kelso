@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
+from cryptography.fernet import InvalidToken
+
 from kelso.lib.config import Config
 
 from .crypto import CryptoEngine, crypto_from_config
@@ -15,6 +17,10 @@ logger = logging.getLogger("kelso.store")
 PORT_RANGE_SIZE = 1000
 
 STORE_MAX_BYTES = 1 * 1024 * 1024
+
+# Set on a secret's record when a rekey appends it again under a new key: the
+# value is unchanged, so the record is not a change to apply.
+REKEY_FIELD = "rekey"
 
 
 class ConfigStore(Protocol):
@@ -56,6 +62,13 @@ class JsonLogtabStore(ConfigStore):
 
   def delete(self, key: str) -> None:
     self._table.delete(key)
+
+
+def _decrypt_or_none(crypto: CryptoEngine, blob: str) -> str | None:
+  try:
+    return crypto.decrypt(blob)
+  except (InvalidToken, ValueError):
+    return None
 
 
 class KelsoStore:
@@ -121,6 +134,27 @@ class KelsoStore:
     raw = self._store.read(f"system/secrets/{name}")
     return self._crypto.decrypt(raw) if raw is not None else None
 
+  def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
+    """Append every secret and token again, read with `old` and written with
+    this store's key. Returns how many, and the names `old` could not read."""
+    written, unreadable = 0, []
+    for name, blob in self._store.scan("system/secrets/").items():
+      plain = _decrypt_or_none(old, blob)
+      if plain is None:
+        unreadable.append(f"system/secrets/{name}")
+        continue
+      self._store.write(f"system/secrets/{name}", self._crypto.encrypt(plain))
+      written += 1
+    for name, token in self._store.scan("system/tokens/").items():
+      plain = _decrypt_or_none(old, token["tok"])
+      if plain is None:
+        unreadable.append(f"system/tokens/{name}")
+        continue
+      rekeyed = {**token, "tok": self._crypto.encrypt(plain)}
+      self._store.write(f"system/tokens/{name}", rekeyed)
+      written += 1
+    return written, unreadable
+
   def list_secrets(self) -> list[str]:
     secrets = self._store.scan("system/secrets/")
     return sorted(secrets.keys())
@@ -169,8 +203,17 @@ class AppStore:
     self._crypto = crypto
 
   def set_config(self, name: str, secret: bool, value: str) -> None:
+    """Store a value. Setting what is already on file writes nothing."""
+    if self._config_is(name, secret, value):
+      return
     stored = self._crypto.encrypt(value) if secret else value
     self._store.write(f"config/{name}", {"secret": secret, "value": stored})
+
+  def _config_is(self, name: str, secret: bool, value: str) -> bool:
+    try:
+      return self.get_config(name) == (secret, value)
+    except InvalidToken:
+      return False
 
   def get_config(self, name: str) -> tuple[bool, str] | tuple[None, None]:
     """Return (secret, plaintext_value), or (None, None) if not set."""
@@ -181,12 +224,33 @@ class AppStore:
     raw = entry["value"]
     return secret, self._crypto.decrypt(raw) if secret else raw
 
+  def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
+    """Append every secret again, read with `old` and written with this
+    store's key, marked as a rekey so nothing becomes pending. Returns how
+    many, and the names `old` could not read."""
+    written, unreadable = 0, []
+    for name, entry in self._store.scan("config/").items():
+      if not entry.get("secret"):
+        continue
+      plain = _decrypt_or_none(old, entry["value"])
+      if plain is None:
+        unreadable.append(f"config/{name}")
+        continue
+      self._store.write(
+        f"config/{name}",
+        {"secret": True, "value": self._crypto.encrypt(plain), REKEY_FIELD: True},
+      )
+      written += 1
+    return written, unreadable
+
   def has_config(self, name: str) -> bool:
     """Whether a value is stored, without decrypting it."""
     return self._store.read(f"config/{name}") is not None
 
   def set_bind(self, volume_name: str, host_volume: str) -> None:
     """Record that app volume ``volume_name`` is bound to host volume tag."""
+    if self._store.read(f"binds/{volume_name}") == host_volume:
+      return
     self._store.write(f"binds/{volume_name}", host_volume)
 
   def list_binds(self) -> dict[str, str]:
@@ -196,6 +260,8 @@ class AppStore:
 
   def set_route_assignment(self, route_name: str, provider_tag: str) -> None:
     """Record which route-provider tag publishes ``route_name``."""
+    if self.get_route_assignment(route_name) == provider_tag:
+      return
     self._store.write(f"routes/{route_name}", provider_tag)
 
   def get_route_assignment(self, route_name: str) -> str | None:

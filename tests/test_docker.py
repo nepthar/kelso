@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from kelso.lib.logtab import LogTab
+from tests.conftest import write_test_seed
 
 
 def _free_port() -> int:
@@ -130,7 +130,7 @@ image = "nginx:alpine"
 main = {{ port = "{port}:80" }}
 """
   )
-  LogTab(root / "conf" / "master.key").write("master_key", "0" * 64)
+  write_test_seed(root / "conf" / "master.key")
   config = root / "config.toml"
   config.write_text(
     """\

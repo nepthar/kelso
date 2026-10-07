@@ -17,12 +17,10 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  # Not crypto_from_config: with no master key that hands back the noop engine,
-  # which returns its input unchanged and would report every blob as decrypted.
   if not ctx.config.master_key:
     raise ValueError(
-      f"No master key in {ctx.config.master_keyfile}, so nothing was encrypted "
-      f"with one. Run: kelso system gen-masterkey"
+      f"No recovery phrase in {ctx.config.master_keyfile}. Make one with "
+      f"`kelso system rekey`."
     )
 
   blob = sys.stdin.read().strip()
