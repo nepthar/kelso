@@ -7,7 +7,7 @@ from logging import getLogger
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
-from kelso.lib.crypto import FernetCryptoEngine, crypto_from_config
+from kelso.lib.crypto import FernetCryptoEngine
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.load import materialize
 from kelso.lib.lifecycle.rootfs import run_as_root
@@ -19,7 +19,6 @@ from kelso.lib.lifecycle.snapshot import (
   snapshot_archive,
 )
 from kelso.lib.recovery import master_key_at
-from kelso.lib.rekey import reencrypt_app_store
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import validate_identifier
@@ -186,9 +185,7 @@ def _rebuild_run_dir(plan: RestorePlan, ctx: KelsoCtx) -> None:
   # them again under today's.
   then = master_key_at(ctx.config.master_keyfile, plan.taken_at)
   if then != ctx.config.master_key:
-    reencrypt_app_store(
-      plan.config_path, FernetCryptoEngine(then), crypto_from_config(ctx.config)
-    )
+    ctx.app_store(plan.app_id).rekey_secrets(FernetCryptoEngine(then))
 
 
 def _restore_data_volumes(plan: RestorePlan, ctx: KelsoCtx) -> None:

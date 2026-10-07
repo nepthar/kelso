@@ -64,6 +64,13 @@ class JsonLogtabStore(ConfigStore):
     self._table.delete(key)
 
 
+def _decrypt_or_none(crypto: CryptoEngine, blob: str) -> str | None:
+  try:
+    return crypto.decrypt(blob)
+  except (InvalidToken, ValueError):
+    return None
+
+
 class KelsoStore:
   """Store and manipulate kelso-wide state"""
 
@@ -126,6 +133,27 @@ class KelsoStore:
   def get_secret(self, name: str) -> str | None:
     raw = self._store.read(f"system/secrets/{name}")
     return self._crypto.decrypt(raw) if raw is not None else None
+
+  def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
+    """Append every secret and token again, read with `old` and written with
+    this store's key. Returns how many, and the names `old` could not read."""
+    written, unreadable = 0, []
+    for name, blob in self._store.scan("system/secrets/").items():
+      plain = _decrypt_or_none(old, blob)
+      if plain is None:
+        unreadable.append(f"system/secrets/{name}")
+        continue
+      self._store.write(f"system/secrets/{name}", self._crypto.encrypt(plain))
+      written += 1
+    for name, token in self._store.scan("system/tokens/").items():
+      plain = _decrypt_or_none(old, token["tok"])
+      if plain is None:
+        unreadable.append(f"system/tokens/{name}")
+        continue
+      rekeyed = {**token, "tok": self._crypto.encrypt(plain)}
+      self._store.write(f"system/tokens/{name}", rekeyed)
+      written += 1
+    return written, unreadable
 
   def list_secrets(self) -> list[str]:
     secrets = self._store.scan("system/secrets/")
@@ -195,6 +223,25 @@ class AppStore:
     secret = entry["secret"]
     raw = entry["value"]
     return secret, self._crypto.decrypt(raw) if secret else raw
+
+  def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
+    """Append every secret again, read with `old` and written with this
+    store's key, marked as a rekey so nothing becomes pending. Returns how
+    many, and the names `old` could not read."""
+    written, unreadable = 0, []
+    for name, entry in self._store.scan("config/").items():
+      if not entry.get("secret"):
+        continue
+      plain = _decrypt_or_none(old, entry["value"])
+      if plain is None:
+        unreadable.append(f"config/{name}")
+        continue
+      self._store.write(
+        f"config/{name}",
+        {"secret": True, "value": self._crypto.encrypt(plain), REKEY_FIELD: True},
+      )
+      written += 1
+    return written, unreadable
 
   def has_config(self, name: str) -> bool:
     """Whether a value is stored, without decrypting it."""
