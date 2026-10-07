@@ -9,7 +9,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.rootfs import run_as_root
 from kelso.lib.spec import AppSpec
-from kelso.lib.util import validate_identifier
+from kelso.lib.util import now_ts, validate_identifier
 
 logger = getLogger("kelso.lifecycle.snapshot")
 
@@ -209,6 +209,9 @@ def snapshot(
       [
         f'app_id = "{app}"',
         f'date = "{folder_name}"',
+        # When its secrets were copied: the key file at this moment says which
+        # key they are under.
+        f'taken_at = "{now_ts()}"',
         f'app_version = "{app_version}"',
         f"included_volumes = {_toml_str_array(included)}",
         f"excluded_volumes = {_toml_str_array(excluded)}",

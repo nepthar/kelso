@@ -117,8 +117,6 @@ class Config:
   repos_root: Path
   repos: dict[str, Repo]
   master_key: str
-  # Keys a rekey replaced: still decrypt, never encrypt.
-  retired_master_keys: tuple[str, ...]
   port_base: int
   kelso_address: str
   default_route_provider: str
@@ -138,7 +136,6 @@ class Config:
     kelso_address: str = "",
     extra_repos: dict[str, Repo] | None = None,
     host_volumes: dict[str, HostVolume] | None = None,
-    retired_master_keys: tuple[str, ...] = (),
   ) -> None:
     self.config_path = config_path
     self.kelso_root = kelso_root
@@ -149,7 +146,6 @@ class Config:
     }
     self.snapshot_root = snapshot_root
     self.master_key = master_key
-    self.retired_master_keys = retired_master_keys
     self.port_base = port_base
     self.kelso_address = kelso_address
     self.default_route_provider = default_route_provider
@@ -323,7 +319,6 @@ def load_config_file(config_file: str | Path) -> Config:
     repos_root=repos_root,
     snapshot_root=snapshot_root,
     master_key=master_key,
-    retired_master_keys=keyfile.retired,
     port_base=parsed.port_base,
     kelso_address=parsed.kelso_address,
     default_route_provider=parsed.default_route_provider,

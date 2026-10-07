@@ -5,7 +5,7 @@ on disk anywhere but the key file."""
 import sys
 from collections.abc import Callable
 
-from kelso.lib.recovery import format_phrase, quiz
+from kelso.lib import recovery
 
 SAVE_IT = """\
 Your recovery phrase:
@@ -18,15 +18,23 @@ backup cannot be restored, and nobody can recover them for you."""
 
 
 def show(words: list[str]) -> None:
-  print(SAVE_IT.format(grid=format_phrase(words)))
+  print(SAVE_IT.format(grid=recovery.format_phrase(words)))
   sys.stdout.flush()
 
 
 def check(words: list[str], ask: Callable[[str], str] = input) -> bool:
-  """Ask for two words back, allowing one retry."""
+  """Ask for two of the words back, allowing one retry. False on a wrong
+  answer twice, or no answer at all."""
   print("\nTo check you saved them:")
   for attempt in range(2):
-    if quiz(words, ask):
+    try:
+      answers = [
+        (ask(f"Enter word {n}: ").strip().lower(), words[n - 1])
+        for n in recovery.quiz_positions()
+      ]
+    except EOFError:
+      return False
+    if all(given == expected for given, expected in answers):
       print("That matches.")
       return True
     if attempt == 0:

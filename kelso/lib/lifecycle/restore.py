@@ -7,7 +7,7 @@ from logging import getLogger
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
-from kelso.lib.crypto import CryptoEngine, crypto_from_config
+from kelso.lib.crypto import FernetCryptoEngine, crypto_from_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.load import materialize
 from kelso.lib.lifecycle.rootfs import run_as_root
@@ -18,6 +18,7 @@ from kelso.lib.lifecycle.snapshot import (
   snapshot,
   snapshot_archive,
 )
+from kelso.lib.recovery import master_key_at
 from kelso.lib.rekey import reencrypt_app_store
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import AppSpec
@@ -36,6 +37,9 @@ class RestorePlan:
   app_id: AppID
   snapshot_path: Path
   app_version: str
+  # When the snapshot was taken; None for one from before it was recorded.
+  # When it was taken: the key file at this moment names its secrets' key.
+  taken_at: str
   run_path: Path
   config_path: Path
   # (path inside the snapshot, path it is copied back over)
@@ -125,6 +129,11 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
   # data under another's id, so treat a mismatch as a wrong argument.
   if meta.get("app_id") != str(app):
     raise ValueError(f"Snapshot {archive} belongs to {meta.get('app_id')!r}, not {app}")
+  if "taken_at" not in meta:
+    raise ValueError(
+      f"Snapshot {archive} does not record when it was taken, so the key its "
+      "secrets are under is unknown; it cannot be restored"
+    )
 
   data_root = ctx.config.volume_roots["data"] / app
   data_volumes = []
@@ -157,6 +166,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
     app_id=app,
     snapshot_path=snapshot_path,
     app_version=str(meta.get("app_version", "")),
+    taken_at=str(meta["taken_at"]),
     run_path=ctx.loaded_paths(app).run_path,
     config_path=ctx.config.app_config_path(app),
     data_volumes=tuple(data_volumes),
@@ -164,7 +174,7 @@ def restore_plan(app: AppID, snapshot_name: str, ctx: KelsoCtx) -> RestorePlan:
   )
 
 
-def _rebuild_run_dir(plan: RestorePlan, crypto: CryptoEngine) -> None:
+def _rebuild_run_dir(plan: RestorePlan, ctx: KelsoCtx) -> None:
   """Drop the live run dir and rebuild it from the snapshot."""
   if plan.run_path.exists():
     shutil.rmtree(plan.run_path)
@@ -172,8 +182,13 @@ def _rebuild_run_dir(plan: RestorePlan, crypto: CryptoEngine) -> None:
   shutil.copytree(plan.snapshot_path / "app_bundle", plan.run_path / "app_bundle")
   plan.config_path.parent.mkdir(parents=True, exist_ok=True)
   shutil.copy2(plan.snapshot_path / "config.logtab", plan.config_path)
-  # The snapshot may predate a rekey; its secrets move onto the current key.
-  reencrypt_app_store(plan.config_path, crypto)
+  # Taken before a rekey, its secrets are under the key current then: append
+  # them again under today's.
+  then = master_key_at(ctx.config.master_keyfile, plan.taken_at)
+  if then != ctx.config.master_key:
+    reencrypt_app_store(
+      plan.config_path, FernetCryptoEngine(then), crypto_from_config(ctx.config)
+    )
 
 
 def _restore_data_volumes(plan: RestorePlan, ctx: KelsoCtx) -> None:
@@ -252,7 +267,7 @@ def _restore_extracted(
   # and failing here leaves the run dir untouched.
   _restore_data_volumes(plan, ctx)
 
-  _rebuild_run_dir(plan, crypto_from_config(ctx.config))
+  _rebuild_run_dir(plan, ctx)
 
   try:
     run_data, _ = materialize(spec, ctx)

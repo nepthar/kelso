@@ -1,9 +1,8 @@
 import base64
 import hashlib
-from collections.abc import Iterable
 from typing import Protocol
 
-from cryptography.fernet import Fernet, MultiFernet
+from cryptography.fernet import Fernet
 
 from kelso.lib.config import Config
 
@@ -13,12 +12,10 @@ class CryptoEngine(Protocol):
 
   def decrypt(self, ciphertext: str) -> str: ...
 
-  def rotate(self, ciphertext: str) -> str: ...
-
 
 def crypto_from_config(config: Config) -> CryptoEngine:
   if config.master_key:
-    return FernetCryptoEngine(config.master_key, config.retired_master_keys)
+    return FernetCryptoEngine(config.master_key)
   return MissingKeyEngine(str(config.master_keyfile))
 
 
@@ -34,7 +31,7 @@ class MissingKeyEngine:
       f"or decrypt secrets with. Make one with `kelso system rekey`."
     )
 
-  encrypt = decrypt = rotate = _refuse
+  encrypt = decrypt = _refuse
 
 
 class NoopCryptoEngine:
@@ -46,9 +43,6 @@ class NoopCryptoEngine:
   def decrypt(self, ciphertext: str) -> str:
     return ciphertext
 
-  def rotate(self, ciphertext: str) -> str:
-    return ciphertext
-
 
 def _fernet(master_key: str) -> Fernet:
   digest = hashlib.sha256(master_key.encode()).digest()
@@ -56,18 +50,11 @@ def _fernet(master_key: str) -> Fernet:
 
 
 class FernetCryptoEngine:
-  """Encrypts under `master_key`; decrypts under it or any `retired` key."""
-
-  def __init__(self, master_key: str, retired: Iterable[str] = ()):
-    keys = [master_key, *(k for k in retired if k and k != master_key)]
-    self._fernet = MultiFernet([_fernet(k) for k in keys])
+  def __init__(self, master_key: str):
+    self._fernet = _fernet(master_key)
 
   def encrypt(self, plaintext: str) -> str:
     return self._fernet.encrypt(plaintext.encode()).decode()
 
   def decrypt(self, ciphertext: str) -> str:
     return self._fernet.decrypt(ciphertext.encode()).decode()
-
-  def rotate(self, ciphertext: str) -> str:
-    """The same plaintext, encrypted under the current key."""
-    return self._fernet.rotate(ciphertext.encode()).decode()

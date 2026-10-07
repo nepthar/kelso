@@ -29,9 +29,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   try:
     # Fernet is authenticated: a wrong key raises, never returns garbage.
-    plaintext = FernetCryptoEngine(
-      ctx.config.master_key, ctx.config.retired_master_keys
-    ).decrypt(blob)
+    plaintext = FernetCryptoEngine(ctx.config.master_key).decrypt(blob)
   except InvalidToken:
     raise ValueError(
       "Could not decrypt that value. It is not a kelso-encrypted blob, or it "

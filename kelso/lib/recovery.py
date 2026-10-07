@@ -5,12 +5,14 @@ is the one thing to keep off the machine: from it, a fresh install derives the
 same master key, so a backup of this root can be restored anywhere.
 
 `conf/master.key` keeps the phrase's entropy as `seed`, and the master key is
-derived from it. Keys a rekey replaced are kept as `retired/<n>`, for
-decrypting what was written under them -- old snapshots above all.
+derived from it. A rekey appends a new `seed`; the file's history is the record
+of every key this root has had, so something written under an older one -- a
+snapshot's secrets -- is read with the seed that was current when it was
+written (`master_key_at`).
 """
 
 import secrets
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,7 +28,6 @@ ENTROPY_BYTES = 16
 
 SEED_KEY = "seed"
 CONFIRMED_KEY = "seed_confirmed"
-RETIRED_PREFIX = "retired/"
 
 # The label for the key that encrypts secrets. A new use gets its own label,
 # never this one, so a key for one thing cannot decrypt another.
@@ -79,38 +80,29 @@ class KeyFile:
   master_key: str
   seed: bytes | None
   confirmed: bool
-  retired: tuple[str, ...]
 
 
-def read_keyfile(path: Path) -> KeyFile:
+def read_keyfile(path: Path, at: str | None = None) -> KeyFile:
+  """The key file now, or as it stood at timestamp `at`."""
   if not path.is_file():
-    return KeyFile("", None, False, ())
-  table = LogTab(path).load()
+    return KeyFile("", None, False)
+  table = LogTab(path).load(at=at)
   seed_entry = table.get(SEED_KEY)
   seed = bytes.fromhex(seed_entry.value) if seed_entry else None
   master_key = master_key_from(seed) if seed is not None else ""
-  retired = tuple(
-    entry.value
-    for key, entry in sorted(table.items(), key=lambda kv: kv[1].ts)
-    if key.startswith(RETIRED_PREFIX)
-  )
   confirmed = seed is not None and CONFIRMED_KEY in table
-  # Newest retired key first: the likeliest one an old blob was written under.
-  return KeyFile(master_key, seed, confirmed, tuple(reversed(retired)))
+  return KeyFile(master_key, seed, confirmed)
+
+
+def master_key_at(path: Path, at: str) -> str:
+  """The master key that was current at timestamp `at`; empty if none was."""
+  return read_keyfile(path, at=at).master_key
 
 
 def write_seed(path: Path, entropy: bytes, *, title: str = "Kelso Master Key") -> None:
-  """Make `entropy` the master key's seed, retiring the key it replaces.
-
-  The `seed` record is the switch: until it lands, the old key is current, and
-  after, it is both retired and still able to decrypt.
-  """
+  """Make `entropy` the master key's seed. Older seeds stay in the history."""
   current = read_keyfile(path)
   table = LogTab(path, title=title)
-  new_key = master_key_from(entropy)
-  if current.master_key and current.master_key != new_key:
-    n = len(current.retired) + 1
-    table.write(f"{RETIRED_PREFIX}{n}", current.master_key)
   table.write(SEED_KEY, entropy.hex())
   # A new seed has not been confirmed, whatever the old one was.
   if current.confirmed:
@@ -135,15 +127,3 @@ def format_phrase(words: list[str]) -> str:
     cells = [f"{c * rows + r + 1:>2}. {words[c * rows + r]:<10}" for c in range(3)]
     lines.append("    " + "  ".join(cells).rstrip())
   return "\n".join(lines)
-
-
-def quiz(words: list[str], ask: Callable[[str], str] = input) -> bool:
-  """Ask for two of the words back. False on a wrong answer or no answer."""
-  for position in quiz_positions():
-    try:
-      answer = ask(f"Enter word {position}: ")
-    except EOFError:
-      return False
-    if answer.strip().lower() != words[position - 1]:
-      return False
-  return True
