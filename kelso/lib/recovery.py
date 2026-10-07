@@ -4,10 +4,9 @@ The phrase encodes 128 random bits (BIP39's English wordlist and checksum). It
 is the one thing to keep off the machine: from it, a fresh install derives the
 same master key, so a backup of this root can be restored anywhere.
 
-`conf/master.key` keeps the phrase's entropy as `seed`. When it is there, the
-master key is derived from it; a root made before recovery phrases has only a
-`master_key` record, used as-is. Keys a rekey replaced are kept as `retired/<n>`,
-for decrypting what was written under them -- old snapshots above all.
+`conf/master.key` keeps the phrase's entropy as `seed`, and the master key is
+derived from it. Keys a rekey replaced are kept as `retired/<n>`, for
+decrypting what was written under them -- old snapshots above all.
 """
 
 import secrets
@@ -27,7 +26,6 @@ ENTROPY_BYTES = 16
 
 SEED_KEY = "seed"
 CONFIRMED_KEY = "seed_confirmed"
-LEGACY_KEY = "master_key"
 RETIRED_PREFIX = "retired/"
 
 # The label for the key that encrypts secrets. A new use gets its own label,
@@ -90,11 +88,7 @@ def read_keyfile(path: Path) -> KeyFile:
   table = LogTab(path).load()
   seed_entry = table.get(SEED_KEY)
   seed = bytes.fromhex(seed_entry.value) if seed_entry else None
-  if seed is not None:
-    master_key = master_key_from(seed)
-  else:
-    legacy = table.get(LEGACY_KEY)
-    master_key = legacy.value if legacy else ""
+  master_key = master_key_from(seed) if seed is not None else ""
   retired = tuple(
     entry.value
     for key, entry in sorted(table.items(), key=lambda kv: kv[1].ts)

@@ -885,14 +885,13 @@ def test_decrypt_refuses_empty_stdin(kelso_env):
   assert "Nothing on stdin" in result.stderr
 
 
-def test_decrypt_refuses_when_there_is_no_master_key(kelso_env):
-  # Without a key the noop engine would echo the input back and call it success.
+def test_decrypt_refuses_when_there_is_no_recovery_phrase(kelso_env):
   kelso_env.master_keyfile.write_text("")
   blob = FernetCryptoEngine("0" * 64).encrypt("hunter2")
 
   result = kelso_env.run("system", "decrypt", input=f"{blob}\n")
   assert result.returncode == 1
-  assert "No master key" in result.stderr
+  assert "No recovery phrase" in result.stderr
   assert "hunter2" not in result.stdout
 
 

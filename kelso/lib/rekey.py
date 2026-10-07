@@ -2,11 +2,11 @@
 
 Encrypted values live in two places: each app's config logtab (`config/<name>`
 records marked secret) and kelsodb (`system/secrets/*` and `system/tokens/*`).
-Each record is re-encrypted where it sits, history included, so nothing on file
-is left readable only under the key being replaced.
+For each value in effect, rekey appends a new `set` record holding it encrypted
+under the new key. History is never rewritten: older records stay as written,
+readable through the retired key kept beside the new one.
 """
 
-import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -17,10 +17,14 @@ from cryptography.fernet import InvalidToken
 
 from kelso.lib.crypto import CryptoEngine, FernetCryptoEngine
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.logtab import LogTab
+from kelso.lib.observations import REKEYED_AT, changes_since_start
 from kelso.lib.recovery import read_keyfile, write_seed
+from kelso.lib.store import JsonLogtabStore
+from kelso.lib.util import now_ts
 
 logger = logging.getLogger("kelso.rekey")
+
+Rotate = Callable[[str, str], str | None]
 
 
 @dataclass
@@ -31,55 +35,19 @@ class RekeyResult:
   unreadable: list[str] = field(default_factory=list)
 
 
-def _rotator(
-  crypto: CryptoEngine, path: Path, result: RekeyResult, *, plaintext: bool
-) -> Callable[[str, str], str]:
-  """Re-encrypt one ciphertext, or encrypt it if the root never had a key."""
-
-  def rotate(key: str, blob: str) -> str:
-    try:
-      return crypto.rotate(blob)
-    except InvalidToken:
-      if plaintext:
-        return crypto.encrypt(blob)
-      result.unreadable.append(f"{path.name}: {key}")
-      return blob
-
-  return rotate
-
-
-def _json_transform(
-  path: Path,
-  result: RekeyResult,
-  crypto: CryptoEngine,
-  plaintext: bool,
-  rewrite: Callable[[str, Any, Callable[[str, str], str]], Any],
-) -> int:
-  rotate = _rotator(crypto, path, result, plaintext=plaintext)
-
-  def transform(key: str, raw: str) -> str:
-    try:
-      value = json.loads(raw)
-    except ValueError:
-      return raw
-    new = rewrite(key, value, rotate)
-    return raw if new is value else json.dumps(new, separators=(",", ":"))
-
-  return LogTab(path).rewrite(transform)
-
-
-def _app_record(key: str, value: Any, rotate: Callable[[str, str], str]) -> Any:
+def _app_record(key: str, value: Any, rotate: Rotate) -> Any:
   if (
     key.startswith("config/")
     and isinstance(value, dict)
     and value.get("secret")
     and isinstance(value.get("value"), str)
   ):
-    return {**value, "value": rotate(key, value["value"])}
-  return value
+    blob = rotate(key, value["value"])
+    return None if blob is None else {**value, "value": blob}
+  return None
 
 
-def _kelsodb_record(key: str, value: Any, rotate: Callable[[str, str], str]) -> Any:
+def _kelsodb_record(key: str, value: Any, rotate: Rotate) -> Any:
   if key.startswith("system/secrets/") and isinstance(value, str):
     return rotate(key, value)
   if (
@@ -87,21 +55,52 @@ def _kelsodb_record(key: str, value: Any, rotate: Callable[[str, str], str]) -> 
     and isinstance(value, dict)
     and isinstance(value.get("tok"), str)
   ):
-    return {**value, "tok": rotate(key, value["tok"])}
-  return value
+    blob = rotate(key, value["tok"])
+    return None if blob is None else {**value, "tok": blob}
+  return None
+
+
+def _append_reencrypted(
+  path: Path,
+  crypto: CryptoEngine,
+  record: Callable[[str, Any, Rotate], Any],
+  result: RekeyResult,
+) -> int:
+  """Append each encrypted value in effect, re-encrypted. Returns how many."""
+  store = JsonLogtabStore(path)
+
+  def rotate(key: str, blob: str) -> str | None:
+    try:
+      return crypto.rotate(blob)
+    except InvalidToken:
+      result.unreadable.append(f"{path.name}: {key}")
+      return None
+
+  written = 0
+  for key, value in store.scan().items():
+    new = record(key, value, rotate)
+    if new is not None:
+      store.write(key, new)
+      written += 1
+  return written
 
 
 def reencrypt_app_store(
   path: Path, crypto: CryptoEngine, result: RekeyResult | None = None
 ) -> int:
-  """Re-encrypt one app config logtab's secrets under `crypto`'s current key.
+  """Append one app's secrets re-encrypted under `crypto`'s current key.
 
-  The caller holds the app's lock.
+  The plaintext does not change, so neither does what is pending: an app that
+  was current before is marked current again. The caller holds the app's lock.
   """
   result = result if result is not None else RekeyResult()
   if not path.is_file():
     return 0
-  return _json_transform(path, result, crypto, False, _app_record)
+  was_current = not changes_since_start(path).any
+  written = _append_reencrypted(path, crypto, _app_record, result)
+  if written and was_current:
+    JsonLogtabStore(path).write(REKEYED_AT, now_ts())
+  return written
 
 
 def rekey(ctx: KelsoCtx, entropy: bytes) -> RekeyResult:
@@ -112,24 +111,21 @@ def rekey(ctx: KelsoCtx, entropy: bytes) -> RekeyResult:
   and running rekey again with the same phrase finishes the job.
   """
   config = ctx.config
-  had_key = bool(config.master_key)
   with ctx.kelso_lock("rekey"):
     write_seed(config.master_keyfile, entropy)
   keyfile = read_keyfile(config.master_keyfile)
   crypto = FernetCryptoEngine(keyfile.master_key, keyfile.retired)
-  plaintext = not had_key
 
   result = RekeyResult()
   for app in sorted(config.app_config_ids()):
     with ctx.app_lock(app, "rekey"):
-      path = config.app_config_path(app)
-      result.values += _json_transform(path, result, crypto, plaintext, _app_record)
+      result.values += reencrypt_app_store(config.app_config_path(app), crypto, result)
       result.apps += 1
 
   with ctx.kelso_lock("rekey"):
     if config.kelsodb_path.is_file():
-      result.values += _json_transform(
-        config.kelsodb_path, result, crypto, plaintext, _kelsodb_record
+      result.values += _append_reencrypted(
+        config.kelsodb_path, crypto, _kelsodb_record, result
       )
 
   for item in result.unreadable:

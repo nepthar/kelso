@@ -20,9 +20,9 @@ subdomain = { default = "jelly" }
 
 [volumes]
 config     = { kind = "data", desc = "Server config, users, playback state" }
-metadata   = { kind = "bulk", desc = "Artwork, trickplay images, subtitles" }
+metadata   = { kind = "bulk", desc = "Artwork and subtitles" }
 cache      = { kind = "temp", desc = "Transcode and image cache; safe to lose" }
-tricklplay = { kind = "temp", desc = "Trickplay images so you can seek through the timeline" }
+trickplay  = { kind = "temp", desc = "Trickplay images so you can seek through the timeline" }
 media      = { kind = "host",  desc = "The library itself; bind to the media share", readonly = true }
 
 [run.main]

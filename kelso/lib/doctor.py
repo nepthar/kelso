@@ -43,6 +43,7 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *kelsod_problems(ctx),
     *_volume_problems(ctx),
     *_catalog_problems(ctx),
+    *_key_problems(ctx),
   ]
   warnings = [*_repo_warnings(ctx), *_key_warnings(ctx)]
   for observation in ctx.observations():
@@ -52,18 +53,23 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
   return DoctorPrognosis(tuple(problems), tuple(warnings))
 
 
-def _key_warnings(ctx: KelsoCtx) -> list[Finding]:
-  """Whether this root's secrets could be read on another machine."""
-  keyfile = read_keyfile(ctx.config.master_keyfile)
-  if keyfile.seed is None:
+def _key_problems(ctx: KelsoCtx) -> list[Finding]:
+  """A root with no seed has no key: every secret is out of reach."""
+  if read_keyfile(ctx.config.master_keyfile).seed is None:
     return [
       Finding(
-        "the master key",
-        "it predates recovery phrases, so a backup of this kelso could not be "
-        "restored on another machine. Make one with `kelso system rekey`.",
+        "the recovery phrase",
+        f"there is none in {ctx.config.master_keyfile}, so kelso cannot encrypt "
+        "or read secrets. Make one with `kelso system rekey`.",
       )
     ]
-  if not keyfile.confirmed:
+  return []
+
+
+def _key_warnings(ctx: KelsoCtx) -> list[Finding]:
+  """A phrase nobody confirmed saving may not be anywhere but this disk."""
+  keyfile = read_keyfile(ctx.config.master_keyfile)
+  if keyfile.seed is not None and not keyfile.confirmed:
     return [
       Finding(
         "the recovery phrase",

@@ -19,10 +19,27 @@ class CryptoEngine(Protocol):
 def crypto_from_config(config: Config) -> CryptoEngine:
   if config.master_key:
     return FernetCryptoEngine(config.master_key, config.retired_master_keys)
-  return NoopCryptoEngine()
+  return MissingKeyEngine(str(config.master_keyfile))
+
+
+class MissingKeyEngine:
+  """A root with no seed: refuses every use rather than store plaintext."""
+
+  def __init__(self, keyfile: str):
+    self._keyfile = keyfile
+
+  def _refuse(self, _: str) -> str:
+    raise ValueError(
+      f"No recovery phrase in {self._keyfile}, so kelso has no key to encrypt "
+      f"or decrypt secrets with. Make one with `kelso system rekey`."
+    )
+
+  encrypt = decrypt = rotate = _refuse
 
 
 class NoopCryptoEngine:
+  """Stores values as they are. For tests that do not exercise encryption."""
+
   def encrypt(self, plaintext: str) -> str:
     return plaintext
 

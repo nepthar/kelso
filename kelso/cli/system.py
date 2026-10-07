@@ -212,8 +212,8 @@ def run_recovery_phrase(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   keyfile = recovery.read_keyfile(ctx.config.master_keyfile)
   if keyfile.seed is None:
     raise ValueError(
-      "This kelso's master key predates recovery phrases, so there is none to "
-      "show. Make one with `kelso system rekey`."
+      f"No recovery phrase in {ctx.config.master_keyfile}. Make one with "
+      "`kelso system rekey`."
     )
   words = recovery.phrase(keyfile.seed)
   if not args.confirm:

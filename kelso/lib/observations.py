@@ -179,8 +179,11 @@ _START_KEYS = ("config/", "binds/")
 _LOAD_KEYS = ("config/subdomain", "routes/")
 
 
+# A rekey re-appends secrets with the same plaintext; on an app that was
+# current, it records that it still is.
+REKEYED_AT = "meta/rekeyed_at"
 # A load or a start applies everything written before it.
-_APPLIED_AT = ("meta/loaded_at", "meta/started_at")
+_APPLIED_AT = ("meta/loaded_at", "meta/started_at", REKEYED_AT)
 
 
 @dataclass(frozen=True)

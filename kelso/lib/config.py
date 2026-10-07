@@ -295,10 +295,8 @@ def load_config_file(config_file: str | Path) -> Config:
   keyfile = read_keyfile(master_keyfile)
   master_key = keyfile.master_key
 
-  if master_key:
-    logger.debug(f"Using master key from {master_keyfile}")
-  else:
-    logger.warning("Using empty master key")
+  if not master_key:
+    logger.debug("No recovery phrase in %s", master_keyfile)
 
   repos_root = ep(parsed.repos_root)
   extra_repos = _resolve_repos(repo_raw, repos_root, ep)

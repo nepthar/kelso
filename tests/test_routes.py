@@ -24,6 +24,7 @@ from kelso.lib.config import (
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.routes import assigned_routes, preflight_app_routes
 from kelso.lib.manifest import ConfigError, Manifest, _validate_routes
+from kelso.lib.recovery import master_key_from
 from kelso.lib.routes import (
   PROVIDERS,
   CloudflareTunnelRouteProvider,
@@ -36,6 +37,7 @@ from kelso.lib.routes import (
 )
 from kelso.lib.run_layout import AppRunData, AssignedRoute, _route_urls
 from kelso.lib.spec import AppSpec
+from tests.conftest import TEST_SEED
 
 
 def _model(body: str) -> Manifest:
@@ -450,7 +452,7 @@ def _config(tmp_path: Path, route_providers: dict) -> Config:
     kelso_root=tmp_path,
     repos_root=tmp_path / "repos",
     snapshot_root=tmp_path / "snapshots",
-    master_key="",
+    master_key=master_key_from(TEST_SEED),
     port_base=41000,
     kelso_address="192.168.1.10",
     default_route_provider="web",
