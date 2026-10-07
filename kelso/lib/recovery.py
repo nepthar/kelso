@@ -21,13 +21,11 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from mnemonic import Mnemonic
 
 from kelso.lib.logtab import LogTab
-from kelso.lib.util import now_ts
 
 WORDS = 12
 ENTROPY_BYTES = 16
 
 SEED_KEY = "seed"
-CONFIRMED_KEY = "seed_confirmed"
 
 # The label for the key that encrypts secrets. A new use gets its own label,
 # never this one, so a key for one thing cannot decrypt another.
@@ -79,19 +77,17 @@ class KeyFile:
 
   master_key: str
   seed: bytes | None
-  confirmed: bool
 
 
 def read_keyfile(path: Path, at: str | None = None) -> KeyFile:
   """The key file now, or as it stood at timestamp `at`."""
   if not path.is_file():
-    return KeyFile("", None, False)
+    return KeyFile("", None)
   table = LogTab(path).load(at=at)
   seed_entry = table.get(SEED_KEY)
   seed = bytes.fromhex(seed_entry.value) if seed_entry else None
   master_key = master_key_from(seed) if seed is not None else ""
-  confirmed = seed is not None and CONFIRMED_KEY in table
-  return KeyFile(master_key, seed, confirmed)
+  return KeyFile(master_key, seed)
 
 
 def master_key_at(path: Path, at: str) -> str:
@@ -101,22 +97,8 @@ def master_key_at(path: Path, at: str) -> str:
 
 def write_seed(path: Path, entropy: bytes, *, title: str = "Kelso Master Key") -> None:
   """Make `entropy` the master key's seed. Older seeds stay in the history."""
-  current = read_keyfile(path)
-  table = LogTab(path, title=title)
-  table.write(SEED_KEY, entropy.hex())
-  # A new seed has not been confirmed, whatever the old one was.
-  if current.confirmed:
-    table.delete(CONFIRMED_KEY)
+  LogTab(path, title=title).write(SEED_KEY, entropy.hex())
   path.chmod(0o600)
-
-
-def mark_confirmed(path: Path) -> None:
-  LogTab(path).write(CONFIRMED_KEY, now_ts())
-
-
-def quiz_positions(count: int = 2) -> list[int]:
-  """Which words, 1-based and in order, to ask back."""
-  return sorted(secrets.SystemRandom().sample(range(1, WORDS + 1), count))
 
 
 def format_phrase(words: list[str]) -> str:

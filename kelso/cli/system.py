@@ -48,8 +48,8 @@ def register(subparsers) -> None:
   rekey = sub.add_parser(
     "rekey",
     help="Make a new recovery phrase and re-encrypt every secret under it",
-    description="Shows a new recovery phrase, checks you saved it, then "
-    "re-encrypts every app secret and system secret under the key it derives. "
+    description="Makes a new recovery phrase, re-encrypts every app secret and "
+    "system secret under the key it derives, and shows the phrase. "
     "The old key is kept, to read snapshots taken under it. Rekeying does not "
     "undo an exposed key: whoever had it could already read every secret, so "
     "change the secrets themselves too.",
@@ -63,11 +63,6 @@ def register(subparsers) -> None:
 
   phrase_cmd = sub.add_parser(
     "recovery-phrase", help="Show this kelso's recovery phrase"
-  )
-  phrase_cmd.add_argument(
-    "--confirm",
-    action="store_true",
-    help="Check you saved it, instead of showing it",
   )
   phrase_cmd.set_defaults(func=run_recovery_phrase)
 
@@ -185,22 +180,16 @@ def run_rekey(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if args.phrase:
     entered = input(f"Enter the {recovery.WORDS} words, separated by spaces: ")
     entropy = recovery.entropy_from_phrase(entered.split())
-    confirmed = True
   else:
     entropy = recovery.new_entropy()
-    words = recovery.phrase(entropy)
-    phrase.show(words)
-    if not phrase.check(words):
-      raise ValueError("The phrase was not confirmed, so nothing was changed")
-    confirmed = True
 
   result = rekey(ctx, entropy)
-  if confirmed:
-    recovery.mark_confirmed(ctx.config.master_keyfile)
   print(
     f"Re-encrypted {result.values} value(s) across {result.apps} app(s) and "
-    f"kelsodb under the new key."
+    f"kelsodb under the new key.\n"
   )
+  if not args.phrase:
+    phrase.show(recovery.phrase(entropy))
   if result.unreadable:
     raise ValueError(
       f"{len(result.unreadable)} value(s) could not be decrypted with any key on "
@@ -215,11 +204,4 @@ def run_recovery_phrase(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       f"No recovery phrase in {ctx.config.master_keyfile}. Make one with "
       "`kelso system rekey`."
     )
-  words = recovery.phrase(keyfile.seed)
-  if not args.confirm:
-    print(recovery.format_phrase(words))
-    return
-  if not phrase.check(words):
-    raise ValueError("That does not match the recovery phrase on file")
-  with ctx.kelso_lock("recovery-phrase"):
-    recovery.mark_confirmed(ctx.config.master_keyfile)
+  print(recovery.format_phrase(recovery.phrase(keyfile.seed)))

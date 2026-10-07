@@ -28,15 +28,14 @@ from .fakedocker import FakeDocker, FakeSubprocess, GuardDocker
 LOCK_TIMEOUT = 0.25
 
 
-# A fixed phrase, confirmed: what a root made and set up by `kelso init` holds.
+# A fixed phrase: what a root made by `kelso init` holds.
 TEST_SEED = bytes(range(16))
 
 
 def write_test_seed(path: Path) -> None:
-  from kelso.lib.recovery import mark_confirmed, write_seed
+  from kelso.lib.recovery import write_seed
 
   write_seed(path, TEST_SEED)
-  mark_confirmed(path)
 
 
 def spec_of(tmp_path: Path, manifest: str, app_id: str = "demo") -> AppSpec:

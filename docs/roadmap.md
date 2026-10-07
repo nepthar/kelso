@@ -270,7 +270,8 @@ a twelve-word recovery phrase (`kelso system recovery-phrase`), so a fresh
 install given the phrase reads the same secrets. What remains is the backup
 itself: restic against the live data volumes and kelso's state, run from a
 `kelso-backup` app with its own schedule and retention, and a restore that
-starts from the phrase and the bucket.
+starts from the phrase and the bucket. The first backup warns loudly that the
+recovery phrase is the only way to read it, and shows how to see the phrase.
 
 ### Restricted network mode
 A mode where a sidecar takes over DNS and proxies all outgoing HTTP and HTTPS,

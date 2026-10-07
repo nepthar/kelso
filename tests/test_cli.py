@@ -1856,13 +1856,11 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
   after = run_at(kelso_env, root, "ps")
   assert after.returncode == 0, after.stderr
 
-  # It comes from a recovery phrase, shown last. Nothing answered the check, so
-  # it is left unconfirmed and init says how to confirm it.
+  # It comes from a recovery phrase, shown last.
   keyfile = recovery.read_keyfile(root / "conf" / "master.key")
-  assert keyfile.seed is not None and not keyfile.confirmed
+  assert keyfile.seed is not None
   for word in recovery.phrase(keyfile.seed):
     assert word in result.stdout
-  assert "recovery-phrase --confirm" in result.stdout
 
 
 def test_every_shipped_bundle_loads(kelso_env):

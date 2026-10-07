@@ -11,7 +11,7 @@ from kelso.lib.apps import AppID, read_app_actions
 from kelso.lib.bundle import load_bundle
 from kelso.lib.docker import KelsoRunUnitStatus, load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
-from kelso.lib.store import CHANGE_CONFIG, CHANGE_ROUTES, CHANGED_META
+from kelso.lib.store import REKEY_FIELD
 
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
@@ -178,7 +178,19 @@ def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
 
 # A load or a start applies every change recorded before it.
 _APPLIED_AT = ("meta/loaded_at", "meta/started_at")
-_CHANGED = f"meta/{CHANGED_META}"
+# The records a start applies, by what it does with them: it reads config and
+# binds, and re-derives routes from the subdomain and route assignments.
+_CONFIG_KEYS = ("config/", "binds/")
+_ROUTE_KEYS = ("config/subdomain", "routes/")
+
+
+def _rekeyed(raw: str) -> bool:
+  """A secret a rekey appended again: the same value, so not a change."""
+  try:
+    value = json.loads(raw)
+  except ValueError:
+    return False
+  return isinstance(value, dict) and value.get(REKEY_FIELD) is True
 
 
 @dataclass(frozen=True)
@@ -196,7 +208,7 @@ class PendingChanges:
 
 
 def changes_since_start(path: Path) -> PendingChanges:
-  """The changes the app store at `path` records after its last load or start.
+  """What the app store at `path` has had written after its last load or start.
 
   By order in the log rather than by timestamp, which is only to the second.
   """
@@ -204,10 +216,12 @@ def changes_since_start(path: Path) -> PendingChanges:
   for key, entry in LogTab(path).history():
     if key in _APPLIED_AT:
       config = routes = False
-    elif key == _CHANGED:
-      kind = json.loads(entry.value)
-      routes = routes or kind == CHANGE_ROUTES
-      config = config or kind == CHANGE_CONFIG
+    elif _rekeyed(entry.value):
+      continue
+    elif key.startswith(_ROUTE_KEYS):
+      routes = True
+    elif key.startswith(_CONFIG_KEYS):
+      config = True
   return PendingChanges(config=config, routes=routes)
 
 

@@ -46,12 +46,9 @@ def _secret_blobs(path) -> list[str]:
   return blobs
 
 
-def _answer_quiz(monkeypatch, seed: bytes) -> str:
-  """Fix the phrase and the words asked for; return what to type."""
+def _fix_phrase(monkeypatch, seed: bytes) -> None:
+  """Make the next new phrase this one."""
   monkeypatch.setattr(recovery, "new_entropy", lambda: seed)
-  monkeypatch.setattr(recovery, "quiz_positions", lambda count=2: [3, 11])
-  words = recovery.phrase(seed)
-  return f"{words[2]}\n{words[10]}\n"
 
 
 # --- the phrase -------------------------------------------------------------
@@ -89,7 +86,6 @@ def test_the_master_key_comes_from_the_seed_not_a_stored_key(tmp_path):
   recovery.write_seed(path, NEW_SEED)
   keyfile = recovery.read_keyfile(path)
   assert keyfile.master_key == recovery.master_key_from(NEW_SEED)
-  assert not keyfile.confirmed
   assert oct(path.stat().st_mode & 0o777) == "0o600"
 
 
@@ -112,16 +108,6 @@ def test_the_key_file_answers_for_any_moment_in_its_history(tmp_path):
   assert recovery.read_keyfile(path).master_key == recovery.master_key_from(NEW_SEED)
 
 
-def test_a_new_seed_needs_confirming_again(tmp_path):
-  path = tmp_path / "master.key"
-  recovery.write_seed(path, TEST_SEED)
-  recovery.mark_confirmed(path)
-  recovery.write_seed(path, NEW_SEED)
-  keyfile = recovery.read_keyfile(path)
-  assert keyfile.master_key == recovery.master_key_from(NEW_SEED)
-  assert not keyfile.confirmed
-
-
 # --- rekey ------------------------------------------------------------------
 
 
@@ -133,8 +119,8 @@ def test_rekey_moves_every_secret_onto_the_new_key(kelso_env, monkeypatch):
   app_log = ctx.config.app_config_path(BASIC)
   assert _secret_blobs(app_log)
 
-  typed = _answer_quiz(monkeypatch, NEW_SEED)
-  result = kelso_env.run("system", "rekey", input=typed)
+  _fix_phrase(monkeypatch, NEW_SEED)
+  result = kelso_env.run("system", "rekey")
   assert result.returncode == 0, result.stderr
   # Shown on stdout, never through logging into the activity log.
   assert recovery.phrase(NEW_SEED)[0] in result.stdout
@@ -154,19 +140,8 @@ def test_rekey_moves_every_secret_onto_the_new_key(kelso_env, monkeypatch):
   with pytest.raises(InvalidToken):
     _fernet(OLD_KEY).decrypt(blobs[-1].encode())
 
-  keyfile = recovery.read_keyfile(kelso_env.master_keyfile)
-  assert keyfile.confirmed
   doctor = kelso_env.run("system", "doctor")
   assert "recovery phrase" not in doctor.stdout + doctor.stderr
-
-
-def test_a_wrong_answer_changes_nothing(kelso_env, monkeypatch):
-  before = kelso_env.master_keyfile.read_text()
-  _answer_quiz(monkeypatch, NEW_SEED)
-  result = kelso_env.run("system", "rekey", input="wrong\nwrong\nwrong\nwrong\n")
-  assert result.returncode != 0
-  assert "nothing was changed" in result.stderr
-  assert kelso_env.master_keyfile.read_text() == before
 
 
 def test_rekey_can_adopt_a_phrase_you_already_have(kelso_env):
@@ -197,8 +172,8 @@ def test_a_snapshot_from_before_a_rekey_restores(kelso_env, monkeypatch):
   _, admin_pass = _ctx(kelso_env).app_store(BASIC).get_config("admin_pass")
   name = _snapshot(kelso_env, BASIC, "before")
 
-  typed = _answer_quiz(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey", input=typed).returncode == 0
+  _fix_phrase(monkeypatch, NEW_SEED)
+  assert kelso_env.run("system", "rekey").returncode == 0
 
   restored = kelso_env.run("snapshot", "restore", BASIC, name, "-y")
   assert restored.returncode == 0, restored.stderr
@@ -209,7 +184,7 @@ def test_a_snapshot_from_before_a_rekey_restores(kelso_env, monkeypatch):
   _fernet(recovery.master_key_from(NEW_SEED)).decrypt(latest.encode())
 
 
-# --- showing and confirming the phrase -----------------------------------------
+# --- showing the phrase -----------------------------------------
 
 
 def test_recovery_phrase_shows_the_words_on_file(kelso_env):
@@ -235,33 +210,17 @@ def test_a_root_without_a_seed_is_told_to_rekey(kelso_env):
 
 def test_rekey_on_a_root_without_a_seed_gives_it_one(kelso_env, monkeypatch):
   kelso_env.master_keyfile.write_text("")
-  typed = _answer_quiz(monkeypatch, NEW_SEED)
-  result = kelso_env.run("system", "rekey", input=typed)
+  _fix_phrase(monkeypatch, NEW_SEED)
+  result = kelso_env.run("system", "rekey")
   assert result.returncode == 0, result.stderr
   assert _ctx(kelso_env).config.master_key == recovery.master_key_from(NEW_SEED)
-
-
-def test_confirming_the_phrase_quiets_doctor(kelso_env, monkeypatch):
-  kelso_env.master_keyfile.unlink()
-  recovery.write_seed(kelso_env.master_keyfile, TEST_SEED)
-  doctor = kelso_env.run("system", "doctor")
-  assert "--confirm" in doctor.stdout + doctor.stderr
-
-  monkeypatch.setattr(recovery, "quiz_positions", lambda count=2: [1, 12])
-  words = recovery.phrase(TEST_SEED)
-  confirmed = kelso_env.run(
-    "system", "recovery-phrase", "--confirm", input=f"{words[0]}\n{words[11]}\n"
-  )
-  assert confirmed.returncode == 0, confirmed.stderr
-  doctor = kelso_env.run("system", "doctor")
-  assert "--confirm" not in doctor.stdout + doctor.stderr
 
 
 def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
   """The plaintext did not change, so there is nothing to restart for."""
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  typed = _answer_quiz(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey", input=typed).returncode == 0
+  _fix_phrase(monkeypatch, NEW_SEED)
+  assert kelso_env.run("system", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout
   row = next(line for line in ps.splitlines() if line.startswith(BASIC)).split()
   assert row[2] == "ready"
@@ -270,8 +229,8 @@ def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
 def test_rekey_keeps_a_change_that_was_already_pending(kelso_env, monkeypatch):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=bob").returncode == 0
-  typed = _answer_quiz(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey", input=typed).returncode == 0
+  _fix_phrase(monkeypatch, NEW_SEED)
+  assert kelso_env.run("system", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout
   row = next(line for line in ps.splitlines() if line.startswith(BASIC)).split()
   assert row[2] == "restart"

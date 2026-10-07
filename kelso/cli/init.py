@@ -302,15 +302,8 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   # Last, so it is what is on screen when init is done.
   print("")
-  words = recovery.phrase(entropy)
-  phrase.show(words)
-  if not args.yes and phrase.check(words):
-    recovery.mark_confirmed(master_key_path)
-  else:
-    print(
-      "\nOnce they are saved, confirm it with: kelso system recovery-phrase "
-      "--confirm\n`kelso system doctor` reminds you until you do."
-    )
+  phrase.show(recovery.phrase(entropy))
+  print("`kelso system recovery-phrase` shows it again.")
 
   if service.has_systemd():
     print(RESTART)

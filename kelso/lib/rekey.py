@@ -18,7 +18,7 @@ from cryptography.fernet import InvalidToken
 from kelso.lib.crypto import CryptoEngine, FernetCryptoEngine, crypto_from_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.recovery import read_keyfile, write_seed
-from kelso.lib.store import JsonLogtabStore
+from kelso.lib.store import REKEY_FIELD, JsonLogtabStore
 
 logger = logging.getLogger("kelso.rekey")
 
@@ -41,7 +41,7 @@ def _app_record(key: str, value: Any, rotate: Rotate) -> Any:
     and isinstance(value.get("value"), str)
   ):
     blob = rotate(key, value["value"])
-    return None if blob is None else {**value, "value": blob}
+    return None if blob is None else {**value, "value": blob, REKEY_FIELD: True}
   return None
 
 
@@ -92,8 +92,8 @@ def reencrypt_app_store(
 ) -> int:
   """Append one app's secrets, decrypted with `old`, encrypted with `new`.
 
-  The plaintext does not change, so no change is recorded and nothing becomes
-  pending. The caller holds the app's lock.
+  Each record is marked as a rekey: the plaintext did not change, so nothing
+  becomes pending. The caller holds the app's lock.
   """
   result = result if result is not None else RekeyResult()
   if not path.is_file():
