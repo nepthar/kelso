@@ -42,6 +42,9 @@
   <div class="head"><h1>{{ title }}</h1>
     {%- block refresh %}<a href="{{ path|urlencode }}">Refresh</a>{% endblock %}
     {%- block actions %}{% endblock %}</div>
+  {% if NO_PASSWORD %}
+  <div class="error"><h2>No password</h2><p>kelso-ui's <code>no_password</code> is set, so anyone who can reach this page can run kelso. For testing only. Turn it off with <code>kelso config kelso-ui --set no_password=off</code> and restart kelso-ui.</p></div>
+  {% endif %}
   {% if daemon_api is not none and daemon_api != NEEDS_API %}
   <div class="error"><h2>Version mismatch</h2><p>This page was built for kelso API {{ NEEDS_API }}, but kelsod speaks {{ daemon_api }}. Buttons and status may be wrong until the two match.</p>
     <p>Reload this app and start it again:<br><code>kelso load kelso-ui</code><br><code>kelso start kelso-ui</code></p></div>
