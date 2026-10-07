@@ -38,9 +38,9 @@ def test_volume_metrics_records_each_directory(kelso_env):
   media = kelso_env.root / "external-data"
   media.mkdir()
   (media / "clip").write_bytes(b"z" * 20)
-  snapshots = kelso_env.root / "snapshots"
-  snapshots.mkdir()
-  (snapshots / "blob").write_bytes(b"s" * 50)
+  backups = kelso_env.root / "backups"
+  backups.mkdir()
+  (backups / "blob").write_bytes(b"s" * 50)
 
   ctx = _ctx(kelso_env)
   job = VolumeMetricsJob.call({}, ctx, started_by="test")
@@ -50,7 +50,7 @@ def test_volume_metrics_records_each_directory(kelso_env):
   assert gauges["gauge/volume_size_bytes/demo.app/data/uploads"] == 100
   assert gauges["gauge/volume_size_bytes/gone.app/temp/scratch"] == 40
   assert gauges["gauge/volume_size_bytes//host/media"] == 20
-  assert gauges["gauge/snapshots_size_bytes"] == 50
+  assert gauges["gauge/backups_size_bytes"] == 50
   assert gauges["gauge/var_size_bytes"] > 0
   assert activity.list_runs(ctx) == []
   assert job.log is None
@@ -164,12 +164,12 @@ def test_record_host_stats_skips_unavailable_gauges(kelso_env, monkeypatch):
 def test_record_volume_sizes_skips_missing_host_paths(kelso_env):
   ctx = _ctx(kelso_env)
   n = record_volume_sizes(ctx)
-  # var/ and repos/ exist in a fresh root; snapshots/ does not until one is taken.
+  # var/ and repos/ exist in a fresh root; backups/ does not until init makes it.
   assert n == 2
   assert ctx.read_gauges("volume_size_bytes/") == {}
   assert "gauge/var_size_bytes" in ctx.read_gauges("var_size_bytes")
   assert "gauge/repos_size_bytes" in ctx.read_gauges("repos_size_bytes")
-  assert ctx.read_gauges("snapshots_size_bytes") == {}
+  assert ctx.read_gauges("backups_size_bytes") == {}
 
 
 def test_history_gauges_keeps_points_from_since(kelso_env):

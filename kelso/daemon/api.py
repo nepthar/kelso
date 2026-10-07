@@ -347,9 +347,9 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def list_host_volumes(ctx: Ctx) -> dict:
     return {"host_volumes": views.host_volumes_view(ctx)}
 
-  @app.get("/snapshots", tags=["snapshots"])
-  def list_snapshots(ctx: Ctx) -> dict:
-    return {"snapshots": views.snapshots_view(ctx)}
+  @app.get("/backups", tags=["backups"])
+  def list_backups(ctx: Ctx) -> dict:
+    return views.backups_view(ctx)
 
   @app.post("/host-volumes", status_code=201, tags=["host volumes"])
   def create_host_volume(body: NewHostVolume, ctx: Ctx) -> dict:

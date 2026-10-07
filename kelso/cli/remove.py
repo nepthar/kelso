@@ -125,7 +125,7 @@ def _describe_removal(plan: RemovalPlan) -> None:
     print("Its configuration and address are kept.")
   for path in plan.host_paths:
     print(f"The host volume at {path} is left alone.")
-  print("If you want this data back, take a snapshot first.")
+  print(f"If you want this data back, back it up first: kelso backup run {plan.app_id}")
 
 
 def _volume_lines(plan: RemovalPlan) -> list[str]:

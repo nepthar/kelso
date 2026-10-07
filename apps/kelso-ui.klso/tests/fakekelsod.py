@@ -207,6 +207,7 @@ APP_CONFIG = {
     _field("subdomain", value="kelso", default="kelso", section="option"),
     _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
     _field("route.none", choices=[]),
+    _field("backup.movies", value="on", choices=["on", "off"]),
     _field("tuning", section="advanced"),
     _field("debug", section="advanced", default="0"),
     _field("start_order", section="option", default="6"),
@@ -405,23 +406,38 @@ HOST_VOLUMES = {
   ]
 }
 
-SNAPSHOTS = {
-  "snapshots": [
+BACKUPS = {
+  "kelso_id": "3fa9c2d1",
+  "schedule": "0 3 * * *",
+  "keep": {"daily": 3, "weekly": 2, "monthly": 1, "manual": 5},
+  "last_run": {
+    "run": "20260923-030000",
+    "time": "2026-09-23T03:00:00Z",
+    "reason": "scheduled",
+    "everything": True,
+    "backed_up": ["kelso-ui"],
+    "failed": [f"mealie: {EVIL}"],
+  },
+  "destination": "/mnt/nas/kelso",
+  "problem": None,
+  "backups": [
     {
+      "id": "20260923-030000",
       "app_id": "kelso-ui",
-      "name": "2026-09-23_15-03Z_test",
-      "taken_at": "2026-09-23T15:03:00Z",
-      "tag": EVIL,
-      "bytes": 4851,
+      "app_version": "0.6.0",
+      "reason": "scheduled",
+      "taken_at": "2026-09-23T03:00:00Z",
+      "bulk": False,
     },
     {
-      "app_id": "mealie",
-      "name": "old-style-name",
-      "taken_at": None,
-      "tag": None,
-      "bytes": None,
+      "id": "20260920-120000",
+      "app_id": EVIL,
+      "app_version": "",
+      "reason": "manual",
+      "taken_at": "2026-09-20T12:00:00Z",
+      "bulk": True,
     },
-  ]
+  ],
 }
 
 ROUTE_PROVIDERS = {
@@ -517,11 +533,11 @@ ACTIVITY = {
     {
       "ts": "2026-09-23T15:03:04Z",
       "app_id": "kelso-ui",
-      "verb": "snapshot",
+      "verb": "backup",
       "status": "ok",
       "started_by": "kelso_ui",
       "duration_ms": 1505,
-      "log": "2026-09-23T150302Z.kelso-ui.snapshot.log",
+      "log": "2026-09-23T150302Z.kelso-ui.backup.log",
       "available": True,
     },
     {
@@ -563,7 +579,7 @@ HOST = {
       "device": "/dev/sda2",
       "mountpoint": "/",
       "total_bytes": 2 * 1024**4,
-      "holds": ["bulk", "snapshots", EVIL],
+      "holds": ["bulk", "backups", EVIL],
       "gauge": "host_drive_used_ratio/sda2",
     }
   ],
@@ -588,7 +604,7 @@ GET = {
   "/repos": REPOS,
   "/volumes": VOLUMES,
   "/host-volumes": HOST_VOLUMES,
-  "/snapshots": SNAPSHOTS,
+  "/backups": BACKUPS,
   "/route-providers": ROUTE_PROVIDERS,
   "/route-providers/web/config-request": PROVIDER_CONFIG,
   "/route-providers/web/routes": PUBLISHED_ROUTES,

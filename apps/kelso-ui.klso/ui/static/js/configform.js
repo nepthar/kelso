@@ -5,10 +5,12 @@
     var controls = form.querySelectorAll("input:not([type=hidden]), select");
     var save = form.querySelector(".cfg-save");
     if (!controls.length || !save) return;
-    var initial = Array.prototype.map.call(controls, function (c) { return c.value; });
+    // A checkbox's value never changes; whether it is checked does.
+    function state(c) { return c.type === "checkbox" ? String(c.checked) : c.value; }
+    var initial = Array.prototype.map.call(controls, state);
     function dirty() {
       var on = Array.prototype.some.call(controls, function (c, i) {
-        return c.value !== initial[i];
+        return state(c) !== initial[i];
       });
       form.classList.toggle("is-dirty", on);
       save.disabled = !on;

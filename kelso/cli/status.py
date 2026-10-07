@@ -33,7 +33,7 @@ def run(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
       _apps(ctx),
       _routes(ctx),
       _volumes(ctx),
-      _snapshots(ctx),
+      _backups(ctx),
       _doctor(ctx),
     ]
   print("\n\n".join(sections))
@@ -109,10 +109,12 @@ def _volumes(ctx: KelsoCtx) -> str:
   return f"Volumes\n{tabulate(rows, headers=headers)}"
 
 
-def _snapshots(ctx: KelsoCtx) -> str:
-  snapshots = views.snapshots_view(ctx)
-  size = sum(snap["bytes"] or 0 for snap in snapshots)
-  return f"Snapshots  {len(snapshots)}, {fmt_size(size)} in total"
+def _backups(ctx: KelsoCtx) -> str:
+  last = ctx.kelso_db.last_backup_run()
+  if last is None:
+    return "Backups    none yet; `kelso backup run` takes one"
+  outcome = f"{len(last['failed'])} failed" if last["failed"] else "ok"
+  return f"Backups    last {last['time']} ({last['reason']}), {outcome}"
 
 
 def _doctor(ctx: KelsoCtx) -> str:

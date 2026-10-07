@@ -5,7 +5,7 @@ from kelso.lib.lifecycle import update
 
 class UpdateJob(Job):
   name = "update"
-  description = "Update an app from its source, snapshotting it first"
+  description = "Update an app from its source, backing it up first"
   required_args = ("app",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:

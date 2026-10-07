@@ -49,7 +49,7 @@ is not competing with either on their terms.
 
 v2 is done when a person with a fresh machine and an agent can say "make me a
 recipe site at recipes.example.com" and end up with a running, published,
-snapshotted app, without opening a terminal themselves and without the agent
+backed-up app, without opening a terminal themselves and without the agent
 guessing at any step.
 
 ### 1. The agent contract
@@ -96,7 +96,7 @@ live.
   a start script. No image to build or host.
 - **Build from the bundle when a runtime is not enough.** A run unit may point at
   a Dockerfile in the bundle instead of an image. The built image is tagged with
-  the bundle's version, so snapshots and rollback still name an exact image.
+  the bundle's version, so backups and rollback still name an exact image.
 - **The dev loop an agent can close.** `kelso dev` already runs a working copy
   with live source. It gains `--json` status and a "healthy at URL" signal, so an
   agent edits, sees it come up or fail, reads the logs, and edits again.
@@ -121,24 +121,24 @@ live.
 ### 4. Updates that roll back
 
 The guarantee: **an update either works, or the whole app is put back exactly as
-it was before the update, from its pre-update snapshot.** There is no separate
-update state or migration engine; snapshots are the mechanism, so they have to
+it was before the update, from its update backup.** There is no separate
+update state or migration engine; backups are the mechanism, so they have to
 be bulletproof.
 
 - **A health gate decides "works".** After loading the new version, `update`
   starts the app and waits for every unit to be healthy (or, with no
   healthcheck, still running after the settle time). Anything else, including a
-  failed load, restores the pre-update snapshot and starts the app again.
-- **Snapshots that can always be restored:**
-  - Refuse to start a snapshot without the disk space for it.
-  - Verify the archive after writing it (it lists, and its files and checksums
-    match) before the update touches anything.
+  failed load, restores the update backup and starts the app again.
+- **Backups that can always be restored:**
+  - Refuse to start a backup without the disk space for it.
+  - Verify the backup after taking it (`restic check` on what it wrote) before
+    the update touches anything.
   - Record the image digests the app ran, and have `cleanup` keep any image a
-    kept snapshot names. Today `cleanup` removes images no *loaded* app uses,
+    kept backup names. Today `cleanup` removes images no *loaded* app uses,
     which can leave a rollback with nothing to roll back to.
   - Restore takes the app back to the recorded digests, not to whatever a tag
     points at now.
-- **Live-tested, not just unit-tested.** Snapshot and restore of real root-owned
+- **Live-tested, not just unit-tested.** Backup and restore of real root-owned
   data is on the release checklist (see [testing](testing.md)), and the rollback
   path is exercised on purpose with a bundle whose new version fails its
   healthcheck.
@@ -195,7 +195,7 @@ What not to do:
 
 - **A container with kelso inside (Docker-in-Docker with nesting).** It needs a
   privileged container, which is root on the host anyway, and it breaks what
-  kelso is built on: volumes that are ordinary host paths, snapshots that read
+  kelso is built on: volumes that are ordinary host paths, backups that read
   them as root, and kelsod starting apps at boot. A Proxmox LXC with nesting
   enabled is different. It is a normal Linux with systemd, so the install script
   and cloud-init file cover it, and the docs should say so.
@@ -213,7 +213,7 @@ An agent cannot fix what nothing reports. Today you find out by opening the
 dashboard.
 
 - **`kelso problems --json`.** One feed of everything wrong now: `doctor`
-  findings, unhealthy apps, a full disk, a failed snapshot or update, kelsod not
+  findings, unhealthy apps, a full disk, a failed backup or update, kelsod not
   running. Each item uses the same `{code, problem, fix}` shape, so an agent can
   be pointed at the box and told "keep it healthy".
 - **A webhook.** One configurable URL, sent each new problem and, optionally,
@@ -244,7 +244,7 @@ only upgrades from 4, refuses: "Upgrade failed while attempting to upgrade to
 version 6: This only supports upgrading from versions >= 4. Please upgrade to an
 intermediate version first."
 
-Going back a version is only ever `restore` from a snapshot, which brings the
+Going back a version is only ever `restore` from a backup, which brings the
 matching data with it. `update` refuses a version older than the data's.
 
 Versions compare as lists of numbers: split on any of `-.|/`, compare left to
@@ -254,7 +254,7 @@ leading numbers, as in `1.0.0-beta`, is not compared.
 
 The version these checks act on is `loaded_version` in the app's config store,
 which every load records: it survives `unload`, goes with `rm --purge`, and
-comes back with a snapshot on `restore`. `kelso dev` runs a working copy and
+comes back with a backup on `restore`. `kelso dev` runs a working copy and
 skips these checks.
 
 A bundle may carry a `migrations.toml`: manifest-level changes to apply between
@@ -264,14 +264,12 @@ supported way to drop a volume: version N moves the data off it, N+1 removes it
 in `migrations.toml`, and N+2 can drop that migration with `upgrade_from = N+1`,
 so every install passed through the version that removed it.
 
-### Off-host snapshots
-Snapshots stay on the box. The key half is done: the master key derives from
-a twelve-word recovery phrase (`kelso system recovery-phrase`), so a fresh
-install given the phrase reads the same secrets. What remains is the backup
-itself: restic against the live data volumes and kelso's state, run from a
-`kelso-backup` app with its own schedule and retention, and a restore that
-starts from the phrase and the bucket. The first backup warns loudly that the
-recovery phrase is the only way to read it, and shows how to see the phrase.
+### Off-host backups
+Backups go to `backups/` in the kelso root, usually a link to another disk or a
+share. The next step is a bucket: restic speaks S3, Backblaze B2 and SFTP with
+the same code, so it is a `[backup]` setting for the repository address and
+its credentials as kelso secrets, and a choice of whether the bucket replaces
+the local repository or `restic copy` mirrors one into the other each night.
 
 ### Restricted network mode
 A mode where a sidecar takes over DNS and proxies all outgoing HTTP and HTTPS,
@@ -307,7 +305,7 @@ the invoking user and cannot touch what the app's containers wrote.
   something in it, `ps` shows the app with blank columns, `inspect` says it is
   neither loaded nor in a catalog, `cmd` and `config` print a validation error,
   `kelso cron` silently drops its jobs, and `kelso update` fails, since its
-  pre-update snapshot reads that manifest. `kelso system doctor` reports it.
+  update backup reads that manifest. `kelso system doctor` reports it.
   Workaround: `kelso load <app>` from a source that parses.
 - **Two kelso roots on one docker daemon see each other's apps.** Compose
   project names and the `kelso.app_id` label are not scoped to a root, so a

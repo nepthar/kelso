@@ -33,9 +33,9 @@ KELSO_DIRS = (
     lambda ctx: ctx.config.repos_root,
   ),
   KelsoDir(
-    "snapshots",
-    "Total size of all application snapshots",
-    lambda ctx: ctx.config.snapshot_root,
+    "backups",
+    "The backup repository: every backup of every app and of kelso",
+    lambda ctx: ctx.config.backups_root,
   ),
   KelsoDir(
     "var",

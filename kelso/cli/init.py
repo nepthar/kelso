@@ -16,6 +16,7 @@ from kelso.lib.config import (
   load_config_file,
 )
 from kelso.lib.doctor import tool_problems
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
 
@@ -64,6 +65,17 @@ url = "github://nepthar/kelso/main/apps"
 #
 # [repo.dev]
 # path = "~/code/bundles"
+
+# Backups: every app's data volumes, its configuration and the bundle it was
+# loaded from, plus kelso's own state, into backups/ next to this file. Point
+# backups/ at another disk by replacing it with a link, as with a volume root;
+# require_mount refuses to back up while that disk is not mounted. Keep is per
+# app, and small on purpose.
+#
+# [backup]
+# schedule      = "0 3 * * *"
+# require_mount = false
+# keep          = { daily = 3, weekly = 2, monthly = 1, manual = 5 }
 
 # Optional: reverse-proxy (or other) providers that publish app routes.
 # Each block is tagged by you ("web", "lan", "homelab", …); `kind` selects
@@ -176,7 +188,31 @@ def register(subparsers) -> None:
     action="store_true",
     help="Skip fetching the default repos; `kelso repo update` gets them later",
   )
+  parser.add_argument(
+    "--with-phrase",
+    action="store_true",
+    help="Read an existing recovery phrase from stdin instead of making one: "
+    "the first step of restoring a kelso from its backups",
+  )
   parser.set_defaults(func=run)
+
+
+RECOVERING = """\
+This kelso uses the recovery phrase you entered, so it can read backups made
+under it. Before restoring, point any volume roots that should live on another
+disk at it -- replace {root}/volumes/<kind> with a link -- and, if the backups
+are where new ones should go too, {root}/backups. Then:
+
+    kelso restore <backups directory>"""
+
+
+def _read_phrase() -> bytes:
+  """Twelve words from stdin, checked before init makes anything."""
+  try:
+    entered = input(f"Recovery phrase ({recovery.WORDS} words): ")
+  except EOFError:
+    raise ValueError("No recovery phrase on stdin; nothing was made") from None
+  return recovery.entropy_from_phrase(entered.split())
 
 
 def _mirror_default_repos(config) -> None:
@@ -188,7 +224,6 @@ def _mirror_default_repos(config) -> None:
   it up later.
   """
   from kelso.lib import repo as repo_lib
-  from kelso.lib.kelso import KelsoCtx
 
   remotes = [r for r in config.repos.values() if r.mirrored]
   if not remotes:
@@ -216,6 +251,8 @@ def run(args: argparse.Namespace, _ctx) -> None:
       "kelso needs these working before it can be set up:\n"
       + "\n".join(f"  {f.subject}: {f.message}" for f in missing)
     )
+  # Before anything is made: a phrase that does not check out stops init here.
+  given = _read_phrase() if args.with_phrase else None
 
   default = Path(os.environ.get("KELSO_ROOT") or DEFAULT_ROOT).expanduser()
   response = "" if args.yes else input(f"Kelso root directory [{default}]: ").strip()
@@ -241,6 +278,10 @@ def run(args: argparse.Namespace, _ctx) -> None:
       kind_root.mkdir(parents=True, exist_ok=True)
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True, exist_ok=True)
+  # Like a volume root: a link made before init is where backups should go.
+  backups = root / "backups"
+  if not backups.is_symlink():
+    backups.mkdir(exist_ok=True)
 
   address = lan_address()
   template = CONFIG_TEMPLATE
@@ -252,12 +293,13 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   # A new root has no secrets, so making its key is all a rekey would do.
   master_key_path = root / CONF_DIR / MASTER_KEYFILE
-  entropy = recovery.new_entropy()
+  entropy = given if given is not None else recovery.new_entropy()
   recovery.write_seed(master_key_path, entropy)
 
   config = load_config_file(config_path)
+  kelso_id = KelsoCtx(config).kelso_db.kelso_id()
 
-  print(f"Initialized kelso root at {root}")
+  print(f"Initialized kelso {kelso_id} at {root}")
   print(f"  config:      {config_path}")
   if address:
     print(f"  address:     {address} (detected; edit kelso_address if it is wrong)")
@@ -267,6 +309,7 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
   print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   print(f"  repos:       {root / 'repos'}")
+  print(f"  backups:     {root / 'backups'}")
   print(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
   print("  volumes:")
   for line in volume_root_lines(config):
@@ -302,8 +345,11 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   # Last, so it is what is on screen when init is done.
   print("")
-  phrase.show(recovery.phrase(entropy))
-  print("`kelso system recovery-phrase` shows it again.")
+  if given is not None:
+    print(RECOVERING.format(root=root))
+  else:
+    phrase.show(recovery.phrase(entropy))
+    print("`kelso system recovery-phrase` shows it again.")
 
   if service.has_systemd():
     print(RESTART)

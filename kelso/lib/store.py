@@ -1,5 +1,6 @@
 import json
 import logging
+import secrets
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -15,6 +16,8 @@ from .logtab import LogTab
 logger = logging.getLogger("kelso.store")
 
 PORT_RANGE_SIZE = 1000
+KELSO_ID_KEY = "system/kelso_id"
+BACKUP_RUN_KEY = "system/backup/last_run"
 
 STORE_MAX_BYTES = 1 * 1024 * 1024
 
@@ -105,6 +108,30 @@ class KelsoStore:
     if port > max_port:
       raise ValueError(f"No free host ports remaining. Limit is {PORT_RANGE_SIZE}")
     return port
+
+  def kelso_id(self) -> str:
+    """This kelso's id: 8 hex characters, made once, never changed by kelso.
+
+    Only ever shown, to tell two kelsos apart -- in backup tags, above all.
+    """
+    found = self._store.read(KELSO_ID_KEY)
+    if isinstance(found, str) and found:
+      return found
+    made = secrets.token_hex(4)
+    self._store.write(KELSO_ID_KEY, made)
+    return made
+
+  def record_backup_run(self, run: dict[str, Any]) -> None:
+    """How a backup run went, so status and doctor need not ask restic. The
+    last one of each reason is kept."""
+    self._store.write(BACKUP_RUN_KEY, run)
+    self._store.write(f"{BACKUP_RUN_KEY}/{run['reason']}", run)
+
+  def last_backup_run(self, reason: str | None = None) -> dict[str, Any] | None:
+    """The last backup run, or the last one for `reason`."""
+    key = BACKUP_RUN_KEY if reason is None else f"{BACKUP_RUN_KEY}/{reason}"
+    found = self._store.read(key)
+    return found if isinstance(found, dict) else None
 
   # Tokens - Ephemeral secrets with expiration, and automatic refresh (session keys, etc.)
   def set_token(self, key: str, value: str, expire_at_epoch_s: int = -1) -> None:
@@ -276,6 +303,15 @@ class AppStore:
     """route name -> provider tag for every assignment on file."""
     raw = self._store.scan("routes/")
     return {name: tag for name, tag in raw.items() if isinstance(tag, str)}
+
+  def set_backup_bulk(self, volume_name: str, on: bool) -> None:
+    """Whether backups include bulk volume `volume_name`. Start never reads
+    this, so it is not a change for a running app to pick up."""
+    self._store.write(f"backup/{volume_name}", on)
+
+  def backed_up_bulk(self) -> set[str]:
+    """The bulk volumes backups include."""
+    return {name for name, on in self._store.scan("backup/").items() if on is True}
 
   def set_meta(self, name: str, value: Any) -> None:
     self._store.write(f"meta/{name}", value)

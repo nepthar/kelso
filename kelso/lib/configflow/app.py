@@ -1,8 +1,9 @@
 """Everything an operator sets on one app, as a ConfigRequest.
 
 That is its `[config]` values, a host volume for each `kind = "host"` volume,
-and a provider for each route. Binds and routes are named `volume.<name>`
-and `route.<name>`, so they cannot collide with a config name, which has no dots.
+a provider for each route, and whether each bulk volume is backed up. Those are
+named `volume.<name>`, `route.<name>` and `backup.<name>`, so they cannot
+collide with a config name, which has no dots.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 
 VOLUME_PREFIX = "volume."
 ROUTE_PREFIX = "route."
+BACKUP_PREFIX = "backup."
+BACKUP_CHOICES = ("on", "off")
 
 
 def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
@@ -70,6 +73,22 @@ def _route_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   ]
 
 
+def _backup_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
+  """Bulk volumes are left out of backups unless turned on, one by one."""
+  on = ctx.app_store(spec.app).backed_up_bulk()
+  return [
+    ConfigField(
+      name=f"{BACKUP_PREFIX}{name}",
+      value="on" if name in on else "off",
+      desc=f"Back up {name}" + (f": {volume.desc}" if volume.desc else ""),
+      required=False,
+      choices=BACKUP_CHOICES,
+    )
+    for name, volume in spec.volumes.items()
+    if volume.kind == "bulk"
+  ]
+
+
 def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
   """What `spec` needs from the operator, with what is on file now."""
   return ConfigRequest(
@@ -78,6 +97,7 @@ def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
       *_config_fields(spec, ctx),
       *_bind_fields(spec, ctx),
       *_route_fields(spec, ctx),
+      *_backup_fields(spec, ctx),
     ),
     note=spec.description,
     config_title="App config",
@@ -112,4 +132,7 @@ def apply_app_config(
       bind(spec, name.removeprefix(VOLUME_PREFIX), value, ctx)
     elif name.startswith(ROUTE_PREFIX):
       assign_route(spec, name.removeprefix(ROUTE_PREFIX), value, ctx)
+    elif name.startswith(BACKUP_PREFIX):
+      volume = name.removeprefix(BACKUP_PREFIX)
+      ctx.app_store(spec.app).set_backup_bulk(volume, value == "on")
   return [name for name, _ in changed]

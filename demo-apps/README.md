@@ -29,6 +29,6 @@ work on it. When you are done, `kelso unload <app>` removes a demo and
 | [demo-volumes](demo-volumes.klso.md) | Volume kinds, and binding a host directory with `--bind` |
 | [demo-routes](demo-routes.klso.md) | Primary, secondary and private routes, and route providers |
 | [demo-cron](demo-cron.klso.md) | `[commands]` and `[cron]`: run by hand, on a schedule, or detached |
-| [demo-snapshot](demo-snapshot.klso.md) | A volume that changes constantly, to take and restore snapshots of |
+| [demo-backup](demo-backup.klso.md) | A volume that changes constantly, to back up and restore |
 | [demo-compose](demo-compose.klso.md) | `[run.<unit>.compose]` for compose options kelso doesn't model |
 | [demo-danger](demo-danger.klso.md) | Compose keys kelso warns about before loading |

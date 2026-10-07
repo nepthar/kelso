@@ -662,7 +662,7 @@ def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):
   kelso_env.run("stop", app_id)
   declined = kelso_env.run("rm", app_id, input="n\n")
   assert declined.returncode == 0, declined.stderr
-  assert "take a snapshot first" in declined.stdout
+  assert "back it up first" in declined.stdout
   assert "Nothing removed" in declined.stdout
   assert (kelso_env.run_root / app_id).is_dir()
 

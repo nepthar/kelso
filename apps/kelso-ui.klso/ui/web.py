@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, NamedTuple
 from urllib.parse import urlencode
 
+import auth
 from api import ApiError, api
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -64,7 +65,7 @@ NAV = (
   NavItem("/", "Dashboard", "home-outline"),
   NavItem("/catalog", "Repos", "book-multiple-outline"),
   NavItem("/volumes", "Volumes", "database-outline"),
-  NavItem("/snapshots", "Snapshots", "camera-outline"),
+  NavItem("/backups", "Backups", "database-export"),
   NavItem("/routes", "Routes", "network-outline"),
   NavItem("/cron", "Cron", "clock-outline"),
   NavItem("/activity", "Activity", "file-document-multiple-outline"),
@@ -129,6 +130,7 @@ templates.globals.update(
   themes=THEMES,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
+  NO_PASSWORD=auth.TESTING_NO_PASSWORD,
   # Mojave's coral: a tab icon has no theme, and this reads on light and dark.
   FAVICON=favicon("dune", "#f08a4b"),
 )

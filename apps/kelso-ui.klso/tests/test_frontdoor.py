@@ -106,3 +106,38 @@ def test_security_headers(anon, path):
   assert "script-src 'self'" in headers["content-security-policy"]
   assert "frame-ancestors 'none'" in headers["content-security-policy"]
   assert headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.parametrize(
+  "value, off",
+  [
+    ("i-swear-im-just-testing-this", True),
+    ("off", False),
+    ("1", False),
+    ("yes", False),
+    ("I-SWEAR-IM-JUST-TESTING-THIS", False),
+  ],
+)
+def test_only_the_whole_phrase_turns_the_password_off(monkeypatch, value, off):
+  import importlib
+
+  import auth
+
+  monkeypatch.setenv("KELSO_UI_NO_PASSWORD", value)
+  try:
+    reloaded = importlib.reload(auth)
+    assert reloaded.TESTING_NO_PASSWORD is off
+    assert reloaded.valid("") is off
+  finally:
+    monkeypatch.delenv("KELSO_UI_NO_PASSWORD")
+    importlib.reload(auth)
+
+
+def test_every_page_says_when_the_password_is_off(client, fake, monkeypatch):
+  import web
+
+  assert "No password" not in client.get("/").text
+  monkeypatch.setitem(web.templates.globals, "NO_PASSWORD", True)
+  text = client.get("/backups").text
+  assert "No password" in text
+  assert "kelso config kelso-ui --set no_password=off" in text

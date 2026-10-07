@@ -19,7 +19,7 @@ PAGES = [
   "/catalog",
   "/catalog?app=kelso-ui",
   "/volumes",
-  "/snapshots",
+  "/backups",
   "/routes",
   "/routes/web",
   "/routes/fresh?kind=pangolin",
@@ -290,9 +290,25 @@ def test_volume_disks_split_the_disk_into_volume_other_and_free(client, fake):
   assert "path is missing" in bulk
 
 
-def test_snapshots_page_totals_every_archive(client, fake):
-  # 4851 B plus one archive with no size, which counts as nothing.
-  assert "Application snapshots · 4.7 KB in total" in client.get("/snapshots").text
+def test_backups_page_shows_the_last_run_and_each_backup(client, fake):
+  text = client.get("/backups").text
+  assert "/mnt/nas/kelso" in text
+  assert "3 daily, 2 weekly, 1 monthly, 5 manual" in text
+  assert "1 failed" in text
+  rows = text.split("<tbody>")[-1].split("<tr>")[1:]
+  assert len(rows) == 2
+  assert '"backup": "20260923-030000"' in rows[0] or "20260923-030000" in rows[0]
+
+
+def test_backups_page_says_why_they_cannot_run(client, fake, monkeypatch):
+  from fakekelsod import BACKUPS, GET
+
+  monkeypatch.setitem(
+    GET, "/backups", {**BACKUPS, "problem": "backups/ links to nothing"}
+  )
+  text = client.get("/backups").text
+  assert "Backups cannot run" in text
+  assert "backups/ links to nothing" in text
 
 
 def test_a_detached_run_says_why(client, fake):
@@ -304,8 +320,8 @@ def test_a_detached_run_says_why(client, fake):
 
 def test_activity_says_who_started_each_run(client, fake):
   rows = client.get("/activity").text.split("<tr>")
-  snapshot = next(row for row in rows if ">snapshot<" in row)
-  assert ">kelso_ui<" in snapshot
+  backup = next(row for row in rows if ">backup<" in row)
+  assert ">kelso_ui<" in backup
   # Recorded before `started_by` existed.
   older = next(row for row in rows if ">repo-update<" in row)
   assert ">—<" in older
@@ -371,7 +387,7 @@ def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
   # Named by where it is mounted; the device, often unreadable, on hover.
   assert ">Disk /<" in disk and 'title="/dev/sda2"' in disk
   assert "2.0 TB" in disk and "42%" in disk
-  assert "bulk, snapshots, &lt;i" in disk
+  assert "bulk, backups, &lt;i" in disk
   assert "<option disabled>1 day</option>" in text
 
 
@@ -426,3 +442,12 @@ def test_app_page_asks_for_a_restart_only_while_running(client, fake, monkeypatc
   monkeypatch.setitem(GET, "/apps/kelso-ui", stopped)
   text = client.get("/apps/kelso-ui").text
   assert notice not in text
+
+
+def test_a_bulk_volume_backup_is_a_checkbox(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  row = next(r for r in text.split("<tr>") if "backup.movies" in r)
+  # Unchecked posts the hidden "off" alone; checked posts "on" after it.
+  assert row.index('type="hidden" name="set.backup.movies" value="off"') < row.index(
+    'type="checkbox" name="set.backup.movies" value="on" checked'
+  )

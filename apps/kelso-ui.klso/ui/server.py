@@ -12,6 +12,7 @@ from frontdoor import front_door
 from pages import (
   activity,
   apps,
+  backups,
   catalog,
   console,
   cron,
@@ -19,7 +20,6 @@ from pages import (
   jobs,
   routes,
   session,
-  snapshots,
   volumes,
 )
 from web import STATIC, api_error, render
@@ -37,7 +37,7 @@ for feature in (
   console,
   catalog,
   volumes,
-  snapshots,
+  backups,
   routes,
   cron,
   activity,

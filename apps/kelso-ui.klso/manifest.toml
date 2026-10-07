@@ -11,6 +11,9 @@ api_address = { default = "", desc = "host:port of kelsod, instead of the admin 
 admin_pass  = { secret = true, desc = "password for the web ui" }
 
 [adv_config]
+# Testing only: exactly "i-swear-im-just-testing-this" turns the password off
+# for anyone who can reach the page. Any other value leaves it on.
+no_password = { default = "off", desc = "Testing only: i-swear-im-just-testing-this turns the password off" }
 subdomain   = { default = "kelso" }
 instance_id = { secret = true, default = "{hex:4}", desc = "Shown beside the hostname, to tell kelso-ui installs apart" }
 
@@ -36,6 +39,7 @@ healthcheck = ["python", "-c", "import socket; socket.create_connection(('localh
 KELSO_SOCKET            = "${conn.admin.socket}"
 KELSO_API               = "${api_address}"
 ADMIN_PASSWORD           = "${admin_pass}"
+KELSO_UI_NO_PASSWORD     = "${no_password}"
 KELSO_UI_ID              = "${instance_id}"
 TLS_DOMAIN               = "${klso.domain}"
 PORT                     = "8080"

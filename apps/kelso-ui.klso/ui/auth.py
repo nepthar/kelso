@@ -13,11 +13,25 @@ PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
 
 # For running the UI on a dev machine. The manifest fixes the container's env,
 # so a deployed kelso-ui cannot be switched into this through `kelso config`.
-NO_AUTH = os.environ.get("KELSO_UI_NO_AUTH") == "1"
+DEV_NO_AUTH = os.environ.get("KELSO_UI_NO_AUTH") == "1"
 
-if NO_AUTH:
+# For a deployed kelso-ui on a machine that exists to be tested: the
+# `no_password` config turns the password off only when it is exactly this.
+# Long and silly on purpose, so nobody sets it by accident or out of habit.
+NO_PASSWORD_PHRASE = "i-swear-im-just-testing-this"
+TESTING_NO_PASSWORD = os.environ.get("KELSO_UI_NO_PASSWORD") == NO_PASSWORD_PHRASE
+
+NO_AUTH = DEV_NO_AUTH or TESTING_NO_PASSWORD
+
+if DEV_NO_AUTH:
   print(
     "kelso-ui: KELSO_UI_NO_AUTH=1 -- every request is signed in. Dev only.",
+    file=sys.stderr,
+  )
+elif TESTING_NO_PASSWORD:
+  print(
+    "kelso-ui: no_password is set -- anyone who can reach this page is signed "
+    "in. For testing only.",
     file=sys.stderr,
   )
 elif not PASSWORD:

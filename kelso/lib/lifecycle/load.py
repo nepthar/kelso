@@ -445,7 +445,7 @@ def _refuse_version_change(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
   if loaded is not None and loaded.version != spec.version:
     raise ValueError(
       f"App {app} is loaded at version {loaded.version}, and this would load "
-      f"{spec.version}. Run `kelso update {app}`, which snapshots it first."
+      f"{spec.version}. Run `kelso update {app}`, which backs it up first."
     )
 
 
@@ -497,7 +497,7 @@ def load(
     raise ValueError(
       f"App {app} has volume data but no config at {config_path}. "
       f"Loading would generate new secrets that its existing data does not "
-      f"expect. Restore from a snapshot, or run "
+      f"expect. Restore it from a backup, or run "
       f"`kelso rm --purge {app}` to delete its config and data together."
     )
 

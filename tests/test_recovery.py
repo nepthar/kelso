@@ -2,11 +2,7 @@
 
 import base64
 import hashlib
-import importlib
 import json
-import shutil
-import tarfile
-from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
@@ -14,13 +10,9 @@ from cryptography.fernet import Fernet, InvalidToken
 from kelso.lib import logtab, recovery
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.snapshot import snapshot_archive
 from kelso.lib.logtab import LogTab
 from tests.conftest import TEST_SEED
-from tests.test_restore import _snapshot
-
-# The package exports a `snapshot` function that hides the module's name.
-snapshot_lifecycle = importlib.import_module("kelso.lib.lifecycle.snapshot")
+from tests.test_backup import _back_up, _backups
 
 BASIC = "io.p2net.basic-features"
 OLD_KEY = recovery.master_key_from(TEST_SEED)
@@ -151,37 +143,42 @@ def test_rekey_can_adopt_a_phrase_you_already_have(kelso_env):
   assert _ctx(kelso_env).config.master_key == recovery.master_key_from(NEW_SEED)
 
 
-def _ticking_clock(monkeypatch) -> None:
-  """Each timestamp a second after the last. Logtab timestamps are to the
-  second, and restore reads the key file as of the snapshot's."""
-  # From the real now, so it follows what the fixture already wrote.
-  now = datetime.now(UTC).replace(microsecond=0)
-
-  def tick() -> str:
-    nonlocal now
-    now += timedelta(seconds=1)
-    return now.isoformat().replace("+00:00", "Z")
-
-  monkeypatch.setattr(logtab, "now_ts", tick)
-  monkeypatch.setattr(snapshot_lifecycle, "now_ts", tick)
-
-
-def test_a_snapshot_from_before_a_rekey_restores(kelso_env, monkeypatch):
-  _ticking_clock(monkeypatch)
+def test_a_backup_from_before_a_rekey_restores(kelso_env, monkeypatch, backup_clock):
+  # Restore reads the key file as of the backup's time, so the key file has to
+  # be written on the same clock.
+  monkeypatch.setattr(logtab, "now_ts", backup_clock.stamp)
   assert kelso_env.run("load", BASIC).returncode == 0
   _, admin_pass = _ctx(kelso_env).app_store(BASIC).get_config("admin_pass")
-  name = _snapshot(kelso_env, BASIC, "before")
+  backup_id = _back_up(kelso_env, BASIC)
 
   _fix_phrase(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey").returncode == 0
+  rekeyed = kelso_env.run("system", "rekey")
+  assert rekeyed.returncode == 0, rekeyed.stderr
+  # The repository moved to the password the new phrase derives.
+  assert [b.id for b in _backups(kelso_env, BASIC)] == [backup_id]
 
-  restored = kelso_env.run("snapshot", "restore", BASIC, name, "-y")
+  restored = kelso_env.run("restore", BASIC, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
   ctx = _ctx(kelso_env)
   assert ctx.app_store(BASIC).get_config("admin_pass") == (True, admin_pass)
   # And restoring appended it under the current key.
   latest = _secret_blobs(ctx.config.app_config_path(BASIC))[-1]
   _fernet(recovery.master_key_from(NEW_SEED)).decrypt(latest.encode())
+
+
+def test_rekey_refuses_while_the_backup_disk_is_missing(
+  kelso_env, tmp_path, monkeypatch
+):
+  backups = kelso_env.root / "backups"
+  if backups.exists():
+    backups.rmdir()
+  backups.symlink_to(tmp_path / "gone")
+  before = kelso_env.master_keyfile.read_text()
+  _fix_phrase(monkeypatch, NEW_SEED)
+  refused = kelso_env.run("system", "rekey")
+  assert refused.returncode == 1
+  assert "Nothing changed" in refused.stderr
+  assert kelso_env.master_keyfile.read_text() == before
 
 
 # --- showing the phrase -----------------------------------------
@@ -278,24 +275,3 @@ def test_each_real_change_records_its_kind(tmp_path, change, kind):
   change(store)
   pending = changes_since_start(path)
   assert getattr(pending, kind)
-
-
-def test_a_snapshot_that_does_not_say_when_it_was_taken_is_refused(kelso_env):
-  assert kelso_env.run("load", BASIC).returncode == 0
-  name = _snapshot(kelso_env, BASIC, "undated")
-  root = _ctx(kelso_env).config.snapshot_root
-  archive = snapshot_archive(root, BASIC, name)
-
-  # Rebuild the archive without its `taken_at` line.
-  with tarfile.open(archive) as tar:
-    tar.extractall(archive.parent, filter="data")
-  inner = archive.parent / name / "snapshot.toml"
-  lines = inner.read_text().splitlines()
-  inner.write_text("\n".join(x for x in lines if not x.startswith("taken_at")) + "\n")
-  with tarfile.open(archive, "w:gz") as tar:
-    tar.add(archive.parent / name, arcname=name)
-  shutil.rmtree(archive.parent / name)
-
-  restored = kelso_env.run("snapshot", "restore", BASIC, name, "-y")
-  assert restored.returncode != 0
-  assert "when it was taken" in restored.stderr

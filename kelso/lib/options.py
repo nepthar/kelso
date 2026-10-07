@@ -78,12 +78,6 @@ APP_OPTIONS: dict[str, AppOption] = {
       lambda app: "6",
       _int_between(0, 9),
     ),
-    AppOption(
-      "snapshot_max_count",
-      "How many snapshots to keep; 0 keeps them all",
-      lambda app: "0",
-      _int_between(0, None),
-    ),
   )
 }
 

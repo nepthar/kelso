@@ -569,135 +569,59 @@ def test_cmd_verb_reports_an_unknown_command(kelso_env, client):
   assert "nope" in response.json()["error"]
 
 
-def test_snapshots_empty_when_none_taken(kelso_env, client):
-  assert client.get("/snapshots").json() == {"snapshots": []}
+def test_backups_before_any_are_taken(kelso_env, client):
+  body = client.get("/backups").json()
+  assert body["backups"] == []
+  assert body["last_run"] is None
+  assert body["schedule"] == "0 3 * * *"
+  assert body["keep"] == {"daily": 3, "weekly": 2, "monthly": 1, "manual": 5}
+  assert len(body["kelso_id"]) == 8
 
 
-def test_snapshots_lists_archives_newest_first(kelso_env, client):
-  snap = kelso_env.root / "snapshots" / "ports-demo"
-  snap.mkdir(parents=True)
-  (snap / "2020-01-01_00-00Z_old.tar.gz").write_bytes(b"x")
-  (snap / "2024-06-15_12-00Z.tar.gz").write_bytes(b"z")
-  (snap / "2026-01-01_00-00Z_new.tar.gz").write_bytes(b"y")
-  (snap / "2026-01-01_00-00Z_new.toml").write_text('app_version = "1.2"\n')
-  body = client.get("/snapshots").json()["snapshots"]
-  assert body == [
-    {
-      "app_id": "ports-demo",
-      "name": "2026-01-01_00-00Z_new",
-      "taken_at": "2026-01-01T00:00:00Z",
-      "tag": "new",
-      "app_version": "1.2",
-      "bytes": 1,
-    },
-    {
-      "app_id": "ports-demo",
-      "name": "2024-06-15_12-00Z",
-      "taken_at": "2024-06-15T12:00:00Z",
-      "tag": "",
-      "app_version": None,
-      "bytes": 1,
-    },
-    {
-      "app_id": "ports-demo",
-      "name": "2020-01-01_00-00Z_old",
-      "taken_at": "2020-01-01T00:00:00Z",
-      "tag": "old",
-      "app_version": None,
-      "bytes": 1,
-    },
-  ]
+def test_backups_lists_each_app_backup_newest_first(kelso_env, client, jobs):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  job = submit(client, jobs, "backup", {"app": "ports-demo"})
+  assert job["state"] == "done", job["error"]
+  body = client.get("/backups").json()
+  [row] = body["backups"]
+  assert row["app_id"] == "ports-demo"
+  assert row["reason"] == "manual"
+  assert row["bulk"] is False
+  assert body["last_run"]["backed_up"] == ["ports-demo"]
+
+
+def test_a_destination_that_is_not_there_is_reported(kelso_env, client, tmp_path):
+  backups = kelso_env.root / "backups"
+  if backups.exists():
+    backups.rmdir()
+  backups.symlink_to(tmp_path / "gone")
+  body = client.get("/backups").json()
+  assert "not there" in body["problem"]
 
 
 def test_restore_verb(kelso_env, client, jobs):
   assert kelso_env.run("load", "ports-demo").returncode == 0
-  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "back")
+  taken = kelso_env.run("backup", "run", "ports-demo")
   assert taken.returncode == 0, taken.stderr
-  name = Path(taken.stdout.split("written to ")[1].strip()).name.removesuffix(".tar.gz")
-  job = submit(client, jobs, "restore", {"app": "ports-demo", "snapshot": name})
+  backup_id = taken.stdout.split("Backup ")[1].split()[0]
+  job = submit(client, jobs, "restore", {"app": "ports-demo", "backup": backup_id})
   assert job["state"] == "done", job["error"]
   assert "Restored" in read_log(job)
 
 
-def test_restore_unknown_snapshot_is_refused(kelso_env, client):
-  snap = kelso_env.root / "snapshots" / "ports-demo"
-  snap.mkdir(parents=True)
-  (snap / "2026-01-01_00-00Z_real.tar.gz").write_bytes(b"x")
+def test_restore_unknown_backup_is_refused(kelso_env, client):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  assert kelso_env.run("backup", "run", "ports-demo").returncode == 0
   response = client.post(
     "/jobs",
     json={
       "verb": "restore",
-      "args": {"app": "ports-demo", "snapshot": "nope"},
+      "args": {"app": "ports-demo", "backup": "nope"},
       "started_by": BY,
     },
   )
   assert response.status_code == 400
-  assert "No snapshot nope" in response.json()["error"]
-
-
-def test_restore_unknown_app_is_refused(kelso_env, client):
-  response = client.post(
-    "/jobs",
-    json={
-      "verb": "restore",
-      "args": {"app": "never-snapshotted", "snapshot": "x"},
-      "started_by": BY,
-    },
-  )
-  assert response.status_code == 400
-  assert "No snapshots found" in response.json()["error"]
-
-
-def test_snapshot_delete_removes_one_archive(kelso_env, client, jobs):
-  snap = kelso_env.root / "snapshots" / "ports-demo"
-  snap.mkdir(parents=True)
-  keep = snap / "2026-01-01_00-00Z_keep.tar.gz"
-  drop = snap / "2026-01-02_00-00Z_drop.tar.gz"
-  keep.write_bytes(b"x")
-  drop.write_bytes(b"y")
-  job = submit(
-    client,
-    jobs,
-    "snapshot-delete",
-    {"app": "ports-demo", "snapshot": "2026-01-02_00-00Z_drop"},
-  )
-  assert job["state"] == "done", job["error"]
-  assert "Deleted snapshot" in read_log(job)
-  assert keep.is_file()
-  assert not drop.exists()
-  names = [row["name"] for row in client.get("/snapshots").json()["snapshots"]]
-  assert names == ["2026-01-01_00-00Z_keep"]
-
-
-def test_snapshot_delete_removes_an_empty_app_directory(kelso_env, client, jobs):
-  snap = kelso_env.root / "snapshots" / "ports-demo"
-  snap.mkdir(parents=True)
-  (snap / "2026-01-01_00-00Z.tar.gz").write_bytes(b"x")
-  job = submit(
-    client,
-    jobs,
-    "snapshot-delete",
-    {"app": "ports-demo", "snapshot": "2026-01-01_00-00Z"},
-  )
-  assert job["state"] == "done", job["error"]
-  assert not snap.exists()
-
-
-def test_snapshot_delete_unknown_snapshot_is_refused(kelso_env, client):
-  snap = kelso_env.root / "snapshots" / "ports-demo"
-  snap.mkdir(parents=True)
-  (snap / "2026-01-01_00-00Z_real.tar.gz").write_bytes(b"x")
-  response = client.post(
-    "/jobs",
-    json={
-      "verb": "snapshot-delete",
-      "args": {"app": "ports-demo", "snapshot": "nope"},
-      "started_by": BY,
-    },
-  )
-  assert response.status_code == 400
-  assert "No snapshot nope" in response.json()["error"]
-  assert (snap / "2026-01-01_00-00Z_real.tar.gz").is_file()
+  assert "No backup nope" in response.json()["error"]
 
 
 @pytest.mark.parametrize(
@@ -758,7 +682,7 @@ def test_openapi_documents_the_surface(kelso_env, client):
     "/catalog",
     "/jobs",
     "/jobs/{job_id}",
-    "/snapshots",
+    "/backups",
   } <= set(paths)
   assert "post" in paths["/jobs"]
 
@@ -860,7 +784,7 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
   assert volumes["config"]["bytes"] is None
   # The set of directories is kelsod's to name; the UI renders what it sends.
   dirs = {d["name"]: d for d in body["kelso_dirs"]}
-  assert set(dirs) == {"repos", "snapshots", "var"}
+  assert set(dirs) == {"repos", "backups", "var"}
   assert all(d["description"] for d in dirs.values())
   assert all(d["bytes"] is None for d in dirs.values())
 
@@ -1323,3 +1247,13 @@ def test_kelso_ui_expects_the_api_version_kelsod_speaks():
   web = Path(__file__).parent.parent / "apps" / "kelso-ui.klso" / "ui" / "web.py"
   needs = re.search(r"^NEEDS_API = (\d+)$", web.read_text(), re.M)
   assert needs and int(needs[1]) == API_VERSION
+
+
+def test_the_scheduled_backup_backs_up_everything(kelso_env, client, jobs):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  job = submit(client, jobs, "scheduled-backup", {})
+  assert job["state"] == "done", job["error"]
+  last = client.get("/backups").json()["last_run"]
+  assert last["reason"] == "scheduled"
+  assert last["everything"] is True
+  assert last["backed_up"] == ["ports-demo"]

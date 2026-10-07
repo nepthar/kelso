@@ -173,7 +173,7 @@ def test_logs_does_not_hold_the_kelso_lock(kelso_env):
 
 
 def test_an_app_lock_does_not_block_another_app(kelso_env):
-  """The point of per-app locks: snapshotting A must not stall start B."""
+  """The point of per-app locks: backing up A must not stall start B."""
   assert kelso_env.run("load", "ports-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("ports-demo"))
   with lock:
@@ -194,21 +194,22 @@ def test_ps_does_not_need_the_app_lock(kelso_env):
   assert "locked" not in listed.stderr
 
 
-def test_snapshot_releases_kelso_while_copying(kelso_env, monkeypatch):
-  """Other apps can take the kelso lock during the volume copy."""
-  import importlib
-
-  snapshot_mod = importlib.import_module("kelso.lib.lifecycle.snapshot")
+def test_a_backup_releases_kelso_while_restic_reads(kelso_env, monkeypatch):
+  """Other apps can take the kelso lock while one app's volumes are read."""
+  from kelso.lib.restic import Restic
 
   assert kelso_env.run("load", "ports-demo").returncode == 0
-  original = snapshot_mod.snapshot
+  original = Restic.backup
+  checked = []
 
-  def during_copy(app, ctx, label=""):
-    lock = FileLock(ctx.config.kelso_lockfile_path)
+  def during_read(self, sources, tags, *, what):
+    lock = FileLock(kelso_env.kelso_lockfile_path)
     lock.acquire(timeout=0)
     lock.release()
-    return original(app, ctx, label=label)
+    checked.append(tags.get("app"))
+    return original(self, sources, tags, what=what)
 
-  monkeypatch.setattr(snapshot_mod, "snapshot", during_copy)
-  taken = kelso_env.run("snapshot", "take", "ports-demo", "--label", "copy")
+  monkeypatch.setattr(Restic, "backup", during_read)
+  taken = kelso_env.run("backup", "run", "ports-demo")
   assert taken.returncode == 0, taken.stderr
+  assert checked == ["ports-demo"]

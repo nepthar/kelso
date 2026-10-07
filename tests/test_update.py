@@ -1,4 +1,4 @@
-"""`kelso update`: pull, stop, snapshot, re-load from the source, start again."""
+"""`kelso update`: pull, stop, back up, re-load from the source, start again."""
 
 import json
 
@@ -25,7 +25,7 @@ def docker_calls(kelso_env) -> list[list[str]]:
   return [json.loads(line)["args"] for line in lines]
 
 
-def test_update_pulls_first_then_snapshots_and_restarts(kelso_env):
+def test_update_pulls_first_then_backs_up_and_restarts(kelso_env):
   write_bundle(kelso_env, "1.0")
   assert kelso_env.run("start", APP).returncode == 0
   write_bundle(kelso_env, "1.1", tag="3.20")
@@ -42,11 +42,30 @@ def test_update_pulls_first_then_snapshots_and_restarts(kelso_env):
   assert pull < down
   assert calls[-1][:3] == ["compose", "up", "-d"]
 
-  listed = kelso_env.run("snapshot", "list", APP).stdout.splitlines()
+  listed = kelso_env.run("backup", "list", APP).stdout.splitlines()
   (row,) = [line.split() for line in listed[2:]]
-  assert row[0].endswith("_pre-update")
-  assert row[1] == "1.0"
+  assert row[2:4] == ["1.0", "update"]
+  assert f"backup {row[0]} holds the version it replaced" in updated.stdout
   assert kelso_env.run("ps").stdout.count("available") == 0
+
+
+def test_update_keeps_one_update_backup(kelso_env):
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("load", APP).returncode == 0
+  for version in ("1.1", "1.2"):
+    write_bundle(kelso_env, version)
+    assert kelso_env.run("update", APP, "-y").returncode == 0
+  listed = kelso_env.run("backup", "list", APP).stdout.splitlines()
+  assert [line.split()[2] for line in listed[2:]] == ["1.1"]
+
+
+def test_update_no_backup_skips_it(kelso_env):
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("load", APP).returncode == 0
+  write_bundle(kelso_env, "1.1")
+  updated = kelso_env.run("update", APP, "-y", "--no-backup")
+  assert updated.returncode == 0, updated.stderr
+  assert "holds the version" not in updated.stdout
 
 
 def test_update_refuses_a_source_that_no_longer_parses(kelso_env):
@@ -57,6 +76,15 @@ def test_update_refuses_a_source_that_no_longer_parses(kelso_env):
   refused = kelso_env.run("update", APP)
   assert refused.returncode == 1
   assert "Nothing changed" in refused.stderr
-  assert not (kelso_env.root / "snapshots" / APP).exists()
+  assert not (kelso_env.root / "backups" / "config").exists()
   assert not any(c[:2] == ["compose", "down"] for c in docker_calls(kelso_env))
   assert "invalid" in kelso_env.run("repo", "list").stdout
+
+
+def test_an_update_to_the_same_version_says_it_reloaded(kelso_env):
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("load", APP).returncode == 0
+  write_bundle(kelso_env, "1.0", tag="3.20")
+  updated = kelso_env.run("update", APP, "-y")
+  assert updated.returncode == 0, updated.stderr
+  assert "Reloaded upd-app at 1.0: its source changed without a new" in updated.stdout

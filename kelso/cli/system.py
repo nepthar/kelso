@@ -8,6 +8,7 @@ from kelso.cli.kv import parse_kv
 from kelso.lib import recovery
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.recover import held_apps, purge
 from kelso.lib.rekey import rekey
 
 
@@ -50,7 +51,7 @@ def register(subparsers) -> None:
     help="Make a new recovery phrase and re-encrypt every secret under it",
     description="Makes a new recovery phrase, re-encrypts every app secret and "
     "system secret under the key it derives, and shows the phrase. "
-    "The old key is kept, to read snapshots taken under it. Rekeying does not "
+    "The old key is kept, to read backups taken under it. Rekeying does not "
     "undo an exposed key: whoever had it could already read every secret, so "
     "change the secrets themselves too.",
   )
@@ -60,6 +61,17 @@ def register(subparsers) -> None:
     help="Enter an existing recovery phrase instead of making a new one",
   )
   rekey.set_defaults(func=run_rekey, activity="rekey")
+
+  purge_cmd = sub.add_parser(
+    "purge",
+    help="Delete every app, its data and config, so kelso can be restored",
+    description="Stops and purges every app: its loaded copy, config, secrets, "
+    "volumes and routes, as `kelso rm --purge` does for one. Leaves config.toml, "
+    "the recovery phrase, repos, backups/ and the volume roots -- links "
+    "included -- as they are, so `kelso restore <backups directory>` can follow.",
+  )
+  purge_cmd.add_argument("-y", "--yes", action="store_true", help="Do not ask first")
+  purge_cmd.set_defaults(func=run_purge, activity="purge")
 
   phrase_cmd = sub.add_parser(
     "recovery-phrase", help="Show this kelso's recovery phrase"
@@ -195,6 +207,31 @@ def run_rekey(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       f"{len(result.unreadable)} value(s) could not be decrypted with any key on "
       "file and were left as they were. Set them again with `kelso config`."
     )
+
+
+def run_purge(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  apps = held_apps(ctx)
+  if not apps:
+    print("No apps to purge; kelso is ready to restore into.")
+    return
+  if not args.yes:
+    last = ctx.kelso_db.last_backup_run()
+    print(f"This permanently deletes {len(apps)} app(s), with their data and config:")
+    for app in apps:
+      print(f"  {app}")
+    print(
+      f"The last backup ran {last['time']}." if last else "Kelso has never backed up."
+    )
+    try:
+      answer = input("Type purge to delete them: ")
+    except EOFError:
+      answer = ""
+    if answer.strip() != "purge":
+      print("Nothing purged.")
+      return
+  for app in purge(ctx):
+    print(f"Purged {app}")
+  print("Kelso holds no apps now; `kelso restore <backups directory>` can follow.")
 
 
 def run_recovery_phrase(args: argparse.Namespace, ctx: KelsoCtx) -> None:

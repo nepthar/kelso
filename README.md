@@ -2,14 +2,14 @@
 
 **A declarative selfhosting platform for managing and distributing apps.**
 
-Kelso is a self-hosting management system where apps are packages that describe *what* they need rather than *how* they get it. This, combined with a small amount of one time configuration allows for easy distribution, secrets, management, and snapshotting of self-hosted apps.
+Kelso is a self-hosting management system where apps are packages that describe *what* they need rather than *how* they get it. This, combined with a small amount of one time configuration allows for easy distribution, secrets, management, and backups of self-hosted apps.
 
 ![The kelso web UI: host resources and loaded apps](docs/images/kelso-ui.jpg)
 
 - **Configure your system layout once, load any app.** Kelso uses the system layout you specify along with each app's manifest to talior each app to your hardware.
 - **No vendor lock-in by design.** Under the hood, each app is a docker compose project. If you erase `kelso` from your system, you'll still have an organized, functional folder tree of docker compose stacks that you can directly interact with. Try it!
-- **Comprehensive snapshot and rollback** `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again, so what you get back is a coherent point in time. If your app doesn't require 100% uptime 24/7, you can confidentaly snapshot your app in a frozen state.
 - **LLMs can build and deploy apps in minutes** Kelso is uncomplicated and well documented. LLMs have no trouble reading the docs and creating deployment-ready, custom applications for you.
+- **Backup and restore easily** `kelso backup run <app>` stops the app, backs up data + configuration and loaded copy together, and starts it again. If your app doesn't require 100% uptime, you can confidently back up/restore from a perfect frozen state.
 
 ## How does it work?
 Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
@@ -55,10 +55,10 @@ Manifests are small enough to be digested in a few seconds. For a full, function
 
 ## What Kelso provides
 
-- **A web UI.** Host resources, loaded apps, volumes, snapshots, routes, cron and activity, served by the [kelso-ui](apps/kelso-ui.klso) app over kelsod's admin socket.
+- **A web UI.** Host resources, loaded apps, volumes, backups, routes, cron and activity, served by the [kelso-ui](apps/kelso-ui.klso) app over kelsod's admin socket.
 - **Secrets.** Declared in the manifest, generated on load, stored encrypted. No hidden `.env` files.
 - **Volumes.** Each app specifies what class of storage it needs: normal data, bulk data, logs, and temp.
-- **Snapshots.** Whole-app archives of volumes and run state, taken at a coherent point in time, restored the same way.
+- **Backups.** Nightly, deduplicated and encrypted, into `backups/` or wherever you link it. Each app is backed up at a coherent point in time and restored the same way; only your recovery phrase can read them. See [volumes](docs/volumes.md) for what is included.
 - **Cron.** Scheduled commands inside an app, run by kelsod.
 - **Routes.** Expose an app's ports through Cloudflare Tunnel, Nginx Proxy Manager or Pangolin.
 - **App repos.** A repo is a folder of bundles pushed to git. `kelso repo add` makes every app in it a `kelso start` away.
@@ -110,8 +110,8 @@ Once you start using docker compose to run your own apps, you end up managing ea
 - **Other solutions exist, but require you to be a sysadmin.**
 Kelso is simple to reason about. It is mostly just a bunch of folders and text files.
 
-- **Snapshotting containers SHOULD be trivial in 2026, but is not.**
-Since kelso is designed for a single machine you own, it assumes that a few seconds of downtime is an acceptable price for a snapshot you can actually trust. `kelso snapshot take <app>` stops the app, archives its volumes and run state together, and starts it again if it was running — so what you get back is a coherent point in time rather than a copy of files that were being written to. Restoring is the same trade in reverse.
+- **Backing up containers SHOULD be trivial in 2026, but is not.**
+Since kelso is designed for a single machine you own, it assumes that a few seconds of downtime is an acceptable price for a backup you can actually trust. `kelso backup run <app>` stops the app, backs up its volumes, configuration and loaded copy together, and starts it again if it was running — so what you get back is a coherent point in time rather than a copy of files that were being written to. Restoring is the same trade in reverse.
 
 There are GUI options like Portainer and Dockge that help manage containers and stacks, but they basically wrap the problems above in a shiny UI rather than solve them.
 
@@ -126,6 +126,7 @@ You may not want to use kelso if:
 
 - [Installing kelso](docs/install.md): prerequisites, upgrading, uninstalling, volume locations
 - The anatomy of a kelso app [manifest](docs/manifest.md)
+- [Volumes](docs/volumes.md): the kinds, and which are backed up
 - A [case study](docs/case_study.md): building one from scratch
 - Our current [roadmap](docs/roadmap.md), with known issues and the todo list
 - How the [test suite](docs/testing.md) is put together

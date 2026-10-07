@@ -1,21 +1,21 @@
-# Snapshot Demo
+# Backup Demo
 
-For exercising `kelso snapshot` and `kelso snapshot restore`. The app appends a
+For exercising `kelso backup run` and `kelso backup restore`. The app appends a
 timestamp to a data volume every 30s and serves the log back. Restore, and
-the tick log visibly jumps back to what the snapshot held.
+the tick log visibly jumps back to what the backup held.
 
 ```toml klso_path="manifest.toml"
 [app]
-version      = "0.1.0"
-display_name = "Snapshot Demo"
+version      = "0.2.0"
+display_name = "Backup Demo"
 description  = "Appends a timestamp to a data volume every 30s and serves it back"
 
 [config]
-label = { desc = "Anything you like. Echoed back by the endpoint, and captured in snapshots along with the rest of the config." }
+label = { desc = "Anything you like. Echoed back by the endpoint, and captured in backups along with the rest of the config." }
 
 [volumes]
 script = { kind = "app", src = "app.py" }
-state  = { kind = "data", desc = "The tick log. This is the volume snapshots capture and restore." }
+state  = { kind = "data", desc = "The tick log. This is the volume backups capture and restore." }
 
 [run.main]
 image   = "python:3.12"
@@ -39,7 +39,7 @@ The server: `GET /` for a text summary, `GET /state` for JSON.
 ```python klso_path="app.py"
 #!/usr/bin/env python3
 """
-snapshot-demo — state that visibly moves, so you can watch a restore undo it.
+backup-demo — state that visibly moves, so you can watch a restore undo it.
 
 A background thread appends one UTC timestamp per line to $STATE_DIR/ticks.log
 every TICK_SECONDS. The endpoint reads that file back:
@@ -48,8 +48,8 @@ every TICK_SECONDS. The endpoint reads that file back:
   GET /state  the same thing as JSON
 
 Nothing is cached in memory, so what you read is what is on the volume right
-now. Snapshot the app, let it tick a few more times, restore, and the tick
-count and last timestamp both jump back to where the snapshot left them.
+now. Back the app up, let it tick a few more times, restore, and the tick
+count and last timestamp both jump back to where the backup left them.
 
 Config via environment:
   LABEL           the configured value, echoed back (required)
@@ -152,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
   if not LABEL:
-    sys.exit("LABEL is not set; run `kelso config demo-snapshot --set label=...`")
+    sys.exit("LABEL is not set; run `kelso config demo-backup --set label=...`")
 
   STATE_DIR.mkdir(parents=True, exist_ok=True)
   existing = read_ticks()

@@ -49,7 +49,7 @@ change; skip tests entirely for cosmetic ones.
   name is *Kelso Server*.
 - **User-facing text says "app".** Help text, CLI output, and the web UI say
   "app". "Bundle" and "manifest" are for app authors and for places where the
-  file itself matters (`dev`, `snapshot`). Don't call anything a "stack", and
+  file itself matters (`dev`, `backup`). Don't call anything a "stack", and
   don't position kelso around "home", "cloud", or "data center".
 - ruff: 88 cols, **2-space indent**, double quotes, py312.
 - **Comments: only what the code can't say.** Default to none. Write one only

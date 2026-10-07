@@ -3,7 +3,12 @@
   keeps Save hidden until something has changed. -#}
 
 {% macro _control(f) -%}
-{% if f.get('choices') is not none %}
+{% if f.get('choices') == ['on', 'off'] %}
+  {#- Unchecked posts only the hidden "off"; checked posts "on" after it, and
+    the last value is the one read. -#}
+  <input type="hidden" name="set.{{ f.name }}" value="off">
+  <input type="checkbox" name="set.{{ f.name }}" value="on"{% if f.get('value') == 'on' %} checked{% endif %}>
+{%- elif f.get('choices') is not none %}
   {#- The blank option submits nothing, which leaves what is on file alone. -#}
   <select name="set.{{ f.name }}"{% if not f.choices %} disabled{% endif %}>
     <option value="">{{ 'choose one' if f.choices else 'none defined yet' }}</option>
