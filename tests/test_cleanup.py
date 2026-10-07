@@ -1,4 +1,4 @@
-"""`kelso cleanup` and snapshot retention."""
+"""`kelso cleanup`."""
 
 BASIC = "io.p2net.basic-features"
 
@@ -15,56 +15,46 @@ ORPHAN_ROUTE = {
 }
 
 
-def _archives(kelso_env, app: str) -> list[str]:
-  folder = kelso_env.root / "snapshots" / app
-  return sorted(p.name for p in folder.glob("*.tar.gz")) if folder.is_dir() else []
-
-
-def _fake_archives(kelso_env, app: str, *names: str) -> None:
-  folder = kelso_env.root / "snapshots" / app
-  folder.mkdir(parents=True, exist_ok=True)
-  for name in names:
-    (folder / f"{name}.tar.gz").write_bytes(b"x" * 100)
-
-
-def test_snapshot_take_keeps_only_snapshot_max_count(kelso_env):
-  assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "snapshot_max_count=2").returncode == 0
-  for label in ("a", "b", "c"):
-    taken = kelso_env.run("snapshot", "take", BASIC, "--label", label)
-    assert taken.returncode == 0, taken.stderr
-
-  assert [name.split("_")[-1] for name in _archives(kelso_env, BASIC)] == [
-    "b.tar.gz",
-    "c.tar.gz",
-  ]
-
-
 def test_cleanup_lists_by_default_and_deletes_only_with_apply(kelso_env):
-  assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "snapshot_max_count=1").returncode == 0
-  _fake_archives(kelso_env, BASIC, "2026-01-01_00-00Z", "2026-01-02_00-00Z")
   kelso_env.seed_db(ORPHAN_ROUTE)
 
   shown = kelso_env.run("cleanup")
   assert shown.returncode == 0, shown.stderr
-  assert "2026-01-01_00-00Z" in shown.stdout
-  assert "2026-01-02_00-00Z" not in shown.stdout
   assert "io.example.abandoned" in shown.stdout
-  assert len(_archives(kelso_env, BASIC)) == 2
   assert "io.example.abandoned" in kelso_env.read_db().get("routes", {})
 
   applied = kelso_env.run("cleanup", "--apply")
   assert applied.returncode == 0, applied.stderr
-  assert _archives(kelso_env, BASIC) == ["2026-01-02_00-00Z.tar.gz"]
   assert "io.example.abandoned" not in kelso_env.read_db().get("routes", {})
 
 
-def test_snapshots_of_a_purged_app_are_kept(kelso_env):
-  _fake_archives(kelso_env, "io.example.gone", "2026-01-01_00-00Z", "2026-01-02_00-00Z")
+def test_cleanup_removes_what_an_interrupted_restore_left(kelso_env):
+  left = kelso_env.root / "var" / "temp" / "restore" / BASIC / "kelso"
+  left.mkdir(parents=True)
+  (left / "half.txt").write_text("x")
 
+  shown = kelso_env.run("cleanup")
+  assert "incomplete restore" in shown.stdout
   assert kelso_env.run("cleanup", "--apply").returncode == 0
-  assert len(_archives(kelso_env, "io.example.gone")) == 2
+  assert not left.parent.exists()
+
+
+def test_cleanup_keeps_the_images_kelso_runs_itself(kelso_env):
+  from kelso.lib.lifecycle.rootfs import ROOTFS_IMAGE
+  from kelso.lib.restic import RESTIC_IMAGE
+
+  repo, _, rest = RESTIC_IMAGE.partition(":")
+  tag = rest.partition("@")[0]
+  alpine, _, alpine_tag = ROOTFS_IMAGE.partition(":")
+  kelso_env.set_images(
+    [
+      {"ID": "r1", "Repository": repo, "Tag": tag, "Size": "30MB"},
+      {"ID": "a1", "Repository": alpine, "Tag": alpine_tag, "Size": "8MB"},
+    ]
+  )
+  shown = kelso_env.run("cleanup")
+  assert repo not in shown.stdout
+  assert alpine not in shown.stdout
 
 
 def test_cleanup_removes_only_images_nothing_uses(kelso_env):

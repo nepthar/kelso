@@ -49,7 +49,7 @@
   <td class="muted">{{ app.get('version') or '—' }}
     {%- if app.get('update_version') %} <span class="update">{{ job_button('Update ' ~ app.version ~ ' → ' ~ app.update_version, 'update', icon='arrow-up-circle-outline',
         title='Update ' ~ (app.get('display_name') or app.app_id),
-        desc='Updates ' ~ app.app_id ~ ' from ' ~ app.version ~ ' to ' ~ app.update_version ~ ". A pre-update snapshot will be taken.",
+        desc='Updates ' ~ app.app_id ~ ' from ' ~ app.version ~ ' to ' ~ app.update_version ~ ". It is backed up first.",
         args={'app': app.app_id}, done='/') }}</span>{% endif -%}
   </td>
   <td class="muted">{{ app.get('volume_count', 0) }}</td>

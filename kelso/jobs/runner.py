@@ -10,10 +10,12 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 import schedule
 
+from kelso.jobs.backup import BackupJob, ScheduledBackupJob
 from kelso.jobs.cmd import CmdJob
 from kelso.jobs.job import DONE, FAILED, QUEUED, RUNNING, Job
 from kelso.jobs.load import LoadJob
@@ -22,12 +24,12 @@ from kelso.jobs.remove import RmJob, UnloadJob
 from kelso.jobs.repo import RepoAddJob, RepoRemoveJob, RepoUpdateJob
 from kelso.jobs.restart import RestartJob
 from kelso.jobs.restore import RestoreJob
-from kelso.jobs.snapshot import DeleteSnapshotJob, SnapshotJob
 from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
 from kelso.jobs.update import UpdateJob
 from kelso.jobs.updown import DownJob, UpJob
 from kelso.lib.activity import BY_CRON, BY_KELSOD
+from kelso.lib.backup import backup_due
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import tick
 
@@ -53,8 +55,8 @@ JOBS: dict[str, type[Job]] = {
   "down": DownJob,
   "load": LoadJob,
   "update": UpdateJob,
-  "snapshot": SnapshotJob,
-  "snapshot-delete": DeleteSnapshotJob,
+  "backup": BackupJob,
+  "scheduled-backup": ScheduledBackupJob,
   "restore": RestoreJob,
   "cmd": CmdJob,
   "unload": UnloadJob,
@@ -86,6 +88,7 @@ class JobRunner:
     self._thread: threading.Thread | None = None
     self._sched: threading.Thread | None = None
     self._cron: threading.Thread | None = None
+    self._started = datetime.now()
 
   def start(self) -> None:
     if self._thread is not None:
@@ -145,12 +148,26 @@ class JobRunner:
   def _schedule(self) -> None:
     sched = metric_schedule(self._submit_scheduled)
     sched.every(5).minutes.do(self._start_cron_tick)
+    sched.every().minute.do(self._backup_if_due)
     # Readers ignore readings over two hours old, so waiting a full interval
     # after a restart leaves sizes blank for up to an hour.
     sched.run_all()
     while True:
       sched.run_pending()
       time.sleep(1)
+
+  def _backup_if_due(self) -> None:
+    """Submit the scheduled backup once its time has come since the last one.
+
+    A run missed while the machine was off happens at the first check after.
+    With no scheduled run on record, the first is the next one on the clock.
+    """
+    try:
+      ctx = self._ctx_factory()
+      if backup_due(ctx, since=self._started, now=datetime.now()):
+        self._submit_scheduled(ScheduledBackupJob.name)
+    except Exception:  # noqa: BLE001 - a bad check must not kill the scheduler
+      logger.exception("could not check the backup schedule")
 
   def _start_cron_tick(self) -> None:
     """On its own thread, so a long cron job never holds up queued jobs."""

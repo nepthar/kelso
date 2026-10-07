@@ -797,7 +797,6 @@ def test_config_lists_app_options_in_their_own_section(kelso_env):
   assert listed.returncode == 0, listed.stderr
   options = listed.stdout.split("App options:")[1]
   assert "start_order" in options
-  assert "snapshot_max_count" in options
   # ports-demo declares subdomain itself, so it sits with the app's own config.
   assert "subdomain" not in options
 
@@ -2003,7 +2002,7 @@ def test_refuse_root_names_who_and_what_to_do(monkeypatch):
 def test_every_command_refuses_to_run_as_root(kelso_env, monkeypatch):
   """`init` included: it is the command that would create the root-owned tree."""
   monkeypatch.setattr(os, "geteuid", lambda: 0)
-  for argv in (["init"], ["ps"], ["snapshot", "take", BASIC]):
+  for argv in (["init"], ["ps"], ["backup", "run", BASIC]):
     refused = kelso_env.run(*argv)
     assert refused.returncode == 1, argv
     assert "refuses to run as root" in refused.stderr, argv
@@ -2230,7 +2229,7 @@ def test_unload_confirmation_says_what_it_keeps(kelso_env):
   assert "Configuration and volume data will be kept" in declined.stdout
   assert f"kelso rm {BASIC}" in declined.stdout
   # Nothing irreversible is at stake, so it must not borrow rm's warning.
-  assert "take a snapshot first" not in declined.stdout
+  assert "back it up first" not in declined.stdout
   # Where kelso keeps a loaded copy is not the operator's problem.
   assert str(kelso_env.run_root) not in declined.stdout
   assert "Nothing removed" in declined.stdout
@@ -2260,9 +2259,9 @@ def test_ps_forgets_an_app_once_it_is_purged(kelso_env):
   assert BASIC not in kelso_env.run("ps").stdout
 
 
-def test_rm_purge_takes_everything_but_snapshots(kelso_env):
+def test_rm_purge_takes_everything_but_backups(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  assert kelso_env.run("snapshot", "take", BASIC).returncode == 0
+  assert kelso_env.run("backup", "run", BASIC).returncode == 0
   kelso_env.run("stop", BASIC)
   purged = kelso_env.run("rm", "--purge", BASIC, "-y")
   assert purged.returncode == 0, purged.stderr
@@ -2270,7 +2269,8 @@ def test_rm_purge_takes_everything_but_snapshots(kelso_env):
   assert not (kelso_env.run_root / BASIC).exists()
   assert not kelso_env.app_logtab(BASIC).exists()
   assert not (kelso_env.volumes_root / "data" / BASIC).exists()
-  assert (kelso_env.root / "snapshots" / BASIC).is_dir()
+  listed = kelso_env.run("backup", "list", BASIC)
+  assert BASIC in listed.stdout
 
 
 def test_unload_says_how_to_load_it_again(kelso_env):
@@ -2324,7 +2324,7 @@ def test_status_shows_each_section(kelso_env):
     "Apps",
     "Routes",
     "Volumes",
-    "Snapshots  0, 0.0 B in total",
+    "Backups    none yet; `kelso backup run` takes one",
     "Doctor     0 problems, 0 warnings",
   ]
   apps = shown.stdout.split("\n\n")[1]

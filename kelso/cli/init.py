@@ -16,6 +16,7 @@ from kelso.lib.config import (
   load_config_file,
 )
 from kelso.lib.doctor import tool_problems
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.receipt import volume_root_lines
 from kelso.lib.repo import LOCAL_REPO
 
@@ -64,6 +65,17 @@ url = "github://nepthar/kelso/main/apps"
 #
 # [repo.dev]
 # path = "~/code/bundles"
+
+# Backups: every app's data volumes, its configuration and the bundle it was
+# loaded from, plus kelso's own state, into backups/ next to this file. Point
+# backups/ at another disk by replacing it with a link, as with a volume root;
+# require_mount refuses to back up while that disk is not mounted. Keep is per
+# app, and small on purpose.
+#
+# [backup]
+# schedule      = "0 3 * * *"
+# require_mount = false
+# keep          = { daily = 3, weekly = 2, monthly = 1, manual = 5 }
 
 # Optional: reverse-proxy (or other) providers that publish app routes.
 # Each block is tagged by you ("web", "lan", "homelab", …); `kind` selects
@@ -188,7 +200,6 @@ def _mirror_default_repos(config) -> None:
   it up later.
   """
   from kelso.lib import repo as repo_lib
-  from kelso.lib.kelso import KelsoCtx
 
   remotes = [r for r in config.repos.values() if r.mirrored]
   if not remotes:
@@ -241,6 +252,10 @@ def run(args: argparse.Namespace, _ctx) -> None:
       kind_root.mkdir(parents=True, exist_ok=True)
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True, exist_ok=True)
+  # Like a volume root: a link made before init is where backups should go.
+  backups = root / "backups"
+  if not backups.is_symlink():
+    backups.mkdir(exist_ok=True)
 
   address = lan_address()
   template = CONFIG_TEMPLATE
@@ -256,8 +271,9 @@ def run(args: argparse.Namespace, _ctx) -> None:
   recovery.write_seed(master_key_path, entropy)
 
   config = load_config_file(config_path)
+  kelso_id = KelsoCtx(config).kelso_db.kelso_id()
 
-  print(f"Initialized kelso root at {root}")
+  print(f"Initialized kelso {kelso_id} at {root}")
   print(f"  config:      {config_path}")
   if address:
     print(f"  address:     {address} (detected; edit kelso_address if it is wrong)")
@@ -267,6 +283,7 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
   print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   print(f"  repos:       {root / 'repos'}")
+  print(f"  backups:     {root / 'backups'}")
   print(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
   print("  volumes:")
   for line in volume_root_lines(config):

@@ -50,7 +50,7 @@ def register(subparsers) -> None:
     help="Make a new recovery phrase and re-encrypt every secret under it",
     description="Makes a new recovery phrase, re-encrypts every app secret and "
     "system secret under the key it derives, and shows the phrase. "
-    "The old key is kept, to read snapshots taken under it. Rekeying does not "
+    "The old key is kept, to read backups taken under it. Rekeying does not "
     "undo an exposed key: whoever had it could already read every secret, so "
     "change the secrets themselves too.",
   )

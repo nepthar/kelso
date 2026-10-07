@@ -55,6 +55,14 @@ def register(subparsers) -> None:
     help="Bind an app volume to a host_volume tag from config.toml (repeatable)",
   )
   parser.add_argument(
+    "--backup",
+    action="append",
+    default=[],
+    dest="backups",
+    metavar="VOLUME=on|off",
+    help="Include a bulk volume in backups, or leave it out (repeatable)",
+  )
+  parser.add_argument(
     "--get",
     dest="get_name",
     metavar="NAME",
@@ -73,7 +81,9 @@ def register(subparsers) -> None:
   )
   parser.set_defaults(
     func=run,
-    activity=lambda a: "config" if a.sets or a.routes or a.binds or a.edit else None,
+    activity=lambda a: (
+      "config" if a.sets or a.routes or a.binds or a.backups or a.edit else None
+    ),
   )
 
 
@@ -84,16 +94,22 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     spec = _config_spec(app, ctx)
 
     if args.get_name is not None:
-      if args.sets or args.binds or args.routes:
-        raise ValueError("--get cannot be combined with --set, --route, or --bind")
+      if args.sets or args.binds or args.routes or args.backups:
+        raise ValueError(
+          "--get cannot be combined with --set, --route, --bind, or --backup"
+        )
       _get(spec, store, args.get_name, show_secret=args.show_secret)
       return
 
     if args.show_secret:
       raise ValueError("--show-secret requires --get")
 
+    if args.backups:
+      _apply_backups(spec, args.backups, ctx)
     if args.sets or args.binds or args.routes:
       _apply(app, spec, args.sets, args.binds, args.routes, ctx)
+      return
+    if args.backups:
       return
 
     if args.edit:
@@ -181,6 +197,26 @@ def _what_applies_it(app: AppID, ctx: KelsoCtx) -> None:
     logger.info(f"Takes effect on restart: kelso restart {app}")
 
 
+def _apply_backups(spec: AppSpec, raw: list[str], ctx: KelsoCtx) -> None:
+  """Turn backing up a bulk volume on or off. Data volumes always are, and
+  temp, logs and host volumes never are, so only bulk has a choice."""
+  store = ctx.app_store(spec.app)
+  for volume_name, value in (parse_kv(item, "--backup") for item in raw):
+    volume = spec.volumes.get(volume_name)
+    if volume is None:
+      raise ValueError(f"No volume {volume_name} in {spec.app}'s manifest")
+    if volume.kind != "bulk":
+      always = {"data": "always backed up"}.get(volume.kind, "never backed up")
+      raise ValueError(
+        f"Volume {volume_name} is a {volume.kind} volume, which is {always}; "
+        f"only bulk volumes can be turned on or off"
+      )
+    if value not in ("on", "off"):
+      raise ValueError(f"--backup {volume_name}= takes on or off, not {value!r}")
+    store.set_backup_bulk(volume_name, value == "on")
+    print(f"{volume_name}: {'backed up' if value == 'on' else 'not backed up'}")
+
+
 def _apply_routes(
   app: AppID,
   spec: AppSpec,
@@ -223,6 +259,14 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
         tablefmt="simple",
       )
     )
+
+  bulk = [name for name, v in spec.volumes.items() if v.kind == "bulk"]
+  if bulk:
+    on = store.backed_up_bulk()
+    rows = [[name, "on" if name in on else "off"] for name in bulk]
+    print("")
+    print("Bulk volume backups:")
+    print(tabulate(rows, headers=["volume_name", "backup"], tablefmt="simple"))
 
   host = [(n, v) for n, v in spec.volumes.items() if v.kind == "host"]
   if not host:

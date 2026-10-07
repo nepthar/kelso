@@ -11,6 +11,7 @@ from typing import Any
 import psutil
 
 from kelso.lib import activity
+from kelso.lib import backup as backup_lib
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
@@ -19,13 +20,7 @@ from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.edit import RepoGit, editable_entry, repo_git
-from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.run import logs_text
-from kelso.lib.lifecycle.snapshot import (
-  snapshot_archive,
-  snapshot_version,
-  split_snapshot_name,
-)
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
@@ -344,25 +339,38 @@ def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   return roots
 
 
-def snapshots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every snapshot archive, newest name first."""
-  rows = []
-  for app_id in snapshotted_app_ids(ctx):
-    for name in snapshot_names(app_id, ctx):
-      taken_at, tag = split_snapshot_name(name)
-      archive = snapshot_archive(ctx.config.snapshot_root, app_id, name)
-      rows.append(
-        {
-          "app_id": str(app_id),
-          "name": name,
-          "taken_at": taken_at,
-          "tag": tag,
-          "app_version": snapshot_version(ctx.config.snapshot_root, app_id, name),
-          "bytes": archive.stat().st_size if archive.is_file() else None,
-        }
-      )
-  rows.sort(key=lambda row: row["name"], reverse=True)
-  return rows
+def backups_view(ctx: KelsoCtx) -> dict[str, Any]:
+  """Where backups go, how the last run went, and every app backup, newest
+  first. Lists the repository, which starts restic: not for a status line."""
+  config = ctx.config
+  view: dict[str, Any] = {
+    "kelso_id": ctx.kelso_db.kelso_id(),
+    "schedule": config.backup.schedule,
+    "keep": config.backup.keep.model_dump(),
+    "last_run": ctx.kelso_db.last_backup_run(),
+    "destination": None,
+    "problem": None,
+    "backups": [],
+  }
+  try:
+    restic = backup_lib.repository(ctx)
+  except ValueError as e:
+    view["problem"] = str(e)
+    return view
+  view["destination"] = str(restic.repo)
+  if restic.exists():
+    view["backups"] = [
+      {
+        "id": b.id,
+        "app_id": str(b.app),
+        "app_version": b.version,
+        "reason": b.reason,
+        "taken_at": b.time,
+        "bulk": backup_lib.BULK in b.snapshots,
+      }
+      for b in reversed(backup_lib.backups(restic))
+    ]
+  return view
 
 
 def cron_view(ctx: KelsoCtx) -> list[dict[str, Any]]:

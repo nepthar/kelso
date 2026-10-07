@@ -158,5 +158,5 @@ Plain http is fine here: the session cookie only asks to be `Secure` when the
 request that minted it arrived over TLS, which in the container it does.
 
 Run the tests, then look at every page you touched — `/`, `/apps/<id>`,
-`/apps/<id>/logs`, `/apps/<id>/console`, `/volumes`, `/catalog`, `/routes`, `/snapshots`,
+`/apps/<id>/logs`, `/apps/<id>/console`, `/volumes`, `/catalog`, `/routes`, `/backups`,
 `/activity`, `/login` — plus the collapsed nav and one modal. Layout regressions here are invisible in a diff and obvious on screen.

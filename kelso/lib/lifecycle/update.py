@@ -4,31 +4,37 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kelso.lib.apps import AppID, record_app_action
+from kelso.lib.backup import (
+  UPDATE,
+  backup_app,
+  forget_expired,
+  refuse_same_second,
+  repository,
+  run_id,
+)
 from kelso.lib.bundle import load_bundle
 from kelso.lib.docker import pull_image
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import logger
-from kelso.lib.lifecycle.cleanup import prune_snapshots
 from kelso.lib.lifecycle.load import load
 from kelso.lib.lifecycle.run import start, stop
-from kelso.lib.lifecycle.snapshot import SNAPSHOT_TAR_SUFFIX, snapshot
-
-PRE_UPDATE_LABEL = "pre-update"
 
 
 @dataclass(frozen=True)
 class UpdateResult:
   previous: str | None
   version: str
-  snapshot: str
+  # The backup of the version it replaced; None when told not to take one.
+  backup: str | None
   was_running: bool
 
   def summary(self, app: AppID) -> str:
     lines = [
       f"Updated {app} from {self.previous or 'an unrecorded version'} to "
       f"{self.version}",
-      f"  snapshot {self.snapshot} holds the version it replaced",
     ]
+    if self.backup:
+      lines.append(f"  backup {self.backup} holds the version it replaced")
     if self.was_running:
       lines.append(f"Restarted {app}")
     return "\n".join(lines)
@@ -47,11 +53,11 @@ def update_source(app: AppID, ctx: KelsoCtx) -> Path:
   return origin
 
 
-def update(app: AppID, ctx: KelsoCtx) -> UpdateResult:
-  """Pull the new version's images, then stop, snapshot, load, and start again.
+def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
+  """Pull the new version's images, then stop, back up, load, and start again.
 
-  Takes the app and kelso locks itself. A load that fails after the snapshot
-  leaves the app stopped, and the error names the snapshot to restore.
+  Takes the app and kelso locks itself. A load that fails after the backup
+  leaves the app stopped, and the error names the backup to restore.
   """
   source = update_source(app, ctx)
   try:
@@ -70,23 +76,36 @@ def update(app: AppID, ctx: KelsoCtx) -> UpdateResult:
       running = bool(ctx.run_state(app).running_count)
       if running:
         stop(app, ctx)
-    try:
-      archive = snapshot(app, ctx, label=PRE_UPDATE_LABEL)
-      prune_snapshots(app, ctx)
-    except Exception:
-      if running:
-        with ctx.kelso_lock(by):
-          start(app, ctx.config.app_run_path(app), ctx)
-      raise
-    name = archive.name.removesuffix(SNAPSHOT_TAR_SUFFIX)
+    name = None
+    if backup:
+      try:
+        restic = repository(ctx)
+        restic.init()
+        run = run_id()
+        refuse_same_second(restic, run, app)
+        name = backup_app(app, ctx, restic, reason=UPDATE, run=run).id
+        forget_expired(ctx, restic, prune=False)
+      except Exception as e:
+        if running:
+          with ctx.kelso_lock(by):
+            start(app, ctx.config.app_run_path(app), ctx)
+        raise ValueError(
+          f"Nothing changed: backing up {app} before updating failed. Fix the "
+          f"problem below, or pass --no-backup to update without one.\n{e}"
+        ) from e
 
     with ctx.kelso_lock(by):
       try:
         load(app, source, ctx, version_change=True)
       except Exception as e:
+        back = (
+          f"run `kelso backup restore {app} {name}`."
+          if name
+          else "load the old bundle again."
+        )
         raise RuntimeError(
-          f"{e}\n{app} is stopped. To go back to {previous or 'the old version'}, "
-          f"run `kelso snapshot restore {app} {name}`."
+          f"{e}\n{app} is stopped. To go back to "
+          f"{previous or 'the old version'}, {back}"
         ) from e
       record_app_action(
         "updated",
@@ -94,7 +113,7 @@ def update(app: AppID, ctx: KelsoCtx) -> UpdateResult:
         ctx,
         version=spec.version,
         previous=previous or "",
-        snapshot=name,
+        backup=name or "",
       )
       if running:
         start(app, ctx.config.app_run_path(app), ctx)

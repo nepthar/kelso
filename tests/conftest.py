@@ -343,3 +343,35 @@ def kelso_env(
   # No kelsod runs under test; its own tests call `kelsod_problems` directly.
   monkeypatch.setattr(kelso.lib.doctor, "kelsod_problems", lambda ctx: [])
   return env
+
+
+class TickingClock:
+  """Ten minutes later at every reading, from the real now: no two backups
+  ever share a second, as they never do outside a test."""
+
+  def __init__(self) -> None:
+    from datetime import UTC, datetime
+
+    self.at = datetime.now(UTC).replace(microsecond=0)
+
+  def __call__(self):
+    from datetime import timedelta
+
+    self.at += timedelta(minutes=10)
+    return self.at
+
+  def stamp(self) -> str:
+    return self().isoformat().replace("+00:00", "Z")
+
+
+@pytest.fixture(autouse=True)
+def backup_clock(monkeypatch: pytest.MonkeyPatch) -> TickingClock:
+  """The clock backups and the fake restic read."""
+  import kelso.lib.backup
+
+  from . import fakerestic
+
+  clock = TickingClock()
+  monkeypatch.setattr(kelso.lib.backup, "now", clock)
+  monkeypatch.setattr(fakerestic, "now", clock)
+  return clock

@@ -22,6 +22,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+from kelso.lib.restic import RESTIC_IMAGE
+
+try:
+  from . import fakerestic
+except ImportError:  # As `bin/docker`, with tests/ itself on the path.
+  import fakerestic  # type: ignore[no-redef]
+
 DOCKER = "docker"
 
 
@@ -43,7 +50,7 @@ class FakeDocker:
     path = self.images_path
     return json.loads(path.read_text()) if path.exists() else []
 
-  def call(self, args: list[str], cwd: Path, stdout=None, stderr=None):
+  def call(self, args: list[str], cwd: Path, stdout=None, stderr=None, env=None):
     """Run `docker *args` in `cwd`. Returns (returncode, stdout, stderr) text,
     except for `docker run`, which returns the real `sh` run's CompletedProcess."""
     # Where the `app` volume links pointed at the moment of the call. `kelso dev`
@@ -87,6 +94,8 @@ class FakeDocker:
       for container in containers:
         if container["app_id"] == cwd.name:
           out.append(f"{container['run_unit']}-1  | hello from {container['run_unit']}")
+    elif args[0] == "run" and RESTIC_IMAGE in args:
+      return fakerestic.run(args, dict(env or os.environ))
     elif args[0] == "run":
       # `docker run --rm -v HOST:HOST ... IMAGE sh -c SCRIPT`, kelso's stand-in
       # for sudo (kelso/lib/lifecycle/rootfs.py). Every bind maps a host path
@@ -152,7 +161,7 @@ class GuardDocker:
   def __init__(self, log: Path):
     self.log = log
 
-  def call(self, args: list[str], cwd: Path, stdout=None, stderr=None):
+  def call(self, args: list[str], cwd: Path, stdout=None, stderr=None, env=None):
     invocation = "docker " + " ".join(args)
     with self.log.open("a") as f:
       f.write(invocation + "\n")
@@ -228,7 +237,9 @@ class FakeSubprocess:
         **kwargs,
       )
     where = Path(cwd) if cwd else Path.cwd()
-    result = self.docker.call(list(argv[1:]), where, stdout=stdout, stderr=stderr)
+    result = self.docker.call(
+      list(argv[1:]), where, stdout=stdout, stderr=stderr, env=env
+    )
     if isinstance(result, subprocess.CompletedProcess):
       return result
     code, out, err = result

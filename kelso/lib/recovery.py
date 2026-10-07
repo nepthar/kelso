@@ -7,7 +7,7 @@ same master key, so a backup of this root can be restored anywhere.
 `conf/master.key` keeps the phrase's entropy as `seed`, and the master key is
 derived from it. A rekey appends a new `seed`; the file's history is the record
 of every key this root has had, so something written under an older one -- a
-snapshot's secrets -- is read with the seed that was current when it was
+backup's secrets -- is read with the seed that was current when it was
 written (`master_key_at`).
 """
 
@@ -30,6 +30,8 @@ SEED_KEY = "seed"
 # The label for the key that encrypts secrets. A new use gets its own label,
 # never this one, so a key for one thing cannot decrypt another.
 SECRETS_LABEL = "kelso/secrets/v1"
+# The backup repository's password, so the phrase alone opens a backup.
+BACKUP_LABEL = "kelso/backup/v1"
 
 _WORDLIST = Mnemonic("english")
 
@@ -64,6 +66,11 @@ def derive(entropy: bytes, label: str) -> bytes:
   return HKDF(
     algorithm=hashes.SHA256(), length=32, salt=None, info=label.encode()
   ).derive(entropy)
+
+
+def backup_password_from(entropy: bytes) -> str:
+  """The password kelso's backup repository is encrypted with."""
+  return derive(entropy, BACKUP_LABEL).hex()
 
 
 def master_key_from(entropy: bytes) -> str:

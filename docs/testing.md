@@ -65,7 +65,8 @@ to 0.25s.
 | `test_observations.py` | Where an app stands, and whether what runs is current |
 | `test_cli.py` | The command surface — exit codes, output, disk state |
 | `test_lock.py` | Kelso + app locks; who holds them and for how long |
-| `test_restore.py` | Snapshot and restore, including data volumes |
+| `test_backup.py` | Backups and restore, against a fake restic that keeps plain files (`fakerestic.py`) |
+| `test_restic.py` | Restic in its pinned container; the round trip is `docker`-marked |
 | `test_docker.py` | That the docker guard actually fails a stray call |
 | `test_config_edit.py` | Editing config.toml: comments kept, invalid results refused |
 | `test_api.py` | kelsod's routes, its refusals, and jobs run to completion |
@@ -86,17 +87,19 @@ thing being tested, and a fake would only assert that the fake works. Run them
 by hand against a real kelso root before a release or after touching the
 relevant area.
 
-**Snapshot and restore of real volume data.** Containers write their files as
-root, so `lifecycle/rootfs.py` does the `tar`, `cp -a` and `rm -rf` in a
-throwaway container instead of on the host. `test_restore.py` pins down the
-docker command kelso builds, but the fake runs that command's script on the
-host as an ordinary user, so the part that actually needs root is untested.
-Check: a snapshot of an app with genuinely root-owned files in a data volume,
-ownership and modes preserved on the way in, symlinks *inside* a volume not
-dereferenced, an archive left owned by the invoking user rather than root, and
-a restore that brings the data back intact. Also that an interrupted snapshot
-leaves its scratch dir with the message that names it, and that kelso pulls
-the pinned image on a host that does not have it yet.
+**Backup and restore of real volume data.** Containers write their files as
+root, so restic runs in its own container and restore puts volumes back with
+`cp -a` in a throwaway one (`lifecycle/rootfs.py`). `test_backup.py` pins down
+what kelso asks of restic, but the fake restic copies plain files as an
+ordinary user, so the part that actually needs root is untested.
+`test_restic.py`'s `docker`-marked round trip runs real restic, without root-
+owned files. Check: a backup of an app with genuinely root-owned files in a
+data volume, ownership and modes preserved on the way back, symlinks *inside* a
+volume not dereferenced, and a restore that brings the data back intact. Also
+that a restore interrupted part-way leaves `var/temp/restore/<app>` for
+`kelso cleanup` to name, that `backups/` linked to a share that is not mounted
+is refused, and that kelso pulls the pinned restic image on a host that does
+not have it yet.
 
 **Refusing to run as root.** `refuse_root` is unit-tested against a faked uid;
 that it fires for a genuine `sudo kelso …` is not.

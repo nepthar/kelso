@@ -107,3 +107,30 @@ only signal that the volume has not been mounted yet.
 
 If kelso finds dangling links to volume roots, it will refuse to start apps
 rather than re-populate with empty folders.
+
+## Backups
+
+Every night at 3am, kelsod backs up each app's data volumes, configuration and
+loaded copy, and kelso's own state, into `backups/` in the kelso root. What is
+included is in [volumes](volumes.md). `kelso backup` shows where they go and
+how the last run went; `kelso backup run` takes one now; `kelso backup restore
+<app> <backup>` puts an app back.
+
+Like a volume root, `backups/` is meant to be linked to another disk:
+
+```
+mv ~/kelso/backups /mnt/nas/kelso-backups
+ln -s /mnt/nas/kelso-backups ~/kelso/backups
+```
+
+A link to nothing is refused, so an unmounted share is never filled from the
+local disk. To insist that backups are on a mounted disk, set it in
+`config.toml`:
+
+```toml
+[backup]
+require_mount = true
+```
+
+Backups are encrypted, and your recovery phrase is the only way to read them on
+another machine. Keep it somewhere other than this machine.

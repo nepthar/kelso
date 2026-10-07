@@ -34,7 +34,6 @@ image = "alpine:latest"
   assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
     "subdomain": ("demo", "option"),
     "start_order": ("6", "option"),
-    "snapshot_max_count": ("0", "option"),
   }
   assert spec.volumes == {}
   assert spec.commands == {}
@@ -193,7 +192,6 @@ image = "alpine"
   ("entry", "error"),
   [
     ('start_order = { default = "10" }', "from 0 to 9"),
-    ('snapshot_max_count = { default = "-1" }', "0 or more"),
     ('subdomain = { default = "a.b" }', "no periods"),
     ("subdomain = { secret = true }", "cannot be secret"),
   ],

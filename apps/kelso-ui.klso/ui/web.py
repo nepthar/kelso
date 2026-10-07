@@ -64,7 +64,7 @@ NAV = (
   NavItem("/", "Dashboard", "home-outline"),
   NavItem("/catalog", "Repos", "book-multiple-outline"),
   NavItem("/volumes", "Volumes", "database-outline"),
-  NavItem("/snapshots", "Snapshots", "camera-outline"),
+  NavItem("/backups", "Backups", "database-export"),
   NavItem("/routes", "Routes", "network-outline"),
   NavItem("/cron", "Cron", "clock-outline"),
   NavItem("/activity", "Activity", "file-document-multiple-outline"),

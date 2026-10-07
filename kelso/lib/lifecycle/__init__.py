@@ -2,7 +2,6 @@ from kelso.lib.lifecycle.cleanup import (
   CleanupPlan,
   cleanup,
   cleanup_plan,
-  prune_snapshots,
 )
 from kelso.lib.lifecycle.dev import (
   DevPlan,
@@ -26,10 +25,9 @@ from kelso.lib.lifecycle.load import (
 )
 from kelso.lib.lifecycle.restore import (
   RestorePlan,
-  resolve_snapshot_app,
+  find_backup,
   restore,
   restore_plan,
-  snapshot_names,
 )
 from kelso.lib.lifecycle.rm import (
   DATA,
@@ -59,14 +57,12 @@ from kelso.lib.lifecycle.run import (
   start,
   stop,
 )
-from kelso.lib.lifecycle.snapshot import delete_snapshot, snapshot
 from kelso.lib.lifecycle.update import UpdateResult, update
 
 __all__ = [
   "CleanupPlan",
   "cleanup",
   "cleanup_plan",
-  "prune_snapshots",
   "DevPlan",
   "ReloadResult",
   "RemovalPlan",
@@ -77,7 +73,6 @@ __all__ = [
   "apply_config_sets",
   "assign_route",
   "bind",
-  "delete_snapshot",
   "dev",
   "dev_plan",
   "link_host_volumes",
@@ -97,13 +92,11 @@ __all__ = [
   "UNLOAD",
   "RemovalMode",
   "removal_plan",
-  "resolve_snapshot_app",
+  "find_backup",
   "restore",
   "restore_plan",
   "rm",
   "run_command",
-  "snapshot",
-  "snapshot_names",
   "source_volume_links",
   "load",
   "load_target",

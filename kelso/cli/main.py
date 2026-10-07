@@ -7,6 +7,7 @@ from pathlib import Path
 from kelso import VERSION
 from kelso.cli import (
   app,
+  backup,
   cleanup,
   cmd,
   config,
@@ -22,7 +23,6 @@ from kelso.cli import (
   restart,
   routes,
   shell,
-  snapshot,
   start,
   status,
   stop,
@@ -56,7 +56,7 @@ COMMANDS = [
   logs,
   shell,
   dev,
-  snapshot,
+  backup,
   cron,
   repo,
   routes,
@@ -89,9 +89,9 @@ This box
   up          Start all apps in start_order groups
   down        Stop all apps in start_order groups
   cleanup     List what kelso no longer needs; --apply deletes it
-              (old snapshots, unused images, orphaned routes; --temp)
+              (unused images, orphaned routes; --temp)
 
-Snapshots     kelso snapshot take | list | restore
+Backups       kelso backup | backup run | list | restore
 Cron          kelso cron | cron tick
 Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider

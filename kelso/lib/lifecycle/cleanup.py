@@ -4,7 +4,7 @@ It never stops an app: a running app's temp volumes are left alone, and an
 image goes only when no loaded app names it and no container uses it.
 """
 
-import tomllib
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -19,18 +19,12 @@ from kelso.lib.docker import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import logger
-from kelso.lib.lifecycle.restore import snapshot_names, snapshotted_app_ids
 from kelso.lib.lifecycle.rm import TEMP, removal_plan, rm
-from kelso.lib.lifecycle.rootfs import ROOTFS_IMAGE
-from kelso.lib.lifecycle.snapshot import (
-  SNAPSHOT_TAR_SUFFIX,
-  delete_snapshot,
-  remove_snapshot_dir,
-  snapshot_archive,
-)
+from kelso.lib.lifecycle.rootfs import ROOTFS_IMAGE, run_as_root
 from kelso.lib.observations import observe
+from kelso.lib.restic import RESTIC_IMAGE
 
-Kind = Literal["snapshot", "incomplete snapshot", "image", "temp and logs", "routes"]
+Kind = Literal["incomplete restore", "image", "temp and logs", "routes"]
 
 
 @dataclass(frozen=True)
@@ -48,8 +42,6 @@ class Reclaim:
     match self.target:
       case DockerImage(refs=refs, id=image_id):
         return ", ".join(refs) or image_id
-      case Path() as path if self.kind == "snapshot":
-        return path.name.removesuffix(SNAPSHOT_TAR_SUFFIX)
       case Path() as path:
         return str(path)
     return "port and subdomain" if self.kind == "routes" else ""
@@ -66,29 +58,9 @@ class CleanupPlan:
     return sum(item.size or 0 for item in self.items)
 
 
-def excess_snapshots(app: AppID, ctx: KelsoCtx) -> list[Path]:
-  """Archives beyond the app's snapshot_max_count, oldest first."""
-  # A purged app has no config, and reading an option would create one.
-  if not ctx.config.app_config_path(app).is_file():
-    return []
-  keep = int(ctx.app_option(app, "snapshot_max_count"))
-  names = snapshot_names(app, ctx)
-  if not keep or len(names) <= keep:
-    return []
-  root = ctx.config.snapshot_root
-  return [snapshot_archive(root, app, name) for name in names[:-keep]]
-
-
-def prune_snapshots(app: AppID, ctx: KelsoCtx) -> None:
-  """Delete the archives beyond snapshot_max_count. The caller holds the app lock."""
-  for archive in excess_snapshots(app, ctx):
-    delete_snapshot(app, archive.name, ctx)
-    logger.info("Deleted snapshot %s of %s", archive.name, app)
-
-
 def cleanup_plan(ctx: KelsoCtx, *, temp: bool = False) -> CleanupPlan:
   """What cleanup would delete, without deleting it."""
-  items = [*_snapshots(ctx), *_incomplete_snapshots(ctx)]
+  items = _incomplete_restores(ctx)
   skipped: list[AppID] = []
   observations = ctx.observations()
   if temp:
@@ -121,17 +93,11 @@ def cleanup(plan: CleanupPlan, ctx: KelsoCtx) -> None:
 def _reclaim(item: Reclaim, ctx: KelsoCtx) -> None:
   by = f"cleanup {item.kind}"
   match item:
-    case Reclaim(kind="snapshot", app=AppID() as app, target=Path() as archive):
+    case Reclaim(
+      kind="incomplete restore", app=AppID() as app, target=Path() as folder
+    ):
       with ctx.app_lock(app, by):
-        if archive.is_file():
-          delete_snapshot(app, archive.name, ctx)
-          logger.info("Deleted snapshot %s of %s", archive.name, app)
-    case Reclaim(kind="incomplete snapshot", target=Path() as folder):
-      if item.app is None:
         _remove_incomplete(folder)
-      else:
-        with ctx.app_lock(item.app, by):
-          _remove_incomplete(folder)
     case Reclaim(kind="temp and logs", app=AppID() as app):
       with ctx.locked(by, app):
         rm(removal_plan(app, ctx, mode=TEMP), ctx)
@@ -149,34 +115,25 @@ def _reclaim(item: Reclaim, ctx: KelsoCtx) -> None:
 
 def _remove_incomplete(folder: Path) -> None:
   if folder.exists():
-    remove_snapshot_dir(folder)
-    logger.info("Removed incomplete snapshot %s", folder)
+    # Restic restored it as root.
+    run_as_root(
+      f"remove {folder}",
+      f"rm -rf -- {shlex.quote(str(folder.resolve()))}",
+      [folder.parent],
+    )
+    logger.info("Removed what an interrupted restore left at %s", folder)
 
 
-def _snapshots(ctx: KelsoCtx) -> list[Reclaim]:
+def _incomplete_restores(ctx: KelsoCtx) -> list[Reclaim]:
+  """What a restore that did not finish left in its scratch space."""
+  root = ctx.config.temp_root / "restore"
+  if not root.is_dir():
+    return []
   return [
-    Reclaim("snapshot", app, archive, archive.stat().st_size)
-    for app in snapshotted_app_ids(ctx)
-    for archive in excess_snapshots(app, ctx)
-  ]
-
-
-def _incomplete_snapshots(ctx: KelsoCtx) -> list[Reclaim]:
-  """Folders a failed snapshot or restore left behind."""
-  found = [
-    Reclaim("incomplete snapshot", app, entry, None)
-    for app in snapshotted_app_ids(ctx)
-    for entry in sorted((ctx.config.snapshot_root / app).iterdir())
+    Reclaim("incomplete restore", AppID(entry.name), entry, None)
+    for entry in sorted(root.iterdir())
     if entry.is_dir()
   ]
-  scratch = ctx.config.temp_root / "current_snapshot"
-  if scratch.is_dir():
-    # Without its snapshot.toml there is no app to lock; `snapshot` writes it
-    # straight after creating the folder.
-    meta = scratch / "snapshot.toml"
-    app = AppID(tomllib.loads(meta.read_text())["app_id"]) if meta.is_file() else None
-    found.append(Reclaim("incomplete snapshot", app, scratch, None))
-  return found
 
 
 def _recorded_temp_sizes(ctx: KelsoCtx) -> dict[str, int]:
@@ -191,7 +148,9 @@ def _recorded_temp_sizes(ctx: KelsoCtx) -> dict[str, int]:
 
 def _unused_images(ctx: KelsoCtx) -> list[DockerImage]:
   """Images no loaded app names and no container, kelso's or not, was made from."""
-  named = {_normal(ROOTFS_IMAGE)}
+  # Kelso's own: the root-filesystem helper and restic, which `image ls`
+  # names by tag even though kelso pins restic by digest.
+  named = {_normal(ROOTFS_IMAGE), _normal(RESTIC_IMAGE.partition("@")[0])}
   for raw_id in ctx.config.run_root.iterdir() if ctx.config.run_root.is_dir() else ():
     spec = ctx.loaded_spec(raw_id.name)
     if spec is not None:

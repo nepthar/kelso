@@ -13,6 +13,7 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
+from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.recovery import read_keyfile
 from kelso.lib.repo import LOCAL_REPO, Repo, parse_github_url
 from kelso.lib.util import validate_identifier
@@ -85,18 +86,46 @@ class HostVolumeEntry(BaseModel):
   require_mount: bool = False
 
 
+class BackupKeep(BaseModel):
+  """How many backups of each app to keep. Small on purpose: backups share a
+  disk with something, and nobody notices a drive filling until it is full."""
+
+  model_config = ConfigDict(extra="forbid")
+
+  # Scheduled backups: the newest of each of the last n days, weeks and months.
+  daily: int = Field(default=3, ge=0)
+  weekly: int = Field(default=2, ge=0)
+  monthly: int = Field(default=1, ge=0)
+  # Ones you asked for. Those taken before an update or a restore are kept
+  # apart, the newest one of each, so they never push these out.
+  manual: int = Field(default=5, ge=0)
+
+
+class BackupEntry(BaseModel):
+  """The `[backup]` table."""
+
+  model_config = ConfigDict(extra="forbid")
+
+  # When kelsod backs everything up, as a cron schedule in local time.
+  schedule: str = "0 3 * * *"
+  # Refuse unless `backups/` resolves onto another filesystem than the kelso
+  # root: the share it links into is mounted.
+  require_mount: bool = False
+  keep: BackupKeep = Field(default_factory=BackupKeep)
+
+
 class ConfigFile(BaseModel):
   """Shape of config.toml. Cross-cutting checks live in `_validate_config`."""
 
   model_config = ConfigDict(extra="forbid")
 
   repos_root: str = DEFAULT_REPOS_ROOT
-  snapshot_root: str = "snapshots"
   port_base: int = 41000
   kelso_address: str = ""
   default_route_provider: str = NONE_ROUTE_PROVIDER_TAG
   route_provider: dict[str, RouteProviderEntry] = Field(default_factory=dict)
   host_volume: dict[str, HostVolumeEntry] = Field(default_factory=dict)
+  backup: BackupEntry = Field(default_factory=BackupEntry)
 
 
 @dataclass(frozen=True)
@@ -122,13 +151,13 @@ class Config:
   default_route_provider: str
   route_providers: dict[str, RouteProviderEntry]
   host_volumes: dict[str, HostVolume]
+  backup: BackupEntry
 
   def __init__(
     self,
     config_path: Path,
     kelso_root: Path,
     repos_root: Path,
-    snapshot_root: Path,
     master_key: str,
     port_base: int,
     default_route_provider: str,
@@ -136,6 +165,7 @@ class Config:
     kelso_address: str = "",
     extra_repos: dict[str, Repo] | None = None,
     host_volumes: dict[str, HostVolume] | None = None,
+    backup: BackupEntry | None = None,
   ) -> None:
     self.config_path = config_path
     self.kelso_root = kelso_root
@@ -144,13 +174,13 @@ class Config:
       LOCAL_REPO: Repo(LOCAL_REPO, repos_root / LOCAL_REPO, "local"),
       **(extra_repos or {}),
     }
-    self.snapshot_root = snapshot_root
     self.master_key = master_key
     self.port_base = port_base
     self.kelso_address = kelso_address
     self.default_route_provider = default_route_provider
     self.route_providers = route_providers
     self.host_volumes = host_volumes or {}
+    self.backup = backup or BackupEntry()
 
   @property
   def var_root(self) -> Path:
@@ -182,6 +212,12 @@ class Config:
     if root.is_symlink() and not root.exists():
       return root.readlink()
     return None
+
+  @property
+  def backups_root(self) -> Path:
+    """The backup repository. Usually a link to another disk, like a volume
+    root, and a dangling link means that disk is not there."""
+    return self.kelso_root / "backups"
 
   @property
   def run_root(self) -> Path:
@@ -296,7 +332,6 @@ def load_config_file(config_file: str | Path) -> Config:
 
   repos_root = ep(parsed.repos_root)
   extra_repos = _resolve_repos(repo_raw, repos_root, ep)
-  snapshot_root = ep(parsed.snapshot_root)
 
   route_providers: dict[str, RouteProviderEntry] = {
     NONE_ROUTE_PROVIDER_TAG: RouteProviderEntry(kind="noop", domain=PLACEHOLDER_DOMAIN),
@@ -317,7 +352,6 @@ def load_config_file(config_file: str | Path) -> Config:
     config_path=config_path,
     kelso_root=kelso_root,
     repos_root=repos_root,
-    snapshot_root=snapshot_root,
     master_key=master_key,
     port_base=parsed.port_base,
     kelso_address=parsed.kelso_address,
@@ -325,6 +359,7 @@ def load_config_file(config_file: str | Path) -> Config:
     route_providers=route_providers,
     extra_repos=extra_repos,
     host_volumes=host_volumes,
+    backup=parsed.backup,
   )
 
 
@@ -348,6 +383,11 @@ def _validate_config(parsed: ConfigFile) -> list[str]:
       f"route_provider tag {NONE_ROUTE_PROVIDER_TAG!r} is reserved; "
       f"remove [route_provider.{NONE_ROUTE_PROVIDER_TAG}] from config.toml"
     )
+
+  try:
+    CronSchedule.parse(parsed.backup.schedule)
+  except ValueError as e:
+    errors.append(f"[backup] schedule: {e}")
 
   for tag in parsed.route_provider:
     try:

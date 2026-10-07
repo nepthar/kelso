@@ -21,7 +21,7 @@ logger = logging.getLogger("kelso")
 
 @dataclass(frozen=True)
 class RunState:
-  """The run-state of a single app, for lifecycle/snapshot operations."""
+  """The run-state of a single app, for lifecycle operations."""
 
   app_id: AppID
   run_path: Path

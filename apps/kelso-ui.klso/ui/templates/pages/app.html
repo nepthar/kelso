@@ -9,7 +9,7 @@
 {% block refresh %}{% endblock %}
 
 {#- Logs and, while something runs, the console; then start or stop, reload,
-  snapshot, remove. Each verb opens the job modal. Only one of start/stop can
+  back up, remove. Each verb opens the job modal. Only one of start/stop can
   apply, so only that one is drawn. -#}
 {% block actions %}
 <span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a>
@@ -26,12 +26,12 @@
 {% endif %}
   {{ job_button('Reload', 'load', icon='reload', title='Reload ' ~ name, args={'app': app_id},
       desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
-  {{ job_button('Snapshot', 'snapshot', icon='camera-plus-outline', title='Snapshot ' ~ name, args={'app': app_id},
-      desc='Copies ' ~ app_id ~ "'s volumes and run state into an archive under snapshots/. The app is stopped for the copy and started again after.",
-      fields=[{'name': 'label', 'placeholder': 'label (optional)'}], enabled=loaded) }}
+  {{ job_button('Back up', 'backup', icon='database-export', title='Back up ' ~ name, args={'app': app_id},
+      desc='Backs up ' ~ app_id ~ "'s data volumes, configuration and loaded copy, and the bulk volumes turned on in its configuration. The app is stopped for the moment its data is read and started again after.",
+      enabled=loaded) }}
   {#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
   {{ job_button('Remove', icon='delete-outline', title='Remove ' ~ name, danger=true,
-      desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and take a Snapshot.',
+      desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and Back up.',
       choices=[
         {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
          'desc': 'Stops it, unpublishes its routes and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},

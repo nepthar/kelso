@@ -11,6 +11,7 @@ from pathlib import Path
 
 from kelso.lib import git as git_lib
 from kelso.lib.apps import AppID
+from kelso.lib.backup import SCHEDULED, destination_problem, shares_kelso_disk
 from kelso.lib.docker import DOCKER, DockerError, docker_run_command
 from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
@@ -44,8 +45,9 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_volume_problems(ctx),
     *_catalog_problems(ctx),
     *_key_problems(ctx),
+    *_backup_problems(ctx),
   ]
-  warnings = _repo_warnings(ctx)
+  warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx)]
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
@@ -100,7 +102,7 @@ def tool_problems() -> list[Finding]:
         Finding(
           "the docker daemon",
           "docker is running rootless, which kelso does not support yet: "
-          "snapshots and restores read volume files as root and would "
+          "backups and restores read volume files as root and would "
           "silently miss them. Use rootful docker, with this user in the "
           "docker group.",
         )
@@ -180,6 +182,40 @@ def _listening(path: Path) -> bool:
   finally:
     probe.close()
   return True
+
+
+def _backup_problems(ctx: KelsoCtx) -> list[Finding]:
+  findings = []
+  problem = destination_problem(ctx)
+  if problem:
+    findings.append(Finding("backups", problem))
+  last = ctx.kelso_db.last_backup_run(SCHEDULED)
+  if last and last["failed"]:
+    findings.append(
+      Finding(
+        "backups",
+        f"the scheduled backup at {last['time']} could not back up "
+        + "; ".join(last["failed"])
+        + ". `kelso backup run` tries again.",
+      )
+    )
+  return findings
+
+
+def _backup_warnings(ctx: KelsoCtx) -> list[Finding]:
+  """A note, not a problem: backups on kelso's own disk are fine until that
+  disk fails. `require_mount` is how to insist on another one."""
+  root = ctx.config.backups_root
+  if not root.exists() or destination_problem(ctx) or not shares_kelso_disk(ctx):
+    return []
+  return [
+    Finding(
+      "backups",
+      f"{root} is on the same disk as kelso, so a disk failure would take the "
+      f"backups too. To keep them elsewhere, replace it with a link to another "
+      f"disk, as with a volume root.",
+    )
+  ]
 
 
 def _volume_problems(ctx: KelsoCtx) -> list[Finding]:

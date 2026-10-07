@@ -78,8 +78,8 @@ that does not, with no change to the bundle.
 
 | Kind | For |
 | --- | --- |
-| `data` | State the app must not lose. What gets snapshotted. |
-| `bulk` | Large data — media libraries, archives. Usually a separate disk. |
+| `data` | State the app must not lose. Always backed up. |
+| `bulk` | Large data — media libraries, archives. Usually a separate disk. Backed up only when turned on. |
 | `logs` | Output that can be rotated away without loss. |
 | `temp` | Caches and scratch. Safe to delete when the app is not running. |
 | `app` | Files the bundle itself ships. Always mounted read-only. |
@@ -198,7 +198,6 @@ share the config namespace and always have a default.
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
 | `start_order` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops; `kelso up` starts 1 to 9 in order, and `kelso down` stops them in reverse. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
-| `snapshot_max_count` | `0` | A whole number; keep this many snapshots, 0 for all. The oldest beyond it are deleted after `kelso snapshot take` and `kelso update`, and `kelso cleanup` lists any left over. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the
