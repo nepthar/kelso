@@ -78,11 +78,19 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
         if rest[i] == "--tag":
           tags.append(rest[i + 1])
         i += 2
-      elif rest[i] == "--json":
+      elif rest[i] in ("--json", "--dry-run"):
         i += 1
       else:
         paths.append(rest[i])
         i += 1
+    if "--dry-run" in rest:
+      added = sum(
+        p.stat().st_size
+        for guest in paths
+        for p in (binds[guest].rglob("*") if binds[guest].is_dir() else [binds[guest]])
+        if p.is_file()
+      )
+      return 0, json.dumps({"message_type": "summary", "data_added": added}) + "\n", ""
     snap_id = secrets.token_hex(32)
     tree = repo / "trees" / snap_id
     for guest in paths:
@@ -136,6 +144,11 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
       (repo / "snapshots" / f"{snap_id}.json").unlink()
       shutil.rmtree(repo / "trees" / snap_id)
     return 0, "", ""
+
+  if command == "check":
+    if (repo / "corrupt").exists():
+      return 1, "", "Fatal: repository contains errors\n"
+    return 0, "no errors were found\n", ""
 
   if command == "prune":
     return 0, "", ""

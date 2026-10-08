@@ -7,6 +7,7 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.backup import (
   UPDATE,
   backup_app,
+  create_repository,
   forget_expired,
   refuse_same_second,
   repository,
@@ -87,11 +88,12 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
     if backup:
       try:
         restic = repository(ctx)
-        restic.init()
+        create_repository(ctx, restic)
         run = run_id()
         refuse_same_second(restic, run, app)
         name = backup_app(app, ctx, restic, reason=UPDATE, run=run).id
         forget_expired(ctx, restic, prune=False)
+        restic.check()
       except Exception as e:
         if running:
           with ctx.kelso_lock(by):

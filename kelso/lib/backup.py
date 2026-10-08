@@ -17,6 +17,7 @@ Inside the repository every path is fixed, whatever this machine's layout:
                                     each volume root and backups/ pointed
 """
 
+import shutil
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -30,6 +31,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.recovery import backup_password_from, read_keyfile
 from kelso.lib.repo import LOCAL_REPO
 from kelso.lib.restic import Restic, Snapshot
+from kelso.lib.util import fmt_size
 
 logger = getLogger("kelso.backup")
 
@@ -135,6 +137,30 @@ def repository(ctx: KelsoCtx) -> Restic:
     backup_password_from(seed),
     ctx.config.temp_root / "restic-cache",
   )
+
+
+def create_repository(ctx: KelsoCtx, restic: Restic) -> bool:
+  """Create the repository unless it exists. True when it was created."""
+  # Two inits racing on one folder each write a key; restic then reads some
+  # snapshots with the wrong one.
+  with ctx.kelso_lock("create the backup repository"):
+    return restic.init()
+
+
+def free_bytes(path: Path) -> int:
+  return shutil.disk_usage(path).free
+
+
+def refuse_without_space(restic: Restic, sources: dict[Path, str], what: str) -> None:
+  """Raise if backing up `sources` would add more than the destination has free."""
+  needed = restic.added_by(sources)
+  free = free_bytes(restic.repo)
+  if needed > free:
+    raise ValueError(
+      f"Not enough space to {what}: it would add up to {fmt_size(needed)} to "
+      f"{restic.repo}, which has {fmt_size(free)} free. Free some space there, "
+      f"or delete old backups with `kelso backup delete`."
+    )
 
 
 def backup_due(ctx: KelsoCtx, *, since: datetime, now: datetime) -> bool:
@@ -262,6 +288,7 @@ def state_sources(ctx: KelsoCtx) -> dict[Path, str]:
     config.kelsodb_path: f"{STATE_ROOT}/kelsodb.logtab",
     config.app_config_root: f"{STATE_ROOT}/apps",
     config.repos[LOCAL_REPO].path: f"{STATE_ROOT}/repos/{LOCAL_REPO}",
+    config.scripts_root: f"{STATE_ROOT}/scripts",
   }
   return {host: guest for host, guest in sources.items() if host.exists()}
 
@@ -299,6 +326,8 @@ def backup_app(
   by = f"back up {app}"
   snapshots: dict[str, str] = {}
   with ctx.app_lock(app, by):
+    bulk = bulk_sources(ctx, app)
+    refuse_without_space(restic, {**app_sources(ctx, app), **bulk}, by)
     running = False
     if ctx.is_loaded(app):
       with ctx.kelso_lock(by):
@@ -315,7 +344,6 @@ def backup_app(
           start(app, ctx.config.app_run_path(app), ctx)
 
     # Written once and read while the app runs: nothing is gained by stopping.
-    bulk = bulk_sources(ctx, app)
     if bulk:
       snapshots[BULK] = restic.backup(
         bulk, {**tags, "part": BULK}, what=f"back up {app}'s bulk volumes"
@@ -361,7 +389,7 @@ def run_backups(
   restic = repository(ctx)
   run = run_id()
   refuse_same_second(restic, run)
-  result = RunResult(run=run, created=restic.init())
+  result = RunResult(run=run, created=create_repository(ctx, restic))
   everything = apps is None
   for app in backed_up_apps(ctx) if apps is None else list(apps):
     try:
@@ -393,6 +421,11 @@ def run_backups(
       logger.error("could not back up kelso's state: %s", e)
       result.failed.append(f"kelso's state: {e}")
   forget_expired(ctx, restic)
+  try:
+    restic.check()
+  except Exception as e:
+    logger.error("the backup repository failed its check: %s", e)
+    result.failed.append(f"repository check: {e}")
   record()
   return result
 

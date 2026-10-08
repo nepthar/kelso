@@ -208,6 +208,22 @@ class Restic:
         return str(message["snapshot_id"])
     raise ResticError(f"Unable to {what}: restic reported no snapshot")
 
+  def added_by(self, sources: Mapping[Path, str]) -> int:
+    """Bytes backing up `sources` would add, before compression. Reads what
+    changed since the last backup of the same paths, and writes nothing."""
+    args = ["backup", "--dry-run", "--json", "--host", socket.gethostname()]
+    out = self.run([*args, *sources.values()], sources, what="measure a backup")
+    for line in out.splitlines():
+      message = json.loads(line)
+      if message.get("message_type") == "summary":
+        return int(message.get("data_added", 0))
+    raise ResticError("Unable to measure a backup: restic reported no summary")
+
+  def check(self) -> None:
+    """Raise unless the repository's structure is sound: every snapshot,
+    tree and index readable. Does not read the file data itself."""
+    self.run(["check"], what="check the backup repository", say=True)
+
   def snapshots(self, tags: Mapping[str, str] | None = None) -> list[Snapshot]:
     """Every snapshot carrying all of `tags`, oldest first."""
     args = ["snapshots", "--json"]
