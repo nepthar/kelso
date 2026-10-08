@@ -18,7 +18,7 @@ Inside the repository every path is fixed, whatever this machine's layout:
 """
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from logging import getLogger
 from pathlib import Path
@@ -64,6 +64,7 @@ class Backup:
   version: str
   kelso_id: str
   snapshots: dict[str, str]
+  size: int = 0
 
   @property
   def id(self) -> str:
@@ -177,7 +178,11 @@ def backed_up_apps(ctx: KelsoCtx) -> list[AppID]:
   ids = set(ctx.config.app_config_ids())
   data_root = ctx.config.volume_roots[DATA]
   if data_root.is_dir():
-    ids |= {entry.name for entry in data_root.iterdir() if entry.is_dir()}
+    ids |= {
+      entry.name
+      for entry in data_root.iterdir()
+      if entry.is_dir() and any(v.is_dir() for v in entry.iterdir())
+    }
   return [AppID(raw) for raw in sorted(ids)]
 
 
@@ -415,7 +420,14 @@ def backups(restic: Restic, app: AppID | None = None) -> list[Backup]:
         snapshots={},
       )
     backup.snapshots[snap.tags.get("part", DATA)] = snap.id
+    found[key] = replace(backup, size=backup.size + snap.size)
   return sorted(found.values(), key=lambda b: b.run)
+
+
+def delete(restic: Restic, backup: Backup) -> None:
+  """Forget every snapshot of `backup` and free the space only it held."""
+  restic.forget(backup.snapshots.values(), what=f"delete backup {backup.id}")
+  restic.prune()
 
 
 def state_backups(restic: Restic) -> list[Snapshot]:

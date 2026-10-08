@@ -366,7 +366,7 @@ def backups_view(ctx: KelsoCtx) -> dict[str, Any]:
         "app_version": b.version,
         "reason": b.reason,
         "taken_at": b.time,
-        "bulk": backup_lib.BULK in b.snapshots,
+        "size": b.size,
       }
       for b in reversed(backup_lib.backups(restic))
     ]

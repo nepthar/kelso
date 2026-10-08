@@ -63,6 +63,8 @@ class Snapshot:
   time: str
   tags: dict[str, str]
   paths: tuple[str, ...]
+  # What it backed up, in bytes, before dedup and compression.
+  size: int = 0
 
 
 def _moment(raw: str) -> datetime:
@@ -217,6 +219,7 @@ class Restic:
         time=_timestamp(raw["time"]),
         tags=_tags(raw.get("tags") or ()),
         paths=tuple(raw.get("paths") or ()),
+        size=int((raw.get("summary") or {}).get("total_bytes_processed", 0)),
       )
       for raw in json.loads(self.run(args, what="list backups") or "[]")
     ]

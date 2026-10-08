@@ -15,7 +15,7 @@ from typing import Any
 
 import schedule
 
-from kelso.jobs.backup import BackupJob, ScheduledBackupJob
+from kelso.jobs.backup import BackupJob, DeleteBackupJob, ScheduledBackupJob
 from kelso.jobs.cmd import CmdJob
 from kelso.jobs.job import DONE, FAILED, QUEUED, RUNNING, Job
 from kelso.jobs.load import LoadJob
@@ -58,6 +58,7 @@ JOBS: dict[str, type[Job]] = {
   "backup": BackupJob,
   "scheduled-backup": ScheduledBackupJob,
   "restore": RestoreJob,
+  "delete-backup": DeleteBackupJob,
   "cmd": CmdJob,
   "unload": UnloadJob,
   "rm": RmJob,

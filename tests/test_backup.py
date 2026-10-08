@@ -124,6 +124,24 @@ def test_an_unloaded_app_with_kept_data_is_backed_up(kelso_env):
   assert "data" in backup.snapshots
 
 
+def test_an_empty_data_folder_for_an_unknown_app_is_not_backed_up(kelso_env):
+  (kelso_env.volumes_root / "data" / "gone").mkdir(parents=True)
+  assert "gone" not in backup_lib.backed_up_apps(_ctx(kelso_env))
+
+
+def test_a_backup_knows_its_size_and_can_be_deleted(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("x" * 5000)
+  run = _back_up(kelso_env, BASIC)
+  [backup] = _backups(kelso_env, BASIC)
+  assert backup.size >= 5000
+
+  deleted = kelso_env.run("backup", "delete", BASIC, run)
+  assert deleted.returncode == 0, deleted.stderr
+  assert _backups(kelso_env, BASIC) == []
+  assert any("prune" in args for args in _runs(kelso_env, RESTIC_IMAGE))
+
+
 # --- bulk volumes ----------------------------------------------------------------
 
 

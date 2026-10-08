@@ -99,6 +99,11 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
       "tags": tags,
       "paths": sorted(paths),
       "hostname": "fake",
+      "summary": {
+        "total_bytes_processed": sum(
+          p.stat().st_size for p in tree.rglob("*") if p.is_file()
+        )
+      },
     }
     (repo / "snapshots" / f"{snap_id}.json").write_text(json.dumps(meta))
     summary = {"message_type": "summary", "snapshot_id": snap_id}

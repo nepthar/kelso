@@ -4,7 +4,12 @@
 {% block content %}
 {% set keep = view.get('keep') or {} %}
 {% set last = view.get('last_run') %}
-<p class="lede">Backups of every app and of kelso {{ view.kelso_id }}</p>
+<div class="row lede-line">
+  <p class="lede">Backups of apps and kelso {{ view.kelso_id }}</p>
+  {{ job_button('Back up kelso', 'backup', title='Back up everything',
+      desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
+      enabled=not view.get('problem')) }}
+</div>
 
 {% if view.get('problem') %}
 <div class="error"><h2>Backups cannot run</h2><p>{{ view.problem }}</p></div>
@@ -21,11 +26,6 @@
   </td></tr>
 </tbody></table></div>
 {% if last and last.failed %}<ul>{% for f in last.failed %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
-<div class="row actions">
-  {{ job_button('Back up everything now', 'backup', icon='database-export', title='Back up everything',
-      desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
-      enabled=not view.get('problem')) }}
-</div>
 </div>
 
 <h2>Backups</h2>
@@ -34,7 +34,7 @@
 <p class="empty">No backups yet.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>App</th><th>Version</th><th>Reason</th><th>Taken</th><th>Bulk</th><th class="act"></th>
+  <th>App</th><th>Version</th><th>Reason</th><th>Taken</th><th>Size</th><th class="act"></th>
 </tr></thead><tbody>
 {% for b in view.backups %}
 <tr>
@@ -42,11 +42,15 @@
   <td class="muted">{{ b.get('app_version') or '—' }}</td>
   <td class="muted">{{ b.reason }}</td>
   <td class="muted">{{ when(b.taken_at) }}</td>
-  <td class="muted">{{ 'yes' if b.bulk else '' }}</td>
+  <td class="muted">{{ b.size|size }}</td>
   <td class="act">
     {{- job_button('restore', 'restore', icon='refresh',
         title='Restore ' ~ b.app_id,
         desc='Puts ' ~ b.app_id ~ "'s data, configuration and loaded copy back as backup " ~ b.id ~ ' holds them. What is there now is backed up first. The app must be stopped.',
+        args={'app': b.app_id, 'backup': b.id}) -}}
+    {{- job_button('delete', 'delete-backup', icon='delete-outline', danger=true,
+        title='Delete backup ' ~ b.id ~ ' of ' ~ b.app_id,
+        desc='Deletes this backup of ' ~ b.app_id ~ ' and frees the space only it held. This cannot be undone.',
         args={'app': b.app_id, 'backup': b.id}) -}}
   </td>
 </tr>
