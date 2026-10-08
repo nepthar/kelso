@@ -4,32 +4,56 @@ A script is a Python file defining one `KelsoScript` subclass, run by
 `kelso script NAME` with kelso's own interpreter. Yours go in `scripts/` in the
 kelso root; one there replaces a script kelso ships with the same name.
 
-`Kelso` is the supported way in. Anything else under `kelso` can be imported
-too, but may change without notice.
+`Kelso` and `App` are the supported way in. Anything that changes state needs
+a lock held first, as kelso's own commands do: `with kelso.lock(...)` for
+kelso-wide state, `with app.lock(...)` for an app. Anything else under `kelso`
+can be imported too, but may change without notice.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
-from kelso.lib.config import load_config, load_config_file
-from kelso.lib.config_edit import (
-  set_default_route_provider,
-  set_kelso_address,
-  set_route_provider,
-)
-from kelso.lib.configflow.route_provider import resolve_route_provider, secret_ref
+from tomlkit import TOMLDocument
+
+from kelso.lib.apps import AppID
+from kelso.lib.config_edit import edit_config
 from kelso.lib.doctor import DoctorPrognosis, diagnose
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import apply_config_sets, load_target, start, stop
-from kelso.lib.observations import LOADED
+from kelso.lib.lifecycle import (
+  UNLOAD,
+  apply_config_sets,
+  load_target,
+  reload_app,
+  removal_plan,
+  rm,
+  start,
+  stop,
+)
 from kelso.lib.routes import get_route_provider
 
+_current: ContextVar[KelsoCtx] = ContextVar("kelso_script_ctx")
 
-@dataclass(frozen=True)
-class App:
-  id: str
-  version: str | None
-  running: bool
+
+@contextmanager
+def using(ctx: KelsoCtx) -> Iterator[None]:
+  """Make `ctx` the kelso that `Kelso` and `App` act on, for this block."""
+  token = _current.set(ctx)
+  try:
+    yield
+  finally:
+    _current.reset(token)
+
+
+def _ctx() -> KelsoCtx:
+  try:
+    return _current.get()
+  except LookupError:
+    raise RuntimeError(
+      "No kelso to act on: run this with `kelso script NAME`"
+    ) from None
 
 
 @dataclass(frozen=True)
@@ -39,133 +63,166 @@ class RouteProvider:
   domain: str
 
 
+class App:
+  """One app kelso knows of, loaded or not."""
+
+  def __init__(self, app_id: AppID) -> None:
+    self.id = app_id
+
+  def __repr__(self) -> str:
+    return f"App({self.id!r})"
+
+  def _require_app_lock(self, msg: str) -> None:
+    ctx = _ctx()
+    if not (ctx.holds_app_lock(self.id) and ctx.holds_kelso_lock()):
+      raise RuntimeError(
+        f"{msg} needs {self.id}'s lock: do it inside `with app.lock(...)`"
+      )
+
+  @contextmanager
+  def lock(self, by: str) -> Iterator[None]:
+    """Hold this app's lock, then kelso's, as an app command does."""
+    with _ctx().locked(by, self.id):
+      yield
+
+  @property
+  def loaded(self) -> bool:
+    return _ctx().is_loaded(self.id)
+
+  @property
+  def running(self) -> bool:
+    return _ctx().run_state(self.id).running_count > 0
+
+  @property
+  def version(self) -> str | None:
+    """The version loaded; None when it is not loaded."""
+    spec = _ctx().loaded_spec(self.id)
+    return spec.version if spec else None
+
+  def load(self) -> None:
+    """Load or re-load from its catalog bundle, restarting it if running."""
+    self._require_app_lock(f"Loading {self.id}")
+    ctx = _ctx()
+    target = load_target(ctx, self.id)
+    bundle = target.bundle or ctx.bundle_path(self.id)
+    reload_app(self.id, bundle, ctx, bound=target.bound_to)
+
+  def unload(self) -> None:
+    """Stop it and remove its loaded copy, keeping its data and config."""
+    self._require_app_lock(f"Unloading {self.id}")
+    ctx = _ctx()
+    rm(removal_plan(self.id, ctx, mode=UNLOAD), ctx)
+
+  def start(self, config: dict[str, str] | None = None) -> None:
+    """Start it, loading it first if needed. `config` is stored first, as
+    `kelso start --set` would."""
+    self._require_app_lock(f"Starting {self.id}")
+    ctx = _ctx()
+    target = load_target(ctx, self.id)
+    sets = list((config or {}).items())
+    if sets or not self.loaded:
+      bundle = target.bundle or ctx.bundle_path(self.id)
+    else:
+      bundle = ctx.config.app_run_path(self.id)
+    start(self.id, bundle, ctx, sets=sets, bound=target.bound_to)
+
+  def stop(self) -> None:
+    self._require_app_lock(f"Stopping {self.id}")
+    stop(self.id, _ctx())
+
+  def set_config(self, values: dict[str, str]) -> None:
+    """Store config values; a loaded app reads them at its next start."""
+    self._require_app_lock(f"Configuring {self.id}")
+    spec = _ctx().loaded_spec(self.id)
+    if spec is None:
+      raise ValueError(f"{self.id} is not loaded; pass its config to start()")
+    apply_config_sets(spec, list(values.items()), _ctx())
+
+
 class Kelso:
-  """One kelso root. Each method takes the locks the matching command would."""
+  """The kelso root the script runs against."""
 
-  def __init__(self, ctx: KelsoCtx) -> None:
-    self._ctx = ctx
+  def _require_kelso_lock(self, msg: str) -> None:
+    if not _ctx().holds_kelso_lock():
+      raise RuntimeError(
+        f"{msg} needs the kelso lock: do it inside `with kelso.lock(...)`"
+      )
 
-  def _reload(self) -> None:
-    """After writing config.toml: read it again."""
-    self._ctx = KelsoCtx(load_config_file(self._ctx.config.config_path))
+  @contextmanager
+  def lock(self, by: str) -> Iterator[None]:
+    """Hold the kelso-wide lock."""
+    with _ctx().kelso_lock(by):
+      yield
 
   @property
   def id(self) -> str:
-    return self._ctx.kelso_db.kelso_id()
+    return _ctx().kelso_db.kelso_id()
 
   @property
   def root(self) -> Path:
-    return self._ctx.config.kelso_root
+    return _ctx().config.kelso_root
 
   @property
   def address(self) -> str:
     """The LAN address routes point traffic at; empty when unset."""
-    return self._ctx.config.kelso_address
+    return _ctx().config.kelso_address
 
-  def set_address(self, address: str) -> None:
-    with self._ctx.kelso_lock("script set address"):
-      set_kelso_address(self._ctx, address)
-    self._reload()
+  # --- config.toml --------------------------------------------------------
+
+  @contextmanager
+  def edit_kelso_config(self) -> Iterator[TOMLDocument]:
+    """config.toml, to change in place. Written back when the block ends, only
+    if it still loads as a kelso config; raises otherwise."""
+    self._require_kelso_lock("Editing config.toml")
+    with edit_config(_ctx()) as document:
+      yield document
+    self.reload_config()
+
+  def reload_config(self) -> None:
+    """Read config.toml again, keeping any lock this script holds."""
+    _current.set(_ctx().reloaded())
 
   # --- apps ---------------------------------------------------------------
 
   def apps(self) -> list[App]:
     """Every loaded app."""
-    return [
-      App(str(o.app_id), o.loaded_version, o.running_count > 0)
-      for o in self._ctx.observations()
-      if o.state == LOADED
-    ]
+    return [App(AppID(app_id)) for app_id in sorted(_ctx().loaded_app_ids())]
 
-  def app(self, app_id: str) -> App | None:
-    """A loaded app, or None."""
-    return next((a for a in self.apps() if a.id == app_id), None)
-
-  def start(self, app_id: str, config: dict[str, str] | None = None) -> None:
-    """Start an app from the catalog, loading it first if needed. `config` is
-    stored first, as `kelso start --set` would."""
-    target = load_target(self._ctx, app_id)
-    app = target.app_id
-    sets = list((config or {}).items())
-    if sets or not self._ctx.is_loaded(app):
-      bundle = target.bundle or self._ctx.bundle_path(app)
-    else:
-      bundle = self._ctx.config.app_run_path(app)
-    with self._ctx.locked(f"script start {app}", app):
-      start(app, bundle, self._ctx, sets=sets, bound=target.bound_to)
-
-  def stop(self, app_id: str) -> None:
-    app = self._ctx.resolve_app(app_id)
-    with self._ctx.locked(f"script stop {app}", app):
-      stop(app, self._ctx)
-
-  def set_config(self, app_id: str, values: dict[str, str]) -> None:
-    """Store config values for a loaded app; it reads them at its next start."""
-    app = self._ctx.resolve_app(app_id)
-    spec = self._ctx.loaded_spec(app)
-    if spec is None:
-      raise ValueError(f"{app} is not loaded; pass its config to start instead")
-    with self._ctx.locked(f"script config {app}", app):
-      apply_config_sets(spec, list(values.items()), self._ctx)
+  def app(self, app_id: str) -> App:
+    """An app by id, whether loaded or only in a catalog."""
+    return App(_ctx().resolve_app(app_id))
 
   # --- secrets ------------------------------------------------------------
 
   def secret(self, name: str) -> str | None:
-    return self._ctx.kelso_db.get_secret(name)
+    return _ctx().kelso_db.get_secret(name)
 
   def set_secret(self, name: str, value: str) -> None:
-    with self._ctx.kelso_lock("script secret"):
-      self._ctx.kelso_db.set_secret(name, value)
+    self._require_kelso_lock(f"Setting secret {name}")
+    _ctx().kelso_db.set_secret(name, value)
 
   # --- routes -------------------------------------------------------------
 
   def route_providers(self) -> list[RouteProvider]:
     return [
       RouteProvider(tag, entry.kind, entry.domain)
-      for tag, entry in sorted(self._ctx.config.route_providers.items())
+      for tag, entry in sorted(_ctx().config.route_providers.items())
     ]
 
   @property
   def default_route_provider(self) -> str:
-    return self._ctx.config.default_route_provider
-
-  def set_route_provider(
-    self,
-    tag: str,
-    kind: str,
-    domain: str,
-    args: dict[str, str] | None = None,
-    secrets: dict[str, str] | None = None,
-  ) -> None:
-    """Write `[route_provider.<tag>]`, replacing one already there. Each of
-    `secrets` is stored in kelsodb, and the block names it as `<name>_secret`."""
-    resolve_route_provider(tag, self._ctx, kind)
-    secrets = secrets or {}
-    refs = {f"{name}_secret": secret_ref(tag, name) for name in secrets}
-    with self._ctx.kelso_lock(f"script route provider {tag}"):
-      # config.toml first: it refuses a bad block, and no secret is left behind.
-      set_route_provider(
-        self._ctx, tag, kind=kind, domain=domain, args={**(args or {}), **refs}
-      )
-      for name, value in secrets.items():
-        self._ctx.kelso_db.set_secret(secret_ref(tag, name), value)
-    self._reload()
-
-  def set_default_route_provider(self, tag: str) -> None:
-    with self._ctx.kelso_lock("script default route provider"):
-      set_default_route_provider(self._ctx, tag)
-    self._reload()
+    return _ctx().config.default_route_provider
 
   def check_route_provider(self, tag: str) -> list[str]:
     """What is wrong with a route provider; empty when it is usable."""
-    return get_route_provider(self._ctx, tag).validate()
+    return get_route_provider(_ctx(), tag).validate()
 
   # --- health -------------------------------------------------------------
 
   def diagnose(self) -> DoctorPrognosis:
     """What `kelso script doctor` reports."""
-    with self._ctx.kelso_lock("script diagnose"):
-      return diagnose(self._ctx)
+    self._require_kelso_lock("Diagnosing")
+    return diagnose(_ctx())
 
 
 class KelsoScript:
@@ -174,9 +231,6 @@ class KelsoScript:
   def run(self, args: list[str]) -> None:
     raise NotImplementedError
 
+  @property
   def kelso(self) -> Kelso:
-    """A new view of this kelso root, its config read afresh."""
-    config = load_config()
-    if not config:
-      raise ValueError("Kelso is not initialized; run `kelso init` first")
-    return Kelso(KelsoCtx(config))
+    return Kelso()

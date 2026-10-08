@@ -13,7 +13,7 @@ from filelock import FileLock, Timeout
 
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle, scan_bundles
-from kelso.lib.config import Config
+from kelso.lib.config import Config, load_config_file
 from kelso.lib.crypto import crypto_from_config
 from kelso.lib.docker import load_kelso_run_unit_status
 from kelso.lib.logtab import LogTab
@@ -175,6 +175,20 @@ class KelsoCtx:
     path = self.config.app_lockfile_path(app)
     with self._acquire(self._app_filelock(app), path, by, f"app {app}"):
       yield
+
+  def holds_kelso_lock(self) -> bool:
+    return self._kelso_lock.is_locked
+
+  def holds_app_lock(self, app: AppID | str) -> bool:
+    return self._app_filelock(app).is_locked
+
+  def reloaded(self) -> "KelsoCtx":
+    """A context on config.toml as it is now, sharing this one's locks: a
+    second FileLock on a path this process holds would wait on itself."""
+    fresh = KelsoCtx(load_config_file(self.config.config_path))
+    fresh._kelso_lock = self._kelso_lock
+    fresh._app_locks = self._app_locks
+    return fresh
 
   @contextmanager
   def locked(self, by: str, app: AppID | str | None = None) -> Iterator[None]:

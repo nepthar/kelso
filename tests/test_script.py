@@ -4,7 +4,7 @@ import pytest
 
 from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
-from kelso.script.v1 import Kelso
+from kelso.script.v1 import Kelso, using
 
 HELLO = """\
 from kelso.script.v1 import KelsoScript
@@ -14,7 +14,7 @@ class Hello(KelsoScript):
   desc = "Say hello"
 
   def run(self, args: list[str]) -> None:
-    print(f"hello {self.kelso().id} {' '.join(args)}")
+    print(f"hello {self.kelso.id} {' '.join(args)}")
 """
 
 
@@ -58,53 +58,62 @@ def test_a_file_without_a_script_class_is_refused(kelso_env):
   assert "exactly one KelsoScript" in result.stderr
 
 
-# --- kelso.script.v1.Kelso ----------------------------------------------------
+# --- kelso.script.v1 ------------------------------------------------------------
 
 BASIC = "io.p2net.basic-features"
 
 
-def _kelso(kelso_env) -> Kelso:
-  return Kelso(KelsoCtx(load_config_file(kelso_env.config)))
+def _ctx(kelso_env) -> KelsoCtx:
+  return KelsoCtx(load_config_file(kelso_env.config))
 
 
-def test_kelso_starts_an_app_with_config_and_lists_it(kelso_env):
-  kelso = _kelso(kelso_env)
-  assert kelso.app(BASIC) is None
-  kelso.start(BASIC, {"admin_user": "me", "admin_pass": "hunter2"})
-  [app] = [a for a in kelso.apps() if a.id == BASIC]
-  assert app.running
-  ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert ctx.app_store(BASIC).get_config("admin_pass") == (True, "hunter2")
-
-  kelso.set_config(BASIC, {"admin_pass": "swordfish"})
-  assert ctx.app_store(BASIC).get_config("admin_pass") == (True, "swordfish")
-  kelso.stop(BASIC)
-  assert not kelso.app(BASIC).running
-
-
-def test_kelso_writes_a_route_provider_and_makes_it_the_default(kelso_env):
-  kelso = _kelso(kelso_env)
-  kelso.set_address("10.0.0.5")
-  kelso.set_route_provider(
-    "cf",
-    "cloudflare_tunnel",
-    "example.com",
-    args={"account_id": "acct", "tunnel_id": "tun"},
-    secrets={"api_token": "tok"},
-  )
-  kelso.set_default_route_provider("cf")
-
-  assert kelso.default_route_provider == "cf"
-  assert ("cf", "cloudflare_tunnel", "example.com") in [
-    (p.tag, p.kind, p.domain) for p in kelso.route_providers()
-  ]
-  assert kelso.secret("route_provider.cf.api_token") == "tok"
-  config = load_config_file(kelso_env.config)
-  assert config.route_providers["cf"].args["api_token_secret"] == (
-    "route_provider.cf.api_token"
+def test_an_app_starts_with_config_stops_and_unloads(kelso_env):
+  with using(_ctx(kelso_env)):
+    kelso = Kelso()
+    app = kelso.app(BASIC)
+    assert not app.loaded
+    with app.lock("test"):
+      app.start({"admin_user": "me", "admin_pass": "hunter2"})
+      assert app.running
+      assert [a.id for a in kelso.apps()] == [BASIC]
+      app.set_config({"admin_pass": "swordfish"})
+      app.stop()
+      assert not app.running
+      app.unload()
+    assert not app.loaded
+  assert _ctx(kelso_env).app_store(BASIC).get_config("admin_pass") == (
+    True,
+    "swordfish",
   )
 
 
-def test_kelso_refuses_an_unknown_route_provider_kind(kelso_env):
-  with pytest.raises(ValueError, match="Unknown route provider kind"):
-    _kelso(kelso_env).set_route_provider("x", "carrier_pigeon", "example.com")
+def test_changing_state_without_the_lock_is_refused(kelso_env):
+  with using(_ctx(kelso_env)):
+    kelso = Kelso()
+    with pytest.raises(RuntimeError, match="app.lock"):
+      kelso.app(BASIC).start()
+    with pytest.raises(RuntimeError, match="kelso.lock"):
+      kelso.set_secret("x", "y")
+    with pytest.raises(RuntimeError, match="kelso.lock"):
+      with kelso.edit_kelso_config():
+        pass
+
+
+def test_config_edits_are_checked_and_then_seen(kelso_env):
+  with using(_ctx(kelso_env)):
+    kelso = Kelso()
+    with kelso.lock("test"):
+      with pytest.raises(ValueError, match="not valid"):
+        with kelso.edit_kelso_config() as kconfig:
+          kconfig["default_route_provider"] = "nowhere"
+      with kelso.edit_kelso_config() as kconfig:
+        kconfig["kelso_address"] = "10.0.0.5"
+      assert kelso.address == "10.0.0.5"
+      # Still held after the reload, so this does not wait on itself.
+      kelso.set_secret("x", "y")
+    assert kelso.secret("x") == "y"
+
+
+def test_kelso_outside_a_script_says_how_to_run_one():
+  with pytest.raises(RuntimeError, match="kelso script"):
+    Kelso().apps()

@@ -219,12 +219,6 @@ def remove_route_provider(ctx: KelsoCtx, tag: str) -> None:
     del providers[tag]
 
 
-def set_default_route_provider(ctx: KelsoCtx, tag: str) -> None:
-  """Set the route provider apps publish through unless they name another."""
-  with edit_config(ctx) as document:
-    document["default_route_provider"] = tag
-
-
 def set_kelso_address(ctx: KelsoCtx, address: str) -> None:
   """Set the top-level `kelso_address` every route provider points traffic at."""
   if not address:

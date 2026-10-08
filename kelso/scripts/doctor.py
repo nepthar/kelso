@@ -6,7 +6,9 @@ class Doctor(KelsoScript):
   desc = "Report orphaned or inconsistent kelso state"
 
   def run(self, args: list[str]) -> None:
-    prognosis = self.kelso().diagnose()
+    kelso = self.kelso
+    with kelso.lock("doctor"):
+      prognosis = kelso.diagnose()
     if not prognosis.problems and not prognosis.warnings:
       print("No problems found")
       return
