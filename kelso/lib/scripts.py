@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 
 from kelso.lib.kelso import KelsoCtx
-from kelso.script import KelsoScript
+from kelso.script.v1 import KelsoScript
 
 SHIPPED = Path(__file__).parent.parent / "scripts"
 

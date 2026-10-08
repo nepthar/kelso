@@ -1,14 +1,12 @@
-from kelso.lib.doctor import Finding, diagnose
-from kelso.script import KelsoCtx, KelsoScript
+from kelso.lib.doctor import Finding
+from kelso.script.v1 import KelsoScript
 
 
 class Doctor(KelsoScript):
   desc = "Report orphaned or inconsistent kelso state"
 
-  def run(self, ctx: KelsoCtx) -> None:
-    with ctx.kelso_lock("doctor"):
-      prognosis = diagnose(ctx)
-
+  def run(self, args: list[str]) -> None:
+    prognosis = self.kelso().diagnose()
     if not prognosis.problems and not prognosis.warnings:
       print("No problems found")
       return

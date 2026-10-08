@@ -36,4 +36,4 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       f"No script {args.name!r}. `kelso script` lists them; add your own to "
       f"{ctx.config.scripts_root}"
     )
-  load_script(path)(args.args).run(ctx)
+  load_script(path)().run(args.args)
