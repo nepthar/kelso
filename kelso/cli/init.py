@@ -50,7 +50,7 @@ port_base = 41000
 # tables like the ones below -- a directory on this machine, or a folder in a
 # GitHub repository that kelso mirrors into repos/<name> with git.
 #
-# An app id carried by two repos is ambiguous: `kelso script doctor` reports those,
+# An app id carried by two repos is ambiguous: `kelso system doctor` reports those,
 # and you load one by naming its repo, `kelso load <app>@<repo>`.
 #
 # Adding a repo is a standing commitment to whatever appears in it later, not
@@ -270,8 +270,6 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
   git.adopt(root / "repos" / LOCAL_REPO)
-  (root / "scripts").mkdir(exist_ok=True)
-  git.adopt(root / "scripts")
   (root / CONF_DIR / "apps").mkdir(parents=True, exist_ok=True)
   for kind in VOLUME_KINDS:
     # A link made before init is where the operator wants this kind to live.
@@ -311,7 +309,6 @@ def run(args: argparse.Namespace, _ctx) -> None:
     )
   print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   print(f"  repos:       {root / 'repos'}")
-  print(f"  scripts:     {root / 'scripts'} (yours; `kelso script` lists them)")
   print(f"  backups:     {root / 'backups'}")
   print(f"  var:         {root / 'var'} ({', '.join(VAR_DIRS)})")
   print("  volumes:")

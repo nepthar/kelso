@@ -1274,7 +1274,7 @@ def test_doctor_reports_a_dangling_volume_root_and_lists_no_others(kelso_env):
 
 
 def test_doctor_says_only_that_all_is_well(kelso_env):
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 0, result.stdout
   assert result.stdout == "No problems found\n"
 
@@ -1370,7 +1370,7 @@ def test_doctor_lists_problems_then_warnings(kelso_env):
   logs = kelso_env.volumes_root / "logs"
   logs.symlink_to(kelso_env.root.parent / "gone")
 
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert result.stdout == (
     "Problems:\n"
@@ -1659,7 +1659,7 @@ def test_init_refuses_without_git_and_writes_nothing(kelso_env, tmp_path, monkey
 
 def test_doctor_reports_a_missing_tool(kelso_env, monkeypatch):
   monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "git: git is not installed" in result.stdout
 
@@ -1690,7 +1690,7 @@ def test_init_refuses_rootless_docker(kelso_env, tmp_path, monkeypatch):
 
 def test_doctor_reports_rootless_docker(kelso_env, monkeypatch):
   rootless_docker(monkeypatch)
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "docker is running rootless" in result.stdout
 
@@ -1709,7 +1709,7 @@ def test_doctor_says_how_to_pick_up_the_docker_group(kelso_env, monkeypatch):
     return real(cmd, **kwargs)
 
   monkeypatch.setattr(kelso.lib.doctor, "docker_run_command", docker)
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "log out of every session, console included" in result.stdout
   assert "sudo systemctl restart user@$(id -u)" in result.stdout
@@ -1717,7 +1717,7 @@ def test_doctor_says_how_to_pick_up_the_docker_group(kelso_env, monkeypatch):
 
 def test_doctor_refuses_a_git_too_old_to_mirror(kelso_env, monkeypatch):
   monkeypatch.setattr(kelso.lib.doctor, "git", lambda *args: "git version 2.20.1")
-  result = kelso_env.run("script", "doctor")
+  result = kelso_env.run("system", "doctor")
   assert result.returncode == 1
   assert "git version 2.20.1 is too old" in result.stdout
 

@@ -302,7 +302,7 @@ the invoking user and cannot touch what the app's containers wrote.
   something in it, `ps` shows the app with blank columns, `inspect` says it is
   neither loaded nor in a catalog, `cmd` and `config` print a validation error,
   `kelso cron` silently drops its jobs, and `kelso update` fails, since its
-  update backup reads that manifest. `kelso script doctor` reports it.
+  update backup reads that manifest. `kelso system doctor` reports it.
   Workaround: `kelso load <app>` from a source that parses.
 - **Two kelso roots on one docker daemon see each other's apps.** Compose
   project names and the `kelso.app_id` label are not scoped to a root, so a
@@ -312,11 +312,11 @@ the invoking user and cannot touch what the app's containers wrote.
 - **kelsod being down is invisible.** kelsod records the metrics behind volume
   sizes, resumes apps at boot, and runs cron. With it stopped, `kelso status`
   shows `0.0 B` for every volume kind, apps stay down after a reboot, and cron
-  jobs do not run. `kelso script doctor` reports it.
+  jobs do not run. `kelso system doctor` reports it.
 - **`load` says `No app found` when an app's repo no longer carries it.** If the
   repo a loaded app came from is gone or not mirrored, `kelso load <app>` falls
   back to the loaded copy, finds no source, and reports the app as missing.
-  Check `kelso script doctor` for a repo that is not a directory.
+  Check `kelso system doctor` for a repo that is not a directory.
 
 ## Todo
 

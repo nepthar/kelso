@@ -132,7 +132,7 @@ def test_rekey_moves_every_secret_onto_the_new_key(kelso_env, monkeypatch):
   with pytest.raises(InvalidToken):
     _fernet(OLD_KEY).decrypt(blobs[-1].encode())
 
-  doctor = kelso_env.run("script", "doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert "recovery phrase" not in doctor.stdout + doctor.stderr
 
 
@@ -196,7 +196,7 @@ def test_a_root_without_a_seed_is_told_to_rekey(kelso_env):
   result = kelso_env.run("system", "recovery-phrase")
   assert result.returncode != 0
   assert "kelso system rekey" in result.stderr
-  doctor = kelso_env.run("script", "doctor")
+  doctor = kelso_env.run("system", "doctor")
   assert "kelso system rekey" in doctor.stdout + doctor.stderr
 
   # Secrets are refused rather than stored in the clear.

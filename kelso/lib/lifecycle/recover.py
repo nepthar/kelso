@@ -193,14 +193,12 @@ def _copy_state(tree: Path, ctx: KelsoCtx) -> KelsoCtx:
     config.app_config_root.mkdir(parents=True, exist_ok=True)
     for logtab in apps.iterdir():
       shutil.copyfile(logtab, config.app_config_root / logtab.name)
-  for saved, target in (
-    (tree / "repos" / LOCAL_REPO, config.repos[LOCAL_REPO].path),
-    (tree / "scripts", config.scripts_root),
-  ):
-    if saved.is_dir():
-      if target.exists():
-        shutil.rmtree(target)
-      shutil.copytree(saved, target, symlinks=True)
+  local = tree / "repos" / LOCAL_REPO
+  if local.is_dir():
+    target = config.repos[LOCAL_REPO].path
+    if target.exists():
+      shutil.rmtree(target)
+    shutil.copytree(local, target, symlinks=True)
   return ctx
 
 

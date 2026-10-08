@@ -183,10 +183,6 @@ class Config:
     self.backup = backup or BackupEntry()
 
   @property
-  def scripts_root(self) -> Path:
-    return self.kelso_root / "scripts"
-
-  @property
   def var_root(self) -> Path:
     return self.kelso_root / "var"
 

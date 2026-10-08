@@ -23,7 +23,6 @@ from kelso.cli import (
   restart,
   restore,
   routes,
-  script,
   shell,
   start,
   status,
@@ -63,7 +62,6 @@ COMMANDS = [
   cron,
   repo,
   routes,
-  script,
   system,
   init,
 ]
@@ -100,8 +98,7 @@ Backups       kelso backup | backup run | backup list
 Cron          kelso cron | cron tick
 Repos         kelso repo list | add | update | remove
 Routes        kelso route list | add | remove | check | add-provider
-Scripts       kelso script | script <name> [args]   (`kelso script doctor`)
-System        kelso system activity | volumes | secret | host-volume
+System        kelso system doctor | activity | volumes | secret | host-volume
                            service | rekey | recovery-phrase | decrypt | purge
 Setup         kelso init | init --with-phrase
 

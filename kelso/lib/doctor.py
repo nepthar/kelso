@@ -1,4 +1,4 @@
-"""Checks behind `kelso script doctor`: orphaned or inconsistent kelso state.
+"""Checks behind `kelso system doctor`: orphaned or inconsistent kelso state.
 
 Diagnosis only reads; the caller holds the kelso lock and renders the result.
 """

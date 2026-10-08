@@ -524,11 +524,11 @@ def test_a_colon_in_a_path_is_refused(tmp_path):
 
 
 def test_doctor_notes_backups_on_kelsos_own_disk(kelso_env):
-  quiet = kelso_env.run("script", "doctor")
+  quiet = kelso_env.run("system", "doctor")
   assert "same disk as kelso" not in quiet.stdout + quiet.stderr
 
   (kelso_env.root / "backups").mkdir(exist_ok=True)
-  noted = kelso_env.run("script", "doctor")
+  noted = kelso_env.run("system", "doctor")
   assert "same disk as kelso" in noted.stdout + noted.stderr
   assert noted.returncode == 0
 
