@@ -130,9 +130,6 @@ be bulletproof.
   healthcheck, still running after the settle time). Anything else, including a
   failed load, restores the update backup and starts the app again.
 - **Backups that can always be restored:**
-  - Refuse to start a backup without the disk space for it.
-  - Verify the backup after taking it (`restic check` on what it wrote) before
-    the update touches anything.
   - Record the image digests the app ran, and have `cleanup` keep any image a
     kept backup names. Today `cleanup` removes images no *loaded* app uses,
     which can leave a rollback with nothing to roll back to.

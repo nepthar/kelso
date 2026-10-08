@@ -104,7 +104,9 @@ def test_a_running_app_is_stopped_for_its_backup_and_started_again(kelso_env):
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
   ]
   backed_up = next(
-    i for i, args in enumerate(calls) if RESTIC_IMAGE in args and "backup" in args
+    i
+    for i, args in enumerate(calls)
+    if RESTIC_IMAGE in args and "backup" in args and "--dry-run" not in args
   )
   compose = [args[:2] for args in calls if args[0] == "compose"]
   before = [args[:2] for args in calls[:backed_up] if args[0] == "compose"]
@@ -385,6 +387,26 @@ def test_update_without_a_backup_disk_changes_nothing_unless_told(kelso_env, tmp
   refused = kelso_env.run("update", BASIC, "-y")
   assert refused.returncode == 1
   assert "--no-backup" in refused.stderr
+
+
+def test_a_backup_without_room_for_it_is_refused(kelso_env, monkeypatch):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("x" * 5000)
+  monkeypatch.setattr(backup_lib, "free_bytes", lambda _path: 100)
+  refused = kelso_env.run("backup", "run", BASIC)
+  assert refused.returncode == 1
+  assert "Not enough space" in refused.stderr
+  assert _backups(kelso_env, BASIC) == []
+
+
+def test_update_refuses_when_the_repository_fails_its_check(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  _back_up(kelso_env, BASIC)
+  (kelso_env.root / "backups" / "corrupt").touch()
+  refused = kelso_env.run("update", BASIC, "-y")
+  assert refused.returncode == 1
+  assert "Nothing changed" in refused.stderr
+  assert "repository contains errors" in refused.stderr
 
 
 # --- retention ---------------------------------------------------------------------
