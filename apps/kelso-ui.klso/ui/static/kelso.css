@@ -364,9 +364,10 @@ a.btn.icon { padding: 5px 7px; line-height: 0; }
 .reachable { margin-top: 10px; font-size: 13px; }
 .reachable .key { font-weight: 500; }
 .app-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
-/* The dashboard's line about the host, with its shell beside it. */
-.host-line { gap: 8px; margin-bottom: 12px; }
-.host-line .lede { margin: 0; }
+/* A page's lede with one control pushed to the right edge. */
+.lede-line { gap: 8px; margin-bottom: 12px; }
+.lede-line .lede { margin: 0; }
+.lede-line > :not(.lede) { margin-left: auto; }
 .apphead h2 {
   margin: 0; font-size: 19px; font-weight: 600; text-transform: none;
   letter-spacing: -0.012em; color: var(--fg); display: block;
@@ -611,7 +612,6 @@ td.trend span { margin-left: 10px; font-variant-numeric: tabular-nums; }
   fill: none; stroke: var(--coral); stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
-.host-line .timeframe { margin-left: auto; }
 .uplot { font-family: inherit; }
 
 @media (max-width: 52rem) {

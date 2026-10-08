@@ -4,7 +4,12 @@
 {% block content %}
 {% set keep = view.get('keep') or {} %}
 {% set last = view.get('last_run') %}
-<p class="lede">Backups of every app and of kelso {{ view.kelso_id }}</p>
+<div class="row lede-line">
+  <p class="lede">Backups of apps and kelso {{ view.kelso_id }}</p>
+  {{ job_button('Backup Kelso', 'backup', title='Back up everything',
+      desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
+      enabled=not view.get('problem')) }}
+</div>
 
 {% if view.get('problem') %}
 <div class="error"><h2>Backups cannot run</h2><p>{{ view.problem }}</p></div>
@@ -21,11 +26,6 @@
   </td></tr>
 </tbody></table></div>
 {% if last and last.failed %}<ul>{% for f in last.failed %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
-<div class="row actions">
-  {{ job_button('Back up everything now', 'backup', icon='database-export', title='Back up everything',
-      desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
-      enabled=not view.get('problem')) }}
-</div>
 </div>
 
 <h2>Backups</h2>
