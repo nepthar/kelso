@@ -1,6 +1,9 @@
 from kelso.jobs.job import Job, logger
-from kelso.lib.backup import MANUAL, SCHEDULED, run_backups
+from kelso.lib import backup as backup_lib
+from kelso.lib.apps import AppID
+from kelso.lib.backup import MANUAL, SCHEDULED, repository, run_backups
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle import find_backup
 
 
 class BackupJob(Job):
@@ -38,3 +41,22 @@ class ScheduledBackupJob(BackupJob):
   description = "Back up every app and kelso itself, on the [backup] schedule"
   optional_args = ()
   reason = SCHEDULED
+
+
+class DeleteBackupJob(Job):
+  name = "delete-backup"
+  description = "Delete one of an app's backups"
+  required_args = ("app", "backup")
+
+  def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
+    """Not resolved against the catalog: a removed app's backups can go too."""
+    app = AppID(kwargs["app"])
+    find_backup(app, kwargs["backup"], repository(ctx))
+    self.app = str(app)
+    self.app_id = app
+    self.backup = kwargs["backup"]
+
+  def run(self, ctx: KelsoCtx) -> None:
+    restic = repository(ctx)
+    backup_lib.delete(restic, find_backup(self.app_id, self.backup, restic))
+    logger.info("Deleted backup %s of %s", self.backup, self.app_id)

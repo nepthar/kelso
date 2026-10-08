@@ -586,8 +586,14 @@ def test_backups_lists_each_app_backup_newest_first(kelso_env, client, jobs):
   [row] = body["backups"]
   assert row["app_id"] == "ports-demo"
   assert row["reason"] == "manual"
-  assert row["bulk"] is False
+  assert row["size"] > 0
   assert body["last_run"]["backed_up"] == ["ports-demo"]
+
+  job = submit(
+    client, jobs, "delete-backup", {"app": "ports-demo", "backup": row["id"]}
+  )
+  assert job["state"] == "done", job["error"]
+  assert client.get("/backups").json()["backups"] == []
 
 
 def test_a_destination_that_is_not_there_is_reported(kelso_env, client, tmp_path):

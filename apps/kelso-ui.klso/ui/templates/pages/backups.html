@@ -34,7 +34,7 @@
 <p class="empty">No backups yet.</p>
 {% else %}
 <div class="scroll"><table><thead><tr>
-  <th>App</th><th>Version</th><th>Reason</th><th>Taken</th><th>Bulk</th><th class="act"></th>
+  <th>App</th><th>Version</th><th>Reason</th><th>Taken</th><th>Size</th><th class="act"></th>
 </tr></thead><tbody>
 {% for b in view.backups %}
 <tr>
@@ -42,11 +42,15 @@
   <td class="muted">{{ b.get('app_version') or '—' }}</td>
   <td class="muted">{{ b.reason }}</td>
   <td class="muted">{{ when(b.taken_at) }}</td>
-  <td class="muted">{{ 'yes' if b.bulk else '' }}</td>
+  <td class="muted">{{ b.size|size }}</td>
   <td class="act">
     {{- job_button('restore', 'restore', icon='refresh',
         title='Restore ' ~ b.app_id,
         desc='Puts ' ~ b.app_id ~ "'s data, configuration and loaded copy back as backup " ~ b.id ~ ' holds them. What is there now is backed up first. The app must be stopped.',
+        args={'app': b.app_id, 'backup': b.id}) -}}
+    {{- job_button('delete', 'delete-backup', icon='delete-outline', danger=true,
+        title='Delete backup ' ~ b.id ~ ' of ' ~ b.app_id,
+        desc='Deletes this backup of ' ~ b.app_id ~ ' and frees the space only it held. This cannot be undone.',
         args={'app': b.app_id, 'backup': b.id}) -}}
   </td>
 </tr>

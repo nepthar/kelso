@@ -427,7 +427,7 @@ BACKUPS = {
       "app_version": "0.6.0",
       "reason": "scheduled",
       "taken_at": "2026-09-23T03:00:00Z",
-      "bulk": False,
+      "size": 48213,
     },
     {
       "id": "20260920-120000",
@@ -435,7 +435,7 @@ BACKUPS = {
       "app_version": "",
       "reason": "manual",
       "taken_at": "2026-09-20T12:00:00Z",
-      "bulk": True,
+      "size": 7340032,
     },
   ],
 }

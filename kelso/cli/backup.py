@@ -6,6 +6,8 @@ from kelso.lib import backup as backups_lib
 from kelso.lib.apps import AppID
 from kelso.lib.backup import MANUAL, Backup
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle import find_backup
+from kelso.lib.util import fmt_size
 
 FIRST_BACKUP = """\
 
@@ -35,6 +37,11 @@ def register(subparsers) -> None:
   listing = sub.add_parser("list", help="List backups, of one app or all")
   listing.add_argument("app", nargs="?", metavar="APP")
   listing.set_defaults(func=run_list)
+
+  delete = sub.add_parser("delete", help="Delete one of an app's backups")
+  delete.add_argument("app", metavar="APP")
+  delete.add_argument("backup", metavar="BACKUP")
+  delete.set_defaults(func=run_delete, activity="delete-backup")
 
 
 def run_status(args: argparse.Namespace, ctx: KelsoCtx) -> None:
@@ -93,7 +100,8 @@ def run_run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 def _rows(found: list[Backup]) -> list[tuple[str, ...]]:
   return [
-    (b.id, str(b.app), b.version or "-", b.reason, b.time) for b in reversed(found)
+    (b.id, str(b.app), b.version or "-", b.reason, b.time, fmt_size(b.size))
+    for b in reversed(found)
   ]
 
 
@@ -110,8 +118,15 @@ def run_list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   print(
     tabulate(
       _rows(found),
-      headers=["BACKUP", "APP", "VERSION", "REASON", "TAKEN"],
+      headers=["BACKUP", "APP", "VERSION", "REASON", "TAKEN", "SIZE"],
       tablefmt="simple",
       disable_numparse=True,
     )
   )
+
+
+def run_delete(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  restic = backups_lib.repository(ctx)
+  found = find_backup(AppID(args.app), args.backup, restic)
+  backups_lib.delete(restic, found)
+  print(f"Deleted backup {found.id} of {found.app}")
