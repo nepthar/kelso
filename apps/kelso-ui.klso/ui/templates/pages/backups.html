@@ -6,7 +6,7 @@
 {% set last = view.get('last_run') %}
 <div class="row lede-line">
   <p class="lede">Backups of apps and kelso {{ view.kelso_id }}</p>
-  {{ job_button('Backup Kelso', 'backup', title='Back up everything',
+  {{ job_button('Back up kelso', 'backup', title='Back up everything',
       desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
       enabled=not view.get('problem')) }}
 </div>
