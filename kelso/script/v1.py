@@ -4,10 +4,9 @@ A script is a Python file defining one `KelsoScript` subclass, run by
 `kelso script NAME` with kelso's own interpreter. Yours go in `scripts/` in the
 kelso root; one there replaces a script kelso ships with the same name.
 
-`Kelso` and `App` are the supported way in. Anything that changes state needs
-a lock held first, as kelso's own commands do: `with kelso.lock(...)` for
-kelso-wide state, `with app.lock(...)` for an app. Anything else under `kelso`
-can be imported too, but may change without notice.
+`Kelso` and `App` are the supported way in. Each method takes the locks its
+command would; `kelso.lock()` and `app.lock()` hold them across several steps.
+Anything else under `kelso` can be imported too, but may change without notice.
 """
 
 from collections.abc import Iterator
@@ -72,13 +71,6 @@ class App:
   def __repr__(self) -> str:
     return f"App({self.id!r})"
 
-  def _require_app_lock(self, msg: str) -> None:
-    ctx = _ctx()
-    if not (ctx.holds_app_lock(self.id) and ctx.holds_kelso_lock()):
-      raise RuntimeError(
-        f"{msg} needs {self.id}'s lock: do it inside `with app.lock(...)`"
-      )
-
   @contextmanager
   def lock(self, by: str) -> Iterator[None]:
     """Hold this app's lock, then kelso's, as an app command does."""
@@ -101,22 +93,21 @@ class App:
 
   def load(self) -> None:
     """Load or re-load from its catalog bundle, restarting it if running."""
-    self._require_app_lock(f"Loading {self.id}")
     ctx = _ctx()
     target = load_target(ctx, self.id)
     bundle = target.bundle or ctx.bundle_path(self.id)
-    reload_app(self.id, bundle, ctx, bound=target.bound_to)
+    with self.lock(f"script load {self.id}"):
+      reload_app(self.id, bundle, ctx, bound=target.bound_to)
 
   def unload(self) -> None:
     """Stop it and remove its loaded copy, keeping its data and config."""
-    self._require_app_lock(f"Unloading {self.id}")
     ctx = _ctx()
-    rm(removal_plan(self.id, ctx, mode=UNLOAD), ctx)
+    with self.lock(f"script unload {self.id}"):
+      rm(removal_plan(self.id, ctx, mode=UNLOAD), ctx)
 
   def start(self, config: dict[str, str] | None = None) -> None:
     """Start it, loading it first if needed. `config` is stored first, as
     `kelso start --set` would."""
-    self._require_app_lock(f"Starting {self.id}")
     ctx = _ctx()
     target = load_target(ctx, self.id)
     sets = list((config or {}).items())
@@ -124,29 +115,24 @@ class App:
       bundle = target.bundle or ctx.bundle_path(self.id)
     else:
       bundle = ctx.config.app_run_path(self.id)
-    start(self.id, bundle, ctx, sets=sets, bound=target.bound_to)
+    with self.lock(f"script start {self.id}"):
+      start(self.id, bundle, ctx, sets=sets, bound=target.bound_to)
 
   def stop(self) -> None:
-    self._require_app_lock(f"Stopping {self.id}")
-    stop(self.id, _ctx())
+    with self.lock(f"script stop {self.id}"):
+      stop(self.id, _ctx())
 
   def set_config(self, values: dict[str, str]) -> None:
     """Store config values; a loaded app reads them at its next start."""
-    self._require_app_lock(f"Configuring {self.id}")
     spec = _ctx().loaded_spec(self.id)
     if spec is None:
       raise ValueError(f"{self.id} is not loaded; pass its config to start()")
-    apply_config_sets(spec, list(values.items()), _ctx())
+    with self.lock(f"script config {self.id}"):
+      apply_config_sets(spec, list(values.items()), _ctx())
 
 
 class Kelso:
   """The kelso root the script runs against."""
-
-  def _require_kelso_lock(self, msg: str) -> None:
-    if not _ctx().holds_kelso_lock():
-      raise RuntimeError(
-        f"{msg} needs the kelso lock: do it inside `with kelso.lock(...)`"
-      )
 
   @contextmanager
   def lock(self, by: str) -> Iterator[None]:
@@ -173,10 +159,10 @@ class Kelso:
   def edit_kelso_config(self) -> Iterator[TOMLDocument]:
     """config.toml, to change in place. Written back when the block ends, only
     if it still loads as a kelso config; raises otherwise."""
-    self._require_kelso_lock("Editing config.toml")
-    with edit_config(_ctx()) as document:
-      yield document
-    self.reload_config()
+    with self.lock("script edit config"):
+      with edit_config(_ctx()) as document:
+        yield document
+      self.reload_config()
 
   def reload_config(self) -> None:
     """Read config.toml again, keeping any lock this script holds."""
@@ -198,8 +184,8 @@ class Kelso:
     return _ctx().kelso_db.get_secret(name)
 
   def set_secret(self, name: str, value: str) -> None:
-    self._require_kelso_lock(f"Setting secret {name}")
-    _ctx().kelso_db.set_secret(name, value)
+    with self.lock("script secret"):
+      _ctx().kelso_db.set_secret(name, value)
 
   # --- routes -------------------------------------------------------------
 
@@ -221,8 +207,8 @@ class Kelso:
 
   def diagnose(self) -> DoctorPrognosis:
     """What `kelso script doctor` reports."""
-    self._require_kelso_lock("Diagnosing")
-    return diagnose(_ctx())
+    with self.lock("script diagnose"):
+      return diagnose(_ctx())
 
 
 class KelsoScript:

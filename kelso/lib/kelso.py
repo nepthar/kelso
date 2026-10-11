@@ -176,12 +176,6 @@ class KelsoCtx:
     with self._acquire(self._app_filelock(app), path, by, f"app {app}"):
       yield
 
-  def holds_kelso_lock(self) -> bool:
-    return self._kelso_lock.is_locked
-
-  def holds_app_lock(self, app: AppID | str) -> bool:
-    return self._app_filelock(app).is_locked
-
   def reloaded(self) -> "KelsoCtx":
     """A context on config.toml as it is now, sharing this one's locks: a
     second FileLock on a path this process holds would wait on itself."""
