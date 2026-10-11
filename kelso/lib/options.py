@@ -44,6 +44,11 @@ def _int_between(low: int, high: int | None) -> Callable[[str], None]:
   return check
 
 
+def _user(value: str) -> None:
+  if value and not all(part.isdigit() for part in value.split(":", 1)):
+    raise ValueError("use a numeric uid or uid:gid, such as 1000:1000, or leave empty")
+
+
 # The named start_order groups. The odd numbers between them are free, for
 # squeezing something in.
 START_GROUPS = {
@@ -77,6 +82,12 @@ APP_OPTIONS: dict[str, AppOption] = {
       + ". Group 0 runs while kelsod does; `kelso up` starts the rest in order",
       lambda app: "6",
       _int_between(0, 9),
+    ),
+    AppOption(
+      "user",
+      "uid or uid:gid every container runs as; empty runs as the image's own user",
+      lambda app: "",
+      _user,
     ),
   )
 }

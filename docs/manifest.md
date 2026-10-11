@@ -198,6 +198,7 @@ share the config namespace and always have a default.
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
 | `start_order` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops; `kelso up` starts 1 to 9 in order, and `kelso down` stops them in reverse. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
+| `user` | empty | A numeric `uid` or `uid:gid` that every container of the app runs as. Empty runs as the user the image says. The volumes kelso creates belong to the user kelso runs as, so a uid other than that one may not be able to write to them. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the
@@ -364,8 +365,8 @@ Two rules apply.
 
 **Keys kelso generates are refused** — `image`, `volumes`, `ports`, `labels`,
 `environment`, `command`, `hostname`, `restart`, `network_mode`,
-`healthcheck`. Those have
-manifest fields; setting them twice would mean one of them silently losing.
+`healthcheck`, `user`. Those have manifest fields or app options; setting them
+twice would mean one of them silently losing.
 
 **Keys kelso does not recognise are announced.** There is an allowlist of
 options that shape how a container runs without reaching outside it —

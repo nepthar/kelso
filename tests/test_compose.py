@@ -677,6 +677,29 @@ def test_config_env_names_every_value_including_the_unset_ones():
   }
 
 
+def test_the_user_option_sets_every_service_user(tmp_path):
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine"
+
+[run.side]
+image = "alpine"
+""",
+  )
+  user = ConfigValue(spec.config["user"], "1000:1000")
+
+  services = make_compose_dict(spec, run_data(spec, config_values={"user": user}))[
+    "services"
+  ]
+  assert services["main"]["user"] == services["side"]["user"] == "1000:1000"
+  assert "user" not in make_compose_dict(spec, run_data(spec))["services"]["main"]
+
+
 # --- unmodelled compose keys ------------------------------------------------
 #
 # The allowlist exists so that `[run.<unit>.compose]` cannot ask for host root
@@ -695,7 +718,7 @@ version = "1"
 
 [run.main]
 image = "alpine"
-compose = { mem_limit = "256m", user = "1000:1000", depends_on = ["db"] }
+compose = { mem_limit = "256m", working_dir = "/srv", depends_on = ["db"] }
 
 [run.db]
 image = "postgres:16"

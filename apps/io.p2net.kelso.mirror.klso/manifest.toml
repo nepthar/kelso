@@ -8,6 +8,9 @@ url          = "https://github.com/nepthar/kelso"
 [config]
 interval_minutes = { default = "60", desc = "Minutes between the end of one update of a mirror and the start of its next" }
 
+[adv_config]
+user = { default = "1000:1000" }
+
 [volumes]
 app     = { kind = "app", src = "mirror.py" }
 state   = { kind = "data", desc = "The list of mirrors and their run history" }

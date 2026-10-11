@@ -554,6 +554,10 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
         **HEALTHCHECK_TIMING,
       }
 
+    user = data.config_values.get("user")
+    if user and user.value:
+      service["user"] = user.value
+
     # Only on failure: at boot, kelsod starts apps in start_order, not docker.
     service["restart"] = "on-failure" if run_unit.restart == "yes" else "no"
 

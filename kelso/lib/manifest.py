@@ -153,6 +153,7 @@ _COMPOSE_MANAGED_KEYS = frozenset(
     "restart",
     "network_mode",
     "healthcheck",
+    "user",
   }
 )
 
@@ -182,7 +183,6 @@ _COMPOSE_ALLOWED_KEYS = frozenset(
     "pids_limit",
     "ulimits",
     # Process and filesystem, container-local.
-    "user",
     "working_dir",
     "entrypoint",
     "read_only",
@@ -232,7 +232,7 @@ class RunEntry(BaseModel):
     if clashes:
       raise ValueError(
         "compose: kelso manages these service keys, set them via the "
-        f"manifest fields instead: {', '.join(sorted(clashes))}"
+        f"manifest fields or app options instead: {', '.join(sorted(clashes))}"
       )
     return self
 

@@ -13,6 +13,7 @@ pause_minutes = { desc = "Number of minutes to pause when the button is pressed"
 
 [adv_config]
 subdomain = { default = "ag-pause" }
+user      = { default = "1000:1000" }
 
 [volumes]
 script = { kind = "app", src = "app.py" }

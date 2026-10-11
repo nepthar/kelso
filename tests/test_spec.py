@@ -34,6 +34,7 @@ image = "alpine:latest"
   assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
     "subdomain": ("demo", "option"),
     "start_order": ("6", "option"),
+    "user": ("", "option"),
   }
   assert spec.volumes == {}
   assert spec.commands == {}
