@@ -1,0 +1,23 @@
+[app]
+version      = "0.1.0"
+display_name = "Mirror"
+description  = "Keeps mirrors of git repositories, updated every so many minutes"
+author       = "Kelso Server"
+url          = "https://github.com/nepthar/kelso"
+
+[config]
+interval_minutes = { default = "60", desc = "Minutes between the end of one update of a mirror and the start of its next" }
+
+[volumes]
+app     = { kind = "app", src = "mirror.py" }
+state   = { kind = "data", desc = "The list of mirrors and their run history" }
+mirrors = { kind = "bulk", desc = "The mirrored repositories, one bare git repo each" }
+
+[run.main]
+# The full image, not -slim: it ships git.
+image   = "python:3.12"
+cmd     = ["python", "/app/mirror.py"]
+volumes = { app = "/app/mirror.py", state = "/state", mirrors = "/mirrors" }
+env     = { PORT = "8080", INTERVAL_MINUTES = "${interval_minutes}", PYTHONUNBUFFERED = "1" }
+routes  = { main = { port = "8080" } }
+healthcheck = ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/', timeout=3)"]
