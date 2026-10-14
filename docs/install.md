@@ -57,7 +57,7 @@ kelso cmd demo-cron show
 kelso logs demo-cron
 kelso stop demo-cron
 ```
-Each demo is one readable file: `repos/demos/demo-apps/demo-cron.klso.md` is the
+Each demo is one readable file: `repos/demos/demo-apps/net.klso.demo-cron.klso.md` is the
 one above. `kelso repo list` shows every app you can start, and when you are
 done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 

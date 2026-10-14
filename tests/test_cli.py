@@ -32,7 +32,7 @@ from kelso.lib.doctor import STALE_METRICS_SECONDS, Finding, diagnose, kelsod_pr
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.util import refuse_root
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 
 
 # --- lifecycle -------------------------------------------------------------
@@ -1892,12 +1892,12 @@ def test_readme_quickstart_from_repo_apps(kelso_env):
   break if the shipped bundles do. `demo-routes` because its `lan_only` route
   keeps the LAN receipt line under test.
   """
-  bundle = Path(__file__).parents[1] / "demo-apps" / "demo-routes.klso.md"
+  bundle = Path(__file__).parents[1] / "demo-apps" / "net.klso.demo-routes.klso.md"
   assert bundle.is_file(), bundle
 
   started = kelso_env.run("start", str(bundle))
   assert started.returncode == 0, started.stderr
-  assert "Running demo-routes" in started.stdout
+  assert "Running net.klso.demo-routes" in started.stdout
   assert "Routes:" in started.stdout
 
   ps = kelso_env.run("ps")

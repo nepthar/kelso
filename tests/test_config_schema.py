@@ -102,7 +102,7 @@ def test_config_env_var_is_not_rewritten_on_the_spec():
 
 
 def test_fixtures_parse_with_config_section():
-  for bundle in ("io.p2net.basic-features.klso", "routes-demo.klso"):
+  for bundle in ("net.klso.basic-features.klso", "routes-demo.klso"):
     path = FIXTURES / bundle / "manifest.toml"
     manifest = parse_manifest(path.read_bytes(), AppID(bundle.split(".klso")[0]), path)
     assert manifest.config  # non-empty [config] section

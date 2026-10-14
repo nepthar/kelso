@@ -17,7 +17,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import record_volume_sizes
 from kelso.lib.routes import NoopRouteProvider
 
-APP = "io.p2net.basic-features"
+APP = "net.klso.basic-features"
 # Who these tests' jobs say started them; POST /jobs requires one.
 BY = "test"
 
@@ -1250,7 +1250,9 @@ def test_host_reports_its_size_and_the_disks_kelso_uses(kelso_env, client):
 
 def test_kelso_ui_expects_the_api_version_kelsod_speaks():
   """Bumping API_VERSION means bumping kelso-ui's NEEDS_API with it."""
-  web = Path(__file__).parent.parent / "apps" / "kelso-ui.klso" / "ui" / "web.py"
+  web = (
+    Path(__file__).parent.parent / "apps" / "net.klso.kelso-ui.klso" / "ui" / "web.py"
+  )
   needs = re.search(r"^NEEDS_API = (\d+)$", web.read_text(), re.M)
   assert needs and int(needs[1]) == API_VERSION
 

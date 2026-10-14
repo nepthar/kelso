@@ -22,7 +22,7 @@ from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import host_shell
 
-APP = "io.p2net.basic-features"
+APP = "net.klso.basic-features"
 # Absolute: TestClient opens a relative websocket URL on `testserver`, which is
 # not loopback. This is kelso-ui arriving through Docker Desktop.
 LOOPBACK = "ws://127.0.0.1"

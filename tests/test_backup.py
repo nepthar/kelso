@@ -21,7 +21,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.rootfs import ROOTFS_IMAGE, run_as_root
 from kelso.lib.restic import RESTIC_IMAGE
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 
 
 def _ctx(kelso_env) -> KelsoCtx:

@@ -12,9 +12,9 @@ Kelso is a self-hosting management system where apps are packages that describe 
 - **Backup and restore easily** `kelso backup run <app>` stops the app, backs up data + configuration and loaded copy together, and starts it again. If your app doesn't require 100% uptime, you can confidently back up/restore from a perfect frozen state.
 
 ## How does it work?
-Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/demo-markdown.klso.md)). Here's a simplified example:
+Kelso provides an "infrastructure as code" platform with just enough abstraction for self hosting. Each app is packaged as a kelso app bundle that 1) defines a `manifest.toml` which fully describes the app's containers and what they need and 2) optionally contains any helper scripts or files. A bundle is either a `<app_id>.klso` folder or, for small apps, a single `<app_id>.klso.md` markdown file with the same files embedded in code blocks (see [demo-markdown](demo-apps/net.klso.demo-markdown.klso.md)). Here's a simplified example:
 
-unifi-network-application.klso/manifest.toml:
+net.klso.unifi-network-application.klso/manifest.toml:
 ```toml
 [app]
 description = "Unifi Network Application from linuxserver.io"
@@ -55,7 +55,7 @@ Manifests are small enough to be digested in a few seconds. For a full, function
 
 ## What Kelso provides
 
-- **A web UI.** Host resources, loaded apps, volumes, backups, routes, cron and activity, served by the [kelso-ui](apps/kelso-ui.klso) app over kelsod's admin socket.
+- **A web UI.** Host resources, loaded apps, volumes, backups, routes, cron and activity, served by the [kelso-ui](apps/net.klso.kelso-ui.klso) app over kelsod's admin socket.
 - **Secrets.** Declared in the manifest, generated on load, stored encrypted. No hidden `.env` files.
 - **Volumes.** Each app specifies what class of storage it needs: normal data, bulk data, logs, and temp.
 - **Backups.** Nightly, deduplicated and encrypted, into `backups/` or wherever you link it. Each app is backed up at a coherent point in time and restored the same way; only your recovery phrase can read them. See [volumes](docs/volumes.md) for what is included.
@@ -71,14 +71,14 @@ The full list of what a manifest can say is in the [manifest](docs/manifest.md) 
 
 | App | |
 | --- | --- |
-| [kelso-ui](apps/kelso-ui.klso) | Web interface for kelso, over the kelsod admin socket |
-| [immich](apps/immich.klso.md) | Self-hosted photo and video backup |
-| [jellyfin](apps/jellyfin.klso.md) | Stream your own movies, shows and music to any device |
-| [mealie](apps/mealie.klso.md) | Manage, save, share recipes and make shopping lists |
-| [nginx-proxy-manager](apps/nginx-proxy-manager.klso.md) | Reverse proxy, w/ ssl certs managed by letsencrypt |
-| [cloudflared](apps/cloudflared.klso.md) | Cloudflare Tunnel connector for the cloudflare_tunnel route provider |
-| [unifi-network-application](apps/unifi-network-application.klso) | Unifi Network Application from linuxserver.io |
-| [adguard-pause](apps/adguard-pause.klso) | A service that pauses adguard DNS blocking for a while via giant button |
+| [kelso-ui](apps/net.klso.kelso-ui.klso) | Web interface for kelso, over the kelsod admin socket |
+| [immich](apps/net.klso.immich.klso.md) | Self-hosted photo and video backup |
+| [jellyfin](apps/net.klso.jellyfin.klso.md) | Stream your own movies, shows and music to any device |
+| [mealie](apps/net.klso.mealie.klso.md) | Manage, save, share recipes and make shopping lists |
+| [nginx-proxy-manager](apps/net.klso.nginx-proxy-manager.klso.md) | Reverse proxy, w/ ssl certs managed by letsencrypt |
+| [cloudflared](apps/net.klso.cloudflared.klso.md) | Cloudflare Tunnel connector for the cloudflare_tunnel route provider |
+| [unifi-network-application](apps/net.klso.unifi-network-application.klso) | Unifi Network Application from linuxserver.io |
+| [adguard-pause](apps/net.klso.adguard-pause.klso) | A service that pauses adguard DNS blocking for a while via giant button |
 
 The [demo apps](demo-apps) are small ones that each show off a feature, one readable file apiece. Writing your own takes a few minutes: see the [case study](docs/case_study.md).
 

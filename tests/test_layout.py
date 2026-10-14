@@ -16,7 +16,7 @@ from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import dev_plan, load, source_volume_links
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 
 
 def _write_bundle(kelso_env, app_id: str, manifest: str) -> Path:

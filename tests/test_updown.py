@@ -154,7 +154,7 @@ def test_what_counts_as_ready(state, status, settled, ready):
 
 
 def test_resume_brings_back_only_what_was_running(kelso_env):
-  _load(kelso_env, "ports-demo", "routes-demo", "io.p2net.basic-features")
+  _load(kelso_env, "ports-demo", "routes-demo", "net.klso.basic-features")
   assert kelso_env.run("start", "ports-demo").returncode == 0
   assert kelso_env.run("start", "routes-demo").returncode == 0
   assert kelso_env.run("stop", "routes-demo").returncode == 0

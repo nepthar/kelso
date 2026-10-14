@@ -147,7 +147,7 @@ and it is the only way to see whether a change landed:
 
 ```
 KELSO_ROOT=$HOME/kelso uv run kelsod --port 9797 --host 127.0.0.1
-cd apps/kelso-ui.klso/ui && KELSO_API=127.0.0.1:9797 KELSO_UI_NO_AUTH=1 \
+cd apps/net.klso.kelso-ui.klso/ui && KELSO_API=127.0.0.1:9797 KELSO_UI_NO_AUTH=1 \
   uv run uvicorn server:app --port 9798 --reload
 ```
 
