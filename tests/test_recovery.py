@@ -14,7 +14,7 @@ from kelso.lib.logtab import LogTab
 from tests.conftest import TEST_SEED
 from tests.test_backup import _back_up, _backups
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 OLD_KEY = recovery.master_key_from(TEST_SEED)
 NEW_SEED = bytes(range(100, 116))
 

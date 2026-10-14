@@ -118,7 +118,7 @@ last action was `started`, a real healthcheck's
 the 10 seconds before the next group, and stopping kelsod (`systemctl --user
 stop kelsod`) takes group 0 down with it.
 
-**A multi-container app.** `unifi-network-application.klso` is the natural
+**A multi-container app.** `net.klso.unifi-network-application.klso` is the natural
 smoke test — two units, a generated secret shared between them, and a real
 health dependency.
 

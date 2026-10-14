@@ -381,7 +381,7 @@ true` is a legitimate thing for a bundle to need. But kelso cannot know what an
 arbitrary compose key does, so it says so and shows the operator exactly what
 was asked for. A misspelled key is listed too, and compose then refuses to
 start the app with its own error. See
-[demo-danger](../demo-apps/demo-danger.klso.md).
+[demo-danger](../demo-apps/net.klso.demo-danger.klso.md).
 
 ## A bundle in one file
 
@@ -409,7 +409,7 @@ The `:+x` suffix marks the extracted file executable, which a script you
 intend to run as a container command needs.
 
 One file, committable anywhere, readable as documentation by someone who has
-never run kelso. See [demo-markdown](../demo-apps/demo-markdown.klso.md).
+never run kelso. See [demo-markdown](../demo-apps/net.klso.demo-markdown.klso.md).
 
 ## Checking your work
 

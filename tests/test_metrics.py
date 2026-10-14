@@ -122,7 +122,7 @@ def test_swap_used_ratio_skips_when_there_is_none(monkeypatch):
 
 def test_kelso_disks_say_what_of_kelso_each_one_holds(kelso_env):
   """Everything of a test install is on one filesystem."""
-  assert kelso_env.run("load", "io.p2net.basic-features").returncode == 0
+  assert kelso_env.run("load", "net.klso.basic-features").returncode == 0
   [disk] = kelso_disks(_ctx(kelso_env))
   assert {"data", "temp", "repos", "var"} <= set(disk.holds)
   assert disk.gauge == f"host_drive_used_ratio/{Path(disk.device).name or 'root'}"

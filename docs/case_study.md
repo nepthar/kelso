@@ -1,6 +1,6 @@
 # Kelso App Case Study - Unifi Network Application
 
-In this case study, we walk through how I built `unifi-network-application.klso` in about half an hour using Linuxserver.io's documentation and sample docker compose file.
+In this case study, we walk through how I built `net.klso.unifi-network-application.klso` in about half an hour using Linuxserver.io's documentation and sample docker compose file.
 
 By following along, you will see:
 
@@ -14,7 +14,7 @@ The Unifi Network Application is a piece of software that Ubiquiti developed to 
 
 Linuxserver.io takes this software, packages it, and distributes it in a container that we can run. However, their instructions require a fair amount of setup and knowledge to actually stand up a robust, "home-production-ready" deployment. The kelso ecosystem solves this for us.
 
-Feel free to skip to the completed kelso app at [apps/unifi-network-application.klso](../apps/unifi-network-application.klso).
+Feel free to skip to the completed kelso app at [apps/net.klso.unifi-network-application.klso](../apps/net.klso.unifi-network-application.klso).
 
 
 ## Step 1. Make the bare kelso app

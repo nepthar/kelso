@@ -8,7 +8,7 @@ from kelso.lib.config import load_config_file
 from kelso.lib.kelso import KelsoCtx
 from tests.conftest import TEST_SEED
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 WORDS = " ".join(recovery.phrase(TEST_SEED))
 OTHER_WORDS = " ".join(recovery.phrase(bytes(range(50, 66))))
 

@@ -1,6 +1,6 @@
 """`kelso cleanup`."""
 
-BASIC = "io.p2net.basic-features"
+BASIC = "net.klso.basic-features"
 
 ORPHAN_ROUTE = {
   "routes/io.example.abandoned/web": {
