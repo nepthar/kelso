@@ -150,7 +150,7 @@ To bring kelso back on a new machine, or a rebuilt one, from its backups:
    and state, then every app, and points `backups/` at that directory so the
    next backup adds to it.
 4. Check `config.toml`'s host volumes and `kelso_address` for this machine;
-   `kelso system doctor` reports paths that are not there. Then `kelso up`.
+   `kelso script doctor` reports paths that are not there. Then `kelso up`.
 
 Restore refuses a kelso that already holds apps. `kelso system purge` deletes
 every app, its data and its config, leaving config.toml, the phrase, repos,

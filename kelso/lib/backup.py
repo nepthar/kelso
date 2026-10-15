@@ -288,6 +288,7 @@ def state_sources(ctx: KelsoCtx) -> dict[Path, str]:
     config.kelsodb_path: f"{STATE_ROOT}/kelsodb.logtab",
     config.app_config_root: f"{STATE_ROOT}/apps",
     config.repos[LOCAL_REPO].path: f"{STATE_ROOT}/repos/{LOCAL_REPO}",
+    config.scripts_root: f"{STATE_ROOT}/scripts",
   }
   return {host: guest for host, guest in sources.items() if host.exists()}
 
