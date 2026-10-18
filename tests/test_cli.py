@@ -1646,6 +1646,14 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
   assert "kelso repo update" in result.stdout
 
 
+def test_init_schedules_nightly_backups(kelso_env, tmp_path):
+  """Written into config.toml, not a default: removing it turns them off."""
+  root = tmp_path / "fresh"
+  result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
+  assert result.returncode == 0, result.stderr
+  assert load_config_file(root / "config.toml").backup.schedule == "0 3 * * *"
+
+
 def test_init_refuses_without_git_and_writes_nothing(kelso_env, tmp_path, monkeypatch):
   monkeypatch.setattr(kelso.lib.git, "GIT", "no-such-git")
   root = tmp_path / "fresh"

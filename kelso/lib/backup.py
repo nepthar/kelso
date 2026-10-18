@@ -165,7 +165,10 @@ def refuse_without_space(restic: Restic, sources: dict[Path, str], what: str) ->
 
 def backup_due(ctx: KelsoCtx, *, since: datetime, now: datetime) -> bool:
   """Whether the [backup] schedule has come round since the last scheduled run,
-  or since `since` when there has not been one. Local time, as cron is."""
+  or since `since` when there has not been one. Local time, as cron is. Never,
+  without a schedule."""
+  if ctx.config.backup.schedule is None:
+    return False
   last = ctx.kelso_db.last_backup_run(SCHEDULED)
   anchor = since
   if last is not None:

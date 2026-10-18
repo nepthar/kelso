@@ -70,10 +70,11 @@ url = "github://nepthar/kelso/main/apps"
 # loaded from, plus kelso's own state, into backups/ next to this file. Point
 # backups/ at another disk by replacing it with a link, as with a volume root;
 # require_mount refuses to back up while that disk is not mounted. Keep is per
-# app, and small on purpose.
-#
-# [backup]
-# schedule      = "0 3 * * *"
+# app, and small on purpose. Without a schedule, kelsod takes none on its own:
+# remove the line to turn nightly backups off.
+
+[backup]
+schedule = "0 3 * * *"
 # require_mount = false
 # keep          = { daily = 3, weekly = 2, monthly = 1, manual = 5 }
 

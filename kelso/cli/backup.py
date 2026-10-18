@@ -65,7 +65,7 @@ def run_status(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       [
         ("Kelso id", ctx.kelso_db.kelso_id()),
         ("Backups to", where),
-        ("Schedule", config.backup.schedule),
+        ("Schedule", config.backup.schedule or "none"),
         (
           "Keep",
           f"{keep.daily} daily, {keep.weekly} weekly, {keep.monthly} monthly, "

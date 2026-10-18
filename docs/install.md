@@ -116,6 +116,16 @@ included is in [volumes](volumes.md). `kelso backup` shows where they go and
 how the last run went; `kelso backup run` takes one now; `kelso restore <app>
 <backup>` puts an app back.
 
+The schedule is the `[backup]` table `kelso init` writes into `config.toml`:
+
+```toml
+[backup]
+schedule = "0 3 * * *"
+```
+
+Remove the `schedule` line, or the whole table, and kelsod takes no backups on
+its own; `kelso backup run` still works.
+
 Like a volume root, `backups/` is meant to be linked to another disk:
 
 ```
