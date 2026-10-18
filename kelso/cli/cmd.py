@@ -4,7 +4,6 @@ from tabulate import tabulate
 
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import run_command
-from kelso.lib.spec import AppSpec
 
 
 def register(subparsers) -> None:
@@ -46,7 +45,7 @@ def _list_commands(app, ctx: KelsoCtx) -> None:
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
 
-  spec = AppSpec.from_file(paths.manifest_path, app)
+  spec = ctx.require_loaded_spec(app)
   if not spec.commands:
     print(f"No commands defined for {app}")
     return

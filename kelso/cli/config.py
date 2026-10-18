@@ -140,7 +140,7 @@ def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The manifest this command reads its schema from."""
   paths = ctx.loaded_paths(app)
   if paths.exists():
-    return AppSpec.from_file(paths.manifest_path, app)
+    return ctx.require_loaded_spec(app)
   # Refuses an id carried by two sources, and a bundle with no manifest.
   return load_bundle(ctx.bundle_path(app)).app_spec()
 

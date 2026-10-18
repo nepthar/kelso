@@ -55,7 +55,11 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
   now = datetime.now(UTC)
   runs = []
   for observation in ctx.observations():
-    spec = ctx.loaded_spec(observation.app_id) if observation.loaded else None
+    try:
+      spec = ctx.loaded_spec(observation.app_id) if observation.loaded else None
+    except ValueError as e:
+      logger.error("cron jobs for %s skipped: %s", observation.app_id, e)
+      continue
     if spec is None or not spec.manifest.cron:
       continue
     app = observation.app_id

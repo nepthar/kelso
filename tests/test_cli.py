@@ -516,7 +516,7 @@ def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
 
   reloaded = kelso_env.run("load", app_id)
   assert reloaded.returncode == 1
-  assert "No app found" in reloaded.stderr
+  assert "came from repo local, which no longer carries it" in reloaded.stderr
 
 
 def test_load_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
@@ -1390,6 +1390,24 @@ def test_doctor_reports_a_loaded_manifest_that_no_longer_parses(kelso_env):
   assert problem.subject == "ports-demo"
   assert "loaded manifest no longer parses" in problem.message
   assert "`kelso load ports-demo`" in problem.message
+
+
+def test_a_loaded_manifest_that_no_longer_parses_is_named_until_reloaded(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  ctx.loaded_paths("ports-demo").manifest_path.write_text("not = [valid")
+
+  listed = kelso_env.run("ps")
+  assert listed.returncode == 0, listed.stderr
+  assert "broken manifest" in listed.stdout
+  assert "`kelso load ports-demo`" in listed.stderr
+  for command in (["inspect", "ports-demo"], ["config", "ports-demo"]):
+    refused = kelso_env.run(*command)
+    assert refused.returncode == 1
+    assert "loaded manifest no longer parses" in refused.stderr
+
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  assert "broken manifest" not in kelso_env.run("ps").stdout
 
 
 def test_doctor_reports_kelsod_not_listening(kelso_env):
@@ -2340,12 +2358,11 @@ def test_status_shows_each_section(kelso_env):
   assert any(line.split()[:3] == [BASIC, "ok", "1/1"] for line in apps.splitlines())
   volumes = shown.stdout.split("\n\n")[4]
   assert volumes.splitlines()[1].split() == ["KIND", "DEVICE", "SIZE", "FREE"]
-  assert [line.split()[0] for line in volumes.splitlines()[3:]] == [
-    "bulk",
-    "data",
-    "logs",
-    "temp",
-  ]
+  rows = [line.split() for line in volumes.splitlines()[3:7]]
+  assert [row[0] for row in rows] == ["bulk", "data", "logs", "temp"]
+  # BASIC's data volume has no reading: kelsod is not running in tests.
+  assert rows[1][1] != "-" and rows[1][2] == "-"
+  assert volumes.splitlines()[-1].startswith("No sizes: kelsod is not recording")
 
 
 def test_status_says_where_each_location_links(kelso_env, tmp_path):

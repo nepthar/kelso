@@ -25,7 +25,6 @@ from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
 from kelso.lib.run_layout import KELSO_BIN, unit_commands
-from kelso.lib.spec import AppSpec
 
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
@@ -59,7 +58,7 @@ def console_command(
         f"{unit} is not running in {app_id}; running units: {', '.join(running)}"
       )
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
-  spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
+  spec = ctx.require_loaded_spec(app_id)
   unit_shell = spec.run_units[unit].shell
   script = f"exec {shlex.quote(unit_shell[0])} -i"
   if unit_commands(spec, unit):

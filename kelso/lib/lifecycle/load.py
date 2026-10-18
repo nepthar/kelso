@@ -9,6 +9,7 @@ from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.kelso import (
+  BOUND_TO_META,
   CatalogEntry,
   KelsoCtx,
   LoadedAppPaths,
@@ -247,10 +248,6 @@ def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
     script.chmod(0o755)
 
 
-# Lives in the app's config store, so `--purge` clears it and nothing else does.
-BOUND_TO_META = "bound_to"
-
-
 @dataclass(frozen=True)
 class LoadTarget:
   """What a `load`/`start` argument named, and where it came from."""
@@ -441,7 +438,10 @@ def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> No
 
 
 def _refuse_version_change(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
-  loaded = ctx.loaded_spec(app)
+  try:
+    loaded = ctx.loaded_spec(app)
+  except ValueError:
+    return
   if loaded is not None and loaded.version != spec.version:
     raise ValueError(
       f"App {app} is loaded at version {loaded.version}, and this would load "

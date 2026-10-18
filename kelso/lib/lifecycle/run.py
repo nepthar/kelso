@@ -63,7 +63,7 @@ def start(
   if sets or binds or not ctx.is_loaded(app):
     result = load(app, bundle, ctx, sets=sets, binds=binds, bound=bound)
   else:
-    spec = AppSpec.from_file(paths.manifest_path, app)
+    spec = ctx.require_loaded_spec(app)
     if changes_since_start(ctx.config.app_config_path(app)).routes:
       take_down_routes(app, ctx)
       run_data, _ = materialize(spec, ctx)
@@ -203,7 +203,7 @@ def run_command(
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
 
-  spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
+  spec = ctx.require_loaded_spec(app_id)
   entry = spec.commands.get(cmd_name)
   if entry is None:
     available = ", ".join(sorted(spec.commands)) or "(none)"

@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 from tabulate import tabulate
 
@@ -9,6 +10,8 @@ from kelso.lib.spec import AppSpec
 from kelso.lib.views import config_status
 
 EMPTY = "-"
+
+logger = logging.getLogger("kelso.cli")
 
 
 def register(subparsers) -> None:
@@ -28,16 +31,21 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     for observation in ctx.observations():
       if not (observation.loaded or (args.all and observation.known)):
         continue
-      spec = (
-        ctx.bundle_spec(observation.app_id)
-        if observation.state == UNLOADED
-        else ctx.loaded_spec(observation.app_id)
-      )
+      try:
+        spec = (
+          ctx.bundle_spec(observation.app_id)
+          if observation.state == UNLOADED
+          else ctx.loaded_spec(observation.app_id)
+        )
+        config = _config(observation, spec, ctx)
+      except ValueError as e:
+        logger.warning("%s", e)
+        spec, config = None, "broken manifest"
       rows.append(
         (
           observation.app_id,
           _status(observation, spec),
-          _config(observation, spec, ctx),
+          config,
           _volumes(observation, spec),
           observation.last_action or EMPTY,
           _version(observation, spec),

@@ -3,7 +3,6 @@ import shlex
 from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import run_command
-from kelso.lib.spec import AppSpec
 
 
 class CmdJob(Job):
@@ -28,7 +27,7 @@ class CmdJob(Job):
 
     if not ctx.is_loaded(app):
       raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
-    spec = AppSpec.from_file(ctx.loaded_paths(app).manifest_path, app)
+    spec = ctx.require_loaded_spec(app)
     if kwargs["command"] not in spec.commands:
       available = ", ".join(sorted(spec.commands)) or "(none)"
       raise ValueError(

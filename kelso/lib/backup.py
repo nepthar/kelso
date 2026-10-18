@@ -299,7 +299,10 @@ def state_sources(ctx: KelsoCtx) -> dict[Path, str]:
 
 
 def _version(ctx: KelsoCtx, app: AppID) -> str:
-  spec = ctx.loaded_spec(app)
+  try:
+    spec = ctx.loaded_spec(app)
+  except ValueError:
+    spec = None
   if spec is not None:
     return spec.version
   if ctx.config.app_config_path(app).is_file():
