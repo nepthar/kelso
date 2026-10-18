@@ -2359,9 +2359,10 @@ def test_status_says_where_each_location_links(kelso_env, tmp_path):
 
   shown = kelso_env.run("status")
   assert shown.returncode == 0, shown.stderr
-  locations = shown.stdout.split("\n\n")[3].splitlines()[1:]
-  where = {line.split()[0]: " ".join(line.split()[1:]) for line in locations}
-  assert where["$kelso"] == f"→ {kelso_env.root}"
+  locations = shown.stdout.split("\n\n")[3].splitlines()
+  assert locations[1].split() == ["FOLDER", "PATH"]
+  where = {line.split()[0]: " ".join(line.split()[1:]) for line in locations[3:]}
+  assert where["$kelso"] == str(kelso_env.root)
   assert where["volumes/bulk"] == f"→ {nas}"
   assert where["volumes/data"] == "$kelso/volumes/data"
   assert where["volumes/logs"] == "$kelso/volumes/logs (not created yet)"

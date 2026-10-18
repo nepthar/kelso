@@ -98,13 +98,13 @@ def _locations(ctx: KelsoCtx) -> str:
     ),
     *((entry.name, entry.root(ctx)) for entry in KELSO_DIRS),
   ]
-  rows = [("$kelso", f"→ {root}")]
+  rows = [("$kelso", str(root))]
   rows += [(name, _where(path, root)) for name, path in places]
   # Host volumes are the operator's own folders: kelso never creates them.
   for tag, volume in sorted(ctx.config.host_volumes.items()):
     missing = "" if volume.path.is_dir() else " (missing)"
     rows.append((f"{tag} (host)", f"{_short(volume.path, root)}{missing}"))
-  return f"Locations\n{tabulate(rows, tablefmt='plain')}"
+  return f"Locations\n{tabulate(rows, headers=['FOLDER', 'PATH'])}"
 
 
 def _where(path: Path, root: Path) -> str:
