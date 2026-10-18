@@ -36,6 +36,9 @@ ACTIVITY_LOG_HISTORY = 2000  # records
 METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024
 METRICS_LOG_HISTORY = 50_000  # records: days of readings
 
+# Lives in the app's config store, so `--purge` clears it and nothing else does.
+BOUND_TO_META = "bound_to"
+
 LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2
 
 
@@ -205,9 +208,30 @@ class KelsoCtx:
     if len(entries) == 1:
       return entries[0].path
     elif not entries:
-      raise ValueError(f'No app found for "{app}"')
+      raise ValueError(self._no_bundle_message(app))
     else:
       raise ValueError(ambiguity_message(app, entries))
+
+  def _no_bundle_message(self, app: AppID | str) -> str:
+    """Why no repo offers `app`, naming the source a loaded copy came from."""
+    bound = None
+    if self.config.app_config_path(app).is_file():
+      bound = self.app_store(app).get_meta(BOUND_TO_META)
+    if not bound:
+      return f'No app found for "{app}"'
+    if not bound.startswith("repo "):
+      return f"{app} was loaded from {bound}, not a repo; run `kelso load {bound}`."
+    name = bound.removeprefix("repo ")
+    repo = self.config.repos.get(name)
+    if repo is None:
+      problem = "is not in config.toml; add it back with `kelso repo add`"
+    elif not repo.path.is_dir() and repo.mirrored:
+      problem = f"is not mirrored; run `kelso repo update {name}`"
+    elif not repo.path.is_dir():
+      problem = f"is missing: {repo.path} is not a directory"
+    else:
+      problem = "no longer carries it"
+    return f"{app} came from repo {name}, which {problem}."
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
@@ -216,19 +240,36 @@ class KelsoCtx:
     """An app option: as configured, else the manifest's default, else kelso's."""
     _, value = self.app_store(app).get_config(name)
     if value is None:
-      spec = self.loaded_spec(app)
+      try:
+        spec = self.loaded_spec(app)
+      except ValueError:
+        # `up` orders every app by this; `start` is what refuses a broken one.
+        spec = None
       value = spec.config[name].default if spec else None
     return value or APP_OPTIONS[name].default(AppID(app))
 
   def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The loaded app's spec, or None when it is not loaded or no longer parses."""
+    """The loaded app's spec, or None when it is not loaded.
+
+    Raises ValueError naming the fix when the loaded manifest no longer parses.
+    """
     paths = self.loaded_paths(app)
     if not paths.manifest_path.is_file():
       return None
     try:
       return AppSpec.from_file(paths.manifest_path, paths.app_id)
-    except ValueError:
-      return None
+    except ValueError as e:
+      raise ValueError(
+        f"{app}'s loaded manifest no longer parses; `kelso load {app}` from a "
+        f"bundle that does. {e}"
+      ) from e
+
+  def require_loaded_spec(self, app: AppID | str) -> "AppSpec":
+    """The loaded app's spec. Raises ValueError naming the fix if there is none."""
+    spec = self.loaded_spec(app)
+    if spec is None:
+      raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
+    return spec
 
   def app_state(self, app: AppID | str) -> str:
     """Where one app stands, from the filesystem alone."""

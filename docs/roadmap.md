@@ -216,17 +216,6 @@ dashboard.
 - **A webhook.** One configurable URL, sent each new problem and, optionally,
   the activity log as it happens. Undelivered messages queue in a logtab spool,
   so a webhook that is down gets them later.
-- **The quiet failures become loud.** Everything in [Known issues](#known-issues)
-  that today fails silently is a problem in this feed first.
-
-### Before v2: v1.x
-
-Fix what an agent would trip over first, since every one of these is a place
-where it cannot tell what went wrong:
-
-- The known issues below, starting with the two that fail silently.
-- `load` naming the real cause when an app's repo no longer carries it (today
-  it says `No app found`).
 
 ---
 
@@ -294,29 +283,6 @@ volume files as the container's root, which under a user namespace maps back to
 the invoking user and cannot touch what the app's containers wrote.
 
 ---
-
-## Known issues
-
-- **An app whose loaded manifest no longer parses goes quiet.** A loaded app
-  keeps the manifest it was loaded with. When a newer kelso stops accepting
-  something in it, `ps` shows the app with blank columns, `inspect` says it is
-  neither loaded nor in a catalog, `cmd` and `config` print a validation error,
-  `kelso cron` silently drops its jobs, and `kelso update` fails, since its
-  update backup reads that manifest. `kelso system doctor` reports it.
-  Workaround: `kelso load <app>` from a source that parses.
-- **Two kelso roots on one docker daemon see each other's apps.** Compose
-  project names and the `kelso.app_id` label are not scoped to a root, so a
-  second root reports the first one's containers as needing manual recovery,
-  and its `cleanup` offers to remove images the other root still uses. Run one
-  kelso root per docker daemon.
-- **kelsod being down is invisible.** kelsod records the metrics behind volume
-  sizes, resumes apps at boot, and runs cron. With it stopped, `kelso status`
-  shows `0.0 B` for every volume kind, apps stay down after a reboot, and cron
-  jobs do not run. `kelso system doctor` reports it.
-- **`load` says `No app found` when an app's repo no longer carries it.** If the
-  repo a loaded app came from is gone or not mirrored, `kelso load <app>` falls
-  back to the loaded copy, finds no source, and reports the app as missing.
-  Check `kelso system doctor` for a repo that is not a directory.
 
 ## Todo
 

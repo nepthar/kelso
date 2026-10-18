@@ -418,6 +418,14 @@ def test_a_stale_lock_is_cleared_and_the_update_goes_ahead(kelso_env):
   assert not lock.exists()
 
 
+def test_update_replaces_a_loaded_manifest_that_no_longer_parses(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").write_text("x = [")
+  updated = kelso_env.run("update", BASIC, "-y")
+  assert updated.returncode == 0, updated.stderr
+  assert "broken manifest" not in kelso_env.run("ps").stdout
+
+
 def test_a_held_lock_still_refuses_the_update(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   _back_up(kelso_env, BASIC)

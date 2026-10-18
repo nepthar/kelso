@@ -40,7 +40,10 @@ def volumes_on_disk(ctx: KelsoCtx) -> list[VolumeOnDisk]:
     for app_dir in sorted(p for p in root.iterdir() if p.is_dir()):
       app_id = AppID(app_dir.name)
       if app_id not in specs:
-        specs[app_id] = ctx.loaded_spec(app_id)
+        try:
+          specs[app_id] = ctx.loaded_spec(app_id)
+        except ValueError:
+          specs[app_id] = None
       for volume_dir in sorted(p for p in app_dir.iterdir() if p.is_dir()):
         use = _use(ctx, app_id, specs[app_id], volume_dir.name, kind, running)
         found.append(VolumeOnDisk(app_id, volume_dir.name, kind, volume_dir, use))

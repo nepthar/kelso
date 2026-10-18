@@ -6,6 +6,7 @@ Note that secrets should never be rendered to the user through this module.
 import difflib
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import psutil
@@ -307,7 +308,11 @@ def host_view(ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Each volume root's size, summed from its volumes', and the filesystem it shares."""
+  """Each volume root's size, summed from its volumes', and the filesystem it shares.
+
+  A root holding volumes with no live reading, as while kelsod is down, has
+  size None.
+  """
   totals: dict[str, int] = {}
   for key, entry in ctx.read_gauges("volume_size_bytes/").items():
     _, _, app_id, kind, name = key.split("/", 4)
@@ -320,7 +325,7 @@ def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
     row: dict[str, Any] = {
       "kind": kind,
       "path": str(root),
-      "bytes": totals.get(kind, 0),
+      "bytes": totals.get(kind, None if _holds_volumes(root) else 0),
       "device": None,
       "mountpoint": None,
       "used": None,
@@ -337,6 +342,15 @@ def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
       }
     roots.append(row)
   return roots
+
+
+def _holds_volumes(root: Path) -> bool:
+  return root.is_dir() and any(
+    volume.is_dir()
+    for app_dir in root.iterdir()
+    if app_dir.is_dir()
+    for volume in app_dir.iterdir()
+  )
 
 
 def backups_view(ctx: KelsoCtx) -> dict[str, Any]:
@@ -422,7 +436,10 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
   """One app in full: what `kelso inspect` shows, as data."""
   observation = observe(app_id, ctx)
-  spec = ctx.loaded_spec(app_id)
+  try:
+    spec = ctx.loaded_spec(app_id)
+  except ValueError as e:
+    return {**_summary(observation, ctx), "issues": [{"problem": str(e)}]}
   view = _summary(observation, ctx, spec=spec)
 
   if spec is None:
@@ -467,8 +484,12 @@ def _summary(
   *,
   spec: AppSpec | None = None,
 ) -> dict[str, Any]:
+  broken = False
   if spec is None:
-    spec = ctx.loaded_spec(observation.app_id)
+    try:
+      spec = ctx.loaded_spec(observation.app_id)
+    except ValueError:
+      broken = True
   return {
     "app_id": str(observation.app_id),
     "display_name": spec.display_name if spec else "",
@@ -480,7 +501,7 @@ def _summary(
       "running": observation.running_count,
       "total": len(observation.containers),
     },
-    "configured": _configured(observation, spec, ctx),
+    "configured": "broken manifest" if broken else _configured(observation, spec, ctx),
     "changes_pending": observation.changes_pending,
     "volume_count": len(spec.volumes) if spec else 0,
     "last_action": observation.last_action,

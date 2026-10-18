@@ -80,7 +80,10 @@ def _apps(ctx: KelsoCtx) -> str:
 def _routes(ctx: KelsoCtx) -> str:
   lines = []
   for observation in ctx.observations():
-    spec = ctx.loaded_spec(observation.app_id) if observation.loaded else None
+    try:
+      spec = ctx.loaded_spec(observation.app_id) if observation.loaded else None
+    except ValueError:
+      continue
     if spec is None:
       continue
     for url in published_urls(spec, load_run_data(spec, ctx), ctx):
@@ -129,7 +132,8 @@ def _short(path: Path, root: Path) -> str:
 
 def _volumes(ctx: KelsoCtx) -> str:
   rows = []
-  for root in views.volume_roots_view(ctx):
+  roots = views.volume_roots_view(ctx)
+  for root in roots:
     if root["used"] is None:
       rows.append((root["kind"], "-", "-", "path is missing"))
       continue
@@ -139,12 +143,15 @@ def _volumes(ctx: KelsoCtx) -> str:
       (
         root["kind"],
         root["device"],
-        fmt_size(root["bytes"]),
+        "-" if root["bytes"] is None else fmt_size(root["bytes"]),
         f"{fmt_size(free)} ({free / total:.0%})",
       )
     )
   headers = ["KIND", "DEVICE", "SIZE", "FREE"]
-  return f"Volumes\n{tabulate(rows, headers=headers)}"
+  table = f"Volumes\n{tabulate(rows, headers=headers)}"
+  if any(root["used"] is not None and root["bytes"] is None for root in roots):
+    table += "\nNo sizes: kelsod is not recording them; see `kelso system doctor`."
+  return table
 
 
 def _backups(ctx: KelsoCtx) -> str:
