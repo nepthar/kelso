@@ -1,7 +1,18 @@
 {% extends "frame.html" %}
-{% from "macros.html" import job_button, pill, sub %}
+{% from "macros.html" import job_button, log_button, pill, sub, when %}
 
 {% block content %}
+{% if alerts %}
+<div class="error alerts"><h2>{{ alerts|length }} unattended run{{ 's' if alerts|length != 1 }} failed</h2>
+<ul>
+{% for a in alerts %}{% set what = (a.verb ~ ' ' ~ (a.app_id or ''))|trim %}
+<li>{{ when(a.ts) }} <b>{{ what }}</b>: {{ a.error or 'see its log' }}
+  {%- if a.available %} {{ log_button('log', a.log, a.status, title=what) }}{% endif %}</li>
+{% endfor %}
+</ul>
+<form method="post" action="/alerts" class="row"><button type="submit">Acknowledge</button></form>
+</div>
+{% endif %}
 <h2>kelso host</h2>
 <div class="row lede-line">
   <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>

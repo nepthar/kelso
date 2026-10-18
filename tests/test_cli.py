@@ -2352,6 +2352,7 @@ def test_status_shows_each_section(kelso_env):
     "Locations",
     "Volumes",
     "Backups    none yet; `kelso backup run` takes one",
+    "Alerts     none new",
     "Doctor     0 problems, 0 warnings",
   ]
   apps = shown.stdout.split("\n\n")[1]

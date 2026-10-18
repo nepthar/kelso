@@ -1,8 +1,8 @@
 """The dashboard: what the host has and how busy it is, and every loaded app."""
 
-from api import api, where
+from api import STARTED_BY, ApiError, api, where
 from fastapi import APIRouter
-from web import PageDep, fmt_size
+from web import PageDep, fmt_size, see
 
 router = APIRouter()
 
@@ -45,6 +45,7 @@ def dashboard(page: PageDep):
     "pages/dashboard.html",
     "Dashboard",
     where=where(),
+    alerts=api("/alerts").get("alerts", []),
     apps=api("/apps").get("apps", []),
     resources=resources,
     spark_w=SPARK_W,
@@ -52,6 +53,15 @@ def dashboard(page: PageDep):
     # 25%, 50% and 75%; the border stands for 0% and 100%.
     spark_grid=[SPARK_H * q / 4 for q in (1, 2, 3)],
   )
+
+
+@router.post("/alerts")
+def acknowledge_alerts():
+  try:
+    api("/alerts/ack", "POST", {"started_by": STARTED_BY})
+  except ApiError as e:
+    return see("/", err=str(e))
+  return see("/")
 
 
 def _line(points, since, until):

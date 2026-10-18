@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from kelso.lib import alerts
 from kelso.lib import git as git_lib
 from kelso.lib.apps import AppID
 from kelso.lib.backup import SCHEDULED, destination_problem, shares_kelso_disk
@@ -47,12 +48,24 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_key_problems(ctx),
     *_backup_problems(ctx),
   ]
-  warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx)]
+  warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx), *_alert_warnings(ctx)]
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
     warnings += [Finding(subject, m) for m in _app_warnings(observation)]
   return DoctorPrognosis(tuple(problems), tuple(warnings))
+
+
+def _alert_warnings(ctx: KelsoCtx) -> list[Finding]:
+  if not alerts.alerts(ctx):
+    return []
+  return [
+    Finding(
+      "",
+      "There are unacknowledged alerts. Use `kelso system alerts` to view and "
+      "acknowledge them",
+    )
+  ]
 
 
 def _key_problems(ctx: KelsoCtx) -> list[Finding]:

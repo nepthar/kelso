@@ -11,7 +11,7 @@ import psutil
 from tabulate import tabulate
 
 from kelso import VERSION
-from kelso.lib import views
+from kelso.lib import alerts, views
 from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import KELSO_DIRS, cpu_used_ratio
@@ -36,6 +36,7 @@ def run(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
       _locations(ctx),
       _volumes(ctx),
       _backups(ctx),
+      _alerts(ctx),
       _doctor(ctx),
     ]
   print("\n\n".join(sections))
@@ -160,6 +161,13 @@ def _backups(ctx: KelsoCtx) -> str:
     return "Backups    none yet; `kelso backup run` takes one"
   outcome = f"{len(last['failed'])} failed" if last["failed"] else "ok"
   return f"Backups    last {last['time']} ({last['reason']}), {outcome}"
+
+
+def _alerts(ctx: KelsoCtx) -> str:
+  count = len(alerts.alerts(ctx))
+  if not count:
+    return "Alerts     none new"
+  return f"Alerts     {count} new; see `kelso system alerts`"
 
 
 def _doctor(ctx: KelsoCtx) -> str:

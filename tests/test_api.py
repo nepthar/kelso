@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from kelso.daemon.api import API_VERSION, create_app
 from kelso.jobs import JobRunner
+from kelso.lib.activity import BY_KELSOD, Activity
 from kelso.lib.apps import AppID
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
@@ -1265,3 +1266,15 @@ def test_the_scheduled_backup_backs_up_everything(kelso_env, client, jobs):
   assert last["reason"] == "scheduled"
   assert last["everything"] is True
   assert last["backed_up"] == ["ports-demo"]
+
+
+def test_alerts_are_listed_until_acknowledged(kelso_env, client):
+  with pytest.raises(RuntimeError), Activity(ctx(), "up", started_by=BY_KELSOD):
+    raise RuntimeError("app x did not start")
+
+  (alert,) = client.get("/alerts").json()["alerts"]
+  assert (alert["verb"], alert["error"]) == ("up", "app x did not start")
+
+  assert client.post("/alerts/ack", json={}).status_code == 400
+  assert client.post("/alerts/ack", json={"started_by": BY}).status_code == 200
+  assert client.get("/alerts").json()["alerts"] == []

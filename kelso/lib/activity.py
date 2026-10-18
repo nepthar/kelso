@@ -55,6 +55,9 @@ BY_KELSOD = "kelsod"  # kelsod's own startup and schedule
 BY_CRON = "cron"  # a cron job kelsod's tick found due
 BY_CLI = "cli"
 
+# The index record keeps this much of a run's error; the run file has all of it.
+ERROR_CHARS = 500
+
 
 def _index_key(app_id: AppID | None) -> str:
   return f"apps/{app_id}/run" if app_id else f"{KELSO_DIR}/run"
@@ -133,6 +136,7 @@ def finish_run(
   finished: datetime,
   started_by: str,
   args: dict[str, str] | None = None,
+  error: str | None = None,
 ) -> None:
   """Append the closing trailer to ``relpath`` and index the run."""
   path = ctx.config.activity_root / relpath
@@ -150,6 +154,7 @@ def finish_run(
         "ms": duration_ms,
         "log": relpath,
         "started_by": started_by,
+        **({"error": error[:ERROR_CHARS]} if error else {}),
       },
       separators=(",", ":"),
     ),
@@ -168,6 +173,7 @@ def record_run(
   finished: datetime,
   output: str,
   started_by: str,
+  error: str | None = None,
 ) -> str:
   """Write one run's output file and index record; returns its relative path."""
   relpath = begin_run(ctx, verb, args, app_id=app_id, started=started)
@@ -185,6 +191,7 @@ def record_run(
     finished=finished,
     args=args,
     started_by=started_by,
+    error=error,
   )
   return relpath
 
@@ -335,6 +342,7 @@ class Activity:
           started=self._started,
           finished=datetime.now(UTC),
           started_by=self.started_by,
+          error=self.error,
         )
       except Exception:  # noqa: BLE001 - a log failure must not hide the block's own error
         logger.exception("could not record activity for `%s`", self.verb)
@@ -461,6 +469,7 @@ def list_runs(
         "duration_ms": record.get("ms"),
         "log": relpath,
         "started_by": record.get("started_by", ""),
+        "error": record.get("error"),
         "available": bool(relpath) and (ctx.config.activity_root / relpath).is_file(),
       }
     )

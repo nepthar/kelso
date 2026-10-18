@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from kelso import VERSION
 from kelso.daemon import console
 from kelso.jobs import JobRunner
-from kelso.lib import views
+from kelso.lib import alerts, views
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
@@ -102,6 +102,12 @@ class JobSubmission(BaseModel):
 def _ctx(request: Request) -> KelsoCtx:
   """A context per request."""
   return request.app.state.ctx_factory()
+
+
+class AlertsAck(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  started_by: Identifier
 
 
 def _runner(request: Request) -> JobRunner:
@@ -408,6 +414,17 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       return {"activity": views.activity_view(ctx, app=app, verb=verb, limit=limit)}
     except ValueError as e:
       raise HTTPException(400, str(e)) from e
+
+  @app.get("/alerts", tags=["activity"])
+  def list_alerts(ctx: Ctx) -> dict:
+    """Unattended runs that failed since the last acknowledgement."""
+    return {"alerts": alerts.alerts(ctx)}
+
+  @app.post("/alerts/ack", tags=["activity"])
+  def ack_alerts(body: AlertsAck, ctx: Ctx) -> dict:
+    """Mark every alert so far as seen."""
+    alerts.acknowledge(ctx, body.started_by)
+    return {"alerts": []}
 
   @app.get("/activity/{filename}", tags=["activity"])
   def get_activity_log(filename: str, ctx: Ctx) -> dict:
