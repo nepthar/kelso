@@ -2331,16 +2331,40 @@ def test_status_shows_each_section(kelso_env):
   assert sections[1:] == [
     "Apps",
     "Routes",
+    "Locations",
     "Volumes",
     "Backups    none yet; `kelso backup run` takes one",
     "Doctor     0 problems, 0 warnings",
   ]
   apps = shown.stdout.split("\n\n")[1]
   assert any(line.split()[:3] == [BASIC, "ok", "1/1"] for line in apps.splitlines())
-  volumes = shown.stdout.split("\n\n")[3]
+  volumes = shown.stdout.split("\n\n")[4]
+  assert volumes.splitlines()[1].split() == ["KIND", "DEVICE", "SIZE", "FREE"]
   assert [line.split()[0] for line in volumes.splitlines()[3:]] == [
     "bulk",
     "data",
     "logs",
     "temp",
   ]
+
+
+def test_status_says_where_each_location_links(kelso_env, tmp_path):
+  nas = tmp_path / "nas-bulk"
+  nas.mkdir()
+  kelso_env.volumes_root.mkdir(exist_ok=True)
+  (kelso_env.volumes_root / "bulk").symlink_to(nas)
+  (kelso_env.volumes_root / "data").mkdir()
+  (kelso_env.root / "backups").symlink_to(tmp_path / "unmounted")
+  (kelso_env.root / "external-data").mkdir()
+
+  shown = kelso_env.run("status")
+  assert shown.returncode == 0, shown.stderr
+  locations = shown.stdout.split("\n\n")[3].splitlines()[1:]
+  where = {line.split()[0]: " ".join(line.split()[1:]) for line in locations}
+  assert where["$kelso"] == f"→ {kelso_env.root}"
+  assert where["volumes/bulk"] == f"→ {nas}"
+  assert where["volumes/data"] == "$kelso/volumes/data"
+  assert where["volumes/logs"] == "$kelso/volumes/logs (not created yet)"
+  assert where["backups"] == f"→ {tmp_path / 'unmounted'} (missing)"
+  assert where["media"] == "(host) $kelso/external-data"
+  assert where["other"] == "(host) $kelso/other-data (missing)"
