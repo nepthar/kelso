@@ -48,6 +48,8 @@ OWNED_BY_KELSO = (
 
 # Restic's exit status when the password opens no key in the repository.
 WRONG_PASSWORD = 12
+# Restic's exit status when another lock on the repository is in the way.
+LOCKED = 11
 
 
 class ResticError(RuntimeError):
@@ -173,6 +175,14 @@ class Restic:
     logger.debug("restic: %s", " ".join(args))
     env = {**os.environ, "RESTIC_PASSWORD": self._password}
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.returncode == LOCKED and args[:1] != ["unlock"]:
+      # A restic killed mid-run (a reboot, the OOM killer) leaves its lock
+      # behind, and its container is gone, so nothing will ever release it.
+      # Plain `unlock` removes only stale locks: ones not refreshed for half
+      # an hour, which a live restic does every five minutes. Then try once
+      # more; a lock that is still held fails the same way again.
+      self.run(["unlock"], what="clear stale backup repository locks")
+      result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
       detail = result.stderr.strip()
       raise ResticError(

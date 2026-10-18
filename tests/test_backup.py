@@ -409,6 +409,25 @@ def test_update_refuses_when_the_repository_fails_its_check(kelso_env):
   assert "repository contains errors" in refused.stderr
 
 
+def test_a_stale_lock_is_cleared_and_the_update_goes_ahead(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  _back_up(kelso_env, BASIC)
+  lock = kelso_env.root / "backups" / "lock"
+  lock.write_text("stale")
+  assert kelso_env.run("update", BASIC, "-y").returncode == 0
+  assert not lock.exists()
+
+
+def test_a_held_lock_still_refuses_the_update(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  _back_up(kelso_env, BASIC)
+  (kelso_env.root / "backups" / "lock").write_text("held")
+  refused = kelso_env.run("update", BASIC, "-y")
+  assert refused.returncode == 1
+  assert "Nothing changed" in refused.stderr
+  assert "already locked" in refused.stderr
+
+
 # --- retention ---------------------------------------------------------------------
 
 

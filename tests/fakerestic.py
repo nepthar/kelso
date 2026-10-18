@@ -71,6 +71,16 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
   if json.loads(config.read_text())["password"] != password:
     return 12, "", WRONG_PASSWORD
 
+  # A `lock` file stands for a lock some other restic left: `stale` if it
+  # died, anything else if it is still running.
+  lock = repo / "lock"
+  if command == "unlock":
+    if lock.exists() and lock.read_text() == "stale":
+      lock.unlink()
+    return 0, "", ""
+  if lock.exists():
+    return 11, "", "Fatal: unable to create lock in backend: repository is already locked\n"
+
   if command == "backup":
     tags, paths, i = [], [], 0
     while i < len(rest):
