@@ -3,7 +3,7 @@ import sys
 
 from tabulate import tabulate
 
-from kelso.cli import activity, decrypt, doctor, phrase, service, volumes
+from kelso.cli import activity, decrypt, phrase, service, volumes
 from kelso.cli.kv import parse_kv
 from kelso.lib import recovery
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
@@ -102,7 +102,7 @@ def register(subparsers) -> None:
     activity=lambda a: "host-volume" if a.add or a.set_ or a.rm else None,
   )
 
-  for command in (activity, decrypt, doctor, service, volumes):
+  for command in (activity, decrypt, service, volumes):
     command.register(sub)
 
 

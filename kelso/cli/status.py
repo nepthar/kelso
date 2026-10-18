@@ -121,5 +121,5 @@ def _doctor(ctx: KelsoCtx) -> str:
   prognosis = diagnose(ctx)
   found = f"{len(prognosis.problems)} problems, {len(prognosis.warnings)} warnings"
   if prognosis.problems or prognosis.warnings:
-    found += "; see `kelso system doctor`"
+    found += "; see `kelso script doctor`"
   return f"Doctor     {found}"
