@@ -486,15 +486,28 @@ def test_a_second_backup_in_the_same_second_does_nothing(kelso_env, monkeypatch)
 # --- the schedule -------------------------------------------------------------------
 
 
-def test_the_schedule_is_due_once_its_time_passes(kelso_env):
+def _scheduled(kelso_env) -> KelsoCtx:
+  config = kelso_env.config
+  config.write_text(config.read_text() + '\n[backup]\nschedule = "0 3 * * *"\n')
+  return _ctx(kelso_env)
+
+
+def test_without_a_schedule_no_backup_is_ever_due(kelso_env):
   ctx = _ctx(kelso_env)
+  assert ctx.config.backup.schedule is None
+  started = datetime(2026, 10, 7, 12, 0)
+  assert not backup_due(ctx, since=started, now=datetime(2027, 10, 8, 3, 0))
+
+
+def test_the_schedule_is_due_once_its_time_passes(kelso_env):
+  ctx = _scheduled(kelso_env)
   started = datetime(2026, 10, 7, 12, 0)
   assert not backup_due(ctx, since=started, now=datetime(2026, 10, 8, 2, 59))
   assert backup_due(ctx, since=started, now=datetime(2026, 10, 8, 3, 0))
 
 
 def test_a_scheduled_run_resets_the_clock(kelso_env):
-  ctx = _ctx(kelso_env)
+  ctx = _scheduled(kelso_env)
   ctx.kelso_db.record_backup_run(
     {
       "run": "x",

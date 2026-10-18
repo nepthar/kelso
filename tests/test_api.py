@@ -573,7 +573,7 @@ def test_backups_before_any_are_taken(kelso_env, client):
   body = client.get("/backups").json()
   assert body["backups"] == []
   assert body["last_run"] is None
-  assert body["schedule"] == "0 3 * * *"
+  assert body["schedule"] is None
   assert body["keep"] == {"daily": 3, "weekly": 2, "monthly": 1, "manual": 5}
   assert len(body["kelso_id"]) == 8
 

@@ -18,7 +18,7 @@
 <div class="card">
 <div class="scroll"><table class="kv"><tbody>
   <tr><td class="key">Backups to</td><td class="mono">{{ view.get('destination') or '—' }}</td></tr>
-  <tr><td class="key">Schedule</td><td class="mono">{{ view.schedule }}</td></tr>
+  <tr><td class="key">Schedule</td><td class="mono">{{ view.schedule or 'none' }}</td></tr>
   <tr><td class="key">Keep</td><td>{{ keep.daily }} daily, {{ keep.weekly }} weekly, {{ keep.monthly }} monthly, {{ keep.manual }} manual</td></tr>
   <tr><td class="key">Last run</td><td>
     {%- if not last %}<span class="muted">never</span>

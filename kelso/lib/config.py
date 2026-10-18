@@ -106,8 +106,10 @@ class BackupEntry(BaseModel):
 
   model_config = ConfigDict(extra="forbid")
 
-  # When kelsod backs everything up, as a cron schedule in local time.
-  schedule: str = "0 3 * * *"
+  # When kelsod backs everything up, as a cron schedule in local time. None,
+  # the default, schedules nothing: `kelso init` writes one into config.toml,
+  # and taking it out turns scheduled backups off.
+  schedule: str | None = None
   # Refuse unless `backups/` resolves onto another filesystem than the kelso
   # root: the share it links into is mounted.
   require_mount: bool = False
@@ -384,10 +386,11 @@ def _validate_config(parsed: ConfigFile) -> list[str]:
       f"remove [route_provider.{NONE_ROUTE_PROVIDER_TAG}] from config.toml"
     )
 
-  try:
-    CronSchedule.parse(parsed.backup.schedule)
-  except ValueError as e:
-    errors.append(f"[backup] schedule: {e}")
+  if parsed.backup.schedule is not None:
+    try:
+      CronSchedule.parse(parsed.backup.schedule)
+    except ValueError as e:
+      errors.append(f"[backup] schedule: {e}")
 
   for tag in parsed.route_provider:
     try:
