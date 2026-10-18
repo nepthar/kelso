@@ -1,10 +1,11 @@
-"""`kelso status`: the dashboard as text -- host, apps, routes, storage."""
+"""`kelso status`: the dashboard as text -- host, apps, routes, locations, storage."""
 
 import argparse
 import os
 import socket
 import time
 from datetime import timedelta
+from pathlib import Path
 
 import psutil
 from tabulate import tabulate
@@ -13,7 +14,7 @@ from kelso import VERSION
 from kelso.lib import views
 from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.metric import cpu_used_ratio
+from kelso.lib.metric import KELSO_DIRS, cpu_used_ratio
 from kelso.lib.receipt import published_urls
 from kelso.lib.run_layout import load_run_data
 from kelso.lib.util import fmt_size
@@ -32,6 +33,7 @@ def run(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
       _host(),
       _apps(ctx),
       _routes(ctx),
+      _locations(ctx),
       _volumes(ctx),
       _backups(ctx),
       _doctor(ctx),
@@ -86,26 +88,62 @@ def _routes(ctx: KelsoCtx) -> str:
   return "Routes\n" + ("\n".join(lines) or "None published.")
 
 
+def _locations(ctx: KelsoCtx) -> str:
+  """Where each volume root, kelso directory and host volume really is."""
+  root = ctx.config.kelso_root
+  places = [
+    *(
+      (f"volumes/{kind}", path)
+      for kind, path in sorted(ctx.config.volume_roots.items())
+    ),
+    *((entry.name, entry.root(ctx)) for entry in KELSO_DIRS),
+  ]
+  rows = [("$kelso", str(root))]
+  rows += [(name, _where(path, root)) for name, path in places]
+  # Host volumes are the operator's own folders: kelso never creates them.
+  for tag, volume in sorted(ctx.config.host_volumes.items()):
+    missing = "" if volume.path.is_dir() else " (missing)"
+    rows.append((f"{tag} (host)", f"{_short(volume.path, root)}{missing}"))
+  return f"Locations\n{tabulate(rows, headers=['FOLDER', 'PATH'])}"
+
+
+def _where(path: Path, root: Path) -> str:
+  """A link's target, or where the folder is, under `$kelso` when it can be."""
+  if path.is_symlink():
+    target = path.readlink()
+    if not target.is_absolute():
+      target = path.parent / target
+    shown = f"→ {_short(target, root)}"
+    return shown if path.exists() else f"{shown} (missing)"
+  if not path.exists():
+    return f"{_short(path, root)} (not created yet)"
+  return _short(path, root)
+
+
+def _short(path: Path, root: Path) -> str:
+  """`path`, written from `$kelso` when it is under the kelso root."""
+  if path.is_relative_to(root):
+    return str(Path("$kelso") / path.relative_to(root))
+  return str(path)
+
+
 def _volumes(ctx: KelsoCtx) -> str:
   rows = []
   for root in views.volume_roots_view(ctx):
     if root["used"] is None:
-      rows.append((root["kind"], "-", "-", "-", "-", "path is missing"))
+      rows.append((root["kind"], "-", "-", "path is missing"))
       continue
     total = root["used"] + root["available"]
-    mine = root["bytes"]
-    other = max(root["used"] - mine, 0)
+    free = root["available"]
     rows.append(
       (
         root["kind"],
         root["device"],
-        fmt_size(total),
-        f"{fmt_size(mine)} ({mine / total:.1%})",
-        f"{other / total:.1%}",
-        f"{root['available'] / total:.1%}",
+        fmt_size(root["bytes"]),
+        f"{fmt_size(free)} ({free / total:.0%})",
       )
     )
-  headers = ["KIND", "DEVICE", "SIZE", "VOLUMES", "OTHER", "FREE"]
+  headers = ["KIND", "DEVICE", "SIZE", "FREE"]
   return f"Volumes\n{tabulate(rows, headers=headers)}"
 
 
