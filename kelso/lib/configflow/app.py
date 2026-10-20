@@ -1,7 +1,7 @@
 """Everything an operator sets on one app, as a ConfigRequest.
 
 That is its `[config]` values, a host volume for each `kind = "host"` volume,
-a provider for each route, and whether each bulk volume is backed up. Those are
+the providers for each route, and whether each bulk volume is backed up. Those are
 named `volume.<name>`, `route.<name>` and `backup.<name>`, so they cannot
 collide with a config name, which has no dots.
 """
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from kelso.lib.config import format_route_providers
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.spec import AppSpec
 
@@ -63,13 +64,16 @@ def _route_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   return [
     ConfigField(
       name=f"{ROUTE_PREFIX}{name}",
-      value=assignments.get(name),
-      desc=route.desc or f"Route provider that publishes {name}",
+      value=None if tags is None else format_route_providers(tags),
+      desc=route.desc
+      or f"Route providers that publish {name}; the first gives its URL",
       # Unassigned is a valid state: a private route stays on its host port.
       required=False,
       choices=tuple(sorted(ctx.config.route_providers)),
+      multi=True,
     )
     for name, route in spec.routes.items()
+    for tags in [assignments.get(name)]
   ]
 
 

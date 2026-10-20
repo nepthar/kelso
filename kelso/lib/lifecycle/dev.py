@@ -16,7 +16,7 @@ from kelso.lib.lifecycle.routes import (
 )
 from kelso.lib.lifecycle.run import down_env, recovery_lines
 from kelso.lib.routes import RouteProviderError
-from kelso.lib.run_layout import AppRunData, load_run_data
+from kelso.lib.run_layout import AppRunData, load_run_data, provider_route_urls
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import same_path
 
@@ -33,9 +33,10 @@ class DevPlan:
   mounts: dict[str, Path]
   spec: AppSpec
   run_data: AppRunData
-  # route name -> public URL, for the routes this run will publish. Empty
-  # unless `--routes` asked for it; a dev run is unpublished by default.
-  published: dict[str, str]
+  # route name -> public URLs, primary first, for the routes this run will
+  # publish. Empty unless `--routes` asked for it; a dev run is unpublished by
+  # default.
+  published: dict[str, list[str]]
 
 
 def refuse_other_origin(app: AppID, source: Path, ctx: KelsoCtx) -> None:
@@ -74,13 +75,12 @@ def dev_plan(
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
 
-  published: dict[str, str] = {}
+  published: dict[str, list[str]] = {}
   if publish_routes:
-    published = {
-      name: run_data.route_urls[name]
-      for name, _, _ in assigned_routes(run_data, ctx)
-      if name in run_data.route_urls
-    }
+    for name, route, tag in assigned_routes(run_data, ctx):
+      url = provider_route_urls(route, ctx.config).get(tag)
+      if url:
+        published.setdefault(name, []).append(url)
 
   return DevPlan(
     app_id=app,

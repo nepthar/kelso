@@ -83,6 +83,14 @@ class ConfigApp(App[ConfigResponse]):
     return Vertical(*widgets, classes=classes)
 
   def _control(self, entry: ConfigField) -> Input | Select:
+    if entry.multi:
+      # A Select picks one; an ordered few are typed, comma-separated.
+      return Input(
+        value=entry.value or "",
+        placeholder=", ".join(entry.choices or ()) or "(none defined)",
+        compact=True,
+        id=self._ids[entry.name],
+      )
     if entry.choices is not None:
       return Select(
         [(choice, choice) for choice in entry.choices],

@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import byline, pill, sub, kv_table, job_button, empty %}
+{% from "macros.html" import byline, pill, sub, tag, kv_table, job_button, empty %}
 {% from "configform.html" import config_form %}
 {% set app_id = app.app_id %}
 {% set name = app.get('display_name') or app_id %}
@@ -60,10 +60,16 @@
   {% if reachable %}
   <div class="reachable"><span class="muted">Available at:</span>
   {% for r in reachable %}
-    {%- set url = r.get('published_url') or r.host_url %}
-    {%- set provider = r.get('provider') %}
-    <div><span class="key">{{ r.name }}:</span> <a href="{{ url }}" target="_blank" rel="noopener" title="{{ r.unit }}:{{ r.container_port }} → {{ r.host_port or 'unallocated' }}{{ ', via ' ~ provider if provider and provider != 'none' }}">{{ url }}</a></div>
-  {% endfor %}
+    {%- set where = r.unit ~ ':' ~ r.container_port ~ ' → ' ~ (r.host_port or 'unallocated') %}
+    {%- set via = r.get('providers') or [] %}
+    {#- One line per provider, primary first: its URL is the one the app is
+      told, so it is the one marked when there is more than one. -#}
+    {%- for p in via %}
+    <div><span class="key">{{ r.name }}:</span> <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ where }}">{{ p.url }}</a> {{ tag(p.tag, title=('primary: the URL the app is given for ' ~ r.name) if loop.first and via|length > 1 else 'via ' ~ p.tag) }}</div>
+    {% else %}
+    <div><span class="key">{{ r.name }}:</span> <a href="{{ r.host_url }}" target="_blank" rel="noopener" title="{{ where }}">{{ r.host_url }}</a></div>
+    {% endfor %}
+  {%- endfor %}
   </div>
   {% endif %}
 </div>
@@ -159,4 +165,4 @@
 {% endfor %}
 {% endblock %}
 
-{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/tagpick.js') }}"></script>{% endblock %}

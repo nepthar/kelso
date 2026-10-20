@@ -23,7 +23,7 @@ def _route(
     container_port=container_port,
     proto="tcp",
     scheme="http",
-  ).__dict__
+  ).record()
 
 
 @pytest.fixture

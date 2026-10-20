@@ -256,8 +256,15 @@ def test_config_form(client, fake):
   assert 'name="set.subdomain"' in options
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
-  assert '<option value="">none defined yet</option>' in basic
   assert '<option value="kelso_conn" selected>' in basic
+  # A pick-several field: its comma list in order, and a tag per choice.
+  assert (
+    '<input name="set.route.main" value="web,lan" placeholder="pick one or more"'
+    in basic
+  )
+  picks = basic.split('name="set.route.main"')[1].split("</div>")[0]
+  assert re.findall(r'data-tag="([^"]*)"', picks)[:3] == ["lan", "none", "web"]
+  assert '<input name="set.route.none" value="" placeholder="none defined yet"' in basic
   assert '<input type="hidden" name="action" value="config">' in form
 
 
@@ -354,10 +361,19 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
   ]
   assert "Routes" not in headings
   reachable = text.split('<div class="reachable">')[1].split("</div>\n  </div>")[0]
-  assert (
-    '<span class="key">main:</span> <a href="https://kelso.example.test"' in reachable
+  # One line per provider, primary first, each tagged with its provider.
+  primary, second = (
+    reachable.index('<a href="https://kelso.example.test"'),
+    reachable.index('<a href="https://kelso.lan.test"'),
   )
-  assert 'title="main:8080 → 10001, via web"' in reachable
+  assert primary < second
+  assert reachable.count('<span class="key">main:</span>') == 2
+  assert 'title="main:8080 → 10001"' in reachable
+  assert (
+    '<span class="tag" title="primary: the URL the app is given for main">web</span>'
+    in reachable
+  )
+  assert '<span class="tag" title="via lan">lan</span>' in reachable
   # No published address and no host port: nowhere to reach it, so not listed.
   assert "admin" not in reachable
 

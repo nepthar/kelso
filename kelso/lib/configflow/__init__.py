@@ -28,6 +28,12 @@ class ConfigField:
   # None for free text. Otherwise the value must be one of these; an empty tuple
   # means "pick one" with nothing defined to pick from yet.
   choices: tuple[str, ...] | None = None
+  # With choices: the value is one or more of them, comma-separated, in order.
+  multi: bool = False
+
+  def picked(self, value: str) -> list[str]:
+    """The choices a value names: itself, or each comma-separated item if multi."""
+    return [item.strip() for item in value.split(",")] if self.multi else [value]
 
   @property
   def is_set(self) -> bool:
@@ -88,9 +94,12 @@ class ConfigRequest:
         errors.append(f"{self.title}: no config named {name!r}")
       elif not value:
         errors.append(f"{self.title}: {name} cannot be empty")
-      elif entry.choices is not None and value not in entry.choices:
+      elif entry.choices is not None and any(
+        item not in entry.choices for item in entry.picked(value)
+      ):
         known = ", ".join(entry.choices) or "(none defined)"
-        errors.append(f"{self.title}: {name} must be one of: {known}")
+        some = "one or more (comma-separated)" if entry.multi else "one"
+        errors.append(f"{self.title}: {name} must be {some} of: {known}")
     return errors
 
   def response(self, values: dict[str, str]) -> ConfigResponse:

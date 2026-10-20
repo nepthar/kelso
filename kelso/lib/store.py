@@ -2,13 +2,13 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
 from cryptography.fernet import InvalidToken
 
-from kelso.lib.config import Config
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 
 from .crypto import CryptoEngine, crypto_from_config
 from .logtab import LogTab
@@ -72,6 +72,16 @@ def _decrypt_or_none(crypto: CryptoEngine, blob: str) -> str | None:
     return crypto.decrypt(blob)
   except (InvalidToken, ValueError):
     return None
+
+
+def _route_tags(value: Any) -> list[str] | None:
+  """A stored route assignment as a tag list. Older stores hold one tag, with
+  `none` for published nowhere."""
+  if isinstance(value, str):
+    return [] if value == NONE_ROUTE_PROVIDER_TAG else [value]
+  if isinstance(value, list) and all(isinstance(tag, str) for tag in value):
+    return value
+  return None
 
 
 class KelsoStore:
@@ -285,24 +295,31 @@ class AppStore:
     raw = self._store.scan("binds/")
     return {name: tag for name, tag in raw.items() if isinstance(tag, str)}
 
-  def set_route_assignment(self, route_name: str, provider_tag: str) -> None:
-    """Record which route-provider tag publishes ``route_name``."""
-    if self.get_route_assignment(route_name) == provider_tag:
+  def set_route_assignment(self, route_name: str, provider_tags: Sequence[str]) -> None:
+    """Record which route-provider tags publish ``route_name``, primary first.
+    An empty list is an assignment too: published nowhere, on purpose."""
+    if isinstance(provider_tags, str):
+      raise TypeError(f"provider tags must be a list, not {provider_tags!r}")
+    tags = list(provider_tags)
+    if self.get_route_assignment(route_name) == tags:
       return
-    self._store.write(f"routes/{route_name}", provider_tag)
+    self._store.write(f"routes/{route_name}", tags)
 
-  def get_route_assignment(self, route_name: str) -> str | None:
-    """Return the assigned provider tag, or None if never set."""
-    value = self._store.read(f"routes/{route_name}")
-    return value if isinstance(value, str) else None
+  def get_route_assignment(self, route_name: str) -> list[str] | None:
+    """The assigned provider tags, primary first, or None if never set."""
+    return _route_tags(self._store.read(f"routes/{route_name}"))
 
   def has_route_assignment(self, route_name: str) -> bool:
     return self._store.read(f"routes/{route_name}") is not None
 
-  def list_route_assignments(self) -> dict[str, str]:
-    """route name -> provider tag for every assignment on file."""
+  def list_route_assignments(self) -> dict[str, list[str]]:
+    """route name -> provider tags, primary first, for every assignment on file."""
     raw = self._store.scan("routes/")
-    return {name: tag for name, tag in raw.items() if isinstance(tag, str)}
+    return {
+      name: tags
+      for name, value in raw.items()
+      if (tags := _route_tags(value)) is not None
+    }
 
   def set_backup_bulk(self, volume_name: str, on: bool) -> None:
     """Whether backups include bulk volume `volume_name`. Start never reads

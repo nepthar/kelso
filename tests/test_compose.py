@@ -60,7 +60,7 @@ def run_data(
   config_values: dict[str, ConfigValue] | None = None,
   host_mounts: tuple[dict, ...] = (),
   issues: tuple[ConfigIssue, ...] = (),
-  assignments: dict[str, str] | None = None,
+  assignments: dict[str, list[str]] | None = None,
 ) -> AppRunData:
   """An `AppRunData` for `spec`, with every route allocated.
 
@@ -70,7 +70,7 @@ def run_data(
   host_ports = host_ports or {}
   if assignments is None:
     assignments = {
-      name: "web" for name, route in spec.routes.items() if not route.private
+      name: ["web"] for name, route in spec.routes.items() if not route.private
     }
   routes = {
     name: AssignedRoute(
@@ -81,7 +81,7 @@ def run_data(
       container_port=route.container_port,
       proto=route.proto,
       scheme=route.scheme,
-      provider=assignments.get(name, "none"),
+      providers=tuple(assignments.get(name, ())),
     )
     for name, route in spec.routes.items()
   }

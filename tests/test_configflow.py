@@ -328,7 +328,7 @@ def test_applying_binds_and_routes_goes_through_bind_and_assign_route(kelso_env)
 
   spec, ctx, _ = _app_request(kelso_env, "routes-demo")
   apply_app_config(spec, ConfigResponse(values={"route.admin": "web"}), ctx)
-  assert ctx.app_store(spec.app).get_route_assignment("admin") == "web"
+  assert ctx.app_store(spec.app).get_route_assignment("admin") == ["web"]
 
 
 def test_a_bind_to_an_undeclared_host_volume_is_refused(kelso_env):

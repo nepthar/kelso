@@ -33,6 +33,30 @@ NONE_ROUTE_PROVIDER_TAG = "none"
 # Domain used for route URLs when a route is unassigned or assigned to none.
 PLACEHOLDER_DOMAIN = "kelso.localhost"
 
+
+def parse_route_providers(route_name: str, raw: str) -> list[str]:
+  """`a,b` -> ["a", "b"], primary first; `none` alone -> [] (published nowhere)."""
+  tags = [tag.strip() for tag in raw.split(",")]
+  if tags == [NONE_ROUTE_PROVIDER_TAG]:
+    return []
+  if NONE_ROUTE_PROVIDER_TAG in tags:
+    raise ValueError(
+      f"route {route_name}: {NONE_ROUTE_PROVIDER_TAG!r} cannot be combined with "
+      f"other providers ({raw!r}); use {route_name}={NONE_ROUTE_PROVIDER_TAG} "
+      f"alone to publish it nowhere"
+    )
+  if "" in tags:
+    raise ValueError(f"route {route_name}: empty provider tag in {raw!r}")
+  if repeated := sorted({tag for tag in tags if tags.count(tag) > 1}):
+    raise ValueError(f"route {route_name}: {', '.join(repeated)} listed more than once")
+  return tags
+
+
+def format_route_providers(tags: list[str]) -> str:
+  """What `parse_route_providers` reads back as `tags`."""
+  return ",".join(tags) or NONE_ROUTE_PROVIDER_TAG
+
+
 RouteProviderKind = Literal[
   "nginx_proxy_manager", "pangolin", "cloudflare_tunnel", "noop"
 ]

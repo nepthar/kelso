@@ -231,6 +231,19 @@ Pin a host port only when something outside kelso already points at it — a TV
 that expects `:8096`, or an app that advertises its own port. Otherwise let
 kelso allocate, and collisions stop being your problem.
 
+Which route providers publish a route is the operator's call, not the
+manifest's. A route can go through several at once — say, Pangolin for the
+internet and Nginx Proxy Manager for the LAN:
+
+```sh
+kelso config immich --route main=pangolin,npm
+```
+
+The first one listed is the primary: its domain is the one `${routes.<name>}`
+and `${klso.domain}` resolve to. Take it out and the next one becomes primary.
+`--route main=none` publishes the route nowhere; `none` cannot be combined with
+other providers.
+
 ## `[commands.<name>]`
 
 Operations the app declares for itself, runnable from the CLI or as a button
@@ -302,12 +315,13 @@ an empty string:
 
 - `${<config key>}` — anything from `[config]` or `[adv_config]`, and the app
   options.
-- `${routes.<name>}` — the full public URL of a declared route.
+- `${routes.<name>}` — the full public URL of a declared route, through its
+  primary (first-listed) provider.
 - `${klso.…}` — the app's own resolved values:
 
   | Key | Resolves to |
   | --- | --- |
-  | `${klso.domain}` | `<subdomain>.<domain>` of the `main` route's provider, e.g. `recipes.example.com`; `<subdomain>.kelso.localhost` while unassigned |
+  | `${klso.domain}` | `<subdomain>.<domain>` of the `main` route's primary provider, e.g. `recipes.example.com`; `<subdomain>.kelso.localhost` while unassigned |
   | `${klso.volumes}` | This unit's volumes as `name:/path/in/container`, comma-separated |
   | `${klso.routes}` | This unit's routes as `name:container_port`, comma-separated |
   | `${klso.cmd}` | This unit's `cmd`, joined with spaces |

@@ -8,6 +8,7 @@ instead.
 
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -669,7 +670,40 @@ def test_assigning_a_route_before_load_is_recorded(kelso_env):
   assert "route main -> web" in assigned.stdout
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert ctx.app_store("routes-demo").get_route_assignment("main") == "web"
+  assert ctx.app_store("routes-demo").get_route_assignment("main") == ["web"]
+
+
+def test_a_route_published_through_two_providers_is_reachable_at_both(kelso_env):
+  """The first provider listed gives the route its URL; each one publishes it."""
+  with open(kelso_env.config, "a") as f:
+    f.write('\n[route_provider.lan]\nkind = "noop"\ndomain = "lan.test"\n')
+
+  assigned = kelso_env.run("config", "routes-demo", "--route", "main=lan,web")
+  assert assigned.returncode == 0, assigned.stderr
+  assert "route main -> lan, web" in assigned.stdout
+  listed = kelso_env.run("config", "routes-demo")
+  assert re.search(r"^main\s+lan, web\b", listed.stdout, re.M), listed.stdout
+
+  started = kelso_env.run("start", "routes-demo")
+  assert started.returncode == 0, started.stderr
+  line = next(ln for ln in started.stdout.splitlines() if ".lan.test" in ln)
+  assert re.search(r"<- https://\S+\.lan\.test, https://\S+\.kelso\.localhost", line)
+
+
+@pytest.mark.parametrize(
+  "routes, error",
+  [
+    (["main=web,none"], "'none' cannot be combined"),
+    (["main=web", "main=web"], "--route main given more than once"),
+  ],
+)
+def test_a_bad_set_of_route_providers_is_refused(kelso_env, routes, error):
+  args = [arg for route in routes for arg in ("--route", route)]
+  refused = kelso_env.run("config", "routes-demo", *args)
+  assert refused.returncode == 1
+  assert error in refused.stderr
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  assert ctx.app_store("routes-demo").get_route_assignment("main") is None
 
 
 def test_config_set_secret(kelso_env):
@@ -1244,7 +1278,7 @@ def test_an_unmet_bind_is_reported_as_missing_config(kelso_env):
 
 
 def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
-  """A loaded bundle that will not parse is unknown, not unconfigured."""
+  """A loaded bundle that will not parse is named as broken, not unconfigured."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1256,7 +1290,8 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
   listed = kelso_env.run("ps")
   assert listed.returncode == 0, listed.stderr
   row = _ps_row(listed.stdout, app_id)
-  assert row[1:4] == ["stopped", "-", "-"]
+  assert row[1:4] == ["stopped", "broken", "manifest"]
+  assert "missing" not in row
 
 
 # --- doctor ----------------------------------------------------------------
