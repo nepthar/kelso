@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Egress Proxy</title>
+<style>
+  :root { color-scheme: light dark; font: 15px/1.4 system-ui, sans-serif; }
+  body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #8884; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  button { margin-left: .25rem; }
+  .muted { opacity: .6; }
+</style>
+</head>
+<body>
+<h1>Egress proxy</h1>
+<p>Mode: <b id="mode">…</b> · <a href="rules?format=text">download rules</a></p>
+
+<h2>Pending</h2>
+<table>
+  <thead><tr><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
+  <tbody id="pending"></tbody>
+</table>
+
+<h2>Rules</h2>
+<table>
+  <thead><tr><th>Domain</th><th>Verdict</th></tr></thead>
+  <tbody id="rules"></tbody>
+</table>
+
+<h2>Traffic</h2>
+<table>
+  <thead><tr><th>Domain</th><th>Scheme</th><th>Conns</th><th>Allowed</th><th>Denied</th><th>Timed out</th><th>Out</th><th>In</th></tr></thead>
+  <tbody id="stats"></tbody>
+</table>
+
+<script>
+const el = (tag, text, cls) => {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+};
+const row = (cells) => {
+  const tr = el("tr");
+  for (const c of cells) tr.append(c instanceof Node ? c : el("td", c));
+  return tr;
+};
+const empty = (cols) => row([Object.assign(el("td", "none", "muted"), { colSpan: cols })]);
+const bytes = (n) => n < 1024 ? n + " B" : n < 1 << 20 ? (n / 1024).toFixed(1) + " KB" : (n / (1 << 20)).toFixed(1) + " MB";
+
+async function decide(domain, verdict) {
+  if (!confirm(`${verdict} ${domain} and all its subdomains?`)) return;
+  const r = await fetch("decide", { method: "POST", body: JSON.stringify({ domain, verdict }) });
+  if (!r.ok) alert(await r.text());
+  refresh();
+}
+
+async function refresh() {
+  try {
+    const [pending, rules, stats] = await Promise.all(
+      ["pending", "rules", "stats"].map((p) => fetch(p).then((r) => r.ok ? r.json() : null)));
+
+    const pb = document.getElementById("pending");
+    pb.replaceChildren(...(pending?.length ? pending.map((p) => {
+      const actions = el("td");
+      for (const v of ["allow", "deny"]) {
+        const b = el("button", v);
+        b.onclick = () => decide(p.domain, v);
+        actions.append(b);
+      }
+      return row([p.domain, new Date(p.first_seen).toLocaleString(), el("td", p.hits, "n"), actions]);
+    }) : [empty(4)]));
+
+    document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";
+    const rb = document.getElementById("rules");
+    rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => row([r.domain, r.verdict])) : [empty(2)]));
+
+    const sb = document.getElementById("stats");
+    const srows = [];
+    for (const d of Object.keys(stats || {}).sort()) {
+      for (const [scheme, c] of Object.entries(stats[d])) {
+        srows.push(row([d, scheme, ...[c.conns, c.allowed, c.denied, c.timed_out].map((n) => el("td", n, "n")),
+          el("td", bytes(c.bytes_out), "n"), el("td", bytes(c.bytes_in), "n")]));
+      }
+    }
+    sb.replaceChildren(...(srows.length ? srows : [empty(8)]));
+  } catch (e) {
+    document.getElementById("mode").textContent = "unreachable";
+  }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

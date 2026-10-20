@@ -1,0 +1,43 @@
+name: kproxy-itest
+
+networks:
+  apps:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.99.0/24
+          ip_range: 172.30.99.128/25
+  egress: {}
+
+volumes:
+  admin: {}
+
+services:
+  proxy:
+    image: kproxy:dev
+    command: ["-ip", "172.30.99.2", "-hold", "5s"]
+    networks:
+      apps:
+        ipv4_address: 172.30.99.2
+      egress: {}
+    volumes:
+      - admin:/run/kproxy
+    healthcheck:
+      test: ["CMD", "/kproxy", "healthcheck"]
+      interval: 1s
+      retries: 60
+
+  internal-web:
+    image: busybox:1.37
+    command: ["httpd", "-f", "-p", "8080", "-h", "/etc"]
+    networks: [apps]
+
+  client:
+    image: curlimages/curl:8.17.0
+    entrypoint: ["sleep", "infinity"]
+    dns: 172.30.99.2
+    networks: [apps]
+    volumes:
+      - admin:/run/kproxy
+    depends_on:
+      proxy: { condition: service_healthy }
