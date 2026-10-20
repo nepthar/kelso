@@ -1,9 +1,9 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
-from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
+from kelso.lib.config import Config
 from kelso.lib.connections import CONNECTION_KINDS
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.run_layout import AppRunData, resolved_subdomain
+from kelso.lib.run_layout import AppRunData, provider_route_urls, resolved_subdomain
 from kelso.lib.spec import AppSpec
 
 # Every label in these receipts pads to at least this, so the capability block
@@ -13,20 +13,24 @@ LABEL_WIDTH = len("Containers:")
 
 def published_route_urls(
   spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
-) -> dict[str, str]:
-  """Route name -> public URL, for routes loaded with a non-none provider."""
-  return {
-    name: run_data.route_urls[name]
-    for name in spec.routes
-    if (loaded := run_data.routes.get(name)) is not None
-    and loaded.provider != NONE_ROUTE_PROVIDER_TAG
-    and name in run_data.route_urls
-  }
+) -> dict[str, list[str]]:
+  """Route name -> its public URLs, primary first, for routes loaded with a provider."""
+  published: dict[str, list[str]] = {}
+  for name in spec.routes:
+    loaded = run_data.routes.get(name)
+    if loaded is None:
+      continue
+    urls = list(provider_route_urls(loaded, ctx.config).values())
+    if urls:
+      published[name] = urls
+  return published
 
 
 def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:
-  """URLs for routes assigned to a non-none provider, in declaration order."""
-  return list(published_route_urls(spec, run_data, ctx).values())
+  """URLs for routes assigned to a provider, in declaration order, primary first."""
+  return [
+    url for urls in published_route_urls(spec, run_data, ctx).values() for url in urls
+  ]
 
 
 def host_url(
@@ -47,7 +51,7 @@ def host_url(
 def route_lines(
   spec: AppSpec,
   run_data: AppRunData | None,
-  published: Mapping[str, str],
+  published: Mapping[str, Sequence[str]],
   *,
   host: str = "localhost",
 ) -> list[str]:
@@ -57,8 +61,8 @@ def route_lines(
     where = host_url(spec, run_data, name, host) or "(no host port allocated)"
 
     line = f"{route.run_unit_name}:{route.container_port}/{route.proto} <- {where}"
-    if name in published:
-      line += f" <- {published[name]}"
+    if published.get(name):
+      line += f" <- {', '.join(published[name])}"
     lines.append(line)
   return lines
 

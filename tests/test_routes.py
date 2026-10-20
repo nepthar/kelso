@@ -19,7 +19,9 @@ from kelso.lib.config import (
   Config,
   RouteProviderEntry,
   RouteProviderKind,
+  format_route_providers,
   load_config_file,
+  parse_route_providers,
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.routes import assigned_routes, preflight_app_routes
@@ -35,7 +37,12 @@ from kelso.lib.routes import (
   RouteProviderError,
   get_route_provider,
 )
-from kelso.lib.run_layout import AppRunData, AssignedRoute, _route_urls
+from kelso.lib.run_layout import (
+  AppRunData,
+  AssignedRoute,
+  _route_urls,
+  provider_route_urls,
+)
 from kelso.lib.spec import AppSpec
 from tests.conftest import TEST_SEED
 
@@ -177,13 +184,82 @@ metrics = { port = "9090" }
 
 # ── assigned-route filtering (lifecycle) ───────────────────────────────────
 def test_assigned_routes_skips_none_and_unassigned():
-  """By the provider each route was loaded with, not the assignment now."""
+  """By the providers each route was loaded with, not the assignment now."""
   spec = _spec(ROUTES)
-  run_data = _run_data(spec, providers={"main": "web", "api": NONE_ROUTE_PROVIDER_TAG})
-  store = SimpleNamespace(list_route_assignments=lambda: {"api": "web"})
+  run_data = _run_data(spec, providers={"main": ("web",), "api": ()})
+  store = SimpleNamespace(list_route_assignments=lambda: {"api": ["web"]})
   ctx = SimpleNamespace(app_store=lambda _app: store)
   names = {name for name, _, _ in assigned_routes(run_data, ctx)}
   assert names == {"main"}
+
+
+def test_assigned_routes_yields_each_provider_primary_first():
+  spec = _spec(ROUTES)
+  run_data = _run_data(spec, providers={"main": ("pangolin", "npm"), "api": ()})
+  pairs = [(name, tag) for name, _, tag in assigned_routes(run_data, SimpleNamespace())]
+  assert pairs == [("main", "pangolin"), ("main", "npm")]
+
+
+def test_the_first_provider_gives_a_route_its_url():
+  spec = _spec(ROUTES)
+  domains = {"pangolin": "example.com", "npm": "home.lan"}
+  config = SimpleNamespace(
+    provider_domain=lambda tag: domains.get(tag, PLACEHOLDER_DOMAIN)
+  )
+  for order, url in [
+    (("pangolin", "npm"), "https://photos.example.com"),
+    # Take the primary out and the next one up is the primary.
+    (("npm",), "https://photos.home.lan"),
+  ]:
+    route = _assigned(spec, "main", providers=order)
+    assert _route_urls({"main": route}, config) == {"main": url}
+    assert route.primary_provider == order[0]
+  both = _assigned(spec, "main", providers=("pangolin", "npm"))
+  assert provider_route_urls(both, config) == {
+    "pangolin": "https://photos.example.com",
+    "npm": "https://photos.home.lan",
+  }
+
+
+def test_a_route_record_from_before_multiple_providers_still_loads():
+  spec = _spec(ROUTES)
+  record = _assigned(spec, "main").record()
+  del record["providers"]
+  assert AssignedRoute.from_record({**record, "provider": "web"}).providers == ("web",)
+  none = AssignedRoute.from_record({**record, "provider": NONE_ROUTE_PROVIDER_TAG})
+  assert none.providers == ()
+  assert none.primary_provider == NONE_ROUTE_PROVIDER_TAG
+  both = _assigned(spec, "main", providers=("a", "b"))
+  assert AssignedRoute.from_record(json.loads(json.dumps(both.record()))) == both
+
+
+@pytest.mark.parametrize(
+  "raw, tags",
+  [
+    ("web", ["web"]),
+    ("pangolin,npm", ["pangolin", "npm"]),
+    (" a , b ", ["a", "b"]),
+    ("none", []),
+  ],
+)
+def test_route_providers_parse_in_order(raw, tags):
+  assert parse_route_providers("main", raw) == tags
+  if tags:
+    assert parse_route_providers("main", format_route_providers(tags)) == tags
+
+
+@pytest.mark.parametrize(
+  "raw, match",
+  [
+    ("pangolin,none", "cannot be combined"),
+    ("none,none", "cannot be combined"),
+    ("pangolin,,npm", "empty provider tag"),
+    ("npm,npm", "npm listed more than once"),
+  ],
+)
+def test_route_providers_refuse_a_bad_set(raw, match):
+  with pytest.raises(ValueError, match=match):
+    parse_route_providers("main", raw)
 
 
 # ── validation ────────────────────────────────────────────────────────────
@@ -1216,7 +1292,7 @@ def test_pangolin_validate_reports_missing_shared_policy():
 
 # ── preflight against the route provider ───────────────────────────────────
 def _assigned(
-  spec, route_name: str, host_port: int = 41000, provider: str = "none"
+  spec, route_name: str, host_port: int = 41000, providers: tuple[str, ...] = ()
 ) -> AssignedRoute:
   route = spec.routes[route_name]
   return AssignedRoute(
@@ -1227,22 +1303,22 @@ def _assigned(
     container_port=route.container_port,
     proto=route.proto,
     scheme=route.scheme,
-    provider=provider,
+    providers=providers,
   )
 
 
 def _run_data(
   spec,
   host_ports: dict[str, int] | None = None,
-  providers: dict[str, str] | None = None,
+  providers: dict[str, tuple[str, ...]] | None = None,
 ) -> AppRunData:
   ports = host_ports or {}
   if providers is None:
     providers = {
-      name: "web" for name, route in spec.routes.items() if not route.private
+      name: ("web",) for name, route in spec.routes.items() if not route.private
     }
   assigned = {
-    name: _assigned(spec, name, ports.get(name, 41000 + i), providers.get(name, "none"))
+    name: _assigned(spec, name, ports.get(name, 41000 + i), providers.get(name, ()))
     for i, name in enumerate(spec.routes)
   }
   config = SimpleNamespace(
@@ -1283,7 +1359,7 @@ main = {{ port = "8080" }}
 
 def _preflight_with(provider, spec):
   store = SimpleNamespace(
-    list_route_assignments=lambda: {"main": "web"},
+    list_route_assignments=lambda: {"main": ["web"]},
   )
   ctx = SimpleNamespace(
     config=SimpleNamespace(

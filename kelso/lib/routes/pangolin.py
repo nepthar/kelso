@@ -68,7 +68,8 @@ class PangolinRouteProvider(RouteProvider):
     kelso_domain: str,
     kelso_address: str,
     shared_policy: str | None = None,
-    timeout: float = 30.0,
+    # A string when it comes from config.toml, where every arg is one.
+    timeout: float | str = 30.0,
   ):
     self.endpoint = self._https_endpoint(endpoint)
     self._api_key = api_key
@@ -83,7 +84,7 @@ class PangolinRouteProvider(RouteProvider):
     self.kelso_address = kelso_address
     self.shared_policy = shared_policy or None
     self._resolved_policy_id: int | None = None
-    self._timeout = timeout
+    self._timeout = float(timeout)
     self._session = requests.Session()
 
   @staticmethod

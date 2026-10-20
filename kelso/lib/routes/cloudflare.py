@@ -79,7 +79,8 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     kelso_domain: str,
     kelso_address: str,
     zone_id: str = "",
-    timeout: float = 30.0,
+    # A string when it comes from config.toml, where every arg is one.
+    timeout: float | str = 30.0,
   ):
     self.account_id = account_id
     self.tunnel_id = tunnel_id
@@ -87,7 +88,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     self.kelso_domain = kelso_domain
     self.kelso_address = kelso_address
     self._zone_id = zone_id or None
-    self._timeout = timeout
+    self._timeout = float(timeout)
     self._session = requests.Session()
 
   # ── low-level request helper ──────────────────────────────────────────

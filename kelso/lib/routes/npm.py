@@ -71,7 +71,8 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     kelso_db: KelsoStore | None = None,
     token: str | None = None,
     token_expire: float | None = None,
-    timeout: float = 30.0,
+    # A string when it comes from config.toml, where every arg is one.
+    timeout: float | str = 30.0,
   ):
     self.endpoint = endpoint.rstrip("/")
     self.email = email
@@ -83,7 +84,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     self._kelso_db = kelso_db
     self._token = token
     self._token_expire = token_expire or 0.0
-    self._timeout = timeout
+    self._timeout = float(timeout)
     self._session = requests.Session()
 
   # ── auth ──────────────────────────────────────────────────────────────

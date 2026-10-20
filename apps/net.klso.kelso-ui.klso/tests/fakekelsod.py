@@ -28,6 +28,9 @@ def _field(name, **kw):
     "section": "config",
     "required": False,
     "choices": None,
+    "multi": False,
+    "empty_value": None,
+    "primary_desc": "",
   }
   base.update(kw)
   return base
@@ -131,7 +134,10 @@ APP_DETAIL = {
       "url": "https://kelso.example.test",
       "published_url": "https://kelso.example.test",
       "host_url": "http://10.0.0.5:10001",
-      "provider": "web",
+      "providers": [
+        {"tag": "web", "url": "https://kelso.example.test"},
+        {"tag": "lan", "url": "https://kelso.lan.test"},
+      ],
     },
     {
       "name": "admin",
@@ -141,7 +147,7 @@ APP_DETAIL = {
       "url": None,
       "published_url": None,
       "host_url": None,
-      "provider": None,
+      "providers": [],
     },
   ],
   "volumes": [
@@ -206,7 +212,15 @@ APP_CONFIG = {
     _field("token", secret=True, secret_set=True),
     _field("subdomain", value="kelso", default="kelso", section="option"),
     _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
-    _field("route.none", choices=[]),
+    _field("route.none", choices=[], multi=True, empty_value="none"),
+    _field(
+      "route.main",
+      value="web,lan",
+      choices=["lan", "web", EVIL],
+      multi=True,
+      empty_value="none",
+      primary_desc=f"Primary route: passed to the app as {EVIL}",
+    ),
     _field("backup.movies", value="on", choices=["on", "off"]),
     _field("tuning", section="advanced"),
     _field("debug", section="advanced", default="0"),

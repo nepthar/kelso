@@ -35,6 +35,12 @@
 <span class="pill"{% if title %} title="{{ title }}"{% endif %}><span class="{{ 'dot ' ~ dot if dot else 'dot' }}"></span>{{ text }}</span>
 {%- endmacro %}
 
+{#- A name that labels the thing beside it, e.g. the route provider a URL
+  goes through. A label, not a control: hairline and dim, never coloured. -#}
+{% macro tag(text, title="") -%}
+<span class="tag"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>
+{%- endmacro %}
+
 {#- How a recorded run ended. -#}
 {% macro run_status(status) -%}
 {%- if status == 'ok' %}{{ pill(status, 'running') }}

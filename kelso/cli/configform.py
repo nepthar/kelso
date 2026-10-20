@@ -27,7 +27,9 @@ def _ask(entry: ConfigField, edits: dict[str, str]) -> None:
   if entry.desc:
     print(f"  {entry.desc}")
   if entry.choices is not None:
-    print(f"  one of: {', '.join(entry.choices) or '(none defined)'}")
+    some = "one or more, comma-separated, of" if entry.multi else "one of"
+    alone = f" (or {entry.empty_value} for none)" if entry.empty_value else ""
+    print(f"  {some}: {', '.join(entry.choices) or '(none defined)'}{alone}")
 
   if entry.secret and sys.stdin.isatty():
     value = getpass(prompt).strip()

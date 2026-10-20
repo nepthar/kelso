@@ -45,6 +45,7 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_volume_problems(ctx),
     *_catalog_problems(ctx),
     *_key_problems(ctx),
+    *_secret_problems(ctx),
     *_backup_problems(ctx),
   ]
   warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx)]
@@ -66,6 +67,22 @@ def _key_problems(ctx: KelsoCtx) -> list[Finding]:
       )
     ]
   return []
+
+
+def _secret_problems(ctx: KelsoCtx) -> list[Finding]:
+  """A secret config.toml names but kelso does not hold: whatever names it
+  fails the first time it is used."""
+  stored = set(ctx.kelso_db.list_secrets())
+  return [
+    Finding(
+      ref.split(".args.")[0],
+      f"{ref} names system secret {name!r}, which is not set. "
+      f"Set it with `kelso system secret {name}`.",
+    )
+    for name, refs in ctx.config.secret_references().items()
+    if name not in stored
+    for ref in refs
+  ]
 
 
 # `git sparse-checkout set`, which mirroring needs, arrived in 2.25.

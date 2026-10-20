@@ -256,8 +256,27 @@ def test_config_form(client, fake):
   assert 'name="set.subdomain"' in options
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
-  assert '<option value="">none defined yet</option>' in basic
   assert '<option value="kelso_conn" selected>' in basic
+  # A pick-several field: no text box, only a tag per choice, the picks
+  # pressed, the first marked primary, and the comma list in a hidden input.
+  assert (
+    '<input type="hidden" name="set.route.main" value="web,lan" data-tag-pick '
+    'data-empty="none" data-primary-desc="Primary route: passed to the app as '
+    "&lt;i" in basic
+  )
+  picks = basic.split('name="set.route.main"')[1].split("</div>")[0]
+  tags = re.findall(r'<button type="button" class="tag" data-tag="([^"]*)"', picks)
+  assert tags[:2] == ["lan", "web"]
+  assert 'data-tag="none"' not in picks
+  assert 'data-tag="lan" aria-pressed="true">lan<' in picks
+  assert (
+    'data-tag="web" aria-pressed="true" data-primary '
+    'title="Primary route: passed to the app as &lt;i' in picks
+  )
+  assert picks.count("data-primary ") == 1
+  assert 'aria-pressed="false">&lt;i' in picks
+  none_defined = basic.split('name="set.route.none"')[1].split("</td>")[0]
+  assert '<span class="muted">none defined yet</span>' in none_defined
   assert '<input type="hidden" name="action" value="config">' in form
 
 
@@ -354,10 +373,19 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
   ]
   assert "Routes" not in headings
   reachable = text.split('<div class="reachable">')[1].split("</div>\n  </div>")[0]
-  assert (
-    '<span class="key">main:</span> <a href="https://kelso.example.test"' in reachable
+  # One line per provider, primary first, each tagged with its provider.
+  primary, second = (
+    reachable.index('<a href="https://kelso.example.test"'),
+    reachable.index('<a href="https://kelso.lan.test"'),
   )
-  assert 'title="main:8080 → 10001, via web"' in reachable
+  assert primary < second
+  assert reachable.count('<span class="key">main:</span>') == 2
+  assert 'title="main:8080 → 10001"' in reachable
+  assert (
+    '<span class="tag" title="primary: the URL the app is given for main">web</span>'
+    in reachable
+  )
+  assert '<span class="tag" title="via lan">lan</span>' in reachable
   # No published address and no host port: nowhere to reach it, so not listed.
   assert "admin" not in reachable
 

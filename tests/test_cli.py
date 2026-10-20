@@ -8,9 +8,11 @@ instead.
 
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -23,13 +25,15 @@ import kelso.lib.git
 import kelso.lib.lifecycle.run
 import kelso.lib.service
 from kelso.lib import activity, lifecycle, recovery
-from kelso.lib.apps import read_app_actions, read_last_app_action
+from kelso.lib.apps import AppID, read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
 from kelso.lib.docker import DockerError, DockerReturn
 from kelso.lib.doctor import STALE_METRICS_SECONDS, Finding, diagnose, kelsod_problems
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.load import LoadTarget, load_source
+from kelso.lib.repo import Repo, parse_github_url
 from kelso.lib.util import refuse_root
 
 BASIC = "net.klso.basic-features"
@@ -564,6 +568,35 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
 
 
+def test_load_says_where_the_bundle_came_from(kelso_env):
+  app_id = "ports-demo"
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  (entry,) = ctx.app_catalog()[app_id]
+
+  loaded = kelso_env.run("load", app_id)
+  assert loaded.returncode == 0, loaded.stderr
+  assert f"\n  from repo local: {entry.path}\n" in loaded.stdout
+
+  # A bundle named by path belongs to no repo: the path is the whole answer.
+  by_path = kelso_env.run("load", "--force", str(entry.path))
+  assert by_path.returncode == 0, by_path.stderr
+  assert f"\n  from {entry.path}\n" in by_path.stdout
+
+
+def test_a_load_from_a_mirrored_repo_names_the_remote_and_commit(tmp_path):
+  remote = parse_github_url("github://nepthar/kelso/main/apps")
+  repo = Repo("staples", tmp_path / "apps", "github", remote, tmp_path)
+  ctx = SimpleNamespace(
+    config=SimpleNamespace(repos={"staples": repo}),
+    kelso_db=SimpleNamespace(get_repo_state=lambda name: {"sha": "0123456789abcdef"}),
+  )
+  bundle = tmp_path / "apps" / "x.klso"
+  target = LoadTarget(AppID("x"), None, "staples")
+  assert load_source(target, bundle, ctx) == (
+    f"repo staples (github://nepthar/kelso/main/apps at 01234567): {bundle}"
+  )
+
+
 def test_load_names_the_config_a_start_still_needs(kelso_env):
   loaded = kelso_env.run("load", BASIC)
   assert loaded.returncode == 0, loaded.stderr
@@ -669,7 +702,40 @@ def test_assigning_a_route_before_load_is_recorded(kelso_env):
   assert "route main -> web" in assigned.stdout
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert ctx.app_store("routes-demo").get_route_assignment("main") == "web"
+  assert ctx.app_store("routes-demo").get_route_assignment("main") == ["web"]
+
+
+def test_a_route_published_through_two_providers_is_reachable_at_both(kelso_env):
+  """The first provider listed gives the route its URL; each one publishes it."""
+  with open(kelso_env.config, "a") as f:
+    f.write('\n[route_provider.lan]\nkind = "noop"\ndomain = "lan.test"\n')
+
+  assigned = kelso_env.run("config", "routes-demo", "--route", "main=lan,web")
+  assert assigned.returncode == 0, assigned.stderr
+  assert "route main -> lan, web" in assigned.stdout
+  listed = kelso_env.run("config", "routes-demo")
+  assert re.search(r"^main\s+lan, web\b", listed.stdout, re.M), listed.stdout
+
+  started = kelso_env.run("start", "routes-demo")
+  assert started.returncode == 0, started.stderr
+  line = next(ln for ln in started.stdout.splitlines() if ".lan.test" in ln)
+  assert re.search(r"<- https://\S+\.lan\.test, https://\S+\.kelso\.localhost", line)
+
+
+@pytest.mark.parametrize(
+  "routes, error",
+  [
+    (["main=web,none"], "'none' cannot be combined"),
+    (["main=web", "main=web"], "--route main given more than once"),
+  ],
+)
+def test_a_bad_set_of_route_providers_is_refused(kelso_env, routes, error):
+  args = [arg for route in routes for arg in ("--route", route)]
+  refused = kelso_env.run("config", "routes-demo", *args)
+  assert refused.returncode == 1
+  assert error in refused.stderr
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  assert ctx.app_store("routes-demo").get_route_assignment("main") is None
 
 
 def test_config_set_secret(kelso_env):
@@ -822,17 +888,92 @@ def test_system_config_is_encrypted_listed_and_unset(kelso_env):
 
   listed = kelso_env.run("system", "secret")
   assert listed.returncode == 0, listed.stderr
-  assert listed.stdout.splitlines() == [other_key, route_key]
+  assert _secret_rows(listed.stdout) == {other_key: "set", route_key: "set"}
   assert route_password not in listed.stdout
   assert "backup-secret" not in listed.stdout
 
   unset = kelso_env.run("system", "secret", "--unset", route_key)
   assert unset.returncode == 0, unset.stderr
-  assert kelso_env.run("system", "secret").stdout.splitlines() == [other_key]
+  assert _secret_rows(kelso_env.run("system", "secret").stdout) == {other_key: "set"}
 
   old_command = kelso_env.run("provider", "set-password")
   assert old_command.returncode == 2
   assert "invalid choice" in old_command.stderr
+
+
+def _secret_rows(stdout: str) -> dict[str, str]:
+  """`kelso system secret`'s table as name -> status."""
+  body = stdout.split("\n\n")[0].splitlines()[2:]
+  return {line.split()[0]: line.split()[1] for line in body}
+
+
+def _with_npm_provider(kelso_env) -> str:
+  """Add a route provider whose password is a system secret; returns its name."""
+  text = kelso_env.config.read_text()
+  kelso_env.config.write_text(
+    'kelso_address = "10.0.0.5"\n' + text + "\n[route_provider.lan]\n"
+    'kind = "nginx_proxy_manager"\n'
+    'domain = "home.lan"\n'
+    "[route_provider.lan.args]\n"
+    'endpoint = "http://npm:81"\n'
+    'email = "admin@home.lan"\n'
+    'password_secret = "route_provider.lan.password"\n'
+  )
+  return "route_provider.lan.password"
+
+
+def test_a_secret_config_names_is_listed_as_missing_until_set(kelso_env):
+  name = _with_npm_provider(kelso_env)
+
+  listed = kelso_env.run("system", "secret")
+  assert listed.returncode == 0, listed.stderr
+  assert _secret_rows(listed.stdout) == {name: "missing"}
+  assert "route_provider.lan.args.password_secret" in listed.stdout
+  assert "`kelso system secret <name>`" in listed.stdout
+
+  # The name alone reads the value from stdin when it is not a terminal.
+  stored = kelso_env.run("system", "secret", name, input="hunter2\n")
+  assert stored.returncode == 0, stored.stderr
+  assert f"Set system secret {name!r}" in stored.stdout
+  again = kelso_env.run("system", "secret", name, input="hunter3\n")
+  assert f"Replaced system secret {name!r}" in again.stdout
+
+  listed = kelso_env.run("system", "secret").stdout
+  assert _secret_rows(listed) == {name: "set"}
+  assert "missing" not in listed
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  assert ctx.kelso_db.get_secret(name) == "hunter3"
+
+
+def test_doctor_names_a_secret_config_needs_but_kelso_lacks(kelso_env):
+  name = _with_npm_provider(kelso_env)
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  found = [
+    p for p in _diagnose(kelso_env).problems if p.subject == "route_provider.lan"
+  ]
+  assert len(found) == 1
+  assert f"`kelso system secret {name}`" in found[0].message
+
+  ctx.kelso_db.set_secret(name, "hunter2")
+  assert not [
+    p for p in _diagnose(kelso_env).problems if p.subject == "route_provider.lan"
+  ]
+
+
+@pytest.mark.parametrize(
+  "args, stdin, error",
+  [
+    (["--unset", "nope"], "", "No system secret 'nope'"),
+    (["empty"], "", "No value given for 'empty'"),
+    (["--set", "empty="], "", "--set expects KEY=VALUE"),
+    (["a", "--stdin", "b"], "x\n", "Two names given"),
+  ],
+)
+def test_a_secret_change_that_cannot_apply_is_refused(kelso_env, args, stdin, error):
+  refused = kelso_env.run("system", "secret", *args, input=stdin)
+  assert refused.returncode == 1
+  assert error in refused.stderr
+  assert kelso_env.read_db().get("system", {}).get("secrets", {}) == {}
 
 
 def test_decrypt_round_trips_a_stored_secret(kelso_env):
@@ -1244,7 +1385,7 @@ def test_an_unmet_bind_is_reported_as_missing_config(kelso_env):
 
 
 def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
-  """A loaded bundle that will not parse is unknown, not unconfigured."""
+  """A loaded bundle that will not parse is named as broken, not unconfigured."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1256,7 +1397,8 @@ def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
   listed = kelso_env.run("ps")
   assert listed.returncode == 0, listed.stderr
   row = _ps_row(listed.stdout, app_id)
-  assert row[1:4] == ["stopped", "-", "-"]
+  assert row[1:4] == ["stopped", "broken", "manifest"]
+  assert "missing" not in row
 
 
 # --- doctor ----------------------------------------------------------------

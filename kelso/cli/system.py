@@ -1,5 +1,6 @@
 import argparse
 import sys
+from getpass import getpass
 
 from tabulate import tabulate
 
@@ -18,32 +19,64 @@ def register(subparsers) -> None:
   )
   sub = parser.add_subparsers(dest="system_command", required=True)
 
-  secret = sub.add_parser("secret", help="List or set encrypted system config")
+  secret = sub.add_parser(
+    "secret",
+    help="List or set the encrypted secrets config.toml refers to",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    description=(
+      "System secrets are values kelso keeps encrypted in its database rather\n"
+      "than in config.toml, such as a route provider's password or API key.\n"
+      "config.toml refers to one by name from an arg ending in _secret:\n"
+      "\n"
+      "  [route_provider.web.args]\n"
+      '  password_secret = "route_provider.web.password"\n'
+      "\n"
+      "With no arguments, lists every secret config.toml refers to and every\n"
+      "one stored, and whether each is set."
+    ),
+    epilog=(
+      "examples:\n"
+      "  kelso system secret                               list them\n"
+      "  kelso system secret route_provider.web.password   asks for the value,\n"
+      "                                                    without echoing it\n"
+      "  kelso system secret route_provider.web.password < npm-password.txt\n"
+      "                                                    reads it from stdin\n"
+      "  kelso system secret --unset route_provider.web.password"
+    ),
+  )
+  secret.add_argument(
+    "name",
+    nargs="?",
+    metavar="NAME",
+    help="Secret to set: asked for on a terminal, otherwise read from stdin",
+  )
+  secret.add_argument(
+    "--stdin",
+    dest="stdin_key",
+    metavar="NAME",
+    help="Same as giving NAME",
+  )
   secret.add_argument(
     "--set",
     action="append",
     default=[],
     dest="sets",
-    metavar="KEY=VALUE",
-    help="Set a system config value (repeatable)",
+    metavar="NAME=VALUE",
+    help="Set a secret inline (repeatable; the value lands in your shell history)",
   )
   secret.add_argument(
     "--unset",
     action="append",
     default=[],
     dest="unsets",
-    metavar="KEY",
-    help="Remove a system config (repeatable)",
-  )
-  secret.add_argument(
-    "--stdin",
-    dest="stdin_key",
-    metavar="KEY",
-    help="Set KEY from stdin (for secrets)",
+    metavar="NAME",
+    help="Remove a secret (repeatable)",
   )
   secret.set_defaults(
     func=run,
-    activity=lambda a: "secret" if a.sets or a.unsets or a.stdin_key else None,
+    activity=lambda a: (
+      "secret" if a.name or a.sets or a.unsets or a.stdin_key else None
+    ),
   )
 
   rekey = sub.add_parser(
@@ -107,34 +140,70 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if args.name and args.stdin_key and args.name != args.stdin_key:
+    raise ValueError(
+      f"Two names given ({args.name!r} and --stdin {args.stdin_key!r}); set one at a time"
+    )
+  sets = [parse_kv(raw, "--set") for raw in args.sets]
+  # Asked for before the lock, which nothing else should wait on while you type.
+  name = args.name or args.stdin_key
+  if name:
+    sets.insert(0, (name, _read_secret(name)))
+  for set_name, value in sets:
+    if not value:
+      raise ValueError(f"No value given for {set_name!r}; nothing was stored")
+
   with ctx.kelso_lock("system secret"):
     db = ctx.kelso_db
-    changed = False
+    stored = set(db.list_secrets())
+    for set_name, value in sets:
+      db.set_secret(set_name, value)
+      verb = "Replaced" if set_name in stored else "Set"
+      print(f"{verb} system secret {set_name!r}")
+      stored.add(set_name)
 
-    if args.stdin_key is not None:
-      value = sys.stdin.read().rstrip("\n")
-      if not value:
-        raise ValueError("empty value")
-      db.set_secret(args.stdin_key, value)
-      print(f"Set system config {args.stdin_key!r}")
-      changed = True
+    for unset_name in args.unsets:
+      if unset_name not in stored:
+        raise ValueError(
+          f"No system secret {unset_name!r}; `kelso system secret` lists them"
+        )
+      db.del_secret(unset_name)
+      stored.discard(unset_name)
+      print(f"Removed system secret {unset_name!r}")
 
-    for raw in args.sets:
-      name, value = parse_kv(raw, "--set")
-      db.set_secret(name, value)
-      print(f"Set system config {name!r}")
-      changed = True
+    if not sets and not args.unsets:
+      _list_secrets(sorted(stored), ctx)
 
-    for name in args.unsets:
-      db.del_secret(name)
-      print(f"Unset system config {name!r}")
-      changed = True
 
-    if changed:
-      return
+def _read_secret(name: str) -> str:
+  """The value, asked for without echo on a terminal, else all of stdin."""
+  if sys.stdin.isatty():
+    return getpass(f"Value for {name} (hidden): ").strip()
+  return sys.stdin.read().rstrip("\r\n")
 
-    for name in db.list_secrets():
-      print(name)
+
+def _list_secrets(stored: list[str], ctx: KelsoCtx) -> None:
+  refs = ctx.config.secret_references()
+  names = sorted({*stored, *refs})
+  if not names:
+    print(
+      "No system secrets yet. A route provider in config.toml names the one "
+      'it needs with an arg like password_secret = "route_provider.web.password"; '
+      "set it with `kelso system secret <name>`."
+    )
+    return
+
+  rows = [
+    [
+      name,
+      "set" if name in stored else "missing",
+      ", ".join(refs.get(name, [])) or "(nothing in config.toml)",
+    ]
+    for name in names
+  ]
+  print(tabulate(rows, headers=["NAME", "STATUS", "USED BY"], tablefmt="simple"))
+  if any(name not in stored for name in names):
+    print("\nSet a missing one with `kelso system secret <name>`.")
 
 
 def run_host_volume(args: argparse.Namespace, ctx: KelsoCtx) -> None:

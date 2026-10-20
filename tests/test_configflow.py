@@ -311,8 +311,29 @@ def test_every_route_is_a_choice_of_providers_private_ones_included(kelso_env):
 
   routes = {f.name: f for f in request.fields if f.name.startswith("route.")}
   assert set(routes) == {"route.main", "route.api", "route.admin"}
-  assert routes["route.admin"].choices == ("none", "web")
+  # Pick several, or none: `none` is what picking nothing sends, not a choice.
+  assert routes["route.admin"].choices == ("web",)
+  assert routes["route.admin"].multi
+  assert routes["route.admin"].empty_value == "none"
+  # The first provider picked is the primary: its URL is what the app is given.
+  assert routes["route.admin"].primary_desc == (
+    "Primary route: passed to the app as ${routes.admin}"
+  )
+  assert routes["route.main"].primary_desc == (
+    "Primary route: passed to the app as ${routes.main} and ${klso.domain}"
+  )
   assert all(not field.required for field in routes.values())
+  assert not request.validate({"route.admin": "none"})
+  assert request.validate({"route.admin": "web,none"})
+
+
+def test_picking_no_provider_in_the_form_publishes_a_route_nowhere(kelso_env):
+  from kelso.lib.configflow.app import apply_app_config
+
+  spec, ctx, _ = _app_request(kelso_env, "routes-demo")
+  apply_app_config(spec, ConfigResponse(values={"route.main": "web"}), ctx)
+  apply_app_config(spec, ConfigResponse(values={"route.main": "none"}), ctx)
+  assert ctx.app_store(spec.app).get_route_assignment("main") == []
 
 
 def test_applying_binds_and_routes_goes_through_bind_and_assign_route(kelso_env):
@@ -328,7 +349,7 @@ def test_applying_binds_and_routes_goes_through_bind_and_assign_route(kelso_env)
 
   spec, ctx, _ = _app_request(kelso_env, "routes-demo")
   apply_app_config(spec, ConfigResponse(values={"route.admin": "web"}), ctx)
-  assert ctx.app_store(spec.app).get_route_assignment("admin") == "web"
+  assert ctx.app_store(spec.app).get_route_assignment("admin") == ["web"]
 
 
 def test_a_bind_to_an_undeclared_host_volume_is_refused(kelso_env):

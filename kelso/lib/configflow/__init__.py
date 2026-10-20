@@ -28,6 +28,23 @@ class ConfigField:
   # None for free text. Otherwise the value must be one of these; an empty tuple
   # means "pick one" with nothing defined to pick from yet.
   choices: tuple[str, ...] | None = None
+  # With choices: the value is one or more of them, comma-separated, in order.
+  multi: bool = False
+  # With multi: the value that means none of them were picked. It is not one of
+  # the choices; a front end sends it when every choice is deselected.
+  empty_value: str | None = None
+  # With multi: what being picked first means, when order matters. A front end
+  # marks the first pick as the primary and says this beside it.
+  primary_desc: str = ""
+
+  def picked(self, value: str) -> list[str]:
+    """The choices a value names: itself, or each comma-separated item if multi.
+    The empty value names none."""
+    if not self.multi:
+      return [value]
+    if value == self.empty_value:
+      return []
+    return [item.strip() for item in value.split(",")]
 
   @property
   def is_set(self) -> bool:
@@ -88,9 +105,13 @@ class ConfigRequest:
         errors.append(f"{self.title}: no config named {name!r}")
       elif not value:
         errors.append(f"{self.title}: {name} cannot be empty")
-      elif entry.choices is not None and value not in entry.choices:
+      elif entry.choices is not None and any(
+        item not in entry.choices for item in entry.picked(value)
+      ):
         known = ", ".join(entry.choices) or "(none defined)"
-        errors.append(f"{self.title}: {name} must be one of: {known}")
+        some = "one or more (comma-separated)" if entry.multi else "one"
+        alone = f", or {entry.empty_value} alone" if entry.empty_value else ""
+        errors.append(f"{self.title}: {name} must be {some} of: {known}{alone}")
     return errors
 
   def response(self, values: dict[str, str]) -> ConfigResponse:

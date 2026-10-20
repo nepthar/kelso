@@ -286,10 +286,6 @@ the invoking user and cannot touch what the app's containers wrote.
 
 ## Todo
 
-- **Drop the Textual configuration mode; rethink interactive command-line
-  config.** `kelso config --edit` and `kelso dev` open a full-screen Textual
-  form on a terminal, which is the heaviest dependency for the least-used path.
-  Remove it, and decide what interactive config at the command line should be.
 - **Refuse volume names that are volume kinds.** A volume named `data`,
   `bulk`, `logs`, `temp`, `app` or `host` reads ambiguously everywhere a volume
   is shown next to its kind, and the `Data:` line `kelso start` prints picks a

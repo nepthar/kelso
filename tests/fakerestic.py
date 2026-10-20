@@ -79,7 +79,11 @@ def run(args: list[str], process_env: dict[str, str]) -> tuple[int, str, str]:
       lock.unlink()
     return 0, "", ""
   if lock.exists():
-    return 11, "", "Fatal: unable to create lock in backend: repository is already locked\n"
+    return (
+      11,
+      "",
+      "Fatal: unable to create lock in backend: repository is already locked\n",
+    )
 
   if command == "backup":
     tags, paths, i = [], [], 0

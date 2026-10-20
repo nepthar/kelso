@@ -25,12 +25,13 @@ from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
-from kelso.lib.receipt import host_url, published_route_urls
+from kelso.lib.receipt import host_url
 from kelso.lib.repo import LOCAL_REPO, bound_apps
 from kelso.lib.routes import get_route_provider
 from kelso.lib.run_layout import (
   AppRunData,
   load_run_data,
+  provider_route_urls,
   resolved_subdomain,
   shown_environment,
 )
@@ -561,10 +562,16 @@ def _unit_state(container: KelsoRunUnitStatus | None) -> str | None:
 
 
 def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
-  published = published_route_urls(spec, run_data, ctx)
   routes = []
   for name, route in spec.routes.items():
     assigned = run_data.routes.get(name)
+    # Primary first: the one `published_url` and `${routes.<name>}` name.
+    providers = [
+      {"tag": tag, "url": url}
+      for tag, url in (
+        provider_route_urls(assigned, ctx.config) if assigned else {}
+      ).items()
+    ]
     routes.append(
       {
         "name": name,
@@ -575,11 +582,11 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
         "container_port": route.container_port,
         "host_port": assigned.host_port if assigned else None,
         "url": run_data.route_urls.get(name),
-        "published_url": published.get(name),
+        "published_url": providers[0]["url"] if providers else None,
         "host_url": host_url(
           spec, run_data, name, ctx.config.kelso_address or "localhost"
         ),
-        "provider": assigned.provider if assigned else None,
+        "providers": providers,
       }
     )
   return routes

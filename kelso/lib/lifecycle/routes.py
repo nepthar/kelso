@@ -13,17 +13,18 @@ from kelso.lib.run_layout import AppRunData, AssignedRoute, loaded_routes
 def assigned_routes(
   run_data: AppRunData, ctx: KelsoCtx
 ) -> list[tuple[str, AssignedRoute, str]]:
-  """Routes loaded with a provider other than none: (name, route, provider_tag)."""
+  """One (name, route, provider_tag) per provider each route was loaded with,
+  primary first."""
   out: list[tuple[str, AssignedRoute, str]] = []
   for route_name, route in run_data.routes.items():
-    tag = route.provider
-    if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
-      logger.debug(
-        "route %s has no provider assignment (or none); skipping", route_name
-      )
-      continue
-    out.append((route_name, route, tag))
+    if not route.providers:
+      logger.debug("route %s has no provider assignment; skipping", route_name)
+    out.extend((route_name, route, tag) for tag in _published_tags(route))
   return out
+
+
+def _published_tags(route: AssignedRoute) -> list[str]:
+  return [tag for tag in route.providers if tag and tag != NONE_ROUTE_PROVIDER_TAG]
 
 
 def preflight_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
@@ -92,11 +93,10 @@ def unregister_app_routes(app: AppID, ctx: KelsoCtx) -> None:
   except TypeError as e:
     logger.error("skipping malformed route records for %s: %s", app, e)
     return
-  for route in routes.values():
-    tag = route.provider
-    if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
-      continue
-
+  published = [
+    (route, tag) for route in routes.values() for tag in _published_tags(route)
+  ]
+  for route, tag in published:
     provider = get_route_provider(ctx, tag)
     domain = ctx.config.provider_domain(tag)
     if tag not in owners:

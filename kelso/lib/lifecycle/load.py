@@ -7,7 +7,7 @@ import yaml
 
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
-from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
 from kelso.lib.kelso import (
   BOUND_TO_META,
   CatalogEntry,
@@ -124,10 +124,10 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
       container_port=route.container_port,
       proto=route.proto,
       scheme=route.scheme,
-      provider=store.get_route_assignment(route_name) or NONE_ROUTE_PROVIDER_TAG,
+      providers=tuple(store.get_route_assignment(route_name) or ()),
     )
 
-    hdb.set_route(spec.app, route_name, assigned.__dict__)
+    hdb.set_route(spec.app, route_name, assigned.record())
 
 
 def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
@@ -138,7 +138,9 @@ def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
     if store.has_route_assignment(route_name):
       continue
     if not route.private:
-      store.set_route_assignment(route_name, default)
+      store.set_route_assignment(
+        route_name, [] if default == NONE_ROUTE_PROVIDER_TAG else [default]
+      )
 
 
 def _existing_volume_kinds(volumes_root: Path) -> dict[str, str]:
@@ -266,6 +268,20 @@ class LoadTarget:
     return str(self.bundle) if self.bundle else None
 
 
+def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
+  """Where a load reads `bundle` from, to say so: its repo (and, for a mirror,
+  the remote and commit) and the path itself."""
+  repo = ctx.config.repos.get(target.repo) if target.repo else None
+  if repo is None:
+    return str(bundle)
+  where = f"repo {repo.name}"
+  if repo.mirrored:
+    state = ctx.kelso_db.get_repo_state(repo.name)
+    at = f" at {state['sha'][:8]}" if state else ""
+    where += f" ({repo.describe()}{at})"
+  return f"{where}: {bundle}"
+
+
 def bound_to(app: AppID | str, ctx: KelsoCtx) -> str | None:
   """What an app is recorded as loaded from, or None if nothing is."""
   if not ctx.config.app_config_path(app).is_file():
@@ -369,28 +385,32 @@ def apply_config_sets(
     store.set_config(name, config.secret, value)
 
 
-def assign_route(spec: AppSpec, route_name: str, tag: str, ctx: KelsoCtx) -> None:
-  """Record which provider publishes a route. `start` registers it with them."""
+def assign_route(spec: AppSpec, route_name: str, raw: str, ctx: KelsoCtx) -> list[str]:
+  """Record which providers publish a route, from `a,b` with the primary first.
+  `start` registers it with each. Returns the tags recorded."""
   app = spec.app
   if route_name not in spec.routes:
     known = ", ".join(sorted(spec.routes)) or "(none)"
     raise ValueError(
       f"route {route_name!r} is not declared in {app}'s manifest; known routes: {known}"
     )
-  if tag not in ctx.config.route_providers:
-    known = ", ".join(sorted(ctx.config.route_providers))
-    raise ValueError(
-      f"route provider {tag!r} is not configured; known tags: {known}. "
-      f"Add [route_provider.{tag}] to config.toml"
-    )
+  tags = parse_route_providers(route_name, raw)
+  for tag in tags:
+    if tag not in ctx.config.route_providers:
+      known = ", ".join(sorted(ctx.config.route_providers))
+      raise ValueError(
+        f"route provider {tag!r} is not configured; known tags: {known}. "
+        f"Add [route_provider.{tag}] to config.toml"
+      )
 
-  ctx.app_store(app).set_route_assignment(route_name, tag)
+  ctx.app_store(app).set_route_assignment(route_name, tags)
   # The compose file carries ${routes.*} URLs, so the next start needs it rewritten.
   if ctx.is_loaded(app):
     with open(ctx.loaded_paths(app).compose_path, "w") as f:
       yaml.safe_dump(
         make_compose_dict(spec, load_run_data(spec, ctx)), f, sort_keys=False
       )
+  return tags
 
 
 def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:

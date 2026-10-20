@@ -171,9 +171,35 @@ class AssignedRoute:
   container_port: int
   proto: str
   scheme: Literal["http", "https"]
-  # The route provider tag it was loaded with: what start publishes to and what
-  # a reload or removal unpublishes from, whatever the assignment says now.
-  provider: str = NONE_ROUTE_PROVIDER_TAG
+  # The route provider tags it was loaded with, primary first: what start
+  # publishes to and what a reload or removal unpublishes from, whatever the
+  # assignment says now. Empty when it is published nowhere.
+  providers: tuple[str, ...] = ()
+
+  @property
+  def primary_provider(self) -> str:
+    """The tag whose domain `${routes.<name>}` and `${klso.domain}` use."""
+    return self.providers[0] if self.providers else NONE_ROUTE_PROVIDER_TAG
+
+  def record(self) -> dict[str, Any]:
+    """What kelsodb holds for this route; `from_record` reads it back."""
+    return {**self.__dict__, "providers": list(self.providers)}
+
+  @classmethod
+  def from_record(cls, entry: Mapping[str, Any]) -> "AssignedRoute":
+    """Raises TypeError for a record that does not fit."""
+    fields = dict(entry)
+    # Loads before multiple providers recorded the one tag as `provider`.
+    if "provider" in fields:
+      legacy = fields.pop("provider")
+      fields.setdefault(
+        "providers", [] if legacy == NONE_ROUTE_PROVIDER_TAG else [legacy]
+      )
+    providers = fields.get("providers", ())
+    if not isinstance(providers, (list, tuple)):
+      raise TypeError(f"route providers must be a list, not {providers!r}")
+    fields["providers"] = tuple(providers)
+    return cls(**fields)
 
 
 @dataclass(frozen=True)
@@ -401,7 +427,7 @@ def _compare_route(
 def loaded_routes(app: AppID | str, ctx: KelsoCtx) -> dict[str, AssignedRoute]:
   """The routes kelsodb holds for `app`, as its last load allocated them."""
   return {
-    name: AssignedRoute(**entry)
+    name: AssignedRoute.from_record(entry)
     for name, entry in ctx.kelso_db.list_routes(str(app)).items()
   }
 
@@ -452,14 +478,24 @@ def _host_mounts() -> tuple[dict[str, Any], ...]:
 
 
 def _route_urls(routes: Mapping[str, AssignedRoute], config: Config) -> dict[str, str]:
-  """Where each route answers: provider domain, or kelso.localhost placeholder."""
+  """Where each route answers: primary provider domain, or kelso.localhost placeholder."""
   urls: dict[str, str] = {}
   for name, route in routes.items():
     if not route.subdomain:
       continue
-    domain = config.provider_domain(route.provider)
+    domain = config.provider_domain(route.primary_provider)
     urls[name] = f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain}.{domain}"
   return urls
+
+
+def provider_route_urls(route: AssignedRoute, config: Config) -> dict[str, str]:
+  """provider tag -> where `route` answers through it, primary first."""
+  if not route.subdomain:
+    return {}
+  return {
+    tag: f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain}.{config.provider_domain(tag)}"
+    for tag in route.providers
+  }
 
 
 def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
@@ -474,7 +510,7 @@ def _app_domain(
   if subdomain is None:
     return None
   main = routes.get(PRIMARY_ROUTE_NAME)
-  return f"{subdomain}.{config.provider_domain(main.provider if main else '')}"
+  return f"{subdomain}.{config.provider_domain(main.primary_provider if main else '')}"
 
 
 def _env_substitutions(

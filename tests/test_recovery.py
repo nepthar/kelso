@@ -248,11 +248,11 @@ def test_setting_what_is_on_file_records_no_change(tmp_path):
   path, store = _store(tmp_path)
   store.set_config("pw", True, "a")
   store.set_bind("media", "nas")
-  store.set_route_assignment("main", "web")
+  store.set_route_assignment("main", ["web"])
   store.set_meta("started_at", "now")
   store.set_config("pw", True, "a")
   store.set_bind("media", "nas")
-  store.set_route_assignment("main", "web")
+  store.set_route_assignment("main", ["web"])
   from kelso.lib.observations import changes_since_start
 
   assert not changes_since_start(path).any
@@ -264,7 +264,7 @@ def test_setting_what_is_on_file_records_no_change(tmp_path):
     (lambda s: s.set_config("pw", True, "b"), "config"),
     (lambda s: s.set_bind("media", "other"), "config"),
     (lambda s: s.set_config("subdomain", False, "lab"), "routes"),
-    (lambda s: s.set_route_assignment("main", "cloud"), "routes"),
+    (lambda s: s.set_route_assignment("main", ["web", "cloud"]), "routes"),
   ],
 )
 def test_each_real_change_records_its_kind(tmp_path, change, kind):

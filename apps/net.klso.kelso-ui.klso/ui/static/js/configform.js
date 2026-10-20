@@ -2,7 +2,10 @@
 // changed, and goes again if every change is undone.
 (function () {
   document.querySelectorAll(".cfg-form").forEach(function (form) {
-    var controls = form.querySelectorAll("input:not([type=hidden]), select");
+    // A pick-several field's value is a hidden input that js/tagpick.js sets.
+    var controls = form.querySelectorAll(
+      "input:not([type=hidden]), input[data-tag-pick], select"
+    );
     var save = form.querySelector(".cfg-save");
     if (!controls.length || !save) return;
     // A checkbox's value never changes; whether it is checked does.

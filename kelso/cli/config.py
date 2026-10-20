@@ -7,6 +7,7 @@ from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
@@ -43,8 +44,11 @@ def register(subparsers) -> None:
     action="append",
     default=[],
     dest="routes",
-    metavar="ROUTE=PROVIDER",
-    help="Assign a route to a route-provider tag (repeatable; use none to clear)",
+    metavar="ROUTE=PROVIDER[,PROVIDER...]",
+    help=(
+      "Publish a route through these route-provider tags; the first gives its URL "
+      "(repeatable for other routes; use none to publish it nowhere)"
+    ),
   )
   parser.add_argument(
     "--bind",
@@ -223,9 +227,18 @@ def _apply_routes(
   routes: list[tuple[str, str]],
   ctx: KelsoCtx,
 ) -> None:
-  for route_name, tag in routes:
-    assign_route(spec, route_name, tag, ctx)
-    print(f"route {route_name} -> {tag}")
+  names = [route_name for route_name, _ in routes]
+  if repeated := sorted({n for n in names if names.count(n) > 1}):
+    raise ValueError(
+      f"--route {', '.join(repeated)} given more than once; "
+      f"list every provider in one, e.g. --route {repeated[0]}=external,internal"
+    )
+  # Refuse a bad one before any is written.
+  for route_name, raw in routes:
+    parse_route_providers(route_name, raw)
+  for route_name, raw in routes:
+    tags = assign_route(spec, route_name, raw, ctx)
+    print(f"route {route_name} -> {', '.join(tags) or NONE_ROUTE_PROVIDER_TAG}")
 
 
 def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
@@ -243,11 +256,11 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
     assignments = store.list_route_assignments()
     route_rows = []
     for name, route in spec.routes.items():
-      tag = assignments.get(name)
-      if tag is None:
+      tags = assignments.get(name)
+      if tags is None:
         display = "(unassigned)"
       else:
-        display = tag
+        display = ", ".join(tags) or NONE_ROUTE_PROVIDER_TAG
       private = "yes" if route.private else ""
       route_rows.append([name, display, private, route.desc or ""])
     print("")
@@ -255,7 +268,7 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
     print(
       tabulate(
         route_rows,
-        headers=["route", "provider", "private", "description"],
+        headers=["route", "providers", "private", "description"],
         tablefmt="simple",
       )
     )
