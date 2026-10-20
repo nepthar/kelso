@@ -85,9 +85,11 @@ class ConfigApp(App[ConfigResponse]):
   def _control(self, entry: ConfigField) -> Input | Select:
     if entry.multi:
       # A Select picks one; an ordered few are typed, comma-separated.
+      choices = ", ".join(entry.choices or ()) or "(none defined)"
+      alone = f", or {entry.empty_value}" if entry.empty_value else ""
       return Input(
         value=entry.value or "",
-        placeholder=", ".join(entry.choices or ()) or "(none defined)",
+        placeholder=choices + alone,
         compact=True,
         id=self._ids[entry.name],
       )

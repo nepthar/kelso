@@ -29,6 +29,8 @@ def _field(name, **kw):
     "required": False,
     "choices": None,
     "multi": False,
+    "empty_value": None,
+    "primary_desc": "",
   }
   base.update(kw)
   return base
@@ -210,9 +212,14 @@ APP_CONFIG = {
     _field("token", secret=True, secret_set=True),
     _field("subdomain", value="kelso", default="kelso", section="option"),
     _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
-    _field("route.none", choices=[], multi=True),
+    _field("route.none", choices=[], multi=True, empty_value="none"),
     _field(
-      "route.main", value="web,lan", choices=["lan", "none", "web", EVIL], multi=True
+      "route.main",
+      value="web,lan",
+      choices=["lan", "web", EVIL],
+      multi=True,
+      empty_value="none",
+      primary_desc=f"Primary route: passed to the app as {EVIL}",
     ),
     _field("backup.movies", value="on", choices=["on", "off"]),
     _field("tuning", section="advanced"),

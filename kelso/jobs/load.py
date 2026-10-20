@@ -1,6 +1,6 @@
 from kelso.jobs.job import Job, app_target, logger
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import reload_app
+from kelso.lib.lifecycle import load_source, reload_app
 
 
 class LoadJob(Job):
@@ -16,14 +16,13 @@ class LoadJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
+    bundle = self.target.bundle or ctx.bundle_path(app)
     with ctx.locked(f"load {app}", app):
-      result = reload_app(
-        app,
-        self.target.bundle or ctx.bundle_path(app),
-        ctx,
-        bound=self.target.bound_to,
-      )
-    lines = [f"Loaded {app} at {ctx.run_path(app)}"]
+      result = reload_app(app, bundle, ctx, bound=self.target.bound_to)
+    lines = [
+      f"Loaded {app} at {ctx.run_path(app)}",
+      f"  from {load_source(self.target, bundle, ctx)}",
+    ]
     if result.was_running:
       lines.append(f"Restarted {app}")
     lines += [

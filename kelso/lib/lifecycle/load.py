@@ -268,6 +268,20 @@ class LoadTarget:
     return str(self.bundle) if self.bundle else None
 
 
+def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
+  """Where a load reads `bundle` from, to say so: its repo (and, for a mirror,
+  the remote and commit) and the path itself."""
+  repo = ctx.config.repos.get(target.repo) if target.repo else None
+  if repo is None:
+    return str(bundle)
+  where = f"repo {repo.name}"
+  if repo.mirrored:
+    state = ctx.kelso_db.get_repo_state(repo.name)
+    at = f" at {state['sha'][:8]}" if state else ""
+    where += f" ({repo.describe()}{at})"
+  return f"{where}: {bundle}"
+
+
 def bound_to(app: AppID | str, ctx: KelsoCtx) -> str | None:
   """What an app is recorded as loaded from, or None if nothing is."""
   if not ctx.config.app_config_path(app).is_file():

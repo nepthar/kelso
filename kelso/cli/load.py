@@ -5,7 +5,7 @@ from pathlib import Path
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import load_target, reload_app
+from kelso.lib.lifecycle import load_source, load_target, reload_app
 from kelso.lib.receipt import capability_receipt, route_receipt_lines
 from kelso.lib.run_layout import AppRunData
 from kelso.lib.spec import ComposeWarning
@@ -53,6 +53,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       f"its link is gone but its data was left in place"
     )
   print(f"Loaded {app} at {ctx.run_path(app)}")
+  print(f"  from {load_source(target, bundle, ctx)}")
   if result.was_running:
     print(f"Restarted {app}")
     print(capability_receipt(load.spec, load.run_data, ctx, compact=True))

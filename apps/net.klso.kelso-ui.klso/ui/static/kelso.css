@@ -337,11 +337,13 @@ button.link:hover:not(:disabled) { color: var(--bad); border: 0; }
 .cfg-form.is-dirty .cfg-actions { display: flex; }
 /* A whole config request in one form: one Save for all of it, once anything moved. */
 .cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
-/* A pick-several field: its text input, and a tag per choice under it that
-   js/tagpick.js toggles into the input, in the order picked. Picked is coral:
-   it is the active state of a control. */
-.tag-picks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 16em; }
+/* A pick-several field: a tag per choice, which js/tagpick.js toggles into a
+   hidden list in the order picked. Picked is coral: it is the active state of
+   a control. Where order matters, the first pick is the primary, in --ok:
+   the one the rest stand behind. */
+.tag-picks { display: flex; flex-wrap: wrap; gap: 4px; max-width: 16em; }
 button.tag[aria-pressed="true"] { border-color: var(--coral); color: var(--coral); }
+button.tag[aria-pressed="true"][data-primary] { border-color: var(--ok); color: var(--ok); }
 /* Icon buttons are ghosts that take on their verb's colour on hover. */
 button.icon { padding: 5px 7px; line-height: 0; color: var(--dim); }
 button.icon svg, a.btn.icon svg {

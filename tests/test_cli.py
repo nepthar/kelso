@@ -12,6 +12,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -24,13 +25,15 @@ import kelso.lib.git
 import kelso.lib.lifecycle.run
 import kelso.lib.service
 from kelso.lib import activity, lifecycle, recovery
-from kelso.lib.apps import read_app_actions, read_last_app_action
+from kelso.lib.apps import AppID, read_app_actions, read_last_app_action
 from kelso.lib.bundle import scan_bundles
 from kelso.lib.config import VAR_DIRS, VOLUME_KINDS, load_config, load_config_file
 from kelso.lib.crypto import FernetCryptoEngine
 from kelso.lib.docker import DockerError, DockerReturn
 from kelso.lib.doctor import STALE_METRICS_SECONDS, Finding, diagnose, kelsod_problems
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle.load import LoadTarget, load_source
+from kelso.lib.repo import Repo, parse_github_url
 from kelso.lib.util import refuse_root
 
 BASIC = "net.klso.basic-features"
@@ -563,6 +566,35 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
   assert loaded.returncode == 0, loaded.stderr
   assert f"Start it with: kelso start {app_id}" in loaded.stdout
   assert _ps_row(kelso_env.run("ps").stdout, app_id)[1] == "stopped"
+
+
+def test_load_says_where_the_bundle_came_from(kelso_env):
+  app_id = "ports-demo"
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  (entry,) = ctx.app_catalog()[app_id]
+
+  loaded = kelso_env.run("load", app_id)
+  assert loaded.returncode == 0, loaded.stderr
+  assert f"\n  from repo local: {entry.path}\n" in loaded.stdout
+
+  # A bundle named by path belongs to no repo: the path is the whole answer.
+  by_path = kelso_env.run("load", "--force", str(entry.path))
+  assert by_path.returncode == 0, by_path.stderr
+  assert f"\n  from {entry.path}\n" in by_path.stdout
+
+
+def test_a_load_from_a_mirrored_repo_names_the_remote_and_commit(tmp_path):
+  remote = parse_github_url("github://nepthar/kelso/main/apps")
+  repo = Repo("staples", tmp_path / "apps", "github", remote, tmp_path)
+  ctx = SimpleNamespace(
+    config=SimpleNamespace(repos={"staples": repo}),
+    kelso_db=SimpleNamespace(get_repo_state=lambda name: {"sha": "0123456789abcdef"}),
+  )
+  bundle = tmp_path / "apps" / "x.klso"
+  target = LoadTarget(AppID("x"), None, "staples")
+  assert load_source(target, bundle, ctx) == (
+    f"repo staples (github://nepthar/kelso/main/apps at 01234567): {bundle}"
+  )
 
 
 def test_load_names_the_config_a_start_still_needs(kelso_env):

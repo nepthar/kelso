@@ -257,14 +257,26 @@ def test_config_form(client, fake):
   assert 'placeholder="set — type to replace"' in basic
   assert 'placeholder="not set"' in basic
   assert '<option value="kelso_conn" selected>' in basic
-  # A pick-several field: its comma list in order, and a tag per choice.
+  # A pick-several field: no text box, only a tag per choice, the picks
+  # pressed, the first marked primary, and the comma list in a hidden input.
   assert (
-    '<input name="set.route.main" value="web,lan" placeholder="pick one or more"'
-    in basic
+    '<input type="hidden" name="set.route.main" value="web,lan" data-tag-pick '
+    'data-empty="none" data-primary-desc="Primary route: passed to the app as '
+    "&lt;i" in basic
   )
   picks = basic.split('name="set.route.main"')[1].split("</div>")[0]
-  assert re.findall(r'data-tag="([^"]*)"', picks)[:3] == ["lan", "none", "web"]
-  assert '<input name="set.route.none" value="" placeholder="none defined yet"' in basic
+  tags = re.findall(r'<button type="button" class="tag" data-tag="([^"]*)"', picks)
+  assert tags[:2] == ["lan", "web"]
+  assert 'data-tag="none"' not in picks
+  assert 'data-tag="lan" aria-pressed="true">lan<' in picks
+  assert (
+    'data-tag="web" aria-pressed="true" data-primary '
+    'title="Primary route: passed to the app as &lt;i' in picks
+  )
+  assert picks.count("data-primary ") == 1
+  assert 'aria-pressed="false">&lt;i' in picks
+  none_defined = basic.split('name="set.route.none"')[1].split("</td>")[0]
+  assert '<span class="muted">none defined yet</span>' in none_defined
   assert '<input type="hidden" name="action" value="config">' in form
 
 

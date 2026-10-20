@@ -9,14 +9,20 @@
   <input type="hidden" name="set.{{ f.name }}" value="off">
   <input type="checkbox" name="set.{{ f.name }}" value="on"{% if f.get('value') == 'on' %} checked{% endif %}>
 {%- elif f.get('multi') %}
-  {#- Typed comma-separated, in order; js/tagpick.js lets the tags under it
-    add and remove themselves. A blank input submits nothing, like a blank
-    select. -#}
-  <input name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" placeholder="{{ 'pick one or more' if f.choices else 'none defined yet' }}" data-tag-pick>
+  {#- Picked by toggling the tags, in the order clicked; js/tagpick.js keeps
+    the hidden comma list in step. Where order matters (`primary_desc`), the
+    first pick is the primary and says so on hover; drop it and the next one
+    up takes its place. Deselecting every one sends the field's empty value;
+    an untouched blank sends nothing, like a blank select. -#}
+  {%- set on = (f.get('value') or '').split(',')|map('trim')|list %}
+  {%- set primary_desc = f.get('primary_desc') or '' %}
+  <input type="hidden" name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" data-tag-pick data-empty="{{ f.get('empty_value') or '' }}" data-primary-desc="{{ primary_desc }}">
   {%- if f.choices %}
   <div class="tag-picks">
-    {%- for c in f.choices %}<button type="button" class="tag" data-tag="{{ c }}" aria-pressed="false">{{ c }}</button>{% endfor -%}
+    {%- for c in f.choices %}<button type="button" class="tag" data-tag="{{ c }}" aria-pressed="{{ 'true' if c in on else 'false' }}"{% if primary_desc and c == on[0] %} data-primary title="{{ primary_desc }}"{% endif %}>{{ c }}</button>{% endfor -%}
   </div>
+  {%- else %}
+  <span class="muted">none defined yet</span>
   {%- endif %}
 {%- elif f.get('choices') is not none %}
   {#- The blank option submits nothing, which leaves what is on file alone. -#}
