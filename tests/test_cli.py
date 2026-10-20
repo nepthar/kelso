@@ -856,17 +856,92 @@ def test_system_config_is_encrypted_listed_and_unset(kelso_env):
 
   listed = kelso_env.run("system", "secret")
   assert listed.returncode == 0, listed.stderr
-  assert listed.stdout.splitlines() == [other_key, route_key]
+  assert _secret_rows(listed.stdout) == {other_key: "set", route_key: "set"}
   assert route_password not in listed.stdout
   assert "backup-secret" not in listed.stdout
 
   unset = kelso_env.run("system", "secret", "--unset", route_key)
   assert unset.returncode == 0, unset.stderr
-  assert kelso_env.run("system", "secret").stdout.splitlines() == [other_key]
+  assert _secret_rows(kelso_env.run("system", "secret").stdout) == {other_key: "set"}
 
   old_command = kelso_env.run("provider", "set-password")
   assert old_command.returncode == 2
   assert "invalid choice" in old_command.stderr
+
+
+def _secret_rows(stdout: str) -> dict[str, str]:
+  """`kelso system secret`'s table as name -> status."""
+  body = stdout.split("\n\n")[0].splitlines()[2:]
+  return {line.split()[0]: line.split()[1] for line in body}
+
+
+def _with_npm_provider(kelso_env) -> str:
+  """Add a route provider whose password is a system secret; returns its name."""
+  text = kelso_env.config.read_text()
+  kelso_env.config.write_text(
+    'kelso_address = "10.0.0.5"\n' + text + "\n[route_provider.lan]\n"
+    'kind = "nginx_proxy_manager"\n'
+    'domain = "home.lan"\n'
+    "[route_provider.lan.args]\n"
+    'endpoint = "http://npm:81"\n'
+    'email = "admin@home.lan"\n'
+    'password_secret = "route_provider.lan.password"\n'
+  )
+  return "route_provider.lan.password"
+
+
+def test_a_secret_config_names_is_listed_as_missing_until_set(kelso_env):
+  name = _with_npm_provider(kelso_env)
+
+  listed = kelso_env.run("system", "secret")
+  assert listed.returncode == 0, listed.stderr
+  assert _secret_rows(listed.stdout) == {name: "missing"}
+  assert "route_provider.lan.args.password_secret" in listed.stdout
+  assert "`kelso system secret <name>`" in listed.stdout
+
+  # The name alone reads the value from stdin when it is not a terminal.
+  stored = kelso_env.run("system", "secret", name, input="hunter2\n")
+  assert stored.returncode == 0, stored.stderr
+  assert f"Set system secret {name!r}" in stored.stdout
+  again = kelso_env.run("system", "secret", name, input="hunter3\n")
+  assert f"Replaced system secret {name!r}" in again.stdout
+
+  listed = kelso_env.run("system", "secret").stdout
+  assert _secret_rows(listed) == {name: "set"}
+  assert "missing" not in listed
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  assert ctx.kelso_db.get_secret(name) == "hunter3"
+
+
+def test_doctor_names_a_secret_config_needs_but_kelso_lacks(kelso_env):
+  name = _with_npm_provider(kelso_env)
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  found = [
+    p for p in _diagnose(kelso_env).problems if p.subject == "route_provider.lan"
+  ]
+  assert len(found) == 1
+  assert f"`kelso system secret {name}`" in found[0].message
+
+  ctx.kelso_db.set_secret(name, "hunter2")
+  assert not [
+    p for p in _diagnose(kelso_env).problems if p.subject == "route_provider.lan"
+  ]
+
+
+@pytest.mark.parametrize(
+  "args, stdin, error",
+  [
+    (["--unset", "nope"], "", "No system secret 'nope'"),
+    (["empty"], "", "No value given for 'empty'"),
+    (["--set", "empty="], "", "--set expects KEY=VALUE"),
+    (["a", "--stdin", "b"], "x\n", "Two names given"),
+  ],
+)
+def test_a_secret_change_that_cannot_apply_is_refused(kelso_env, args, stdin, error):
+  refused = kelso_env.run("system", "secret", *args, input=stdin)
+  assert refused.returncode == 1
+  assert error in refused.stderr
+  assert kelso_env.read_db().get("system", {}).get("secrets", {}) == {}
 
 
 def test_decrypt_round_trips_a_stored_secret(kelso_env):

@@ -32,6 +32,9 @@ DEFAULT_REPOS_ROOT = "repos"
 NONE_ROUTE_PROVIDER_TAG = "none"
 # Domain used for route URLs when a route is unassigned or assigned to none.
 PLACEHOLDER_DOMAIN = "kelso.localhost"
+# A route provider arg ending in this names a system secret instead of holding
+# the value: `password_secret = "route_provider.web.password"`.
+SECRET_ARG_SUFFIX = "_secret"
 
 
 def parse_route_providers(route_name: str, raw: str) -> list[str]:
@@ -318,6 +321,17 @@ class Config:
     if conf is None:
       return PLACEHOLDER_DOMAIN
     return conf.domain
+
+  def secret_references(self) -> dict[str, list[str]]:
+    """System secret name -> each config.toml key that names it, e.g.
+    `route_provider.web.args.password_secret`. A route provider's `<arg>_secret`
+    arg is the only thing that refers to one."""
+    refs: dict[str, list[str]] = {}
+    for tag, entry in sorted(self.route_providers.items()):
+      for arg, name in sorted(entry.args.items()):
+        if arg.endswith(SECRET_ARG_SUFFIX):
+          refs.setdefault(name, []).append(f"route_provider.{tag}.args.{arg}")
+    return refs
 
 
 def load_config_file(config_file: str | Path) -> Config:
