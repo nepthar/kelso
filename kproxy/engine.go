@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -160,6 +161,24 @@ func (e *Engine) Decide(domain string, v Verdict) error {
 	next.Domains[domain] = v
 	return e.publish(next)
 }
+
+// Remove deletes one name's rule from the current rules.
+func (e *Engine) Remove(domain string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	cur := e.snap.Load().rules
+	if cur == nil {
+		return fmt.Errorf("no rules loaded yet: PUT /rules first")
+	}
+	if _, ok := cur.Domains[domain]; !ok {
+		return errNoRule
+	}
+	next := &Rules{Mode: cur.Mode, Domains: maps.Clone(cur.Domains)}
+	delete(next.Domains, domain)
+	return e.publish(next)
+}
+
+var errNoRule = errors.New("no such rule")
 
 // publish must be called with e.mu held.
 func (e *Engine) publish(r *Rules) error {

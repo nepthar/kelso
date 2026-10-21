@@ -34,7 +34,7 @@
 
 <h2>Rules</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Domain</th><th>Verdict</th></tr></thead>
+  <thead><tr><th>Domain</th><th>Verdict</th><th></th></tr></thead>
   <tbody id="rules"></tbody>
 </table></div>
 
@@ -59,16 +59,19 @@ const row = (cells) => {
 const empty = (cols) => row([Object.assign(el("td", "none", "muted"), { colSpan: cols })]);
 const bytes = (n) => n < 1024 ? n + " B" : n < 1 << 20 ? (n / 1024).toFixed(1) + " KB" : (n / (1 << 20)).toFixed(1) + " MB";
 
-async function decide(domain, verdict) {
-  if (!confirm(`${verdict} ${domain} and all its subdomains?`)) return;
-  const r = await fetch("decide", {
-    method: "POST",
+async function send(method, path, body) {
+  const r = await fetch(path, {
+    method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domain, verdict }),
+    body: body && JSON.stringify(body),
   });
   if (!r.ok) alert(await r.text());
   refresh();
 }
+const decide = (domain, verdict) => send("POST", "decide", { domain, verdict });
+const remove = (domain) => send("DELETE", `rules/${encodeURIComponent(domain)}`);
+
+const button = (label, onclick) => Object.assign(el("button", label), { onclick });
 
 const sharedTip = "This domain is commonly shared across many users: allowing it allows all of them.";
 
@@ -106,11 +109,7 @@ function pendingRows(p) {
   const rows = [];
   const add = (n, depth, firstSeen, hits) => {
     const actions = el("td", undefined, "actions");
-    for (const v of ["allow", "deny"]) {
-      const b = el("button", v);
-      b.onclick = () => decide(n, v);
-      actions.append(b);
-    }
+    actions.append(button("allow", () => decide(n, "allow")), button("deny", () => decide(n, "deny")));
     const name = el("td", n);
     name.style.paddingLeft = `${0.5 + depth * 1.25}rem`;
     if (shared(n)) name.append(Object.assign(el("span", "shared", "tag"), { title: sharedTip }));
@@ -139,7 +138,11 @@ async function refresh() {
 
     document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";
     const rb = document.getElementById("rules");
-    rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => row([r.domain, r.verdict])) : [empty(2)]));
+    rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => {
+      const actions = el("td", undefined, "actions");
+      actions.append(button("remove", () => remove(r.domain)));
+      return row([r.domain, r.verdict, actions]);
+    }) : [empty(3)]));
 
     const sb = document.getElementById("stats");
     const srows = [];

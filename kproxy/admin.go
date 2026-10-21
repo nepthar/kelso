@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -121,6 +122,22 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			out.Rules = append(out.Rules, ruleJSON{d, rules.Domains[d]})
 		}
 		writeJSON(w, out)
+	})
+
+	mux.HandleFunc("DELETE /rules/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name, err := ruleName(r.PathValue("name"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		switch err := e.Remove(name); {
+		case errors.Is(err, errNoRule):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case err != nil:
+			http.Error(w, err.Error(), http.StatusConflict)
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
 	})
 
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {

@@ -125,6 +125,21 @@ func TestSnitchSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
 	}
 }
 
+func TestRemoveReturnsDomainToPending(t *testing.T) {
+	e := newEngine(10*time.Millisecond, nil)
+	e.Replace(rules(Snitch, "ok.com", "allow"))
+	if err := e.Remove("ok.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Remove("ok.com"); err != errNoRule {
+		t.Fatalf("second remove: %v", err)
+	}
+	if o, held := e.Check(context.Background(), "www.ok.com"); o != TimedOut || !held {
+		t.Fatalf("got %v held=%v", o, held)
+	}
+	waitPending(t, e, 1, 1)
+}
+
 func TestSnitchTimeoutStaysPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
 	e.Replace(rules(Snitch))
