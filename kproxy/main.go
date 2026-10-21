@@ -30,6 +30,7 @@ func main() {
 	rulesFile := flag.String("rules-file", "", "load rules from and save them to this file")
 	modeFlag := flag.String("mode", "strict", "mode for a rules file that does not name one")
 	hold := flag.Duration("hold", 60*time.Second, "how long snitch mode holds an undecided connection")
+	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
 	flag.Parse()
 
 	ip := net.ParseIP(*ipFlag).To4()
@@ -56,7 +57,12 @@ func main() {
 	}
 	engine.persist = persist
 
-	proxy := &Proxy{engine: engine, stats: newStats(), dial: (&net.Dialer{Timeout: 10 * time.Second}).DialContext}
+	proxy := &Proxy{
+		engine: engine,
+		stats:  newStats(),
+		dial:   (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		slots:  make(chan struct{}, *maxConns),
+	}
 
 	pc, err := net.ListenPacket("udp4", *dnsAddr)
 	if err != nil {

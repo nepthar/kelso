@@ -18,7 +18,7 @@ import (
 )
 
 // clientHello returns the bytes a TLS client sends first for serverName.
-func clientHello(t *testing.T, serverName string) []byte {
+func clientHello(t testing.TB, serverName string) []byte {
 	t.Helper()
 	c, s := net.Pipe()
 	go tls.Client(c, &tls.Config{ServerName: serverName, InsecureSkipVerify: true}).Handshake()
@@ -129,13 +129,17 @@ func TestDNSAnswer(t *testing.T) {
 }
 
 // testProxy routes every upstream dial to addr.
-func testProxy(t *testing.T, r *Rules, addr string) (*Proxy, string, string) {
+func testProxy(t testing.TB, r *Rules, addr string) (*Proxy, string, string) {
+	return testProxyN(t, r, addr, 64)
+}
+
+func testProxyN(t testing.TB, r *Rules, addr string, maxConns int) (*Proxy, string, string) {
 	t.Helper()
 	e := newEngine(50*time.Millisecond, nil)
 	if r != nil {
 		e.Replace(r)
 	}
-	p := &Proxy{engine: e, stats: newStats(), dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+	p := &Proxy{engine: e, stats: newStats(), slots: make(chan struct{}, maxConns), dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return net.Dial(network, addr)
 	}}
 	httpLn, _ := net.Listen("tcp", "127.0.0.1:0")
@@ -229,6 +233,52 @@ func urlHost(serverName string) string {
 		return "127.0.0.1"
 	}
 	return serverName
+}
+
+func TestMaxConnsWaitsForASlot(t *testing.T) {
+	up, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
+	go func() {
+		for {
+			c, err := up.Accept()
+			if err != nil {
+				return
+			}
+			go func() { io.Copy(io.Discard, c); c.Close() }()
+		}
+	}()
+	p, httpAddr, _ := testProxyN(t, rules(Strict, "example.com", "allow"), up.Addr().String(), 1)
+	conns := func() int64 { return p.stats.Snapshot()["example.com"]["http"].Conns }
+	open := func() net.Conn {
+		c, err := net.Dial("tcp", httpAddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprint(c, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+		return c
+	}
+	waitConns := func(n int64) {
+		t.Helper()
+		for deadline := time.Now().Add(time.Second); conns() != n; time.Sleep(time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("conns = %d, want %d", conns(), n)
+			}
+		}
+	}
+
+	a := open()
+	waitConns(1)
+	b := open()
+	defer b.Close()
+	time.Sleep(50 * time.Millisecond)
+	if conns() != 1 {
+		t.Fatal("second connection handled while the only slot was taken")
+	}
+	a.Close()
+	waitConns(2)
 }
 
 func TestSnitchHTTPTimeoutClosesWithoutVerdict(t *testing.T) {

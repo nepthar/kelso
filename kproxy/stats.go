@@ -35,16 +35,28 @@ type Stats struct {
 
 func newStats() *Stats { return &Stats{m: map[statsKey]*counters{}} }
 
+// maxStatsKeys bounds the stats table; connections to domains beyond it are
+// counted under otherDomain.
+const (
+	maxStatsKeys = 10000
+	otherDomain  = "other"
+)
+
 // conn records a new connection and returns its counters for the caller to
 // update as it progresses.
 func (s *Stats) conn(domain, scheme string) *counters {
 	now := time.Now().UnixNano()
+	k := statsKey{domain, scheme}
 	s.mu.Lock()
-	c := s.m[statsKey{domain, scheme}]
+	c := s.m[k]
+	if c == nil && len(s.m) >= maxStatsKeys {
+		k.domain = otherDomain
+		c = s.m[k]
+	}
 	if c == nil {
 		c = &counters{}
 		c.firstSeen.Store(now)
-		s.m[statsKey{domain, scheme}] = c
+		s.m[k] = c
 	}
 	s.mu.Unlock()
 	c.conns.Add(1)

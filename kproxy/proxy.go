@@ -11,7 +11,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -25,8 +24,11 @@ type Proxy struct {
 	engine *Engine
 	stats  *Stats
 	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
+	slots  chan struct{} // one per open client connection, shared by all listeners
 }
 
+// serve stops accepting while every slot is taken, so excess connections
+// wait in the kernel's listen backlog.
 func (p *Proxy) serve(ln net.Listener, handle func(net.Conn)) {
 	for {
 		c, err := ln.Accept()
@@ -34,8 +36,12 @@ func (p *Proxy) serve(ln net.Listener, handle func(net.Conn)) {
 			log.Printf("%s: %v", ln.Addr(), err)
 			return
 		}
+		p.slots <- struct{}{}
 		go func() {
-			defer c.Close()
+			defer func() {
+				c.Close()
+				<-p.slots
+			}()
 			handle(c)
 		}()
 	}
@@ -93,7 +99,7 @@ func (p *Proxy) handleHTTPS(c net.Conn) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp", net.JoinHostPort(host, "443"))
+	up, err := p.dial(context.Background(), "tcp4", net.JoinHostPort(host, "443"))
 	if err != nil {
 		log.Printf("https %s: %v", host, err)
 		return
@@ -130,7 +136,7 @@ func (p *Proxy) handleHTTP(c net.Conn) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp", net.JoinHostPort(host, "80"))
+	up, err := p.dial(context.Background(), "tcp4", net.JoinHostPort(host, "80"))
 	if err != nil {
 		log.Printf("http %s: %v", host, err)
 		writeHTTPError(c, 502, "upstream unreachable")
@@ -162,17 +168,6 @@ func (p *Proxy) check(host, scheme string) (Outcome, *counters) {
 	return o, ctr
 }
 
-type countWriter struct {
-	w io.Writer
-	n *atomic.Int64
-}
-
-func (cw countWriter) Write(b []byte) (int, error) {
-	n, err := cw.w.Write(b)
-	cw.n.Add(int64(n))
-	return n, err
-}
-
 func closeWrite(c net.Conn) {
 	if cw, ok := c.(interface{ CloseWrite() error }); ok {
 		cw.CloseWrite()
@@ -181,23 +176,49 @@ func closeWrite(c net.Conn) {
 	c.Close()
 }
 
-// pipe replays head to up, then copies both directions until both close.
+// pipe replays head to up, then copies both directions until both finish.
 func pipe(client, up net.Conn, head []byte, ctr *counters) {
-	out := countWriter{up, &ctr.bytesOut}
-	if _, err := out.Write(head); err != nil {
+	if _, err := up.Write(head); err != nil {
 		return
 	}
-	var wg sync.WaitGroup
-	wg.Add(2)
+	ctr.bytesOut.Add(int64(len(head)))
+	done := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		io.Copy(out, client)
-		closeWrite(up)
+		defer close(done)
+		copyCounting(client, up, &ctr.bytesIn)
 	}()
-	go func() {
-		defer wg.Done()
-		io.Copy(countWriter{client, &ctr.bytesIn}, up)
-		closeWrite(client)
-	}()
-	wg.Wait()
+	copyCounting(up, client, &ctr.bytesOut)
+	<-done
+}
+
+const (
+	copyChunk = 1 << 20
+
+	// halfCloseTimeout is how long the other direction may keep going once one
+	// side has finished sending, so a peer that never closes can't hold the
+	// connection forever.
+	halfCloseTimeout = 30 * time.Second
+)
+
+// copyCounting copies src to dst, adding to n after each chunk so counts stay
+// current on long-lived connections. dst and src must stay unwrapped
+// *net.TCPConns (an *io.LimitedReader is fine) for Linux to splice instead of
+// copying through a buffer. On EOF it half-closes dst and puts a deadline on
+// the other direction, which reads from dst; on error it closes both so the
+// other direction stops too.
+func copyCounting(dst, src net.Conn, n *atomic.Int64) {
+	for {
+		k, err := io.Copy(dst, io.LimitReader(src, copyChunk))
+		n.Add(k)
+		if err != nil {
+			dst.Close()
+			src.Close()
+			return
+		}
+		if k < copyChunk {
+			closeWrite(dst)
+			dst.SetReadDeadline(time.Now().Add(halfCloseTimeout))
+			return
+		}
+	}
 }

@@ -66,8 +66,7 @@ func (e *Engine) rules() *Rules { return e.snap.Load().rules }
 // rules are unloaded or (in snitch mode) while no rule matches host. held
 // reports whether the connection had to wait.
 func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) {
-	timer := time.NewTimer(e.hold)
-	defer timer.Stop()
+	var timeout <-chan time.Time
 	marked := false
 	for {
 		s := e.snap.Load()
@@ -89,10 +88,15 @@ func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) 
 				marked = true
 			}
 		}
-		held = true
+		if !held {
+			timer := time.NewTimer(e.hold)
+			defer timer.Stop()
+			timeout = timer.C
+			held = true
+		}
 		select {
 		case <-s.changed:
-		case <-timer.C:
+		case <-timeout:
 			return TimedOut, held
 		case <-ctx.Done():
 			return TimedOut, held
@@ -100,11 +104,18 @@ func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) 
 	}
 }
 
+// maxPending bounds the pending list against an app hitting endless random
+// hostnames. Hosts beyond it are still held, just not listed.
+const maxPending = 1000
+
 func (e *Engine) markPending(host string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	h := e.pending[host]
 	if h == nil {
+		if len(e.pending) >= maxPending {
+			return
+		}
 		h = &PendingHost{FirstSeen: time.Now()}
 		e.pending[host] = h
 	}
@@ -113,9 +124,14 @@ func (e *Engine) markPending(host string) {
 
 func (e *Engine) Pending() []Pending {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	groups := map[string]*Pending{}
+	hosts := make(map[string]PendingHost, len(e.pending))
 	for host, h := range e.pending {
+		hosts[host] = *h
+	}
+	e.mu.Unlock()
+
+	groups := map[string]*Pending{}
+	for host, h := range hosts {
 		root := rootDomain(host)
 		p := groups[root]
 		if p == nil {
@@ -126,7 +142,7 @@ func (e *Engine) Pending() []Pending {
 			p.FirstSeen = h.FirstSeen
 		}
 		p.Hits += h.Hits
-		p.Hosts[host] = *h
+		p.Hosts[host] = h
 		_, private := suffixes(host)
 		for _, s := range private {
 			if !slices.Contains(p.Shared, s) {
