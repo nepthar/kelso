@@ -16,7 +16,7 @@ push() {
 }
 health() { docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q proxy)"; }
 code() { c curl -sS -m 10 -o /dev/null -w '%{http_code}' "$@"; }
-rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"neverssl.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"}]}'
+rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"}]}'
 
 docker build -q -t kproxy:dev .. >/dev/null || exit 1
 docker compose down -v -t 1 >/dev/null 2>&1
@@ -36,7 +36,7 @@ expect "AAAA empty" "0" "$(c nslookup -type=AAAA example.com | grep -c '^Address
 expect "MX empty" "0" "$(c nslookup -type=MX example.com | grep -c 'mail exchanger')"
 
 expect "https allowed, subdomain" "200" "$(code https://www.example.com/)"
-expect "http allowed" "200" "$(code http://neverssl.com/)"
+expect "http allowed" "200" "$(code http://example.com/)"
 expect "https denied" "access denied" "$(c curl -sS -m 10 https://example.org/)"
 expect "http denied" "503" "$(code http://example.org/)"
 expect "raw ip unreachable" "Could not connect" "$(c curl -sS -m 5 https://1.1.1.1/)"
@@ -53,7 +53,7 @@ wait
 expect "held conn released on approve" "200" "$(cat "$held")"
 expect "held conn closed on timeout" "000" "$(code https://gitlab.com/)"
 expect "still pending after timeout" '"domain":"gitlab.com"' "$(admin http://k/pending)"
-expect "stats split by scheme" '"neverssl.com":{"http"' "$(admin http://k/stats)"
+expect "stats split by scheme" '"example.com":{"http":' "$(admin http://k/stats)"
 
 docker compose restart -t 1 proxy >/dev/null 2>&1
 sleep 2
