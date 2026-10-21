@@ -71,7 +71,7 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		d, err := ruleDomain(req.Domain)
+		d, err := ruleName(req.Domain)
 		if err == nil {
 			_, err = parseVerdict(string(req.Verdict))
 		}
@@ -137,7 +137,7 @@ func (rj rulesJSON) toRules() (*Rules, error) {
 	}
 	rules := &Rules{Mode: m, Domains: map[string]Verdict{}}
 	for _, r := range rj.Rules {
-		d, err := ruleDomain(r.Domain)
+		d, err := ruleName(r.Domain)
 		if err != nil {
 			return nil, err
 		}

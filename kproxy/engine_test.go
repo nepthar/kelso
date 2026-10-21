@@ -19,7 +19,7 @@ func rules(m Mode, kv ...string) *Rules {
 func checkAsync(e *Engine, host string) <-chan Outcome {
 	ch := make(chan Outcome, 1)
 	go func() {
-		o, _ := e.Check(context.Background(), baseDomain(host), host)
+		o, _ := e.Check(context.Background(), host)
 		ch <- o
 	}()
 	return ch
@@ -58,7 +58,7 @@ func TestModes(t *testing.T) {
 	} {
 		e := newEngine(10*time.Millisecond, nil)
 		e.Replace(rules(tc.mode, "ok.com", "allow", "bad.com", "deny"))
-		o, held := e.Check(context.Background(), tc.domain, tc.domain)
+		o, held := e.Check(context.Background(), tc.domain)
 		if o != tc.want || held != tc.wantHeld {
 			t.Errorf("%s %s: got %v held=%v, want %v held=%v", tc.mode, tc.domain, o, held, tc.want, tc.wantHeld)
 		}
@@ -67,7 +67,7 @@ func TestModes(t *testing.T) {
 
 func TestUnloadedHoldsThenTimesOut(t *testing.T) {
 	e := newEngine(20*time.Millisecond, nil)
-	if o, _ := e.Check(context.Background(), "ok.com", "ok.com"); o != TimedOut {
+	if o, _ := e.Check(context.Background(), "ok.com"); o != TimedOut {
 		t.Fatalf("got %v", o)
 	}
 	if len(e.Pending()) != 0 {
@@ -104,11 +104,30 @@ func TestSnitchApprovalWakesAllHeld(t *testing.T) {
 	waitPending(t, e, 0, 0)
 }
 
+func TestSnitchSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
+	e := newEngine(time.Minute, nil)
+	e.Replace(rules(Snitch))
+	a, b, c := checkAsync(e, "update.googleapis.com"), checkAsync(e, "a.other.googleapis.com"), checkAsync(e, "b.other.googleapis.com")
+	waitPending(t, e, 1, 3)
+	e.Decide("other.googleapis.com", Allow)
+	if <-b != Allowed || <-c != Allowed {
+		t.Fatal("subdomain approval did not release its hosts")
+	}
+	waitPending(t, e, 1, 1)
+	if p := e.Pending(); p[0].Domain != "googleapis.com" || p[0].Hosts["update.googleapis.com"] != 1 {
+		t.Fatalf("pending = %+v", p)
+	}
+	e.Decide("googleapis.com", Deny)
+	if <-a != Denied {
+		t.Fatal("root deny did not release")
+	}
+}
+
 func TestSnitchTimeoutStaysPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
 	e.Replace(rules(Snitch))
 	for _, host := range []string{"a.new.com", "a.new.com", "new.com"} {
-		if o, held := e.Check(context.Background(), "new.com", host); o != TimedOut || !held {
+		if o, held := e.Check(context.Background(), host); o != TimedOut || !held {
 			t.Fatalf("got %v held=%v", o, held)
 		}
 	}
@@ -150,7 +169,7 @@ func TestConcurrentDecisionsAndSwaps(t *testing.T) {
 	for i := range 400 {
 		checks.Go(func() {
 			d := fmt.Sprintf("d%d.com", i%20)
-			o, _ := e.Check(context.Background(), d, d)
+			o, _ := e.Check(context.Background(), d)
 			results <- o
 		})
 	}

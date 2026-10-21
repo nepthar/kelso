@@ -7,35 +7,67 @@ import (
 	"testing"
 )
 
-func TestBaseDomain(t *testing.T) {
+func TestRootDomain(t *testing.T) {
 	for host, want := range map[string]string{
-		"microsoft.com":       "microsoft.com",
-		"a.b.microsoft.com":   "microsoft.com",
-		"WWW.Microsoft.COM.":  "microsoft.com",
-		"news.bbc.co.uk":      "bbc.co.uk",
-		"nepthar.github.io":   "nepthar.github.io",
-		"x.nepthar.github.io": "nepthar.github.io",
-		"github.io":           "",
-		"co.uk":               "",
-		"com":                 "",
-		"localhost":           "",
-		"1.2.3.4":             "",
-		"::1":                 "",
-		"":                    "",
+		"microsoft.com":           "microsoft.com",
+		"a.b.microsoft.com":       "microsoft.com",
+		"WWW.Microsoft.COM.":      "microsoft.com",
+		"news.bbc.co.uk":          "bbc.co.uk",
+		"update.googleapis.com":   "googleapis.com",
+		"a.other.googleapis.com":  "googleapis.com",
+		"x.nepthar.github.io":     "github.io",
+		"github.io":               "github.io",
+		"bucket.s3.amazonaws.com": "amazonaws.com",
+		"co.uk":                   "",
+		"com":                     "",
+		"localhost":               "",
+		"printer.internal":        "",
+		"1.2.3.4":                 "",
+		"::1":                     "",
+		"":                        "",
 	} {
-		if got := baseDomain(host); got != want {
-			t.Errorf("baseDomain(%q) = %q, want %q", host, got, want)
+		if got := rootDomain(host); got != want {
+			t.Errorf("rootDomain(%q) = %q, want %q", host, got, want)
 		}
 	}
 }
 
-func TestRuleDomain(t *testing.T) {
-	if d, err := ruleDomain(" BBC.co.uk "); err != nil || d != "bbc.co.uk" {
-		t.Errorf("got %q, %v", d, err)
+func TestRuleName(t *testing.T) {
+	for in, want := range map[string]string{
+		" BBC.co.uk ":       "bbc.co.uk",
+		"com":               "com",
+		"nepthar.github.io": "nepthar.github.io",
+		"api.weather.com.":  "api.weather.com",
+	} {
+		if got, err := ruleName(in); err != nil || got != want {
+			t.Errorf("ruleName(%q) = %q, %v", in, got, err)
+		}
 	}
-	for _, bad := range []string{"github.io", "co.uk", "api.weather.com", "1.2.3.4", ""} {
-		if _, err := ruleDomain(bad); err == nil {
-			t.Errorf("ruleDomain(%q) accepted", bad)
+	for _, bad := range []string{"1.2.3.4", "", "a..com", "*.com", "a b.com"} {
+		if _, err := ruleName(bad); err == nil {
+			t.Errorf("ruleName(%q) accepted", bad)
+		}
+	}
+}
+
+func TestLookupMostSpecificWins(t *testing.T) {
+	r := rules(Strict,
+		"nepthar.github.io", "deny",
+		"tacos.nepthar.github.io", "allow",
+		"google.com", "allow",
+		"org", "deny")
+	for host, want := range map[string]Verdict{
+		"tacos.nepthar.github.io":   Allow,
+		"a.tacos.nepthar.github.io": Allow,
+		"nepthar.github.io":         Deny,
+		"x.nepthar.github.io":       Deny,
+		"other.github.io":           "",
+		"maps.google.com":           Allow,
+		"notgoogle.com":             "",
+		"anything.org":              Deny,
+	} {
+		if got, _ := r.lookup(host); got != want {
+			t.Errorf("lookup(%q) = %q, want %q", host, got, want)
 		}
 	}
 }
@@ -51,7 +83,7 @@ func TestParseRules(t *testing.T) {
 	if r.format() != "mode snitch\nallow example.com\ndeny example.org\n" {
 		t.Fatalf("format: %q", r.format())
 	}
-	for _, bad := range []string{"allow", "permit example.com", "allow co.uk", "mode loose", "allow a.example.com"} {
+	for _, bad := range []string{"allow", "permit example.com", "allow 10.0.0.1", "mode loose", "allow *.example.com"} {
 		if _, err := parseRules(strings.NewReader(bad), Strict); err == nil {
 			t.Errorf("parsed %q", bad)
 		}

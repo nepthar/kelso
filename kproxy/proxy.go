@@ -11,7 +11,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -147,17 +146,18 @@ func writeHTTPError(c net.Conn, code int, msg string) {
 		code, http.StatusText(code), len(msg)+1, msg)
 }
 
-// check counts the connection and decides it. Hosts without a registrable
-// domain (missing, IP literal, bare suffix) are always denied.
+// check counts the connection under its root domain and decides it. Hosts
+// without a root (missing, IP literal, unknown TLD, bare suffix) are always
+// denied.
 func (p *Proxy) check(host, scheme string) (Outcome, *counters) {
-	domain := baseDomain(host)
-	if domain == "" {
+	root := rootDomain(host)
+	if root == "" {
 		ctr := p.stats.conn(unknownDomain, scheme)
 		ctr.record(Denied, false)
 		return Denied, ctr
 	}
-	ctr := p.stats.conn(domain, scheme)
-	o, held := p.engine.Check(context.Background(), domain, strings.TrimSuffix(strings.ToLower(host), "."))
+	ctr := p.stats.conn(root, scheme)
+	o, held := p.engine.Check(context.Background(), normHost(host))
 	ctr.record(o, held)
 	return o, ctr
 }

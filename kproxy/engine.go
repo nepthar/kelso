@@ -24,11 +24,17 @@ type snapshot struct {
 	changed chan struct{}
 }
 
+// Pending groups the undecided hosts under one root domain.
 type Pending struct {
 	Domain    string         `json:"domain"`
 	FirstSeen time.Time      `json:"first_seen"`
 	Hits      int            `json:"hits"`
 	Hosts     map[string]int `json:"hosts"`
+}
+
+type pendingHost struct {
+	firstSeen time.Time
+	hits      int
 }
 
 type Engine struct {
@@ -38,11 +44,11 @@ type Engine struct {
 	snap atomic.Pointer[snapshot]
 
 	mu      sync.Mutex // serializes rule changes and guards pending
-	pending map[string]*Pending
+	pending map[string]*pendingHost
 }
 
 func newEngine(hold time.Duration, persist func(*Rules) error) *Engine {
-	e := &Engine{hold: hold, persist: persist, pending: map[string]*Pending{}}
+	e := &Engine{hold: hold, persist: persist, pending: map[string]*pendingHost{}}
 	e.snap.Store(&snapshot{changed: make(chan struct{})})
 	return e
 }
@@ -51,20 +57,20 @@ func (e *Engine) loaded() bool { return e.snap.Load().rules != nil }
 
 func (e *Engine) rules() *Rules { return e.snap.Load().rules }
 
-// Check decides whether a connection to host, whose base domain is domain,
-// may proceed, holding it while rules are unloaded or (in snitch mode) while
-// the domain is undecided. held reports whether the connection had to wait.
-func (e *Engine) Check(ctx context.Context, domain, host string) (o Outcome, held bool) {
+// Check decides whether a connection to host may proceed, holding it while
+// rules are unloaded or (in snitch mode) while no rule matches host. held
+// reports whether the connection had to wait.
+func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) {
 	timer := time.NewTimer(e.hold)
 	defer timer.Stop()
 	marked := false
 	for {
 		s := e.snap.Load()
 		if r := s.rules; r != nil {
-			switch r.Domains[domain] {
-			case Allow:
-				return Allowed, held
-			case Deny:
+			if v, ok := r.lookup(host); ok {
+				if v == Allow {
+					return Allowed, held
+				}
 				return Denied, held
 			}
 			switch r.Mode {
@@ -74,7 +80,7 @@ func (e *Engine) Check(ctx context.Context, domain, host string) (o Outcome, hel
 				return Denied, held
 			}
 			if !marked {
-				e.markPending(domain, host)
+				e.markPending(host)
 				marked = true
 			}
 		}
@@ -89,26 +95,37 @@ func (e *Engine) Check(ctx context.Context, domain, host string) (o Outcome, hel
 	}
 }
 
-func (e *Engine) markPending(domain, host string) {
+func (e *Engine) markPending(host string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	p := e.pending[domain]
-	if p == nil {
-		p = &Pending{Domain: domain, FirstSeen: time.Now(), Hosts: map[string]int{}}
-		e.pending[domain] = p
+	h := e.pending[host]
+	if h == nil {
+		h = &pendingHost{firstSeen: time.Now()}
+		e.pending[host] = h
 	}
-	p.Hits++
-	p.Hosts[host]++
+	h.hits++
 }
 
 func (e *Engine) Pending() []Pending {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := make([]Pending, 0, len(e.pending))
-	for _, p := range e.pending {
-		c := *p
-		c.Hosts = maps.Clone(p.Hosts)
-		out = append(out, c)
+	groups := map[string]*Pending{}
+	for host, h := range e.pending {
+		root := rootDomain(host)
+		p := groups[root]
+		if p == nil {
+			p = &Pending{Domain: root, FirstSeen: h.firstSeen, Hosts: map[string]int{}}
+			groups[root] = p
+		}
+		if h.firstSeen.Before(p.FirstSeen) {
+			p.FirstSeen = h.firstSeen
+		}
+		p.Hits += h.hits
+		p.Hosts[host] = h.hits
+	}
+	out := make([]Pending, 0, len(groups))
+	for _, p := range groups {
+		out = append(out, *p)
 	}
 	return out
 }
@@ -120,7 +137,7 @@ func (e *Engine) Replace(r *Rules) error {
 	return e.publish(r)
 }
 
-// Decide sets one domain's verdict on top of the current rules.
+// Decide sets one name's verdict on top of the current rules.
 func (e *Engine) Decide(domain string, v Verdict) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -140,9 +157,9 @@ func (e *Engine) publish(r *Rules) error {
 			return err
 		}
 	}
-	for d := range e.pending {
-		if _, ok := r.Domains[d]; ok || r.Mode != Snitch {
-			delete(e.pending, d)
+	for host := range e.pending {
+		if _, ok := r.lookup(host); ok || r.Mode != Snitch {
+			delete(e.pending, host)
 		}
 	}
 	old := e.snap.Swap(&snapshot{rules: r, changed: make(chan struct{})})

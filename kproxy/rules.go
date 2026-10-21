@@ -44,37 +44,65 @@ func parseVerdict(s string) (Verdict, error) {
 	return "", fmt.Errorf("unknown verdict %q: use allow or deny", s)
 }
 
-// Rules is immutable once published to an Engine.
+// Rules is immutable once published to an Engine. A rule for a name matches
+// that name and every name ending in "."+name.
 type Rules struct {
 	Mode    Mode
 	Domains map[string]Verdict
 }
 
-// baseDomain returns the registrable domain for host, or "" if host has none
-// (IP literals, bare public suffixes, single labels).
-func baseDomain(host string) string {
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
+// lookup returns the verdict of the most specific rule matching host.
+func (r *Rules) lookup(host string) (Verdict, bool) {
+	for name := host; ; {
+		if v, ok := r.Domains[name]; ok {
+			return v, true
+		}
+		_, parent, ok := strings.Cut(name, ".")
+		if !ok {
+			return "", false
+		}
+		name = parent
+	}
+}
+
+func normHost(h string) string { return strings.TrimSuffix(strings.ToLower(h), ".") }
+
+// rootDomain returns host's domain directly under its ICANN suffix
+// (bbc.co.uk, googleapis.com), ignoring the PSL's private section. It is ""
+// for hosts without one: IP literals, single labels, unknown TLDs, bare
+// suffixes.
+func rootDomain(host string) string {
+	host = normHost(host)
 	if host == "" || net.ParseIP(host) != nil {
 		return ""
 	}
-	base, err := publicsuffix.EffectiveTLDPlusOne(host)
-	if err != nil {
+	suffix, icann := publicsuffix.PublicSuffix(host)
+	for !icann {
+		_, parent, ok := strings.Cut(suffix, ".")
+		if !ok {
+			return ""
+		}
+		suffix, icann = publicsuffix.PublicSuffix(parent)
+	}
+	if host == suffix {
 		return ""
 	}
-	return base
+	rest := strings.TrimSuffix(host, "."+suffix)
+	return rest[strings.LastIndex(rest, ".")+1:] + "." + suffix
 }
 
-// ruleDomain normalizes a rule entry, which must already be a base domain.
-func ruleDomain(s string) (string, error) {
-	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
-	base := baseDomain(d)
-	switch {
-	case base == "":
-		return "", fmt.Errorf("%q is not a registrable domain", s)
-	case base != d:
-		return "", fmt.Errorf("%q is a subdomain: use %q", s, base)
+// ruleName normalizes a rule entry: any domain name, down to a bare TLD.
+func ruleName(s string) (string, error) {
+	n := normHost(strings.TrimSpace(s))
+	if n == "" || net.ParseIP(n) != nil {
+		return "", fmt.Errorf("%q is not a domain name", s)
 	}
-	return d, nil
+	for _, l := range strings.Split(n, ".") {
+		if l == "" || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-_") != "" {
+			return "", fmt.Errorf("%q is not a domain name", s)
+		}
+	}
+	return n, nil
 }
 
 func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
@@ -101,7 +129,7 @@ func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", n, err)
 		}
-		d, err := ruleDomain(f[1])
+		d, err := ruleName(f[1])
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", n, err)
 		}
