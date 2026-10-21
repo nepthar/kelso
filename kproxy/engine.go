@@ -25,9 +25,10 @@ type snapshot struct {
 }
 
 type Pending struct {
-	Domain    string    `json:"domain"`
-	FirstSeen time.Time `json:"first_seen"`
-	Hits      int       `json:"hits"`
+	Domain    string         `json:"domain"`
+	FirstSeen time.Time      `json:"first_seen"`
+	Hits      int            `json:"hits"`
+	Hosts     map[string]int `json:"hosts"`
 }
 
 type Engine struct {
@@ -50,10 +51,10 @@ func (e *Engine) loaded() bool { return e.snap.Load().rules != nil }
 
 func (e *Engine) rules() *Rules { return e.snap.Load().rules }
 
-// Check decides whether a connection to domain may proceed, holding it while
-// rules are unloaded or (in snitch mode) while the domain is undecided.
-// held reports whether the connection had to wait.
-func (e *Engine) Check(ctx context.Context, domain string) (o Outcome, held bool) {
+// Check decides whether a connection to host, whose base domain is domain,
+// may proceed, holding it while rules are unloaded or (in snitch mode) while
+// the domain is undecided. held reports whether the connection had to wait.
+func (e *Engine) Check(ctx context.Context, domain, host string) (o Outcome, held bool) {
 	timer := time.NewTimer(e.hold)
 	defer timer.Stop()
 	marked := false
@@ -73,7 +74,7 @@ func (e *Engine) Check(ctx context.Context, domain string) (o Outcome, held bool
 				return Denied, held
 			}
 			if !marked {
-				e.markPending(domain)
+				e.markPending(domain, host)
 				marked = true
 			}
 		}
@@ -88,15 +89,16 @@ func (e *Engine) Check(ctx context.Context, domain string) (o Outcome, held bool
 	}
 }
 
-func (e *Engine) markPending(domain string) {
+func (e *Engine) markPending(domain, host string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	p := e.pending[domain]
 	if p == nil {
-		p = &Pending{Domain: domain, FirstSeen: time.Now()}
+		p = &Pending{Domain: domain, FirstSeen: time.Now(), Hosts: map[string]int{}}
 		e.pending[domain] = p
 	}
 	p.Hits++
+	p.Hosts[host]++
 }
 
 func (e *Engine) Pending() []Pending {
@@ -104,7 +106,9 @@ func (e *Engine) Pending() []Pending {
 	defer e.mu.Unlock()
 	out := make([]Pending, 0, len(e.pending))
 	for _, p := range e.pending {
-		out = append(out, *p)
+		c := *p
+		c.Hosts = maps.Clone(p.Hosts)
+		out = append(out, c)
 	}
 	return out
 }

@@ -16,23 +16,28 @@ func rules(m Mode, kv ...string) *Rules {
 	return r
 }
 
-func checkAsync(e *Engine, domain string) <-chan Outcome {
+func checkAsync(e *Engine, host string) <-chan Outcome {
 	ch := make(chan Outcome, 1)
 	go func() {
-		o, _ := e.Check(context.Background(), domain)
+		o, _ := e.Check(context.Background(), baseDomain(host), host)
 		ch <- o
 	}()
 	return ch
 }
 
-func waitPending(t *testing.T, e *Engine, n int) {
+// waitPending waits until there are n pending domains with hits in total.
+func waitPending(t *testing.T, e *Engine, n, hits int) {
 	t.Helper()
 	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
-		if len(e.Pending()) == n {
+		ps, total := e.Pending(), 0
+		for _, p := range ps {
+			total += p.Hits
+		}
+		if len(ps) == n && total == hits {
 			return
 		}
 	}
-	t.Fatalf("pending = %v, want %d entries", e.Pending(), n)
+	t.Fatalf("pending = %v, want %d entries with %d hits", e.Pending(), n, hits)
 }
 
 func TestModes(t *testing.T) {
@@ -53,7 +58,7 @@ func TestModes(t *testing.T) {
 	} {
 		e := newEngine(10*time.Millisecond, nil)
 		e.Replace(rules(tc.mode, "ok.com", "allow", "bad.com", "deny"))
-		o, held := e.Check(context.Background(), tc.domain)
+		o, held := e.Check(context.Background(), tc.domain, tc.domain)
 		if o != tc.want || held != tc.wantHeld {
 			t.Errorf("%s %s: got %v held=%v, want %v held=%v", tc.mode, tc.domain, o, held, tc.want, tc.wantHeld)
 		}
@@ -62,7 +67,7 @@ func TestModes(t *testing.T) {
 
 func TestUnloadedHoldsThenTimesOut(t *testing.T) {
 	e := newEngine(20*time.Millisecond, nil)
-	if o, _ := e.Check(context.Background(), "ok.com"); o != TimedOut {
+	if o, _ := e.Check(context.Background(), "ok.com", "ok.com"); o != TimedOut {
 		t.Fatalf("got %v", o)
 	}
 	if len(e.Pending()) != 0 {
@@ -83,35 +88,33 @@ func TestUnloadedReleasedByFirstPush(t *testing.T) {
 func TestSnitchApprovalWakesAllHeld(t *testing.T) {
 	e := newEngine(time.Minute, nil)
 	e.Replace(rules(Snitch))
-	a, b, other := checkAsync(e, "new.com"), checkAsync(e, "new.com"), checkAsync(e, "other.com")
-	waitPending(t, e, 2)
-	if p := e.Pending(); p[0].Hits+p[1].Hits != 3 {
-		t.Fatalf("hits: %v", p)
-	}
+	a, b, other := checkAsync(e, "www.new.com"), checkAsync(e, "api.new.com"), checkAsync(e, "other.com")
+	waitPending(t, e, 2, 3)
 	if err := e.Decide("new.com", Allow); err != nil {
 		t.Fatal(err)
 	}
 	if <-a != Allowed || <-b != Allowed {
 		t.Fatal("held connections not released")
 	}
-	waitPending(t, e, 1)
+	waitPending(t, e, 1, 1)
 	e.Decide("other.com", Deny)
 	if <-other != Denied {
 		t.Fatal("deny did not release")
 	}
-	waitPending(t, e, 0)
+	waitPending(t, e, 0, 0)
 }
 
 func TestSnitchTimeoutStaysPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
 	e.Replace(rules(Snitch))
-	for range 2 {
-		if o, held := e.Check(context.Background(), "new.com"); o != TimedOut || !held {
+	for _, host := range []string{"a.new.com", "a.new.com", "new.com"} {
+		if o, held := e.Check(context.Background(), "new.com", host); o != TimedOut || !held {
 			t.Fatalf("got %v held=%v", o, held)
 		}
 	}
-	if p := e.Pending(); len(p) != 1 || p[0].Hits != 2 {
-		t.Fatalf("pending = %v", p)
+	p := e.Pending()
+	if len(p) != 1 || p[0].Hits != 3 || p[0].Hosts["a.new.com"] != 2 || p[0].Hosts["new.com"] != 1 {
+		t.Fatalf("pending = %+v", p)
 	}
 }
 
@@ -146,7 +149,8 @@ func TestConcurrentDecisionsAndSwaps(t *testing.T) {
 	results := make(chan Outcome, 400)
 	for i := range 400 {
 		checks.Go(func() {
-			o, _ := e.Check(context.Background(), fmt.Sprintf("d%d.com", i%20))
+			d := fmt.Sprintf("d%d.com", i%20)
+			o, _ := e.Check(context.Background(), d, d)
 			results <- o
 		})
 	}

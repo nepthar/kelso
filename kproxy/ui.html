@@ -7,10 +7,17 @@
 <style>
   :root { color-scheme: light dark; font: 15px/1.4 system-ui, sans-serif; }
   body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+  .scroll { overflow-x: auto; margin-bottom: 2rem; }
+  table { width: 100%; border-collapse: collapse; }
+  td.when { white-space: nowrap; }
   th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #8884; }
   td.n { text-align: right; font-variant-numeric: tabular-nums; }
-  button { margin-left: .25rem; }
+  td.actions { white-space: nowrap; text-align: right; }
+  td.actions button + button { margin-left: .25rem; }
+  tr.group td { font-weight: 600; border-bottom: none; padding-top: .6rem; }
+  tr.host td { font-size: .9em; padding-top: .1rem; padding-bottom: .1rem; border-bottom: none; }
+  tr.host td:first-child { padding-left: 1.5rem; opacity: .75; }
+  tr.last td { border-bottom: 1px solid #8884; padding-bottom: .5rem; }
   .muted { opacity: .6; }
 </style>
 </head>
@@ -19,22 +26,22 @@
 <p>Mode: <b id="mode">…</b> · <a href="rules?format=text">download rules</a></p>
 
 <h2>Pending</h2>
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
   <tbody id="pending"></tbody>
-</table>
+</table></div>
 
 <h2>Rules</h2>
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Domain</th><th>Verdict</th></tr></thead>
   <tbody id="rules"></tbody>
-</table>
+</table></div>
 
 <h2>Traffic</h2>
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Domain</th><th>Scheme</th><th>Conns</th><th>Allowed</th><th>Denied</th><th>Timed out</th><th>Out</th><th>In</th></tr></thead>
   <tbody id="stats"></tbody>
-</table>
+</table></div>
 
 <script>
 const el = (tag, text, cls) => {
@@ -68,14 +75,27 @@ async function refresh() {
       ["pending", "rules", "stats"].map((p) => fetch(p).then((r) => r.ok ? r.json() : null)));
 
     const pb = document.getElementById("pending");
-    pb.replaceChildren(...(pending?.length ? pending.map((p) => {
-      const actions = el("td");
+    pb.replaceChildren(...(pending?.length ? pending.flatMap((p) => {
+      const actions = el("td", undefined, "actions");
       for (const v of ["allow", "deny"]) {
         const b = el("button", v);
         b.onclick = () => decide(p.domain, v);
         actions.append(b);
       }
-      return row([p.domain, new Date(p.first_seen).toLocaleString(), el("td", p.hits, "n"), actions]);
+      const seen = new Date(p.first_seen);
+      const when = seen.toDateString() === new Date().toDateString()
+        ? seen.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+        : seen.toLocaleDateString([], { month: "short", day: "numeric" });
+      const group = row([p.domain, el("td", when, "when"), el("td", p.hits, "n"), actions]);
+      group.className = "group";
+      const hosts = Object.entries(p.hosts || {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const rows = [group, ...hosts.map(([host, n]) => {
+        const r = row([host, "", el("td", n, "n"), ""]);
+        r.className = "host";
+        return r;
+      })];
+      rows.at(-1).classList.add("last");
+      return rows;
     }) : [empty(4)]));
 
     document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";

@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,7 +157,7 @@ func (p *Proxy) check(host, scheme string) (Outcome, *counters) {
 		return Denied, ctr
 	}
 	ctr := p.stats.conn(domain, scheme)
-	o, held := p.engine.Check(context.Background(), domain)
+	o, held := p.engine.Check(context.Background(), domain, strings.TrimSuffix(strings.ToLower(host), "."))
 	ctr.record(o, held)
 	return o, ctr
 }
