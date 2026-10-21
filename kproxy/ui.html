@@ -53,7 +53,11 @@ const bytes = (n) => n < 1024 ? n + " B" : n < 1 << 20 ? (n / 1024).toFixed(1) +
 
 async function decide(domain, verdict) {
   if (!confirm(`${verdict} ${domain} and all its subdomains?`)) return;
-  const r = await fetch("decide", { method: "POST", body: JSON.stringify({ domain, verdict }) });
+  const r = await fetch("decide", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain, verdict }),
+  });
   if (!r.ok) alert(await r.text());
   refresh();
 }

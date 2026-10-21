@@ -4,9 +4,31 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
 )
+
+// browserGuard protects a TCP admin listener from other sites in the same
+// browser: a foreign Host header means DNS rebinding, and requiring a JSON
+// content type on writes forces a CORS preflight, which is never answered.
+func browserGuard(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = r.Host
+		}
+		if host != "localhost" && net.ParseIP(host) == nil {
+			http.Error(w, "use an IP address or localhost", http.StatusForbidden)
+			return
+		}
+		if r.Method != http.MethodGet && r.Header.Get("Content-Type") != "application/json" {
+			http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
 
 //go:embed ui.html
 var uiHTML []byte

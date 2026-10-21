@@ -26,6 +26,7 @@ func main() {
 	httpAddr := flag.String("http", ":80", "HTTP listen address")
 	httpsAddr := flag.String("https", ":443", "HTTPS listen address")
 	adminSock := flag.String("admin", "/run/kproxy/admin.sock", "admin unix socket")
+	adminHTTP := flag.String("admin-http", "", "also serve the admin API and UI on this TCP address, e.g. 127.0.0.1:18099")
 	rulesFile := flag.String("rules-file", "", "load rules from and save them to this file")
 	modeFlag := flag.String("mode", "strict", "mode for a rules file that does not name one")
 	hold := flag.Duration("hold", 60*time.Second, "how long snitch mode holds an undecided connection")
@@ -66,6 +67,12 @@ func main() {
 	httpsLn := listen("tcp4", *httpsAddr)
 	os.Remove(*adminSock)
 	adminLn := listen("unix", *adminSock)
+	admin := adminHandler(engine, proxy.stats)
+	if *adminHTTP != "" {
+		ln := listen("tcp", *adminHTTP)
+		go func() { log.Fatal(http.Serve(ln, browserGuard(admin))) }()
+		log.Printf("kproxy: admin UI at http://%s/", ln.Addr())
+	}
 
 	self := [4]byte(ip)
 	go serveDNSUDP(pc, self)
@@ -73,7 +80,7 @@ func main() {
 	go proxy.serve(httpLn, proxy.handleHTTP)
 	go proxy.serve(httpsLn, proxy.handleHTTPS)
 	log.Printf("kproxy: answering %s, rules loaded: %v", ip, engine.loaded())
-	log.Fatal(http.Serve(adminLn, adminHandler(engine, proxy.stats)))
+	log.Fatal(http.Serve(adminLn, admin))
 }
 
 func listen(network, addr string) net.Listener {
