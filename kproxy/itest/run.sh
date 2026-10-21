@@ -21,7 +21,7 @@ rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"do
 docker build -q -t kproxy:dev .. >/dev/null || exit 1
 docker compose down -v -t 1 >/dev/null 2>&1
 trap 'docker compose down -v -t 1 >/dev/null 2>&1' EXIT
-docker compose up -d proxy internal-web >/dev/null 2>&1
+docker compose up -d proxy internal-web lan-web >/dev/null 2>&1
 
 sleep 3
 expect "unhealthy before rules" "starting" "$(health)"
@@ -43,6 +43,9 @@ expect "raw ip unreachable" "Could not connect" "$(c curl -sS -m 5 https://1.1.1
 expect "no SNI denied" "access denied" "$(c curl -sSk -m 5 https://172.30.99.2/)"
 expect "no Host denied" "503" "$(c sh -c 'printf "GET / HTTP/1.0\r\n\r\n" | nc -w 3 172.30.99.2 80')"
 expect "other port refused" "Could not connect" "$(c curl -sS -m 5 https://example.com:8443/)"
+expect "forward reaches LAN by name" "200" "$(code http://lanweb/passwd)"
+expect "forwarded LAN ip unreachable" "Could not connect" "$(c curl -sS -m 5 http://172.30.98.10:8080/passwd)"
+expect "forward listed in rules" '"lanweb":"172.30.98.10:8080"' "$(admin http://k/rules)"
 
 held=$(mktemp)
 c curl -sS -m 10 -o /dev/null -w '%{http_code}' https://github.com/ >"$held" &

@@ -138,11 +138,14 @@ async function refresh() {
 
     document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";
     const rb = document.getElementById("rules");
-    rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => {
+    const fwdRows = Object.entries(rules?.forwards || {}).sort().map(([name, target]) =>
+      row([name, `forward to ${target}`, el("td", "set by -forward", "muted actions")]));
+    const ruleRows = (rules?.rules || []).map((r) => {
       const actions = el("td", undefined, "actions");
       actions.append(button("remove", () => remove(r.domain)));
       return row([r.domain, r.verdict, actions]);
-    }) : [empty(3)]));
+    });
+    rb.replaceChildren(...(fwdRows.length + ruleRows.length ? [...fwdRows, ...ruleRows] : [empty(3)]));
 
     const sb = document.getElementById("stats");
     const srows = [];

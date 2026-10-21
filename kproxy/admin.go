@@ -44,7 +44,7 @@ type rulesJSON struct {
 	Rules []ruleJSON `json:"rules"`
 }
 
-func adminHandler(e *Engine, s *Stats) http.Handler {
+func adminHandler(e *Engine, s *Stats, fwd forwards) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +121,10 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 		for _, d := range rules.sorted() {
 			out.Rules = append(out.Rules, ruleJSON{d, rules.Domains[d]})
 		}
-		writeJSON(w, out)
+		writeJSON(w, struct {
+			rulesJSON
+			Forwards forwards `json:"forwards"`
+		}{out, fwd})
 	})
 
 	mux.HandleFunc("DELETE /rules/{name}", func(w http.ResponseWriter, r *http.Request) {

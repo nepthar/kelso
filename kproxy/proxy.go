@@ -21,10 +21,11 @@ const (
 )
 
 type Proxy struct {
-	engine *Engine
-	stats  *Stats
-	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
-	slots  chan struct{} // one per open client connection, shared by all listeners
+	engine   *Engine
+	stats    *Stats
+	forwards forwards
+	dial     func(ctx context.Context, network, addr string) (net.Conn, error)
+	slots    chan struct{} // one per open client connection, shared by all listeners
 }
 
 // serve stops accepting while every slot is taken, so excess connections
@@ -91,7 +92,7 @@ func (p *Proxy) handleHTTPS(c net.Conn) {
 	host, head := readSNI(c)
 	c.SetReadDeadline(time.Time{})
 
-	o, ctr := p.check(host, "https")
+	o, ctr, addr := p.route(host, "https", "443")
 	switch o {
 	case Denied:
 		c.Write(tlsAccessDenied)
@@ -99,7 +100,7 @@ func (p *Proxy) handleHTTPS(c net.Conn) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp4", net.JoinHostPort(host, "443"))
+	up, err := p.dial(context.Background(), "tcp4", addr)
 	if err != nil {
 		log.Printf("https %s: %v", host, err)
 		return
@@ -128,7 +129,7 @@ func (p *Proxy) handleHTTP(c net.Conn) {
 	host, head := readHost(c)
 	c.SetReadDeadline(time.Time{})
 
-	o, ctr := p.check(host, "http")
+	o, ctr, addr := p.route(host, "http", "80")
 	switch o {
 	case Denied:
 		writeHTTPError(c, 503, "blocked by egress proxy")
@@ -136,7 +137,7 @@ func (p *Proxy) handleHTTP(c net.Conn) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp4", net.JoinHostPort(host, "80"))
+	up, err := p.dial(context.Background(), "tcp4", addr)
 	if err != nil {
 		log.Printf("http %s: %v", host, err)
 		writeHTTPError(c, 502, "upstream unreachable")
@@ -150,6 +151,18 @@ func writeHTTPError(c net.Conn, code int, msg string) {
 	fmt.Fprintf(c, "HTTP/1.1 %d %s\r\nRetry-After: 60\r\nContent-Type: text/plain\r\n"+
 		"Content-Length: %d\r\nConnection: close\r\n\r\n%s\n",
 		code, http.StatusText(code), len(msg)+1, msg)
+}
+
+// route decides a connection and returns the address to dial: a forward's
+// target, which is always allowed, or host on port.
+func (p *Proxy) route(host, scheme, port string) (Outcome, *counters, string) {
+	if target, ok := p.forwards[normHost(host)]; ok {
+		ctr := p.stats.conn(normHost(host), scheme)
+		ctr.record(Allowed, false)
+		return Allowed, ctr, target
+	}
+	o, ctr := p.check(host, scheme)
+	return o, ctr, net.JoinHostPort(host, port)
 }
 
 // check counts the connection under its root domain and decides it. Hosts
