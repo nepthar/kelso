@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,17 +26,19 @@ type snapshot struct {
 	changed chan struct{}
 }
 
-// Pending groups the undecided hosts under one root domain.
+// Pending groups the undecided hosts under one root domain. Shared lists the
+// private public suffixes those hosts fall under.
 type Pending struct {
-	Domain    string         `json:"domain"`
-	FirstSeen time.Time      `json:"first_seen"`
-	Hits      int            `json:"hits"`
-	Hosts     map[string]int `json:"hosts"`
+	Domain    string                 `json:"domain"`
+	FirstSeen time.Time              `json:"first_seen"`
+	Hits      int                    `json:"hits"`
+	Hosts     map[string]PendingHost `json:"hosts"`
+	Shared    []string               `json:"shared"`
 }
 
-type pendingHost struct {
-	firstSeen time.Time
-	hits      int
+type PendingHost struct {
+	FirstSeen time.Time `json:"first_seen"`
+	Hits      int       `json:"hits"`
 }
 
 type Engine struct {
@@ -44,11 +48,11 @@ type Engine struct {
 	snap atomic.Pointer[snapshot]
 
 	mu      sync.Mutex // serializes rule changes and guards pending
-	pending map[string]*pendingHost
+	pending map[string]*PendingHost
 }
 
 func newEngine(hold time.Duration, persist func(*Rules) error) *Engine {
-	e := &Engine{hold: hold, persist: persist, pending: map[string]*pendingHost{}}
+	e := &Engine{hold: hold, persist: persist, pending: map[string]*PendingHost{}}
 	e.snap.Store(&snapshot{changed: make(chan struct{})})
 	return e
 }
@@ -100,10 +104,10 @@ func (e *Engine) markPending(host string) {
 	defer e.mu.Unlock()
 	h := e.pending[host]
 	if h == nil {
-		h = &pendingHost{firstSeen: time.Now()}
+		h = &PendingHost{FirstSeen: time.Now()}
 		e.pending[host] = h
 	}
-	h.hits++
+	h.Hits++
 }
 
 func (e *Engine) Pending() []Pending {
@@ -114,17 +118,24 @@ func (e *Engine) Pending() []Pending {
 		root := rootDomain(host)
 		p := groups[root]
 		if p == nil {
-			p = &Pending{Domain: root, FirstSeen: h.firstSeen, Hosts: map[string]int{}}
+			p = &Pending{Domain: root, FirstSeen: h.FirstSeen, Hosts: map[string]PendingHost{}, Shared: []string{}}
 			groups[root] = p
 		}
-		if h.firstSeen.Before(p.FirstSeen) {
-			p.FirstSeen = h.firstSeen
+		if h.FirstSeen.Before(p.FirstSeen) {
+			p.FirstSeen = h.FirstSeen
 		}
-		p.Hits += h.hits
-		p.Hosts[host] = h.hits
+		p.Hits += h.Hits
+		p.Hosts[host] = *h
+		_, private := suffixes(host)
+		for _, s := range private {
+			if !slices.Contains(p.Shared, s) {
+				p.Shared = append(p.Shared, s)
+			}
+		}
 	}
 	out := make([]Pending, 0, len(groups))
 	for _, p := range groups {
+		sort.Strings(p.Shared)
 		out = append(out, *p)
 	}
 	return out

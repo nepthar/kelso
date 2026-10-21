@@ -15,8 +15,10 @@
   td.actions button + button { margin-left: .25rem; }
   tr.group td { font-weight: 600; border-bottom: none; padding-top: .6rem; }
   tr.host td { font-size: .9em; padding-top: .1rem; padding-bottom: .1rem; border-bottom: none; }
-  tr.host td:first-child { opacity: .75; }
+  tr.host td:first-child, tr.host td.when { opacity: .75; }
   tr.last td { border-bottom: 1px solid #8884; padding-bottom: .5rem; }
+  td.when { white-space: nowrap; }
+  .tag { font-size: .75em; font-weight: 500; margin-left: .5rem; padding: 0 .35rem; border: 1px solid #c80; border-radius: .25rem; color: #c80; cursor: help; }
   .muted { opacity: .6; }
 </style>
 </head>
@@ -26,7 +28,7 @@
 
 <h2>Pending</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Domain</th><th>Hits</th><th></th></tr></thead>
+  <thead><tr><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
   <tbody id="pending"></tbody>
 </table></div>
 
@@ -68,8 +70,18 @@ async function decide(domain, verdict) {
   refresh();
 }
 
+const sharedTip = "This domain is commonly shared across many users: allowing it allows all of them.";
+
+const when = (iso) => {
+  const t = new Date(iso);
+  return t.toDateString() === new Date().toDateString()
+    ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : t.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
 // pendingRows lays out one root's hosts as a tree: the root, every host seen,
-// and any name in between that two or more seen hosts share.
+// and any name in between that two or more seen hosts share. Only the root
+// row sums; every other row shows its own hits, or nothing if it wasn't hit.
 function pendingRows(p) {
   const hosts = p.hosts || {};
   const seen = Object.keys(hosts);
@@ -81,7 +93,7 @@ function pendingRows(p) {
       if (under(n).length >= 2) nodes.add(n);
     }
   }
-  const hits = (n) => under(n).reduce((sum, h) => sum + hosts[h], 0);
+  const weight = (n) => under(n).reduce((sum, h) => sum + hosts[h].hits, 0);
   const children = {};
   for (const n of nodes) {
     if (n === p.domain) continue;
@@ -89,9 +101,10 @@ function pendingRows(p) {
     while (!nodes.has(a)) a = parentOf(a);
     (children[a] ||= []).push(n);
   }
+  const shared = (n) => (p.shared || []).some((s) => s === n || s.endsWith("." + n));
 
   const rows = [];
-  const walk = (n, depth) => {
+  const add = (n, depth, firstSeen, hits) => {
     const actions = el("td", undefined, "actions");
     for (const v of ["allow", "deny"]) {
       const b = el("button", v);
@@ -100,12 +113,18 @@ function pendingRows(p) {
     }
     const name = el("td", n);
     name.style.paddingLeft = `${0.5 + depth * 1.25}rem`;
-    const r = row([name, el("td", depth ? hits(n) : p.hits, "n"), actions]);
+    if (shared(n)) name.append(Object.assign(el("span", "shared", "tag"), { title: sharedTip }));
+    const r = row([name, el("td", firstSeen ? when(firstSeen) : "", "when"), el("td", hits ?? "", "n"), actions]);
     r.className = depth ? "host" : "group";
     rows.push(r);
-    for (const c of (children[n] || []).sort((a, b) => hits(b) - hits(a) || a.localeCompare(b))) walk(c, depth + 1);
   };
-  walk(p.domain, 0);
+  const walk = (n, depth) => {
+    add(n, depth, hosts[n]?.first_seen, hosts[n]?.hits);
+    for (const c of (children[n] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, depth + 1);
+  };
+  add(p.domain, 0, p.first_seen, p.hits);
+  if (hosts[p.domain]) add(p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
+  for (const c of (children[p.domain] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, 1);
   rows.at(-1).classList.add("last");
   return rows;
 }
@@ -116,7 +135,7 @@ async function refresh() {
       ["pending", "rules", "stats"].map((p) => fetch(p).then((r) => r.ok ? r.json() : null)));
 
     const pb = document.getElementById("pending");
-    pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(3)]));
+    pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(4)]));
 
     document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";
     const rb = document.getElementById("rules");

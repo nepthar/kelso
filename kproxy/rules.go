@@ -67,6 +67,23 @@ func (r *Rules) lookup(host string) (Verdict, bool) {
 
 func normHost(h string) string { return strings.TrimSuffix(strings.ToLower(h), ".") }
 
+// suffixes returns host's ICANN public suffix ("" if none) and the PSL
+// private-section suffixes above it that host falls under, such as
+// googleapis.com or s3.amazonaws.com: names whose subdomains belong to many
+// different owners.
+func suffixes(host string) (icannSuffix string, private []string) {
+	suffix, icann := publicsuffix.PublicSuffix(host)
+	for !icann {
+		private = append(private, suffix)
+		_, parent, ok := strings.Cut(suffix, ".")
+		if !ok {
+			return "", private
+		}
+		suffix, icann = publicsuffix.PublicSuffix(parent)
+	}
+	return suffix, private
+}
+
 // rootDomain returns host's domain directly under its ICANN suffix
 // (bbc.co.uk, googleapis.com), ignoring the PSL's private section. It is ""
 // for hosts without one: IP literals, single labels, unknown TLDs, bare
@@ -76,15 +93,8 @@ func rootDomain(host string) string {
 	if host == "" || net.ParseIP(host) != nil {
 		return ""
 	}
-	suffix, icann := publicsuffix.PublicSuffix(host)
-	for !icann {
-		_, parent, ok := strings.Cut(suffix, ".")
-		if !ok {
-			return ""
-		}
-		suffix, icann = publicsuffix.PublicSuffix(parent)
-	}
-	if host == suffix {
+	suffix, _ := suffixes(host)
+	if suffix == "" || host == suffix {
 		return ""
 	}
 	rest := strings.TrimSuffix(host, "."+suffix)

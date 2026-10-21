@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -114,7 +115,8 @@ func TestSnitchSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
 		t.Fatal("subdomain approval did not release its hosts")
 	}
 	waitPending(t, e, 1, 1)
-	if p := e.Pending(); p[0].Domain != "googleapis.com" || p[0].Hosts["update.googleapis.com"] != 1 {
+	if p := e.Pending(); p[0].Domain != "googleapis.com" || p[0].Hosts["update.googleapis.com"].Hits != 1 ||
+		!slices.Equal(p[0].Shared, []string{"googleapis.com"}) {
 		t.Fatalf("pending = %+v", p)
 	}
 	e.Decide("googleapis.com", Deny)
@@ -132,7 +134,8 @@ func TestSnitchTimeoutStaysPending(t *testing.T) {
 		}
 	}
 	p := e.Pending()
-	if len(p) != 1 || p[0].Hits != 3 || p[0].Hosts["a.new.com"] != 2 || p[0].Hosts["new.com"] != 1 {
+	if len(p) != 1 || p[0].Hits != 3 || p[0].Hosts["a.new.com"].Hits != 2 || p[0].Hosts["new.com"].Hits != 1 ||
+		len(p[0].Shared) != 0 {
 		t.Fatalf("pending = %+v", p)
 	}
 }
