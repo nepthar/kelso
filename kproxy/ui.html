@@ -123,7 +123,7 @@ function pendingRows(p) {
     for (const c of (children[n] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, depth + 1);
   };
   add(p.domain, 0, p.first_seen, p.hits);
-  if (hosts[p.domain]) add(p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
+  if (hosts[p.domain] && seen.length > 1) add(p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
   for (const c of (children[p.domain] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, 1);
   rows.at(-1).classList.add("last");
   return rows;
