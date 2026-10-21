@@ -49,12 +49,11 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	engine := newEngine(*hold, persist)
+	engine := newEngine(*hold, nil)
 	if initial != nil {
-		if err := engine.Replace(initial); err != nil {
-			log.Fatal(err)
-		}
+		engine.Replace(initial)
 	}
+	engine.persist = persist
 
 	proxy := &Proxy{engine: engine, stats: newStats(), dial: (&net.Dialer{Timeout: 10 * time.Second}).DialContext}
 

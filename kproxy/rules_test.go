@@ -76,4 +76,14 @@ func TestRulesFile(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("temp files left behind: %v", entries)
 	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o644 {
+		t.Fatalf("new file perm = %v", fi.Mode().Perm())
+	}
+	os.Chmod(path, 0o640)
+	if err := writeRulesFile(path, r); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o640 {
+		t.Fatalf("perm after rewrite = %v", fi.Mode().Perm())
+	}
 }

@@ -150,6 +150,14 @@ func writeRulesFile(path string, r *Rules) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	perm := os.FileMode(0o644)
+	if fi, err := os.Stat(path); err == nil {
+		perm = fi.Mode().Perm()
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
 	if _, err := tmp.WriteString(r.format()); err != nil {
 		tmp.Close()
 		return err
