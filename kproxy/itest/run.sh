@@ -16,7 +16,7 @@ push() {
 }
 health() { docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q proxy)"; }
 code() { c curl -sS -m 10 -o /dev/null -w '%{http_code}' "$@"; }
-rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"}]}'
+rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"},{"domain":"lanweb","verdict":"allow","target":"172.30.98.10:8080"}]}'
 
 docker build -q -t kproxy:dev .. >/dev/null || exit 1
 docker compose down -v -t 1 >/dev/null 2>&1
@@ -43,9 +43,10 @@ expect "raw ip unreachable" "Could not connect" "$(c curl -sS -m 5 https://1.1.1
 expect "no SNI denied" "access denied" "$(c curl -sSk -m 5 https://172.30.99.2/)"
 expect "no Host denied" "503" "$(c sh -c 'printf "GET / HTTP/1.0\r\n\r\n" | nc -w 3 172.30.99.2 80')"
 expect "other port refused" "Could not connect" "$(c curl -sS -m 5 https://example.com:8443/)"
-expect "forward reaches LAN by name" "200" "$(code http://lanweb/passwd)"
-expect "forwarded LAN ip unreachable" "Could not connect" "$(c curl -sS -m 5 http://172.30.98.10:8080/passwd)"
-expect "forward listed in rules" '"lanweb":"172.30.98.10:8080"' "$(admin http://k/rules)"
+expect "target reaches LAN by name" "200" "$(code http://lanweb/passwd)"
+expect "target's LAN ip unreachable" "Could not connect" "$(c curl -sS -m 5 http://172.30.98.10:8080/passwd)"
+expect "target listed in rules" '"target":"172.30.98.10:8080"' "$(admin http://k/rules)"
+expect "bare name without target refused" "503" "$(code http://otherlan/)"
 
 held=$(mktemp)
 c curl -sS -m 10 -o /dev/null -w '%{http_code}' https://github.com/ >"$held" &

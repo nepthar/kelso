@@ -64,24 +64,25 @@ func (e *Engine) rules() *Rules { return e.snap.Load().rules }
 
 // Check decides whether a connection to host may proceed, holding it while
 // rules are unloaded or (in snitch mode) while no rule matches host. held
-// reports whether the connection had to wait.
-func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) {
+// reports whether the connection had to wait; target is the allowing rule's
+// target, if it has one.
+func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool, target string) {
 	var timeout <-chan time.Time
 	marked := false
 	for {
 		s := e.snap.Load()
 		if r := s.rules; r != nil {
-			if v, ok := r.lookup(host); ok {
-				if v == Allow {
-					return Allowed, held
+			if rule, ok := r.lookup(host); ok {
+				if rule.Verdict == Allow {
+					return Allowed, held, rule.Target
 				}
-				return Denied, held
+				return Denied, held, ""
 			}
 			switch r.Mode {
 			case Track:
-				return Allowed, held
+				return Allowed, held, ""
 			case Strict:
-				return Denied, held
+				return Denied, held, ""
 			}
 			if !marked {
 				e.markPending(host)
@@ -97,9 +98,9 @@ func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool) 
 		select {
 		case <-s.changed:
 		case <-timeout:
-			return TimedOut, held
+			return TimedOut, held, ""
 		case <-ctx.Done():
-			return TimedOut, held
+			return TimedOut, held, ""
 		}
 	}
 }
@@ -174,7 +175,7 @@ func (e *Engine) Decide(domain string, v Verdict) error {
 		return fmt.Errorf("no rules loaded yet: PUT /rules first")
 	}
 	next := &Rules{Mode: cur.Mode, Domains: maps.Clone(cur.Domains)}
-	next.Domains[domain] = v
+	next.Domains[domain] = Rule{Verdict: v}
 	return e.publish(next)
 }
 

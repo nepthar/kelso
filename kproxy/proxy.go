@@ -21,11 +21,10 @@ const (
 )
 
 type Proxy struct {
-	engine   *Engine
-	stats    *Stats
-	forwards forwards
-	dial     func(ctx context.Context, network, addr string) (net.Conn, error)
-	slots    chan struct{} // one per open client connection, shared by all listeners
+	engine *Engine
+	stats  *Stats
+	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
+	slots  chan struct{} // one per open client connection, shared by all listeners
 }
 
 // serve stops accepting while every slot is taken, so excess connections
@@ -153,32 +152,41 @@ func writeHTTPError(c net.Conn, code int, msg string) {
 		code, http.StatusText(code), len(msg)+1, msg)
 }
 
-// route decides a connection and returns the address to dial: a forward's
-// target, which is always allowed, or host on port.
+// route counts the connection and decides it, returning the address to dial:
+// the allowing rule's target, or host on port. A host without a root domain
+// (single label, unknown TLD, bare suffix) is denied unless the rule matching
+// it has a target; a missing host or IP literal always is.
 func (p *Proxy) route(host, scheme, port string) (Outcome, *counters, string) {
-	if target, ok := p.forwards[normHost(host)]; ok {
-		ctr := p.stats.conn(normHost(host), scheme)
-		ctr.record(Allowed, false)
-		return Allowed, ctr, target
+	name := normHost(host)
+	if name == "" || net.ParseIP(name) != nil {
+		return p.refuse(scheme)
 	}
-	o, ctr := p.check(host, scheme)
-	return o, ctr, net.JoinHostPort(host, port)
-}
-
-// check counts the connection under its root domain and decides it. Hosts
-// without a root (missing, IP literal, unknown TLD, bare suffix) are always
-// denied.
-func (p *Proxy) check(host, scheme string) (Outcome, *counters) {
-	root := rootDomain(host)
+	root := rootDomain(name)
 	if root == "" {
-		ctr := p.stats.conn(unknownDomain, scheme)
-		ctr.record(Denied, false)
-		return Denied, ctr
+		var rule Rule
+		if r := p.engine.rules(); r != nil {
+			rule, _ = r.lookup(name)
+		}
+		if rule.Verdict != Allow || rule.Target == "" {
+			return p.refuse(scheme)
+		}
+		ctr := p.stats.conn(name, scheme)
+		ctr.record(Allowed, false)
+		return Allowed, ctr, rule.Target
 	}
 	ctr := p.stats.conn(root, scheme)
-	o, held := p.engine.Check(context.Background(), normHost(host))
+	o, held, target := p.engine.Check(context.Background(), name)
 	ctr.record(o, held)
-	return o, ctr
+	if target == "" {
+		target = net.JoinHostPort(name, port)
+	}
+	return o, ctr, target
+}
+
+func (p *Proxy) refuse(scheme string) (Outcome, *counters, string) {
+	ctr := p.stats.conn(unknownDomain, scheme)
+	ctr.record(Denied, false)
+	return Denied, ctr, ""
 }
 
 func closeWrite(c net.Conn) {

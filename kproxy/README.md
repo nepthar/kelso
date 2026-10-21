@@ -17,8 +17,9 @@ runs one per app, but nothing in it is Kelso-specific.
   ClientHello. It decides, then dials the real host and pipes the bytes
   through untouched, starting with the ones it already read.
 - **Refused outright, in every mode:** connections with no name (no SNI, no
-  `Host`), and names that are IP addresses, single labels, unknown TLDs, or bare
-  suffixes like `co.uk`.
+  `Host`) or an IP address for a name. Names with no root domain (single
+  labels, unknown TLDs, bare suffixes like `co.uk`) are refused too, unless an
+  allow rule with a [target](#targets) matches them.
 - **Rejections.** HTTP gets `503` with `Retry-After`; HTTPS gets a TLS
   `access_denied` alert.
 
@@ -63,22 +64,27 @@ startup and rewrites it (atomically, keeping its permissions) on every change.
 Without one, rules live in memory until something pushes them with
 `PUT /rules`.
 
-## Forwards
+### Targets
 
-`-forward NAME=IP:PORT` (repeatable) sends HTTP and HTTPS for exactly `NAME` to
-a fixed address, in every mode and regardless of rules. It is how an app on an
-internal network reaches one service on your LAN:
+An allow rule can name an IPv4 address and port to connect to, instead of
+whatever DNS says. It is how an app on an internal network reaches one
+service on your LAN:
 
 ```
--forward adguard=192.168.1.3:3000
+allow adguard 192.168.1.3:3000
 ```
 
 The app connects to `http://adguard`. Docker's resolver passes the name to the
 proxy, the proxy answers with itself, and the connection is piped to
 `192.168.1.3:3000`. The app still can't reach that IP, or anything else on the
-LAN, directly.
+LAN, directly. A bare name like `adguard` gets through only because its rule
+has a target: `allow adguard` alone is still refused, so the proxy's own DNS
+can't be used to reach arbitrary LAN names.
 
-- Both schemes go to the one target, so use the scheme its port speaks.
+- Targets follow the same matching as any rule, so `allow example.com
+  1.2.3.4:443` pins every subdomain of `example.com` to that address.
+- Both schemes go to the one target, so the app must use the scheme its port
+  speaks.
 - The target sees `Host: adguard`, or SNI `adguard`, and HTTPS certificates
   won't match that name.
 - A container with the same name wins, because Docker resolves it first.
@@ -144,7 +150,6 @@ port mapping. Unix socket paths are limited to about 104 characters there.
 | `-mode` | `strict` | mode for a rules file that doesn't name one |
 | `-hold` | `60s` | how long snitch mode holds an undecided connection |
 | `-max-conns` | `1024` | most client connections open at once |
-| `-forward` | | `NAME=IP:PORT`, repeatable |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
 rules loaded.
@@ -162,9 +167,9 @@ out.
 | `GET /` | web UI |
 | `GET /healthz` | `200` once rules are loaded, else `503` |
 | `GET /pending` | undecided hosts, grouped by root domain |
-| `POST /decide` | `{"domain": "github.com", "verdict": "allow"}` |
-| `GET /rules` | mode, rules and forwards; `?format=text` for the rules file |
-| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "...", "verdict": "allow"}]}` |
+| `POST /decide` | `{"domain": "github.com", "verdict": "allow"}`; no target |
+| `GET /rules` | mode and rules; `?format=text` for the rules file |
+| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "192.168.1.3:3000"}]}` |
 | `DELETE /rules/{name}` | remove one rule; that name goes back to undecided |
 | `GET /stats` | per root domain, HTTP and HTTPS counted separately |
 

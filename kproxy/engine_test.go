@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
+// rules builds Rules from name, rule pairs, where a rule is "allow", "deny",
+// or "allow IP:PORT".
 func rules(m Mode, kv ...string) *Rules {
-	r := &Rules{Mode: m, Domains: map[string]Verdict{}}
+	r := &Rules{Mode: m, Domains: map[string]Rule{}}
 	for i := 0; i < len(kv); i += 2 {
-		r.Domains[kv[i]] = Verdict(kv[i+1])
+		verdict, target, _ := strings.Cut(kv[i+1], " ")
+		r.Domains[kv[i]] = Rule{Verdict: Verdict(verdict), Target: target}
 	}
 	return r
 }
@@ -20,7 +24,7 @@ func rules(m Mode, kv ...string) *Rules {
 func checkAsync(e *Engine, host string) <-chan Outcome {
 	ch := make(chan Outcome, 1)
 	go func() {
-		o, _ := e.Check(context.Background(), host)
+		o, _, _ := e.Check(context.Background(), host)
 		ch <- o
 	}()
 	return ch
@@ -59,7 +63,7 @@ func TestModes(t *testing.T) {
 	} {
 		e := newEngine(10*time.Millisecond, nil)
 		e.Replace(rules(tc.mode, "ok.com", "allow", "bad.com", "deny"))
-		o, held := e.Check(context.Background(), tc.domain)
+		o, held, _ := e.Check(context.Background(), tc.domain)
 		if o != tc.want || held != tc.wantHeld {
 			t.Errorf("%s %s: got %v held=%v, want %v held=%v", tc.mode, tc.domain, o, held, tc.want, tc.wantHeld)
 		}
@@ -68,7 +72,7 @@ func TestModes(t *testing.T) {
 
 func TestUnloadedHoldsThenTimesOut(t *testing.T) {
 	e := newEngine(20*time.Millisecond, nil)
-	if o, _ := e.Check(context.Background(), "ok.com"); o != TimedOut {
+	if o, _, _ := e.Check(context.Background(), "ok.com"); o != TimedOut {
 		t.Fatalf("got %v", o)
 	}
 	if len(e.Pending()) != 0 {
@@ -134,7 +138,7 @@ func TestRemoveReturnsDomainToPending(t *testing.T) {
 	if err := e.Remove("ok.com"); err != errNoRule {
 		t.Fatalf("second remove: %v", err)
 	}
-	if o, held := e.Check(context.Background(), "www.ok.com"); o != TimedOut || !held {
+	if o, held, _ := e.Check(context.Background(), "www.ok.com"); o != TimedOut || !held {
 		t.Fatalf("got %v held=%v", o, held)
 	}
 	waitPending(t, e, 1, 1)
@@ -144,7 +148,7 @@ func TestSnitchTimeoutStaysPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
 	e.Replace(rules(Snitch))
 	for _, host := range []string{"a.new.com", "a.new.com", "new.com"} {
-		if o, held := e.Check(context.Background(), host); o != TimedOut || !held {
+		if o, held, _ := e.Check(context.Background(), host); o != TimedOut || !held {
 			t.Fatalf("got %v held=%v", o, held)
 		}
 	}
@@ -187,7 +191,7 @@ func TestConcurrentDecisionsAndSwaps(t *testing.T) {
 	for i := range 400 {
 		checks.Go(func() {
 			d := fmt.Sprintf("d%d.com", i%20)
-			o, _ := e.Check(context.Background(), d)
+			o, _, _ := e.Check(context.Background(), d)
 			results <- o
 		})
 	}

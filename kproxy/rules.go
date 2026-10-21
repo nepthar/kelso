@@ -48,21 +48,47 @@ func parseVerdict(s string) (Verdict, error) {
 // that name and every name ending in "."+name.
 type Rules struct {
 	Mode    Mode
-	Domains map[string]Verdict
+	Domains map[string]Rule
 }
 
-// lookup returns the verdict of the most specific rule matching host.
-func (r *Rules) lookup(host string) (Verdict, bool) {
+// Rule is a verdict, plus for an allow an optional IPv4 address and port to
+// connect to instead of what DNS says.
+type Rule struct {
+	Verdict Verdict
+	Target  string
+}
+
+// lookup returns the most specific rule matching host.
+func (r *Rules) lookup(host string) (Rule, bool) {
 	for name := host; ; {
-		if v, ok := r.Domains[name]; ok {
-			return v, true
+		if rule, ok := r.Domains[name]; ok {
+			return rule, true
 		}
 		_, parent, ok := strings.Cut(name, ".")
 		if !ok {
-			return "", false
+			return Rule{}, false
 		}
 		name = parent
 	}
+}
+
+// newRule validates a rule's parts. A target is only allowed on an allow.
+func newRule(verdict, target string) (Rule, error) {
+	v, err := parseVerdict(verdict)
+	if err != nil {
+		return Rule{}, err
+	}
+	if target == "" {
+		return Rule{Verdict: v}, nil
+	}
+	if v != Allow {
+		return Rule{}, fmt.Errorf("only an allow can have a target, not %s", v)
+	}
+	ip, port, err := net.SplitHostPort(target)
+	if err != nil || net.ParseIP(ip).To4() == nil || port == "" {
+		return Rule{}, fmt.Errorf("target %q must be an IPv4 address and port, like 192.168.1.3:3000", target)
+	}
+	return Rule{Verdict: v, Target: net.JoinHostPort(ip, port)}, nil
 }
 
 func normHost(h string) string { return strings.TrimSuffix(strings.ToLower(h), ".") }
@@ -116,7 +142,7 @@ func ruleName(s string) (string, error) {
 }
 
 func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
-	rules := &Rules{Mode: defaultMode, Domains: map[string]Verdict{}}
+	rules := &Rules{Mode: defaultMode, Domains: map[string]Rule{}}
 	sc := bufio.NewScanner(r)
 	for n := 1; sc.Scan(); n++ {
 		line := strings.TrimSpace(sc.Text())
@@ -124,10 +150,7 @@ func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
 			continue
 		}
 		f := strings.Fields(line)
-		if len(f) != 2 {
-			return nil, fmt.Errorf("line %d: want '<allow|deny|mode> <value>'", n)
-		}
-		if f[0] == "mode" {
+		if f[0] == "mode" && len(f) == 2 {
 			m, err := parseMode(f[1])
 			if err != nil {
 				return nil, fmt.Errorf("line %d: %w", n, err)
@@ -135,15 +158,22 @@ func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
 			rules.Mode = m
 			continue
 		}
-		v, err := parseVerdict(f[0])
-		if err != nil {
-			return nil, fmt.Errorf("line %d: %w", n, err)
+		if len(f) != 2 && len(f) != 3 {
+			return nil, fmt.Errorf("line %d: want 'mode <mode>' or '<allow|deny> <name> [ip:port]'", n)
 		}
 		d, err := ruleName(f[1])
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", n, err)
 		}
-		rules.Domains[d] = v
+		target := ""
+		if len(f) == 3 {
+			target = f[2]
+		}
+		rule, err := newRule(f[0], target)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %w", n, err)
+		}
+		rules.Domains[d] = rule
 	}
 	return rules, sc.Err()
 }
@@ -161,7 +191,12 @@ func (r *Rules) format() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "mode %s\n", r.Mode)
 	for _, d := range r.sorted() {
-		fmt.Fprintf(&b, "%s %s\n", r.Domains[d], d)
+		rule := r.Domains[d]
+		if rule.Target != "" {
+			fmt.Fprintf(&b, "%s %s %s\n", rule.Verdict, d, rule.Target)
+		} else {
+			fmt.Fprintf(&b, "%s %s\n", rule.Verdict, d)
+		}
 	}
 	return b.String()
 }
@@ -169,7 +204,7 @@ func (r *Rules) format() string {
 func loadRulesFile(path string, defaultMode Mode) (*Rules, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
-		return &Rules{Mode: defaultMode, Domains: map[string]Verdict{}}, nil
+		return &Rules{Mode: defaultMode, Domains: map[string]Rule{}}, nil
 	}
 	if err != nil {
 		return nil, err

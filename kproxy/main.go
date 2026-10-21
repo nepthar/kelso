@@ -1,8 +1,9 @@
 // kproxy is a DNS server and transparent HTTP/HTTPS proxy that controls
 // outbound connections by domain. Every A query is answered with the proxy's
 // own address; connections on 80 and 443 are matched by Host header or TLS
-// SNI against allow/deny rules (or a forward to a fixed address) and piped
-// upstream without TLS termination. It is administered over a unix socket.
+// SNI against allow/deny rules and piped upstream, to what DNS says or to an
+// allow rule's fixed target, without TLS termination. It is administered over
+// a unix socket.
 package main
 
 import (
@@ -31,8 +32,6 @@ func main() {
 	modeFlag := flag.String("mode", "strict", "mode for a rules file that does not name one")
 	hold := flag.Duration("hold", 60*time.Second, "how long snitch mode holds an undecided connection")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
-	fwd := forwards{}
-	flag.Var(fwd, "forward", "send HTTP/HTTPS for NAME to a fixed address, as NAME=IP:PORT (repeatable)")
 	flag.Parse()
 
 	ip := net.ParseIP(*ipFlag).To4()
@@ -60,11 +59,10 @@ func main() {
 	engine.persist = persist
 
 	proxy := &Proxy{
-		engine:   engine,
-		stats:    newStats(),
-		forwards: fwd,
-		dial:     (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		slots:    make(chan struct{}, *maxConns),
+		engine: engine,
+		stats:  newStats(),
+		dial:   (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		slots:  make(chan struct{}, *maxConns),
 	}
 
 	pc, err := net.ListenPacket("udp4", *dnsAddr)
@@ -76,7 +74,7 @@ func main() {
 	httpsLn := listen("tcp4", *httpsAddr)
 	os.Remove(*adminSock)
 	adminLn := listen("unix", *adminSock)
-	admin := adminHandler(engine, proxy.stats, fwd)
+	admin := adminHandler(engine, proxy.stats)
 	if *adminHTTP != "" {
 		ln := listen("tcp", *adminHTTP)
 		go func() { log.Fatal(http.Serve(ln, browserGuard(admin))) }()

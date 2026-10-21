@@ -37,6 +37,7 @@ var uiHTML []byte
 type ruleJSON struct {
 	Domain  string  `json:"domain"`
 	Verdict Verdict `json:"verdict"`
+	Target  string  `json:"target,omitempty"`
 }
 
 type rulesJSON struct {
@@ -44,7 +45,7 @@ type rulesJSON struct {
 	Rules []ruleJSON `json:"rules"`
 }
 
-func adminHandler(e *Engine, s *Stats, fwd forwards) http.Handler {
+func adminHandler(e *Engine, s *Stats) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +76,9 @@ func adminHandler(e *Engine, s *Stats, fwd forwards) http.Handler {
 		d, err := ruleName(req.Domain)
 		if err == nil {
 			_, err = parseVerdict(string(req.Verdict))
+		}
+		if err == nil && req.Target != "" {
+			err = fmt.Errorf("decide sets a verdict only: send a target with PUT /rules")
 		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -119,12 +123,10 @@ func adminHandler(e *Engine, s *Stats, fwd forwards) http.Handler {
 		}
 		out := rulesJSON{Mode: rules.Mode, Rules: []ruleJSON{}}
 		for _, d := range rules.sorted() {
-			out.Rules = append(out.Rules, ruleJSON{d, rules.Domains[d]})
+			rule := rules.Domains[d]
+			out.Rules = append(out.Rules, ruleJSON{d, rule.Verdict, rule.Target})
 		}
-		writeJSON(w, struct {
-			rulesJSON
-			Forwards forwards `json:"forwards"`
-		}{out, fwd})
+		writeJSON(w, out)
 	})
 
 	mux.HandleFunc("DELETE /rules/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -155,17 +157,17 @@ func (rj rulesJSON) toRules() (*Rules, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules := &Rules{Mode: m, Domains: map[string]Verdict{}}
+	rules := &Rules{Mode: m, Domains: map[string]Rule{}}
 	for _, r := range rj.Rules {
 		d, err := ruleName(r.Domain)
 		if err != nil {
 			return nil, err
 		}
-		v, err := parseVerdict(string(r.Verdict))
+		rule, err := newRule(string(r.Verdict), r.Target)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", d, err)
 		}
-		rules.Domains[d] = v
+		rules.Domains[d] = rule
 	}
 	return rules, nil
 }

@@ -66,24 +66,32 @@ func TestLookupMostSpecificWins(t *testing.T) {
 		"notgoogle.com":             "",
 		"anything.org":              Deny,
 	} {
-		if got, _ := r.lookup(host); got != want {
-			t.Errorf("lookup(%q) = %q, want %q", host, got, want)
+		if got, _ := r.lookup(host); got.Verdict != want {
+			t.Errorf("lookup(%q) = %q, want %q", host, got.Verdict, want)
 		}
 	}
 }
 
 func TestParseRules(t *testing.T) {
-	r, err := parseRules(strings.NewReader("# c\nmode snitch\n\nallow example.com\ndeny Example.org\n"), Strict)
+	r, err := parseRules(strings.NewReader(
+		"# c\nmode snitch\n\nallow example.com\ndeny Example.org\nallow AdGuard 192.168.1.3:3000\n"), Strict)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Mode != Snitch || r.Domains["example.com"] != Allow || r.Domains["example.org"] != Deny {
+	if r.Mode != Snitch || r.Domains["example.com"] != (Rule{Verdict: Allow}) ||
+		r.Domains["example.org"] != (Rule{Verdict: Deny}) ||
+		r.Domains["adguard"] != (Rule{Verdict: Allow, Target: "192.168.1.3:3000"}) {
 		t.Fatalf("got %+v", r)
 	}
-	if r.format() != "mode snitch\nallow example.com\ndeny example.org\n" {
+	want := "mode snitch\nallow adguard 192.168.1.3:3000\nallow example.com\ndeny example.org\n"
+	if r.format() != want {
 		t.Fatalf("format: %q", r.format())
 	}
-	for _, bad := range []string{"allow", "permit example.com", "allow 10.0.0.1", "mode loose", "allow *.example.com"} {
+	for _, bad := range []string{
+		"allow", "permit example.com", "allow 10.0.0.1", "mode loose", "allow *.example.com",
+		"deny adguard 192.168.1.3:3000", "allow adguard nas.local:80", "allow adguard 192.168.1.3",
+		"allow adguard [::1]:80", "allow adguard 192.168.1.3:80 extra",
+	} {
 		if _, err := parseRules(strings.NewReader(bad), Strict); err == nil {
 			t.Errorf("parsed %q", bad)
 		}
@@ -96,12 +104,14 @@ func TestRulesFile(t *testing.T) {
 	if err != nil || r.Mode != Track || len(r.Domains) != 0 {
 		t.Fatalf("missing file: %+v, %v", r, err)
 	}
-	r.Domains["example.com"] = Deny
+	r.Domains["example.com"] = Rule{Verdict: Deny}
+	r.Domains["nas"] = Rule{Verdict: Allow, Target: "192.168.1.20:5000"}
 	if err := writeRulesFile(path, r); err != nil {
 		t.Fatal(err)
 	}
 	got, err := loadRulesFile(path, Strict)
-	if err != nil || got.Mode != Track || got.Domains["example.com"] != Deny {
+	if err != nil || got.Mode != Track || got.Domains["example.com"].Verdict != Deny ||
+		got.Domains["nas"].Target != "192.168.1.20:5000" {
 		t.Fatalf("reload: %+v, %v", got, err)
 	}
 	entries, _ := os.ReadDir(filepath.Dir(path))
