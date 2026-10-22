@@ -122,24 +122,91 @@ app:
 Give the internal network an `ip_range` that excludes the proxy's address, or
 Docker may hand it to another container.
 
-### Standalone
+### Standalone, with a real browser
+
+This runs the proxy as an ordinary program on a Mac and points a throwaway
+Chrome window at it, so you can browse and approve domains as they show up.
+Nothing on the machine changes: everything listens on localhost, on high
+ports, and Chrome uses its own profile.
+
+**1. Build and write a rules file.** From this folder, into a scratch folder
+outside the repo:
 
 ```sh
-go build -o kproxy . && printf 'mode snitch\nallow google.com\n' > rules.txt
-./kproxy -ip 127.0.0.1 -dns 127.0.0.1:15353 -http 127.0.0.1:8080 -https 127.0.0.1:8443 \
-  -admin ./admin.sock -admin-http 127.0.0.1:18099 -rules-file ./rules.txt
+mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'mode snitch\nallow google.com\n' > ~/kproxy-test/rules.txt
 ```
 
-Then send traffic through it with curl (`--connect-to ::127.0.0.1:8443`), or a
-throwaway Chrome profile that maps every name to the proxy:
+**2. Terminal 1: run the proxy.**
 
 ```sh
-open -na "Google Chrome" --args --user-data-dir="$PWD/chrome-profile" --disable-quic \
-  --host-resolver-rules="MAP *:443 127.0.0.1:8443, MAP *:80 127.0.0.1:8080"
+cd ~/kproxy-test && ./kproxy -ip 127.0.0.1 -dns 127.0.0.1:15353 -http 127.0.0.1:8080 -https 127.0.0.1:8443 -admin ./admin.sock -admin-http 127.0.0.1:18099 -rules-file ./rules.txt -hold 30s
 ```
 
-macOS won't let an unprivileged program bind 80/443 on localhost, hence the
-port mapping. Unix socket paths are limited to about 104 characters there.
+The DNS server isn't used here, but it has to listen somewhere, and the
+default port 53 needs root.
+
+**3. Open the admin page** in your normal browser, not the one from step 5:
+
+```sh
+open http://127.0.0.1:18099/
+```
+
+It refreshes every few seconds: pending hosts as a tree under their root
+domain, the rules, and traffic per domain.
+
+**4. Terminal 2: check it with curl.** `--connect-to` sends curl to the proxy
+while keeping the real name in the TLS handshake and `Host` header, which is
+what the proxy reads.
+
+```sh
+curl -sS -o /dev/null -w '%{http_code}\n' --connect-to ::127.0.0.1:8443 https://www.google.com/
+```
+
+That prints `200`. This one hangs, because `example.com` has no rule and is
+held:
+
+```sh
+curl -sS -o /dev/null -w '%{http_code}\n' --connect-to ::127.0.0.1:8443 https://example.com/
+```
+
+Click **allow** on `example.com` in the admin page within 30 seconds and curl
+finishes with `200`. Click **deny** instead and it fails with `tlsv1 alert
+access denied`. Do nothing and the connection closes after 30 seconds, with
+`example.com` still pending. Plain HTTP goes to port 8080 the same way
+(`--connect-to ::127.0.0.1:8080 http://...`), and a deny there gets a `503`.
+
+**5. Terminal 3: browse with an isolated Chrome.**
+
+```sh
+open -na "Google Chrome" --args --user-data-dir="$HOME/kproxy-test/chrome-profile" --no-first-run --disable-quic --host-resolver-rules="MAP *:443 127.0.0.1:8443, MAP *:80 127.0.0.1:8080" https://www.google.com/
+```
+
+- `--user-data-dir` starts a separate Chrome with its own profile, so your
+  usual windows, logins and history are untouched.
+- `--host-resolver-rules` resolves every name to the proxy, keeping HTTPS and
+  HTTP on their own ports, as the proxy's DNS would inside Docker.
+- `--disable-quic` stops Chrome trying HTTP/3, which runs over UDP; the proxy
+  only handles TCP.
+
+Google itself loads, but pages look broken until you allow `gstatic.com`,
+where Google keeps its images and scripts. Pending also fills up with
+Chrome's own background traffic: `update.googleapis.com`,
+`content-autofill.googleapis.com`, `gvt1.com` and so on. Allow or deny them
+in the admin page and watch the held requests go through or fail. Every
+decision is written to `~/kproxy-test/rules.txt`, so it survives a restart of
+the proxy.
+
+**6. Clean up.** Quit the isolated Chrome window (it's its own app instance),
+stop the proxy with Ctrl-C, then:
+
+```sh
+rm -rf ~/kproxy-test
+```
+
+macOS won't let an unprivileged program bind ports 80 and 443 on localhost,
+which is why the proxy uses 8080 and 8443 and Chrome remaps to them. Unix
+socket paths are limited to about 104 characters there, so keep `-admin`
+short.
 
 ## Flags
 
