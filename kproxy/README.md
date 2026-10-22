@@ -103,6 +103,24 @@ proxy's own DNS can't be used to reach arbitrary LAN names.
 - A container with the same name wins, because Docker resolves it first.
 - Only HTTP and HTTPS: the name comes from the `Host` header or SNI.
 
+## Ingress
+
+Containers on an `internal: true` network can't publish ports, so nothing
+outside can reach them directly. `-ingress LISTEN=HOST:PORT` relays the other
+way: kproxy listens on `LISTEN` and pipes each connection to `HOST:PORT`, with
+no rules checked. Add `/udp` for a UDP port:
+
+```
+-ingress 20001=main:8080 -ingress 20002=main:10001/udp
+```
+
+Publish `LISTEN` on the kproxy container, and the app is reachable through it.
+`HOST` is resolved on every connection, so a compose service name works.
+
+The app sees kproxy's address as every client's. For UDP, kproxy keeps a
+socket towards the target for each client address and drops it after two
+minutes without a reply, at most 1,024 at once.
+
 ## Running it
 
 kproxy needs Go 1.27.3 or newer, which fixes security bugs in the TLS and
@@ -275,6 +293,7 @@ short.
 | `-default` | `deny` | default policy for a rules file that doesn't set one |
 | `-hold` | `60s` | how long the `ask` policy holds a connection |
 | `-max-conns` | `1024` | most client connections open at once |
+| `-ingress` | | `LISTEN=HOST:PORT[/udp]`, repeatable; see [Ingress](#ingress) |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
 rules loaded.

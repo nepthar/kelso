@@ -31,6 +31,8 @@ func main() {
 	defaultFlag := flag.String("default", "deny", "default policy (allow, deny or ask) for a rules file that doesn't set one")
 	hold := flag.Duration("hold", 60*time.Second, "how long the ask policy holds a connection no rule matches")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
+	var ingress ingresses
+	flag.Var(&ingress, "ingress", "relay LISTEN=HOST:PORT[/udp]: connections on port LISTEN go to HOST:PORT, unchecked (repeatable)")
 	flag.Parse()
 
 	policy, err := parsePolicy(*defaultFlag)
@@ -76,6 +78,18 @@ func main() {
 		log.Printf("kproxy: admin UI at http://%s/", ln.Addr())
 	}
 
+	for _, in := range ingress {
+		addr := fmt.Sprintf(":%d", in.listen)
+		if in.udp {
+			upc, err := net.ListenPacket("udp4", addr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			go proxy.relayUDP(upc, in)
+		} else {
+			go proxy.serve(listen("tcp4", addr), proxy.relayTCP(in))
+		}
+	}
 	go serveDNSUDP(pc)
 	go serveDNSTCP(dnsTCP)
 	go proxy.serve(httpLn, proxy.handleHTTP)
