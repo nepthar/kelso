@@ -71,13 +71,13 @@ asked for on its usual port. It is how an app on an internal network reaches
 one service on your LAN:
 
 ```
-allow adguard rpi.den.zyx.pw:3000
+allow adguard rpi.lab.my-domain.com:3000
 allow nas 192.168.1.20:5000
 ```
 
 The app connects to `http://adguard`. Docker's resolver passes the name to the
 proxy, the proxy answers with itself, and the connection is piped to
-`rpi.den.zyx.pw:3000`. The app still can't reach that address, or anything
+`rpi.lab.my-domain.com:3000`. The app still can't reach that address, or anything
 else on the LAN, directly. A bare name like `adguard` gets through only
 because its rule has a target: `allow adguard` alone is still refused, so the
 proxy's own DNS can't be used to reach arbitrary LAN names.
@@ -173,7 +173,7 @@ out.
 | `GET /pending` | undecided hosts, grouped by root domain |
 | `POST /decide` | `{"domain": "github.com", "verdict": "allow"}`; no target |
 | `GET /rules` | mode and rules; `?format=text` for the rules file |
-| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.den.zyx.pw:3000"}]}` |
+| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.lab.my-domain.com:3000"}]}` |
 | `DELETE /rules/{name}` | remove one rule; that name goes back to undecided |
 | `GET /stats` | per root domain, HTTP and HTTPS counted separately |
 
