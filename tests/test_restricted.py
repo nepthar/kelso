@@ -13,7 +13,7 @@ from kelso.lib import kproxy
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.manifest import ConfigError
-from kelso.lib.run_layout import make_compose_dict
+from kelso.lib.run_layout import load_run_data, make_compose_dict
 from tests.conftest import spec_of
 from tests.test_compose import run_data
 
@@ -84,7 +84,7 @@ def test_restricted_compose_puts_units_behind_kproxy(tmp_path):
 
 def test_rules_file_allows_every_endpoint_and_denies_the_rest(tmp_path):
   spec = spec_of(tmp_path, RESTRICTED)
-  assert kproxy.rules_text(spec.endpoints).splitlines()[1:] == [
+  assert kproxy.rules_text(spec.endpoints, {}).splitlines()[1:] == [
     "default deny",
     "allow api.weather.com",
     "allow fonts.gstatic.com",
@@ -119,6 +119,44 @@ def test_restricted_manifest_mistakes_are_refused(tmp_path, change, message):
     manifest = manifest.replace(manifest[manifest.index("[run.main.routes]") :], "")
   with pytest.raises(ConfigError, match=message):
     spec_of(tmp_path, manifest)
+
+
+FORWARD = """\
+[app]
+version = "1"
+network_mode = "restricted"
+
+[config]
+nas_address = { desc = "host:port" }
+
+[endpoints]
+nas = { forward = "${nas_address}" }
+
+[run.main]
+image = "alpine"
+env = { NAS_URL = "http://nas" }
+"""
+
+
+def test_a_forward_takes_its_target_from_config(tmp_path):
+  spec = spec_of(tmp_path, FORWARD)
+  rules = kproxy.rules_text(spec.endpoints, {"nas_address": "NAS.lan:080"})
+  assert rules.splitlines()[1:] == ["default deny", "allow nas nas.lan:80"]
+  with pytest.raises(ValueError, match="endpoint nas: forward 'nas.lan' must be"):
+    kproxy.rules_text(spec.endpoints, {"nas_address": "nas.lan"})
+
+
+@pytest.mark.parametrize(
+  ("change", "message"),
+  [
+    (("${nas_address}", "${nope}"), r"references \$\{nope\}, which is not in"),
+    (("${nas_address}", "192.168.1.20"), "must be host:port"),
+    (('network_mode = "restricted"', ""), "a forward needs network_mode"),
+  ],
+)
+def test_forward_mistakes_are_refused(tmp_path, change, message):
+  with pytest.raises(ConfigError, match=message):
+    spec_of(tmp_path, FORWARD.replace(*change))
 
 
 def test_endpoints_are_allowed_but_unused_in_open_mode(tmp_path):
@@ -163,3 +201,32 @@ def test_an_app_that_stops_being_restricted_gives_its_subnet_back(kelso_env):
 
   assert _subnet("restricted-demo") is None
   assert not (kelso_env.run_root / "restricted-demo" / "kproxy").exists()
+
+
+def _run_data(app: str):
+  cfg = load_config()
+  assert cfg is not None
+  ctx = KelsoCtx(cfg)
+  return load_run_data(ctx.require_loaded_spec(app), ctx)
+
+
+def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
+  _write(kelso_env, FORWARD)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  # Unset config leaves the forward out; the missing value blocks start already.
+  assert "allow nas" not in _run_data("restricted-demo").kproxy_rules
+
+  set_ok = kelso_env.run(
+    "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
+  )
+  assert set_ok.returncode == 0
+  data = _run_data("restricted-demo")
+  assert "allow nas 10.0.0.5:5000" in data.kproxy_rules
+  assert data.config_env()[kproxy.RULES_ENV] == kproxy.rules_digest(data.kproxy_rules)
+
+  assert (
+    kelso_env.run("config", "restricted-demo", "--set", "nas_address=nope").returncode
+    == 0
+  )
+  blockers = [i.problem for i in _run_data("restricted-demo").start_blockers]
+  assert any(p.startswith("endpoint nas: forward 'nope'") for p in blockers)

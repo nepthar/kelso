@@ -197,6 +197,37 @@ refused, since `weather.com` already means that. `[endpoints]` is allowed in
 `open` mode, where it changes nothing, and refused in `host` mode, which can't
 limit what the app reaches.
 
+### Forwards
+
+A restricted app can't reach an IP address on your network directly. A
+forward gives it a name instead: the group's name is a hostname the app
+connects to, and kproxy sends that connection on to a fixed `host:port`,
+usually from config:
+
+```toml
+[config]
+nas_address = { desc = "The NAS's address as host:port, like 192.168.1.20:5000" }
+
+[endpoints]
+nas = { forward = "${nas_address}" }
+
+[run.main.env]
+NAS_URL = "http://nas"
+```
+
+The app calls `http://nas`, and kproxy connects it to whatever `nas_address`
+says. The host is a name or an IPv4 address, and the port is required.
+Kelso fills the forward in on every start, so `kelso config --set` takes
+effect at the next start, and a value that isn't `host:port` stops the app
+from starting, naming the fix.
+
+- Only HTTP and HTTPS: kproxy finds the name in the `Host` header or TLS SNI.
+- Use the scheme the target port speaks. Both `http://nas` and `https://nas`
+  go to the one target, and over HTTPS the target's certificate won't be for
+  `nas`.
+- A forward needs `network_mode = "restricted"`: without kproxy, nothing
+  answers the name.
+
 ## `[config]` and `[adv_config]`
 
 Values the operator supplies. `[adv_config]` is the same thing, marked as
