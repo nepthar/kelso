@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Egress Proxy</title>
+<style>
+  :root { color-scheme: light dark; font: 15px/1.4 system-ui, sans-serif; }
+  body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  .scroll { overflow-x: auto; margin-bottom: 2rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #8884; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.actions { white-space: nowrap; text-align: right; }
+  td.actions button + button { margin-left: .25rem; }
+  tr.group td { font-weight: 600; border-bottom: none; padding-top: .6rem; }
+  tr.host td { font-size: .9em; padding-top: .1rem; padding-bottom: .1rem; border-bottom: none; }
+  tr.host td:first-child, tr.host td.when { opacity: .75; }
+  tr.last td { border-bottom: 1px solid #8884; padding-bottom: .5rem; }
+  td.when { white-space: nowrap; }
+  .tag { font-size: .75em; font-weight: 500; margin-left: .5rem; padding: 0 .35rem; border: 1px solid #c80; border-radius: .25rem; color: #c80; cursor: help; }
+  .muted { opacity: .6; }
+</style>
+</head>
+<body>
+<h1>Egress proxy</h1>
+<p>Default policy: <b id="policy">…</b> · <a href="rules?format=text">download rules</a></p>
+
+<h2>Pending</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
+  <tbody id="pending"></tbody>
+</table></div>
+
+<h2>Rules</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Domain</th><th>Verdict</th><th></th></tr></thead>
+  <tbody id="rules"></tbody>
+</table></div>
+
+<h2>Traffic</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Domain</th><th>Scheme</th><th>Conns</th><th>Allowed</th><th>Denied</th><th>Timed out</th><th>Out</th><th>In</th></tr></thead>
+  <tbody id="stats"></tbody>
+</table></div>
+
+<script>
+const el = (tag, text, cls) => {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+};
+const row = (cells) => {
+  const tr = el("tr");
+  for (const c of cells) tr.append(c instanceof Node ? c : el("td", c));
+  return tr;
+};
+const empty = (cols) => row([Object.assign(el("td", "none", "muted"), { colSpan: cols })]);
+const bytes = (n) => n < 1024 ? n + " B" : n < 1 << 20 ? (n / 1024).toFixed(1) + " KB" : (n / (1 << 20)).toFixed(1) + " MB";
+
+async function send(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body && JSON.stringify(body),
+  });
+  if (!r.ok) alert(await r.text());
+  refresh();
+}
+const decide = (domain, verdict) => send("POST", "decide", { domain, verdict });
+const remove = (domain) => send("DELETE", `rules/${encodeURIComponent(domain)}`);
+
+const button = (label, onclick) => Object.assign(el("button", label), { onclick });
+
+const sharedTip = "This domain is commonly shared across many users: allowing it allows all of them.";
+
+const when = (iso) => {
+  const t = new Date(iso);
+  return t.toDateString() === new Date().toDateString()
+    ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : t.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+// pendingRows lays out one root's hosts as a tree: the root, every host seen,
+// and any name in between that two or more seen hosts share. Only the root
+// row sums; every other row shows its own hits, or nothing if it wasn't hit.
+function pendingRows(p) {
+  const hosts = p.hosts || {};
+  const seen = Object.keys(hosts);
+  const parentOf = (n) => n.slice(n.indexOf(".") + 1);
+  const under = (n) => seen.filter((h) => h === n || h.endsWith("." + n));
+  const nodes = new Set([p.domain, ...seen]);
+  for (const h of seen) {
+    for (let n = parentOf(h); n.length > p.domain.length; n = parentOf(n)) {
+      if (under(n).length >= 2) nodes.add(n);
+    }
+  }
+  const weight = (n) => under(n).reduce((sum, h) => sum + hosts[h].hits, 0);
+  const children = {};
+  for (const n of nodes) {
+    if (n === p.domain) continue;
+    let a = parentOf(n);
+    while (!nodes.has(a)) a = parentOf(a);
+    (children[a] ||= []).push(n);
+  }
+  const shared = (n) => (p.shared || []).some((s) => s === n || s.endsWith("." + n));
+
+  const rows = [];
+  const add = (n, depth, firstSeen, hits) => {
+    const actions = el("td", undefined, "actions");
+    actions.append(button("allow", () => decide(n, "allow")), button("deny", () => decide(n, "deny")));
+    const name = el("td", n);
+    name.style.paddingLeft = `${0.5 + depth * 1.25}rem`;
+    if (shared(n)) name.append(Object.assign(el("span", "shared", "tag"), { title: sharedTip }));
+    const r = row([name, el("td", firstSeen ? when(firstSeen) : "", "when"), el("td", hits ?? "", "n"), actions]);
+    r.className = depth ? "host" : "group";
+    rows.push(r);
+  };
+  const walk = (n, depth) => {
+    add(n, depth, hosts[n]?.first_seen, hosts[n]?.hits);
+    for (const c of (children[n] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, depth + 1);
+  };
+  add(p.domain, 0, p.first_seen, p.hits);
+  if (hosts[p.domain] && seen.length > 1) add(p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
+  for (const c of (children[p.domain] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, 1);
+  rows.at(-1).classList.add("last");
+  return rows;
+}
+
+async function refresh() {
+  try {
+    const [pending, rules, stats] = await Promise.all(
+      ["pending", "rules", "stats"].map((p) => fetch(p).then((r) => r.ok ? r.json() : null)));
+
+    const pb = document.getElementById("pending");
+    pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(4)]));
+
+    document.getElementById("policy").textContent = rules ? rules.default : "rules not loaded";
+    const rb = document.getElementById("rules");
+    rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => {
+      const actions = el("td", undefined, "actions");
+      actions.append(button("remove", () => remove(r.domain)));
+      return row([r.domain, r.target ? `${r.verdict} → ${r.target}` : r.verdict, actions]);
+    }) : [empty(3)]));
+
+    const sb = document.getElementById("stats");
+    const srows = [];
+    for (const d of Object.keys(stats || {}).sort()) {
+      for (const [scheme, c] of Object.entries(stats[d])) {
+        srows.push(row([d, scheme, ...[c.conns, c.allowed, c.denied, c.timed_out].map((n) => el("td", n, "n")),
+          el("td", bytes(c.bytes_out), "n"), el("td", bytes(c.bytes_in), "n")]));
+      }
+    }
+    sb.replaceChildren(...(srows.length ? srows : [empty(8)]));
+  } catch (e) {
+    document.getElementById("policy").textContent = "unreachable";
+  }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
