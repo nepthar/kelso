@@ -1,18 +1,24 @@
 # Runs a service that pauses adguard, which is bookmarkable
 
 [app]
-version      = "1.0.1"
+version      = "1.1.0"
 display_name = "Adguard Pause Button"
 description  = "A service that pauses adguard DNS blocking for a while via giant button"
+# It talks to AdGuard and nothing else, so it gets no other way out.
+network_mode = "restricted"
 
 [config]
 ag_user = { desc = "Adguard login username"}
 ag_pass = { desc = "Adguard login password", secret = true }
-ag_host = { desc = "Adguard's admin http url"}
+ag_address = { desc = "Adguard's admin address as host:port, like 192.168.1.3:3000"}
 pause_minutes = { desc = "Number of minutes to pause when the button is pressed", default = "15" }
 
 [adv_config]
 subdomain = { default = "ag-pause" }
+
+[endpoints]
+# The app calls http://adguard; kproxy sends it on to ag_address.
+adguard = { forward = "${ag_address}" }
 
 [volumes]
 script = { kind = "app", src = "app.py" }
@@ -20,7 +26,7 @@ script = { kind = "app", src = "app.py" }
 [run.main]
 image   = "python:3.12"
 cmd = ["python", "/app/app.py"]
-env = { AGH_USER = "${ag_user}", AGH_PASS = "${ag_pass}", AGH_URL = "${ag_host}", PAUSE_MINUTES = "${pause_minutes}", PORT = "8099", PYTHONUNBUFFERED = "1" }
+env = { AGH_USER = "${ag_user}", AGH_PASS = "${ag_pass}", AGH_URL = "http://adguard", PAUSE_MINUTES = "${pause_minutes}", PORT = "8099", PYTHONUNBUFFERED = "1" }
 volumes = { script = "/app/app.py" }
 healthcheck = ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/', timeout=3)"]
 

@@ -233,7 +233,7 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
   dropped = _rebuild_volume_links(spec, run_data)
   _rebuild_kelso_dirs(spec, run_data.run_path)
-  _rebuild_kproxy_dir(spec, run_data.run_path)
+  _rebuild_kproxy_dir(spec, run_data)
   with open(ctx.loaded_paths(spec.app).compose_path, "w") as f:
     yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
@@ -262,14 +262,21 @@ def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
     hdb.set_subnet(spec.app, hdb.next_free_subnet())
 
 
-def _rebuild_kproxy_dir(spec: AppSpec, run_path: Path) -> None:
+def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
   """`kproxy/`, kproxy's rules file and admin socket, for a restricted app."""
-  root = run_path / kproxy.KPROXY_RUN_DIR
-  shutil.rmtree(root, ignore_errors=True)
-  if spec.network_mode != "restricted":
+  shutil.rmtree(run_data.run_path / kproxy.KPROXY_RUN_DIR, ignore_errors=True)
+  if spec.network_mode == "restricted":
+    write_kproxy_rules(run_data)
+
+
+def write_kproxy_rules(run_data: AppRunData) -> None:
+  """Write kproxy's rules from current config. Start does this too, since a
+  forward's config may have changed since the load."""
+  if run_data.kproxy_rules is None:
     return
-  root.mkdir()
-  (root / "rules.txt").write_text(kproxy.rules_text(spec.endpoints))
+  root = run_data.run_path / kproxy.KPROXY_RUN_DIR
+  root.mkdir(exist_ok=True)
+  (root / "rules.txt").write_text(run_data.kproxy_rules)
 
 
 @dataclass(frozen=True)

@@ -218,9 +218,11 @@ class AppRunData:
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
   connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
-  # Set for a restricted app: its internal network, and what kproxy is built from.
+  # Set for a restricted app: its internal network, what kproxy is built from,
+  # and kproxy's rules with every forward filled in from config.
   subnet: str | None = None
   kproxy_source: Path | None = None
+  kproxy_rules: str | None = None
 
   @property
   def load_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -232,7 +234,10 @@ class AppRunData:
     return tuple(issue for issue in self.issues if not issue.self_healing)
 
   def config_env(self) -> dict[str, str]:
-    return {c.env_name(): c.env_val() for c in self.config_values.values()}
+    env = {c.env_name(): c.env_val() for c in self.config_values.values()}
+    if self.kproxy_rules is not None:
+      env[kproxy.RULES_ENV] = kproxy.rules_digest(self.kproxy_rules)
+    return env
 
 
 def _load_config_values(
@@ -690,7 +695,9 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
-  subnet, kproxy_source = _load_restricted(spec, issues, ctx)
+  subnet, kproxy_source, kproxy_rules = _load_restricted(
+    spec, issues, ctx, config_values
+  )
   return AppRunData(
     app=spec.app,
     run_path=run_path,
@@ -704,14 +711,18 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     issues=tuple(issues),
     subnet=subnet,
     kproxy_source=kproxy_source,
+    kproxy_rules=kproxy_rules,
   )
 
 
 def _load_restricted(
-  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
-) -> tuple[str | None, Path | None]:
+  spec: AppSpec,
+  issues: list[ConfigIssue],
+  ctx: KelsoCtx,
+  config_values: Mapping[str, ConfigValue],
+) -> tuple[str | None, Path | None, str | None]:
   if spec.network_mode != "restricted":
-    return None, None
+    return None, None, None
   subnet = ctx.kelso_db.get_subnet(spec.app)
   if subnet is None:
     issues.append(
@@ -730,7 +741,27 @@ def _load_restricted(
         load_blocking=True,
       )
     )
-  return subnet, source
+  config = {name: cv.value for name, cv in config_values.items() if cv.value}
+  # A forward whose config isn't set yet is left out: that config is already
+  # an issue, and the app can't start without it.
+  endpoints = {
+    group: entry
+    for group, entry in spec.endpoints.items()
+    if isinstance(entry, list)
+    or set(EnvTemplate(entry.forward).get_identifiers()) <= config.keys()
+  }
+  try:
+    rules = kproxy.rules_text(endpoints, config)
+  except ValueError as e:
+    refs = ", ".join(
+      f"{ref}=<host:port>"
+      for entry in spec.endpoints.values()
+      if not isinstance(entry, list)
+      for ref in EnvTemplate(entry.forward).get_identifiers()
+    )
+    issues.append(ConfigIssue(str(e), f"Run `kelso config {spec.app} --set {refs}`"))
+    rules = None
+  return subnet, source, rules
 
 
 def _volume_paths(

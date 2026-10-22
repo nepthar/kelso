@@ -14,6 +14,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from kelso.lib.util import EnvTemplate
+
 KPROXY_SERVICE = "kproxy"
 KPROXY_GUEST_DIR = "/run/kproxy"
 KPROXY_RUN_DIR = "kproxy"
@@ -26,6 +28,10 @@ SUBNET_POOL = ipaddress.ip_network("10.250.0.0/16")
 # kproxy's own ports inside its container: DNS, HTTP and HTTPS. Ingress
 # listeners are numbered from INGRESS_PORT_BASE, clear of all three.
 INGRESS_PORT_BASE = 20000
+
+# Set to rules_digest() when compose runs, so a change of rules -- a forward
+# whose config changed -- recreates kproxy instead of leaving it on the old ones.
+RULES_ENV = "KELSO_KPROXY_RULES"
 
 RULES_HEADER = (
   "# rules.txt for kproxy. Lists allowed domains. "
@@ -51,6 +57,32 @@ def endpoint_name(value: str) -> str:
   return name
 
 
+def forward_target(value: str) -> str:
+  """Normalize a forward's target: host:port, the host a name or IPv4 address.
+
+  Raises ValueError for anything kproxy would refuse as a rule target.
+  """
+  host, sep, port = value.strip().rpartition(":")
+  bad = ValueError(
+    f"forward {value!r} must be host:port with a numeric port, "
+    "like 192.168.1.3:3000 or nas.lan:80"
+  )
+  if not sep or not port.isdigit() or not 1 <= int(port) <= 65535:
+    raise bad
+  try:
+    ip = ipaddress.ip_address(host)
+  except ValueError:
+    ip = None
+  if ip is not None:
+    if ip.version != 4:
+      raise ValueError(f"forward {value!r}: only IPv4 addresses are supported")
+    return f"{ip}:{int(port)}"
+  try:
+    return f"{endpoint_name(host)}:{int(port)}"
+  except ValueError:
+    raise bad from None
+
+
 def subnets() -> Iterable[ipaddress.IPv4Network]:
   return SUBNET_POOL.subnets(new_prefix=24)
 
@@ -65,12 +97,31 @@ def dynamic_range(subnet: str) -> str:
   return str(list(ipaddress.ip_network(subnet).subnets(prefixlen_diff=1))[1])
 
 
-def rules_text(endpoints: Mapping[str, Iterable[str]]) -> str:
-  """The rules file for an app: everything in [endpoints] allowed, the rest denied."""
-  names = sorted({endpoint_name(n) for group in endpoints.values() for n in group})
-  return (
-    "\n".join([RULES_HEADER, "default deny", *(f"allow {n}" for n in names)]) + "\n"
-  )
+def rules_text(endpoints: Mapping[str, Any], config: Mapping[str, str]) -> str:
+  """The rules file for an app: everything in [endpoints] allowed, the rest denied.
+
+  A group is a list of domains, or a forward (anything with a `forward`
+  template), whose `${…}` are filled from `config`. Raises ValueError for a
+  forward that doesn't come out as host:port, naming the group.
+  """
+  rules: dict[str, str] = {}
+  for group, entry in endpoints.items():
+    if isinstance(entry, list):
+      for name in entry:
+        rules.setdefault(endpoint_name(name), "")
+      continue
+    value = EnvTemplate(entry.forward).safe_substitute(config)
+    try:
+      rules[endpoint_name(group)] = " " + forward_target(value)
+    except ValueError as e:
+      raise ValueError(f"endpoint {group}: {e}") from None
+  lines = [f"allow {name}{target}" for name, target in sorted(rules.items())]
+  return "\n".join([RULES_HEADER, "default deny", *lines]) + "\n"
+
+
+def rules_digest(rules: str) -> str:
+  """Put in kproxy's environment, so new rules recreate the container."""
+  return hashlib.sha256(rules.encode()).hexdigest()[:12]
 
 
 def source_dir() -> Path | None:
@@ -143,6 +194,7 @@ def compose_service(
       "interval": "2s",
       "retries": 30,
     },
+    "environment": {"RULES": f"${{{RULES_ENV}}}"},
     "restart": "on-failure",
   }
   if ports:
