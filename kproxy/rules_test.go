@@ -73,24 +73,28 @@ func TestLookupMostSpecificWins(t *testing.T) {
 }
 
 func TestParseRules(t *testing.T) {
-	r, err := parseRules(strings.NewReader(
-		"# c\nmode snitch\n\nallow example.com\ndeny Example.org\nallow AdGuard 192.168.1.3:3000\n"), Strict)
+	r, err := parseRules(strings.NewReader("# c\nmode snitch\n\nallow example.com\ndeny Example.org\n"+
+		"allow AdGuard 192.168.1.3:3000\nallow pi RPi.den.zyx.pw.:080\n"), Strict)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Mode != Snitch || r.Domains["example.com"] != (Rule{Verdict: Allow}) ||
 		r.Domains["example.org"] != (Rule{Verdict: Deny}) ||
-		r.Domains["adguard"] != (Rule{Verdict: Allow, Target: "192.168.1.3:3000"}) {
+		r.Domains["adguard"] != (Rule{Verdict: Allow, Target: "192.168.1.3:3000"}) ||
+		r.Domains["pi"] != (Rule{Verdict: Allow, Target: "rpi.den.zyx.pw:80"}) {
 		t.Fatalf("got %+v", r)
 	}
-	want := "mode snitch\nallow adguard 192.168.1.3:3000\nallow example.com\ndeny example.org\n"
+	want := "mode snitch\nallow adguard 192.168.1.3:3000\nallow example.com\ndeny example.org\n" +
+		"allow pi rpi.den.zyx.pw:80\n"
 	if r.format() != want {
 		t.Fatalf("format: %q", r.format())
 	}
 	for _, bad := range []string{
 		"allow", "permit example.com", "allow 10.0.0.1", "mode loose", "allow *.example.com",
-		"deny adguard 192.168.1.3:3000", "allow adguard nas.local:80", "allow adguard 192.168.1.3",
-		"allow adguard [::1]:80", "allow adguard 192.168.1.3:80 extra",
+		"deny adguard 192.168.1.3:3000", "allow adguard 192.168.1.3", "allow adguard rpi.den.zyx.pw",
+		"allow adguard 192.168.1.3:http", "allow adguard 192.168.1.3:0", "allow adguard 192.168.1.3:65536",
+		"allow adguard 192.168.1.3:+80", "allow adguard rpi..zyx.pw:80", "allow adguard [::1]:80",
+		"allow adguard 192.168.1.3:80 extra",
 	} {
 		if _, err := parseRules(strings.NewReader(bad), Strict); err == nil {
 			t.Errorf("parsed %q", bad)

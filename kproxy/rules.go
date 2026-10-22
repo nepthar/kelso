@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/publicsuffix"
@@ -51,8 +52,8 @@ type Rules struct {
 	Domains map[string]Rule
 }
 
-// Rule is a verdict, plus for an allow an optional IPv4 address and port to
-// connect to instead of what DNS says.
+// Rule is a verdict, plus for an allow an optional host (a name or IPv4
+// address) and port to connect to instead.
 type Rule struct {
 	Verdict Verdict
 	Target  string
@@ -84,11 +85,23 @@ func newRule(verdict, target string) (Rule, error) {
 	if v != Allow {
 		return Rule{}, fmt.Errorf("only an allow can have a target, not %s", v)
 	}
-	ip, port, err := net.SplitHostPort(target)
-	if err != nil || net.ParseIP(ip).To4() == nil || port == "" {
-		return Rule{}, fmt.Errorf("target %q must be an IPv4 address and port, like 192.168.1.3:3000", target)
+	bad := fmt.Errorf("target %q must be HOST:PORT with a numeric port, like rpi.lan:3000 or 192.168.1.3:3000", target)
+	host, port, err := net.SplitHostPort(target)
+	if err != nil {
+		return Rule{}, bad
 	}
-	return Rule{Verdict: v, Target: net.JoinHostPort(ip, port)}, nil
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1 || p > 65535 || port[0] < '0' || port[0] > '9' {
+		return Rule{}, bad
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() == nil {
+			return Rule{}, fmt.Errorf("target %q: only IPv4 addresses are supported", target)
+		}
+	} else if host, err = ruleName(host); err != nil {
+		return Rule{}, bad
+	}
+	return Rule{Verdict: v, Target: net.JoinHostPort(host, strconv.Itoa(p))}, nil
 }
 
 func normHost(h string) string { return strings.TrimSuffix(strings.ToLower(h), ".") }

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -26,6 +27,7 @@ func TestRuleTargets(t *testing.T) {
 		"adguard", "allow "+plain.Listener.Addr().String(),
 		"nas", "allow "+secure.Listener.Addr().String(),
 		"pinned.example.com", "allow "+plain.Listener.Addr().String(),
+		"byname", "allow localhost:"+strconv.Itoa(plain.Listener.Addr().(*net.TCPAddr).Port),
 		"bare", "allow",
 	))
 	p := &Proxy{engine: e, stats: newStats(), dial: (&net.Dialer{}).DialContext, slots: make(chan struct{}, 8)}
@@ -55,6 +57,7 @@ func TestRuleTargets(t *testing.T) {
 		"http://AdGuard:8080/":       "plain via AdGuard:8080",
 		"https://nas/":               "secure",
 		"http://pinned.example.com/": "plain via pinned.example.com",
+		"http://byname/":             "plain via byname",
 	} {
 		resp, err := client.Get(url)
 		if err != nil {

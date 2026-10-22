@@ -66,21 +66,25 @@ Without one, rules live in memory until something pushes them with
 
 ### Targets
 
-An allow rule can name an IPv4 address and port to connect to, instead of
-whatever DNS says. It is how an app on an internal network reaches one
-service on your LAN:
+An allow rule can name a host and port to connect to, instead of the name
+asked for on its usual port. It is how an app on an internal network reaches
+one service on your LAN:
 
 ```
-allow adguard 192.168.1.3:3000
+allow adguard rpi.den.zyx.pw:3000
+allow nas 192.168.1.20:5000
 ```
 
 The app connects to `http://adguard`. Docker's resolver passes the name to the
 proxy, the proxy answers with itself, and the connection is piped to
-`192.168.1.3:3000`. The app still can't reach that IP, or anything else on the
-LAN, directly. A bare name like `adguard` gets through only because its rule
-has a target: `allow adguard` alone is still refused, so the proxy's own DNS
-can't be used to reach arbitrary LAN names.
+`rpi.den.zyx.pw:3000`. The app still can't reach that address, or anything
+else on the LAN, directly. A bare name like `adguard` gets through only
+because its rule has a target: `allow adguard` alone is still refused, so the
+proxy's own DNS can't be used to reach arbitrary LAN names.
 
+- The host is a name or an IPv4 address, and the port is required and
+  numeric. A name is resolved by the proxy's resolver (in Docker, the host's
+  DNS) on every connection, over IPv4.
 - Targets follow the same matching as any rule, so `allow example.com
   1.2.3.4:443` pins every subdomain of `example.com` to that address.
 - Both schemes go to the one target, so the app must use the scheme its port
@@ -169,7 +173,7 @@ out.
 | `GET /pending` | undecided hosts, grouped by root domain |
 | `POST /decide` | `{"domain": "github.com", "verdict": "allow"}`; no target |
 | `GET /rules` | mode and rules; `?format=text` for the rules file |
-| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "192.168.1.3:3000"}]}` |
+| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.den.zyx.pw:3000"}]}` |
 | `DELETE /rules/{name}` | remove one rule; that name goes back to undecided |
 | `GET /stats` | per root domain, HTTP and HTTPS counted separately |
 
