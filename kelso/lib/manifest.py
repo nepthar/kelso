@@ -21,6 +21,7 @@ from pydantic import (
 from kelso.lib.apps import AppID
 from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS
 from kelso.lib.cronexpr import CronSchedule
+from kelso.lib.kproxy import KPROXY_SERVICE, endpoint_name
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
@@ -31,7 +32,7 @@ from kelso.lib.util import (
   Identifier,
 )
 
-NetworkMode = Literal["normal", "host"]
+NetworkMode = Literal["open", "restricted", "host"]
 VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
 
 
@@ -44,7 +45,7 @@ class AppSection(BaseModel):
 
   app_id: str | None = None
   version: str
-  network_mode: NetworkMode = "normal"
+  network_mode: NetworkMode = "open"
   display_name: str = ""
   description: str = ""
   author: str = ""
@@ -285,6 +286,9 @@ class Manifest(BaseModel):
   commands: dict[Identifier, CommandEntry] = Field(default_factory=dict)
   cron: dict[Identifier, CronEntry] = Field(default_factory=dict)
   connections: dict[Identifier, ConnectionEntry] = Field(default_factory=dict)
+  # Named groups of domains a restricted app may reach; each entry also covers
+  # its subdomains.
+  endpoints: dict[Identifier, list[str]] = Field(default_factory=dict)
 
 
 def parse_manifest(data: bytes, app: AppID, source: Path) -> Manifest:
@@ -338,6 +342,42 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_commands(manifest))
   errors.extend(_validate_cron(manifest))
   errors.extend(_validate_connections(manifest))
+  errors.extend(_validate_network(manifest))
+  return errors
+
+
+# Compose keys that would let a restricted unit reach out around kproxy.
+_RESTRICTED_COMPOSE_KEYS = frozenset({"dns", "networks"})
+
+
+def _validate_network(manifest: Manifest) -> list[str]:
+  errors: list[str] = []
+  mode = manifest.app.network_mode
+  for group, names in manifest.endpoints.items():
+    for name in names:
+      try:
+        endpoint_name(name)
+      except ValueError as e:
+        errors.append(f"[endpoints.{group}]: {e}")
+  if mode == "host" and manifest.endpoints:
+    errors.append(
+      "[endpoints]: network_mode 'host' can't limit outbound traffic; "
+      "use network_mode = 'restricted'"
+    )
+  if mode != "restricted":
+    return errors
+  if KPROXY_SERVICE in manifest.run:
+    errors.append(
+      f"[run.{KPROXY_SERVICE}]: network_mode 'restricted' uses that name for "
+      "its proxy; rename the unit"
+    )
+  for unit_name, run_entry in manifest.run.items():
+    clashes = _RESTRICTED_COMPOSE_KEYS & run_entry.compose.keys()
+    if clashes:
+      errors.append(
+        f"[run.{unit_name}.compose]: network_mode 'restricted' manages "
+        f"{', '.join(sorted(clashes))}"
+      )
   return errors
 
 

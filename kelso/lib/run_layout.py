@@ -6,6 +6,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal
 
+from kelso.lib import kproxy
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS, guest_path
@@ -217,6 +218,9 @@ class AppRunData:
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
   connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
+  # Set for a restricted app: its internal network, and what kproxy is built from.
+  subnet: str | None = None
+  kproxy_source: Path | None = None
 
   @property
   def load_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -563,7 +567,20 @@ def shown_environment(
   }
 
 
+def _depends_on_kproxy(depends_on: Any) -> dict[str, Any]:
+  """A unit's own `depends_on`, in compose's long form, plus a healthy kproxy."""
+  if isinstance(depends_on, list):
+    depends_on = {name: {"condition": "service_started"} for name in depends_on}
+  return {
+    **(depends_on or {}),
+    kproxy.KPROXY_SERVICE: {"condition": "service_healthy"},
+  }
+
+
 def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
+  restricted = spec.network_mode == "restricted"
+  if restricted and (data.subnet is None or data.kproxy_source is None):
+    raise ValueError(f"App {spec.app} is restricted but has no subnet or kproxy source")
   services: dict[str, Any] = {}
   for run_name, run_unit in spec.run_units.items():
     # The validator has already checked every dotted `${...}`, so the only way one
@@ -620,7 +637,11 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       # `$` is the container's, as in a healthcheck; compose would interpolate it.
       service["command"] = [arg.replace("$", "$$") for arg in run_unit.command]
 
-    if run_unit.routes:
+    if restricted:
+      # Routes are published on kproxy, which relays them in.
+      service["networks"] = [kproxy.INTERNAL_NETWORK]
+      service["dns"] = [kproxy.proxy_address(data.subnet)]
+    elif run_unit.routes:
       service["ports"] = [
         _port_string(
           data.routes[name].host_port,
@@ -641,13 +662,26 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     # Manifest [run.<unit>.compose] passthrough; the manifest validator
     # guarantees it never shadows a kelso-managed key.
     service.update(run_unit.compose_extra)
+    if restricted:
+      service["depends_on"] = _depends_on_kproxy(service.get("depends_on"))
 
     services[str(run_name)] = service
 
-  return {
+  compose: dict[str, Any] = {
     "name": _project_name(str(spec.app)),
     "services": services,
   }
+  if restricted:
+    services[kproxy.KPROXY_SERVICE] = kproxy.compose_service(
+      source=data.kproxy_source,
+      subnet=data.subnet,
+      ingress=[
+        (route.host_port, route.run_unit_name, route.container_port, route.proto)
+        for _, route in sorted(data.routes.items())
+      ],
+    )
+    compose["networks"] = kproxy.compose_networks(data.subnet)
+  return compose
 
 
 def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
@@ -656,6 +690,7 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
+  subnet, kproxy_source = _load_restricted(spec, issues, ctx)
   return AppRunData(
     app=spec.app,
     run_path=run_path,
@@ -667,7 +702,35 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     host_mounts=_host_mounts(),
     connections=_load_connections(spec, issues, ctx),
     issues=tuple(issues),
+    subnet=subnet,
+    kproxy_source=kproxy_source,
   )
+
+
+def _load_restricted(
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
+) -> tuple[str | None, Path | None]:
+  if spec.network_mode != "restricted":
+    return None, None
+  subnet = ctx.kelso_db.get_subnet(spec.app)
+  if subnet is None:
+    issues.append(
+      ConfigIssue(
+        "network: no subnet allocated",
+        f"Run `kelso load {spec.app}`",
+        self_healing=True,
+      )
+    )
+  source = kproxy.source_dir()
+  if source is None:
+    issues.append(
+      ConfigIssue(
+        "network_mode 'restricted': kproxy's source isn't next to this kelso",
+        "Run kelso from a checkout of its repository, which includes kproxy/",
+        load_blocking=True,
+      )
+    )
+  return subnet, source
 
 
 def _volume_paths(
