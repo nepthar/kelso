@@ -16,29 +16,34 @@ runs one per app, but nothing in it is Kelso-specific.
   `Host` header; for HTTPS it reads the server name (SNI) from the TLS
   ClientHello. It decides, then dials the real host and pipes the bytes
   through untouched, starting with the ones it already read.
-- **Refused outright, in every mode:** connections with no name (no SNI, no
-  `Host`) or an IP address for a name. Names with no root domain (single
-  labels, unknown TLDs, bare suffixes like `co.uk`) are refused too, unless an
-  allow rule with a [target](#targets) matches them.
+- **Refused outright, whatever the rules say:** connections with no name (no
+  SNI, no `Host`) or an IP address for a name. Names with no root domain
+  (single labels, unknown TLDs, bare suffixes like `co.uk`) are refused too,
+  unless an allow rule with a [forward target](#forward-targets) matches them.
 - **Rejections.** HTTP gets `503` with `Retry-After`; HTTPS gets a TLS
   `access_denied` alert.
 
-The proxy only sees connections made by name. To stop an app connecting
-straight to an IP address, put it on a Docker network with `internal: true`
-(no route out) and give the proxy a second, normal network for egress. See
-[`itest/compose.yml`](itest/compose.yml).
+The proxy only sees connections made by name, so it needs the network layout
+in [In Docker](#in-docker) to stop an app connecting straight to an IP
+address.
 
-## Modes
+## Default policy
 
-| Mode | Allowed by a rule | Denied by a rule | No matching rule |
-|---|---|---|---|
-| `strict` | proxied | rejected | rejected |
-| `snitch` | proxied | rejected | held up to `-hold` (60s) and listed as pending |
-| `track` | proxied | rejected | proxied |
+Rules say what to do with the domains they name. The default policy says what
+to do with everything else:
 
-In snitch mode, deciding a pending domain releases every connection held for
-it. A connection still undecided when its hold runs out is closed without a
-verdict, and the domain stays pending.
+| Default policy | A host no rule matches is… |
+|---|---|
+| `deny` | rejected |
+| `allow` | proxied, and counted in the stats like everything else |
+| `ask` | held up to `-hold` (60s) and listed as pending until someone decides |
+
+`ask` works like [Little Snitch](https://www.obdev.at/products/littlesnitch/):
+the app's connection waits while you allow or deny the domain, and deciding it
+releases every connection held for it. A connection still undecided when its
+hold runs out is closed without a verdict, and the domain stays pending.
+`allow` is useful for finding out what an app talks to before writing its
+rules.
 
 Until rules are loaded, every connection is held and `/healthz` fails.
 
@@ -50,21 +55,23 @@ in `.` plus it, so `google.com` matches `maps.google.com` but not
 specific matching rule wins:
 
 ```
-mode snitch
+default ask
 deny nepthar.github.io
 allow tacos.nepthar.github.io
 ```
 
 Here `tacos.nepthar.github.io` and its subdomains are allowed, the rest of
-`nepthar.github.io` is denied, and the rest of `github.io` is undecided.
+`nepthar.github.io` is denied, and the rest of `github.io` is up to the
+default policy: held and asked about.
 
-That is also the rules file format (`-rules-file`): one `allow`, `deny` or
-`mode` line each, `#` for comments. With a rules file, the proxy loads it at
-startup and rewrites it (atomically, keeping its permissions) on every change.
-Without one, rules live in memory until something pushes them with
+That is also the rules file format (`-rules-file`): one `default`, `allow` or
+`deny` line each, and lines starting with `#` are ignored. With a rules file,
+the proxy loads it at startup and rewrites it (atomically, keeping its
+permissions) on every change, starting with a comment that says what the file
+is. Without one, rules live in memory until something pushes them with
 `PUT /rules`.
 
-### Targets
+### Forward Targets
 
 An allow rule can name a host and port to connect to, instead of the name
 asked for on its usual port. It is how an app on an internal network reaches
@@ -96,15 +103,40 @@ proxy's own DNS can't be used to reach arbitrary LAN names.
 
 ## Running it
 
+kproxy needs Go 1.27.3 or newer, which fixes security bugs in the TLS and
+HTTP code it uses. `go.mod` says so, so an older `go` command fetches that
+version itself, and the Dockerfile builds with it.
+
 ### In Docker
 
 ```sh
 docker build -t kproxy:dev .
 ```
 
+The proxy container is the only one that straddles both networks. Apps sit on
+an `internal: true` network, which has no route out, so a connection straight
+to an IP address fails as unreachable. The proxy is on that network too,
+and also on an ordinary network that can reach the internet. The only way out
+is by name, through the proxy:
+
+```
+[ app ]  [ app ]  [ db ]        internal network (internal: true): no route out
+   │        │
+   └───┬────┘                   DNS, HTTP and HTTPS, by name only
+       ▼
+  [ kproxy ]                    on both networks
+       │
+       ▼
+ordinary network ──► internet and LAN
+```
+
+Containers on the internal network still reach each other directly by
+service name (`db` above); Docker's own DNS answers those before anything
+reaches the proxy.
+
 In the compose file, the proxy gets a fixed address on the internal network
 and a healthcheck; apps set `dns:` to that address and wait for the proxy to be
-healthy:
+healthy. [`itest/compose.yml`](itest/compose.yml) is a complete example.
 
 ```yaml
 proxy:
@@ -133,7 +165,7 @@ ports, and Chrome uses its own profile.
 outside the repo:
 
 ```sh
-mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'mode snitch\nallow google.com\n' > ~/kproxy-test/rules.txt
+mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'default ask\nallow google.com\n' > ~/kproxy-test/rules.txt
 ```
 
 **2. Terminal 1: run the proxy.**
@@ -218,8 +250,8 @@ short.
 | `-admin` | `/run/kproxy/admin.sock` | admin unix socket |
 | `-admin-http` | | also serve the admin API and UI on this TCP address |
 | `-rules-file` | | load rules from and save them to this file |
-| `-mode` | `strict` | mode for a rules file that doesn't name one |
-| `-hold` | `60s` | how long snitch mode holds an undecided connection |
+| `-default` | `deny` | default policy for a rules file that doesn't set one |
+| `-hold` | `60s` | how long the `ask` policy holds a connection |
 | `-max-conns` | `1024` | most client connections open at once |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
@@ -239,8 +271,8 @@ out.
 | `GET /healthz` | `200` once rules are loaded, else `503` |
 | `GET /pending` | undecided hosts, grouped by root domain |
 | `POST /decide` | `{"domain": "github.com", "verdict": "allow"}`; no target |
-| `GET /rules` | mode and rules; `?format=text` for the rules file |
-| `PUT /rules` | replace everything: `{"mode": "snitch", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.lab.my-domain.com:3000"}]}` |
+| `GET /rules` | default policy and rules; `?format=text` for the rules file |
+| `PUT /rules` | replace everything: `{"default": "ask", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.lab.my-domain.com:3000"}]}` |
 | `DELETE /rules/{name}` | remove one rule; that name goes back to undecided |
 | `GET /stats` | per root domain, HTTP and HTTPS counted separately |
 

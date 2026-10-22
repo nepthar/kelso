@@ -63,7 +63,7 @@ func (e *Engine) loaded() bool { return e.snap.Load().rules != nil }
 func (e *Engine) rules() *Rules { return e.snap.Load().rules }
 
 // Check decides whether a connection to host may proceed, holding it while
-// rules are unloaded or (in snitch mode) while no rule matches host. held
+// rules are unloaded or (with the ask policy) while no rule matches host. held
 // reports whether the connection had to wait; target is the allowing rule's
 // target, if it has one.
 func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool, target string) {
@@ -78,10 +78,10 @@ func (e *Engine) Check(ctx context.Context, host string) (o Outcome, held bool, 
 				}
 				return Denied, held, ""
 			}
-			switch r.Mode {
-			case Track:
+			switch r.Default {
+			case DefaultAllow:
 				return Allowed, held, ""
-			case Strict:
+			case DefaultDeny:
 				return Denied, held, ""
 			}
 			if !marked {
@@ -174,7 +174,7 @@ func (e *Engine) Decide(domain string, v Verdict) error {
 	if cur == nil {
 		return fmt.Errorf("no rules loaded yet: PUT /rules first")
 	}
-	next := &Rules{Mode: cur.Mode, Domains: maps.Clone(cur.Domains)}
+	next := &Rules{Default: cur.Default, Domains: maps.Clone(cur.Domains)}
 	next.Domains[domain] = Rule{Verdict: v}
 	return e.publish(next)
 }
@@ -190,7 +190,7 @@ func (e *Engine) Remove(domain string) error {
 	if _, ok := cur.Domains[domain]; !ok {
 		return errNoRule
 	}
-	next := &Rules{Mode: cur.Mode, Domains: maps.Clone(cur.Domains)}
+	next := &Rules{Default: cur.Default, Domains: maps.Clone(cur.Domains)}
 	delete(next.Domains, domain)
 	return e.publish(next)
 }
@@ -205,7 +205,7 @@ func (e *Engine) publish(r *Rules) error {
 		}
 	}
 	for host := range e.pending {
-		if _, ok := r.lookup(host); ok || r.Mode != Snitch {
+		if _, ok := r.lookup(host); ok || r.Default != DefaultAsk {
 			delete(e.pending, host)
 		}
 	}

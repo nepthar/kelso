@@ -24,7 +24,7 @@
 </head>
 <body>
 <h1>Egress proxy</h1>
-<p>Mode: <b id="mode">…</b> · <a href="rules?format=text">download rules</a></p>
+<p>Default policy: <b id="policy">…</b> · <a href="rules?format=text">download rules</a></p>
 
 <h2>Pending</h2>
 <div class="scroll"><table>
@@ -136,7 +136,7 @@ async function refresh() {
     const pb = document.getElementById("pending");
     pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(4)]));
 
-    document.getElementById("mode").textContent = rules ? rules.mode : "rules not loaded";
+    document.getElementById("policy").textContent = rules ? rules.default : "rules not loaded";
     const rb = document.getElementById("rules");
     rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => {
       const actions = el("td", undefined, "actions");
@@ -154,7 +154,7 @@ async function refresh() {
     }
     sb.replaceChildren(...(srows.length ? srows : [empty(8)]));
   } catch (e) {
-    document.getElementById("mode").textContent = "unreachable";
+    document.getElementById("policy").textContent = "unreachable";
   }
 }
 refresh();

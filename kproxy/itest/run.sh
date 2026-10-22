@@ -16,7 +16,7 @@ push() {
 }
 health() { docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q proxy)"; }
 code() { c curl -sS -m 10 -o /dev/null -w '%{http_code}' "$@"; }
-rules='{"mode":"snitch","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"},{"domain":"lanweb","verdict":"allow","target":"172.30.98.10:8080"}]}'
+rules='{"default":"ask","rules":[{"domain":"example.com","verdict":"allow"},{"domain":"example.org","verdict":"deny"},{"domain":"lanweb","verdict":"allow","target":"172.30.98.10:8080"}]}'
 
 docker build -q -t kproxy:dev .. >/dev/null || exit 1
 docker compose down -v -t 1 >/dev/null 2>&1

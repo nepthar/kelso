@@ -12,8 +12,8 @@ import (
 
 // rules builds Rules from name, rule pairs, where a rule is "allow", "deny",
 // or "allow IP:PORT".
-func rules(m Mode, kv ...string) *Rules {
-	r := &Rules{Mode: m, Domains: map[string]Rule{}}
+func rules(m Policy, kv ...string) *Rules {
+	r := &Rules{Default: m, Domains: map[string]Rule{}}
 	for i := 0; i < len(kv); i += 2 {
 		verdict, target, _ := strings.Cut(kv[i+1], " ")
 		r.Domains[kv[i]] = Rule{Verdict: Verdict(verdict), Target: target}
@@ -47,25 +47,25 @@ func waitPending(t *testing.T, e *Engine, n, hits int) {
 
 func TestModes(t *testing.T) {
 	for _, tc := range []struct {
-		mode     Mode
+		policy   Policy
 		domain   string
 		want     Outcome
 		wantHeld bool
 	}{
-		{Strict, "ok.com", Allowed, false},
-		{Strict, "bad.com", Denied, false},
-		{Strict, "new.com", Denied, false},
-		{Track, "bad.com", Denied, false},
-		{Track, "new.com", Allowed, false},
-		{Snitch, "ok.com", Allowed, false},
-		{Snitch, "bad.com", Denied, false},
-		{Snitch, "new.com", TimedOut, true},
+		{DefaultDeny, "ok.com", Allowed, false},
+		{DefaultDeny, "bad.com", Denied, false},
+		{DefaultDeny, "new.com", Denied, false},
+		{DefaultAllow, "bad.com", Denied, false},
+		{DefaultAllow, "new.com", Allowed, false},
+		{DefaultAsk, "ok.com", Allowed, false},
+		{DefaultAsk, "bad.com", Denied, false},
+		{DefaultAsk, "new.com", TimedOut, true},
 	} {
 		e := newEngine(10*time.Millisecond, nil)
-		e.Replace(rules(tc.mode, "ok.com", "allow", "bad.com", "deny"))
+		e.Replace(rules(tc.policy, "ok.com", "allow", "bad.com", "deny"))
 		o, held, _ := e.Check(context.Background(), tc.domain)
 		if o != tc.want || held != tc.wantHeld {
-			t.Errorf("%s %s: got %v held=%v, want %v held=%v", tc.mode, tc.domain, o, held, tc.want, tc.wantHeld)
+			t.Errorf("%s %s: got %v held=%v, want %v held=%v", tc.policy, tc.domain, o, held, tc.want, tc.wantHeld)
 		}
 	}
 }
@@ -84,15 +84,15 @@ func TestUnloadedReleasedByFirstPush(t *testing.T) {
 	e := newEngine(time.Minute, nil)
 	ch := checkAsync(e, "ok.com")
 	time.Sleep(5 * time.Millisecond)
-	e.Replace(rules(Strict, "ok.com", "allow"))
+	e.Replace(rules(DefaultDeny, "ok.com", "allow"))
 	if o := <-ch; o != Allowed {
 		t.Fatalf("got %v", o)
 	}
 }
 
-func TestSnitchApprovalWakesAllHeld(t *testing.T) {
+func TestAskApprovalWakesAllHeld(t *testing.T) {
 	e := newEngine(time.Minute, nil)
-	e.Replace(rules(Snitch))
+	e.Replace(rules(DefaultAsk))
 	a, b, other := checkAsync(e, "www.new.com"), checkAsync(e, "api.new.com"), checkAsync(e, "other.com")
 	waitPending(t, e, 2, 3)
 	if err := e.Decide("new.com", Allow); err != nil {
@@ -109,9 +109,9 @@ func TestSnitchApprovalWakesAllHeld(t *testing.T) {
 	waitPending(t, e, 0, 0)
 }
 
-func TestSnitchSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
+func TestAskSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
 	e := newEngine(time.Minute, nil)
-	e.Replace(rules(Snitch))
+	e.Replace(rules(DefaultAsk))
 	a, b, c := checkAsync(e, "update.googleapis.com"), checkAsync(e, "a.other.googleapis.com"), checkAsync(e, "b.other.googleapis.com")
 	waitPending(t, e, 1, 3)
 	e.Decide("other.googleapis.com", Allow)
@@ -131,7 +131,7 @@ func TestSnitchSubdomainApprovalLeavesSiblingsPending(t *testing.T) {
 
 func TestRemoveReturnsDomainToPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
-	e.Replace(rules(Snitch, "ok.com", "allow"))
+	e.Replace(rules(DefaultAsk, "ok.com", "allow"))
 	if err := e.Remove("ok.com"); err != nil {
 		t.Fatal(err)
 	}
@@ -144,9 +144,9 @@ func TestRemoveReturnsDomainToPending(t *testing.T) {
 	waitPending(t, e, 1, 1)
 }
 
-func TestSnitchTimeoutStaysPending(t *testing.T) {
+func TestAskTimeoutStaysPending(t *testing.T) {
 	e := newEngine(10*time.Millisecond, nil)
-	e.Replace(rules(Snitch))
+	e.Replace(rules(DefaultAsk))
 	for _, host := range []string{"a.new.com", "a.new.com", "new.com"} {
 		if o, held, _ := e.Check(context.Background(), host); o != TimedOut || !held {
 			t.Fatalf("got %v held=%v", o, held)
@@ -173,7 +173,7 @@ func TestPersistFailureKeepsOldRules(t *testing.T) {
 		}
 		return nil
 	})
-	e.Replace(rules(Strict))
+	e.Replace(rules(DefaultDeny))
 	fail = true
 	if err := e.Decide("ok.com", Allow); err == nil {
 		t.Fatal("expected error")
@@ -185,7 +185,7 @@ func TestPersistFailureKeepsOldRules(t *testing.T) {
 
 func TestConcurrentDecisionsAndSwaps(t *testing.T) {
 	e := newEngine(time.Second, nil)
-	e.Replace(rules(Snitch))
+	e.Replace(rules(DefaultAsk))
 	var checks, writes sync.WaitGroup
 	results := make(chan Outcome, 400)
 	for i := range 400 {
@@ -196,7 +196,7 @@ func TestConcurrentDecisionsAndSwaps(t *testing.T) {
 		})
 	}
 	for range 20 {
-		writes.Go(func() { e.Replace(rules(Snitch)) })
+		writes.Go(func() { e.Replace(rules(DefaultAsk)) })
 	}
 	writes.Wait()
 	for i := range 20 {

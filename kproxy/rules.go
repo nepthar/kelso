@@ -14,20 +14,21 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-type Mode string
+// Policy is what the proxy does with a host no rule matches.
+type Policy string
 
 const (
-	Strict Mode = "strict"
-	Snitch Mode = "snitch"
-	Track  Mode = "track"
+	DefaultAllow Policy = "allow"
+	DefaultDeny  Policy = "deny"
+	DefaultAsk   Policy = "ask" // hold the connection and list the host as pending
 )
 
-func parseMode(s string) (Mode, error) {
-	switch m := Mode(s); m {
-	case Strict, Snitch, Track:
-		return m, nil
+func parsePolicy(s string) (Policy, error) {
+	switch p := Policy(s); p {
+	case DefaultAllow, DefaultDeny, DefaultAsk:
+		return p, nil
 	}
-	return "", fmt.Errorf("unknown mode %q: use strict, snitch or track", s)
+	return "", fmt.Errorf("unknown default policy %q: use allow, deny or ask", s)
 }
 
 type Verdict string
@@ -48,7 +49,7 @@ func parseVerdict(s string) (Verdict, error) {
 // Rules is immutable once published to an Engine. A rule for a name matches
 // that name and every name ending in "."+name.
 type Rules struct {
-	Mode    Mode
+	Default Policy
 	Domains map[string]Rule
 }
 
@@ -154,8 +155,8 @@ func ruleName(s string) (string, error) {
 	return n, nil
 }
 
-func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
-	rules := &Rules{Mode: defaultMode, Domains: map[string]Rule{}}
+func parseRules(r io.Reader, defaultPolicy Policy) (*Rules, error) {
+	rules := &Rules{Default: defaultPolicy, Domains: map[string]Rule{}}
 	sc := bufio.NewScanner(r)
 	for n := 1; sc.Scan(); n++ {
 		line := strings.TrimSpace(sc.Text())
@@ -163,16 +164,16 @@ func parseRules(r io.Reader, defaultMode Mode) (*Rules, error) {
 			continue
 		}
 		f := strings.Fields(line)
-		if f[0] == "mode" && len(f) == 2 {
-			m, err := parseMode(f[1])
+		if f[0] == "default" && len(f) == 2 {
+			p, err := parsePolicy(f[1])
 			if err != nil {
 				return nil, fmt.Errorf("line %d: %w", n, err)
 			}
-			rules.Mode = m
+			rules.Default = p
 			continue
 		}
 		if len(f) != 2 && len(f) != 3 {
-			return nil, fmt.Errorf("line %d: want 'mode <mode>' or '<allow|deny> <name> [ip:port]'", n)
+			return nil, fmt.Errorf("line %d: want 'default <allow|deny|ask>' or '<allow|deny> <name> [host:port]'", n)
 		}
 		d, err := ruleName(f[1])
 		if err != nil {
@@ -200,9 +201,11 @@ func (r *Rules) sorted() []string {
 	return ds
 }
 
+const rulesFileHeader = "# rules.txt for kproxy. Lists allowed domains. See github.com/nepthar/kelso/kproxy for more information"
+
 func (r *Rules) format() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "mode %s\n", r.Mode)
+	fmt.Fprintf(&b, "%s\ndefault %s\n", rulesFileHeader, r.Default)
 	for _, d := range r.sorted() {
 		rule := r.Domains[d]
 		if rule.Target != "" {
@@ -214,16 +217,16 @@ func (r *Rules) format() string {
 	return b.String()
 }
 
-func loadRulesFile(path string, defaultMode Mode) (*Rules, error) {
+func loadRulesFile(path string, defaultPolicy Policy) (*Rules, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
-		return &Rules{Mode: defaultMode, Domains: map[string]Rule{}}, nil
+		return &Rules{Default: defaultPolicy, Domains: map[string]Rule{}}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	rules, err := parseRules(f, defaultMode)
+	rules, err := parseRules(f, defaultPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}

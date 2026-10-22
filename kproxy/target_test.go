@@ -23,7 +23,7 @@ func TestRuleTargets(t *testing.T) {
 	defer secure.Close()
 
 	e := newEngine(50*time.Millisecond, nil)
-	e.Replace(rules(Strict,
+	e.Replace(rules(DefaultDeny,
 		"adguard", "allow "+plain.Listener.Addr().String(),
 		"nas", "allow "+secure.Listener.Addr().String(),
 		"pinned.example.com", "allow "+plain.Listener.Addr().String(),

@@ -174,7 +174,7 @@ func TestHTTPThroughProxy(t *testing.T) {
 		w.Write(bytes.Repeat([]byte("x"), n))
 	}))
 	defer up.Close()
-	p, httpAddr, _ := testProxy(t, rules(Strict, "example.com", "allow"), up.Listener.Addr().String())
+	p, httpAddr, _ := testProxy(t, rules(DefaultDeny, "example.com", "allow"), up.Listener.Addr().String())
 
 	const big = 8 << 20
 	code, n := httpGet(t, httpAddr, "cdn.example.com", big)
@@ -202,7 +202,7 @@ func TestHTTPSThroughProxy(t *testing.T) {
 		io.WriteString(w, "hello")
 	}))
 	defer up.Close()
-	_, _, httpsAddr := testProxy(t, rules(Track, "evil.com", "deny"), up.Listener.Addr().String())
+	_, _, httpsAddr := testProxy(t, rules(DefaultAllow, "evil.com", "deny"), up.Listener.Addr().String())
 
 	get := func(serverName string) (string, error) {
 		client := &http.Client{Transport: &http.Transport{
@@ -218,13 +218,13 @@ func TestHTTPSThroughProxy(t *testing.T) {
 		return string(b), nil
 	}
 	if body, err := get("anything.net"); err != nil || body != "hello" {
-		t.Fatalf("track: %q, %v", body, err)
+		t.Fatalf("default allow: %q, %v", body, err)
 	}
 	if _, err := get("evil.com"); err == nil || !strings.Contains(err.Error(), "access denied") {
 		t.Fatalf("denied: %v", err)
 	}
 	if _, err := get(""); err == nil || !strings.Contains(err.Error(), "access denied") {
-		t.Fatalf("no SNI in track mode: %v", err)
+		t.Fatalf("no SNI with default allow: %v", err)
 	}
 }
 
@@ -250,7 +250,7 @@ func TestMaxConnsWaitsForASlot(t *testing.T) {
 			go func() { io.Copy(io.Discard, c); c.Close() }()
 		}
 	}()
-	p, httpAddr, _ := testProxyN(t, rules(Strict, "example.com", "allow"), up.Addr().String(), 1)
+	p, httpAddr, _ := testProxyN(t, rules(DefaultDeny, "example.com", "allow"), up.Addr().String(), 1)
 	conns := func() int64 { return p.stats.Snapshot()["example.com"]["http"].Conns }
 	open := func() net.Conn {
 		c, err := net.Dial("tcp", httpAddr)
@@ -281,8 +281,8 @@ func TestMaxConnsWaitsForASlot(t *testing.T) {
 	waitConns(2)
 }
 
-func TestSnitchHTTPTimeoutClosesWithoutVerdict(t *testing.T) {
-	_, httpAddr, _ := testProxy(t, rules(Snitch), "127.0.0.1:1")
+func TestAskHTTPTimeoutClosesWithoutVerdict(t *testing.T) {
+	_, httpAddr, _ := testProxy(t, rules(DefaultAsk), "127.0.0.1:1")
 	if code, n := httpGet(t, httpAddr, "new.com", 0); code != 0 || n != 0 {
 		t.Fatalf("got %d, %d bytes", code, n)
 	}

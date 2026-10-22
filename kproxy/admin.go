@@ -41,8 +41,8 @@ type ruleJSON struct {
 }
 
 type rulesJSON struct {
-	Mode  Mode       `json:"mode"`
-	Rules []ruleJSON `json:"rules"`
+	Default Policy     `json:"default"`
+	Rules   []ruleJSON `json:"rules"`
 }
 
 func adminHandler(e *Engine, s *Stats) http.Handler {
@@ -121,7 +121,7 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			fmt.Fprint(w, rules.format())
 			return
 		}
-		out := rulesJSON{Mode: rules.Mode, Rules: []ruleJSON{}}
+		out := rulesJSON{Default: rules.Default, Rules: []ruleJSON{}}
 		for _, d := range rules.sorted() {
 			rule := rules.Domains[d]
 			out.Rules = append(out.Rules, ruleJSON{d, rule.Verdict, rule.Target})
@@ -153,11 +153,11 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 }
 
 func (rj rulesJSON) toRules() (*Rules, error) {
-	m, err := parseMode(string(rj.Mode))
+	m, err := parsePolicy(string(rj.Default))
 	if err != nil {
 		return nil, err
 	}
-	rules := &Rules{Mode: m, Domains: map[string]Rule{}}
+	rules := &Rules{Default: m, Domains: map[string]Rule{}}
 	for _, r := range rj.Rules {
 		d, err := ruleName(r.Domain)
 		if err != nil {

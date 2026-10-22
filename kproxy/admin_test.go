@@ -9,7 +9,7 @@ import (
 
 func TestDeleteRule(t *testing.T) {
 	e := newEngine(time.Second, nil)
-	e.Replace(rules(Snitch, "example.com", "allow"))
+	e.Replace(rules(DefaultAsk, "example.com", "allow"))
 	h := adminHandler(e, newStats())
 	for _, want := range []int{204, 404} {
 		w := httptest.NewRecorder()
@@ -25,7 +25,7 @@ func TestDeleteRule(t *testing.T) {
 
 func TestBrowserGuard(t *testing.T) {
 	e := newEngine(time.Second, nil)
-	e.Replace(rules(Snitch))
+	e.Replace(rules(DefaultAsk))
 	h := browserGuard(adminHandler(e, newStats()))
 	for _, tc := range []struct {
 		method, host, ctype string

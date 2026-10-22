@@ -51,7 +51,7 @@ func TestRuleName(t *testing.T) {
 }
 
 func TestLookupMostSpecificWins(t *testing.T) {
-	r := rules(Strict,
+	r := rules(DefaultDeny,
 		"nepthar.github.io", "deny",
 		"tacos.nepthar.github.io", "allow",
 		"google.com", "allow",
@@ -73,30 +73,30 @@ func TestLookupMostSpecificWins(t *testing.T) {
 }
 
 func TestParseRules(t *testing.T) {
-	r, err := parseRules(strings.NewReader("# c\nmode snitch\n\nallow example.com\ndeny Example.org\n"+
-		"allow AdGuard 192.168.1.3:3000\nallow pi RPi.lab.my-domain.com.:080\n"), Strict)
+	r, err := parseRules(strings.NewReader("# c\ndefault ask\n\nallow example.com\ndeny Example.org\n"+
+		"allow AdGuard 192.168.1.3:3000\nallow pi RPi.lab.my-domain.com.:080\n"), DefaultDeny)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Mode != Snitch || r.Domains["example.com"] != (Rule{Verdict: Allow}) ||
+	if r.Default != DefaultAsk || r.Domains["example.com"] != (Rule{Verdict: Allow}) ||
 		r.Domains["example.org"] != (Rule{Verdict: Deny}) ||
 		r.Domains["adguard"] != (Rule{Verdict: Allow, Target: "192.168.1.3:3000"}) ||
 		r.Domains["pi"] != (Rule{Verdict: Allow, Target: "rpi.lab.my-domain.com:80"}) {
 		t.Fatalf("got %+v", r)
 	}
-	want := "mode snitch\nallow adguard 192.168.1.3:3000\nallow example.com\ndeny example.org\n" +
+	want := rulesFileHeader + "\ndefault ask\nallow adguard 192.168.1.3:3000\nallow example.com\ndeny example.org\n" +
 		"allow pi rpi.lab.my-domain.com:80\n"
 	if r.format() != want {
 		t.Fatalf("format: %q", r.format())
 	}
 	for _, bad := range []string{
-		"allow", "permit example.com", "allow 10.0.0.1", "mode loose", "allow *.example.com",
+		"allow", "permit example.com", "allow 10.0.0.1", "default loose", "mode ask", "allow *.example.com",
 		"deny adguard 192.168.1.3:3000", "allow adguard 192.168.1.3", "allow adguard rpi.lab.my-domain.com",
 		"allow adguard 192.168.1.3:http", "allow adguard 192.168.1.3:0", "allow adguard 192.168.1.3:65536",
 		"allow adguard 192.168.1.3:+80", "allow adguard rpi..my-domain.com:80", "allow adguard [::1]:80",
 		"allow adguard 192.168.1.3:80 extra",
 	} {
-		if _, err := parseRules(strings.NewReader(bad), Strict); err == nil {
+		if _, err := parseRules(strings.NewReader(bad), DefaultDeny); err == nil {
 			t.Errorf("parsed %q", bad)
 		}
 	}
@@ -104,8 +104,8 @@ func TestParseRules(t *testing.T) {
 
 func TestRulesFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rules.txt")
-	r, err := loadRulesFile(path, Track)
-	if err != nil || r.Mode != Track || len(r.Domains) != 0 {
+	r, err := loadRulesFile(path, DefaultAllow)
+	if err != nil || r.Default != DefaultAllow || len(r.Domains) != 0 {
 		t.Fatalf("missing file: %+v, %v", r, err)
 	}
 	r.Domains["example.com"] = Rule{Verdict: Deny}
@@ -113,8 +113,8 @@ func TestRulesFile(t *testing.T) {
 	if err := writeRulesFile(path, r); err != nil {
 		t.Fatal(err)
 	}
-	got, err := loadRulesFile(path, Strict)
-	if err != nil || got.Mode != Track || got.Domains["example.com"].Verdict != Deny ||
+	got, err := loadRulesFile(path, DefaultDeny)
+	if err != nil || got.Default != DefaultAllow || got.Domains["example.com"].Verdict != Deny ||
 		got.Domains["nas"].Target != "192.168.1.20:5000" {
 		t.Fatalf("reload: %+v, %v", got, err)
 	}

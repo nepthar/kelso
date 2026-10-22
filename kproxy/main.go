@@ -29,8 +29,8 @@ func main() {
 	adminSock := flag.String("admin", "/run/kproxy/admin.sock", "admin unix socket")
 	adminHTTP := flag.String("admin-http", "", "also serve the admin API and UI on this TCP address, e.g. 127.0.0.1:18099")
 	rulesFile := flag.String("rules-file", "", "load rules from and save them to this file")
-	modeFlag := flag.String("mode", "strict", "mode for a rules file that does not name one")
-	hold := flag.Duration("hold", 60*time.Second, "how long snitch mode holds an undecided connection")
+	defaultFlag := flag.String("default", "deny", "default policy (allow, deny or ask) for a rules file that doesn't set one")
+	hold := flag.Duration("hold", 60*time.Second, "how long the ask policy holds a connection no rule matches")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
 	flag.Parse()
 
@@ -38,7 +38,7 @@ func main() {
 	if ip == nil {
 		log.Fatalf("-ip must be an IPv4 address, got %q", *ipFlag)
 	}
-	mode, err := parseMode(*modeFlag)
+	policy, err := parsePolicy(*defaultFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func main() {
 	if *rulesFile != "" {
 		path := *rulesFile
 		persist = func(r *Rules) error { return writeRulesFile(path, r) }
-		if initial, err = loadRulesFile(path, mode); err != nil {
+		if initial, err = loadRulesFile(path, policy); err != nil {
 			log.Fatal(err)
 		}
 	}
