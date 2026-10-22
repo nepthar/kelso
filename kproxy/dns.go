@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+	"golang.org/x/net/ipv4"
 )
 
 const dnsTTL = 60
@@ -55,28 +56,44 @@ func dnsAnswer(query []byte, self [4]byte) ([]byte, error) {
 	return b.Finish()
 }
 
-func serveDNSUDP(pc net.PacketConn, self [4]byte) {
+// serveDNSUDP answers each query with the address it arrived on, which is the
+// proxy's own address on the asker's network. The reply is sent from that
+// address too: on a socket bound to every address the kernel might otherwise
+// pick another, and the asker would drop the reply.
+func serveDNSUDP(pc net.PacketConn) {
+	p := ipv4.NewPacketConn(pc)
+	if err := p.SetControlMessage(ipv4.FlagDst|ipv4.FlagInterface, true); err != nil {
+		log.Fatalf("dns/udp: %v", err)
+	}
 	buf := make([]byte, 65535)
 	for {
-		n, addr, err := pc.ReadFrom(buf)
+		n, cm, addr, err := p.ReadFrom(buf)
 		if err != nil {
 			log.Printf("dns/udp: %v", err)
 			return
 		}
-		resp, err := dnsAnswer(buf[:n], self)
+		if cm == nil || cm.Dst.To4() == nil {
+			continue
+		}
+		resp, err := dnsAnswer(buf[:n], [4]byte(cm.Dst.To4()))
 		if err != nil {
 			continue
 		}
-		pc.WriteTo(resp, addr)
+		p.WriteTo(resp, &ipv4.ControlMessage{Src: cm.Dst, IfIndex: cm.IfIndex}, addr)
 	}
 }
 
-func serveDNSTCP(ln net.Listener, self [4]byte) {
+func serveDNSTCP(ln net.Listener) {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			log.Printf("dns/tcp: %v", err)
 			return
+		}
+		self := c.LocalAddr().(*net.TCPAddr).IP.To4()
+		if self == nil {
+			c.Close()
+			continue
 		}
 		go func() {
 			defer c.Close()
@@ -90,7 +107,7 @@ func serveDNSTCP(ln net.Listener, self [4]byte) {
 				if _, err := io.ReadFull(c, q); err != nil {
 					return
 				}
-				resp, err := dnsAnswer(q, self)
+				resp, err := dnsAnswer(q, [4]byte(self))
 				if err != nil {
 					return
 				}

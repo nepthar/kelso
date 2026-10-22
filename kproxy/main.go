@@ -1,6 +1,6 @@
 // kproxy is a DNS server and transparent HTTP/HTTPS proxy that controls
-// outbound connections by domain. Every A query is answered with the proxy's
-// own address; connections on 80 and 443 are matched by Host header or TLS
+// outbound connections by domain. Every A query is answered with the address
+// it arrived on; connections on 80 and 443 are matched by Host header or TLS
 // SNI against allow/deny rules and piped upstream, to what DNS says or to an
 // allow rule's fixed target, without TLS termination. It is administered over
 // a unix socket.
@@ -22,7 +22,6 @@ func main() {
 		os.Exit(healthcheck(os.Args[2:]))
 	}
 
-	ipFlag := flag.String("ip", "", "IPv4 address returned for every A query (required)")
 	dnsAddr := flag.String("dns", ":53", "DNS listen address (UDP and TCP)")
 	httpAddr := flag.String("http", ":80", "HTTP listen address")
 	httpsAddr := flag.String("https", ":443", "HTTPS listen address")
@@ -34,10 +33,6 @@ func main() {
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
 	flag.Parse()
 
-	ip := net.ParseIP(*ipFlag).To4()
-	if ip == nil {
-		log.Fatalf("-ip must be an IPv4 address, got %q", *ipFlag)
-	}
 	policy, err := parsePolicy(*defaultFlag)
 	if err != nil {
 		log.Fatal(err)
@@ -81,12 +76,12 @@ func main() {
 		log.Printf("kproxy: admin UI at http://%s/", ln.Addr())
 	}
 
-	self := [4]byte(ip)
-	go serveDNSUDP(pc, self)
-	go serveDNSTCP(dnsTCP, self)
+	go serveDNSUDP(pc)
+	go serveDNSTCP(dnsTCP)
 	go proxy.serve(httpLn, proxy.handleHTTP)
 	go proxy.serve(httpsLn, proxy.handleHTTPS)
-	log.Printf("kproxy: answering %s, rules loaded: %v", ip, engine.loaded())
+	log.Printf("kproxy: DNS on %s, HTTP on %s, HTTPS on %s, rules loaded: %v",
+		pc.LocalAddr(), httpLn.Addr(), httpsLn.Addr(), engine.loaded())
 	log.Fatal(http.Serve(adminLn, admin))
 }
 

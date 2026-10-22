@@ -5,13 +5,15 @@ whether a set of containers may reach the internet. Point a container's DNS at
 it and every outbound connection by name goes through it, where it is allowed,
 denied, or held until someone decides. It never terminates TLS.
 
-It is a standalone Go program with one dependency (`golang.org/x/net`). Kelso
+It is a standalone Go program whose only dependency is `golang.org/x/net`
+(which brings in `golang.org/x/sys`). Kelso
 runs one per app, but nothing in it is Kelso-specific.
 
 ## How it works
 
-- **DNS.** Every `A` query gets the proxy's own address (`-ip`). `AAAA` and
-  every other type get an empty answer.
+- **DNS.** Every `A` query gets the address it arrived on, which is the
+  proxy's own address on the asker's network. `AAAA` and every other type get
+  an empty answer.
 - **Proxy.** Connections arrive on port 80 or 443. For HTTP the proxy reads the
   `Host` header; for HTTPS it reads the server name (SNI) from the TLS
   ClientHello. It decides, then dials the real host and pipes the bytes
@@ -136,23 +138,44 @@ reaches the proxy.
 
 In the compose file, the proxy gets a fixed address on the internal network
 and a healthcheck; apps set `dns:` to that address and wait for the proxy to be
-healthy. [`itest/compose.yml`](itest/compose.yml) is a complete example.
+healthy. The proxy itself isn't told its address. It only has to be fixed
+because Docker's `dns:` setting takes an IP address, not a name, and fixing an
+address means giving the network its own subnet. Every internal network needs
+a different one, since Docker refuses overlapping subnets.
+[`itest/compose.yml`](itest/compose.yml) is a complete example.
 
 ```yaml
 proxy:
   image: kproxy:dev
   user: "1000:1000"   # owns the admin socket; binding 53/80/443 still works
-  command: ["-ip", "10.88.0.2", "-admin", "/data/admin.sock", "-rules-file", "/data/rules.txt"]
+  command: ["-admin", "/data/admin.sock", "-rules-file", "/data/rules.txt"]
+  networks:
+    internal: { ipv4_address: 10.88.0.2 }
+    egress: {}
   volumes: ["./kproxy-data:/data"]
   healthcheck:
     test: ["CMD", "/kproxy", "healthcheck", "-admin", "/data/admin.sock"]
 app:
   dns: 10.88.0.2
+  networks: [internal]
   depends_on: { proxy: { condition: service_healthy } }
 ```
 
-Give the internal network an `ip_range` that excludes the proxy's address, or
-Docker may hand it to another container.
+with the networks defined as:
+
+```yaml
+networks:
+  internal:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.88.0.0/24
+          ip_range: 10.88.0.128/25
+  egress: {}
+```
+
+The `ip_range` keeps the addresses Docker hands out away from the proxy's, or
+Docker may give it to another container.
 
 ### Standalone, with a real browser
 
@@ -171,7 +194,7 @@ mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'default 
 **2. Terminal 1: run the proxy.**
 
 ```sh
-cd ~/kproxy-test && ./kproxy -ip 127.0.0.1 -dns 127.0.0.1:15353 -http 127.0.0.1:8080 -https 127.0.0.1:8443 -admin ./admin.sock -admin-http 127.0.0.1:18099 -rules-file ./rules.txt -hold 30s
+cd ~/kproxy-test && ./kproxy -dns 127.0.0.1:15353 -http 127.0.0.1:8080 -https 127.0.0.1:8443 -admin ./admin.sock -admin-http 127.0.0.1:18099 -rules-file ./rules.txt -hold 30s
 ```
 
 The DNS server isn't used here, but it has to listen somewhere, and the
@@ -244,7 +267,6 @@ short.
 
 | Flag | Default | |
 |---|---|---|
-| `-ip` | (required) | IPv4 address returned for every `A` query |
 | `-dns` | `:53` | DNS listen address, UDP and TCP |
 | `-http`, `-https` | `:80`, `:443` | proxy listen addresses |
 | `-admin` | `/run/kproxy/admin.sock` | admin unix socket |
