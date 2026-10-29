@@ -1,9 +1,10 @@
 # kproxy
 
-A DNS server and transparent HTTP/HTTPS proxy that decides, per domain,
-whether a set of containers may reach the internet. Point a container's DNS at
-it and every outbound connection by name goes through it, where it is allowed,
-denied, or held until someone decides. It never terminates TLS.
+A DNS server and transparent proxy that decides what a set of containers may
+reach. Point a container's DNS at it and every outbound connection by name goes
+through it: HTTP and HTTPS by the name in the traffic, where it is allowed,
+denied or held until someone decides, and other TCP and UDP ports to one fixed
+destination each. It never terminates TLS.
 
 It is a standalone Go program whose only dependency is `golang.org/x/net`
 (which brings in `golang.org/x/sys`). Kelso
@@ -11,18 +12,25 @@ runs one per app, but nothing in it is Kelso-specific.
 
 ## How it works
 
-- **DNS.** Every `A` query gets the address it arrived on, which is the
-  proxy's own address on the asker's network. `AAAA` and every other type get
-  an empty answer.
-- **Proxy.** Connections arrive on port 80 or 443. For HTTP the proxy reads the
-  `Host` header; for HTTPS it reads the server name (SNI) from the TLS
-  ClientHello. It decides, then dials the real host and pipes the bytes
-  through untouched, starting with the ones it already read.
-- **Refused outright, whatever the rules say:** connections with no name (no
-  SNI, no `Host`) or an IP address for a name. Names with no root domain
-  (single labels, unknown TLDs, bare suffixes like `co.uk`) are refused too,
-  unless an allow rule with a [forward target](#forward-targets) matches them.
-- **Rejections.** HTTP gets `503` with `Retry-After`; HTTPS gets a TLS
+- **DNS.** An `A` query for a name the rules would let through gets the
+  address it arrived on, which is the proxy's own address on the asker's
+  network. Other types for such a name get an empty answer, and every other
+  name gets `NXDOMAIN`, so a denied app fails at the lookup.
+- **Listeners.** Each port the proxy listens on has one kind, set by the rules:
+  - `http` reads the `Host` header and `tls` reads the server name (SNI) from
+    the TLS ClientHello, then decide by that name. Many rules share one of these
+    ports. Ports 80 (`http`) and 443 (`tls`) always exist, even with no rules.
+  - `tcp` and `udp` send everything to their one rule's destination without
+    reading it. A `tcp` listener dials as soon as a client connects, so
+    protocols where the server speaks first work.
+
+  After deciding, the proxy dials the destination and pipes the bytes through
+  untouched, starting with the ones it already read.
+- **Refused outright, whatever the rules say:** `http` and `tls` connections
+  with no name (no SNI, no `Host`) or an IP address for a name. Names with no
+  root domain (single labels, unknown TLDs, bare suffixes like `co.uk`) are
+  never let through by the default policy, only by a rule naming them.
+- **Rejections.** HTTP gets `503` with `Retry-After`; TLS gets an
   `access_denied` alert.
 
 The proxy only sees connections made by name, so it needs the network layout
@@ -31,10 +39,10 @@ address.
 
 ## Default policy
 
-Rules say what to do with the domains they name. The default policy says what
-to do with everything else:
+Rules say what to do with the names they match. On `http` and `tls`
+listeners, the default policy says what to do with everything else:
 
-| Default policy | A host no rule matches is… |
+| Default policy | A name no rule matches is… |
 |---|---|
 | `deny` | rejected |
 | `allow` | proxied, and counted in the stats like everything else |
@@ -51,57 +59,99 @@ Until rules are loaded, every connection is held and `/healthz` fails.
 
 ## Rules
 
-A rule names a domain and a verdict. It matches that name and every name ending
-in `.` plus it, so `google.com` matches `maps.google.com` but not
-`notgoogle.com`. Any name works, down to a bare TLD such as `com`. The most
-specific matching rule wins:
+Each line of the rules file (`-rules-file`) is one rule, and says what the
+proxy does under the hood: which listener, which name, and where it goes.
 
 ```
-default ask
-deny nepthar.github.io
-allow tacos.nepthar.github.io
+# rules.txt for kproxy. Lists allowed domains. See github.com/nepthar/kelso/kproxy for more information
+default deny
+
+http  adguard                rpi.lab.my-domain.com:3000
+http  *.mylab.com
+http  admin.mylab.com        deny
+https api.weather.com
+https *.googleapis.com
+https ads.googleapis.com     deny
+
+tls :6443 x.someapi.com      x.someapi.com:443
+tcp :9669 redis              redis.lab.my-domain.com:9669
+udp :2343 video-stream       cam0.lab.my-domain.com:2343
 ```
 
-Here `tacos.nepthar.github.io` and its subdomains are allowed, the rest of
-`nepthar.github.io` is denied, and the rest of `github.io` is up to the
-default policy: held and asked about.
+The long form is `<kind> :<port> <name> [<dest>|deny]`:
 
-That is also the rules file format (`-rules-file`): one `default`, `allow` or
-`deny` line each, and lines starting with `#` are ignored. With a rules file,
-the proxy loads it at startup and rewrites it (atomically, keeping its
-permissions) on every change, starting with a comment that says what the file
-is. Without one, rules live in memory until something pushes them with
-`PUT /rules`.
+| Kind | Name | Destination |
+|---|---|---|
+| `http`, `tls` | a name, or `*.name` for the name and everything below it | optional: `HOST:PORT`, or `*:PORT` for the name asked for; defaults to `*:<port>` |
+| `tcp`, `udp` | a label, for the stats and DNS | required: `HOST:PORT` |
+
+`http NAME [...]` is short for `http :80 NAME [...]`, and `https NAME [deny]`
+is short for `tls :443 NAME *:443`. `https` takes no destination, so the
+line that sends a TLS name somewhere else is always the long one (see
+[Forward Targets](#forward-targets)).
+
+- **Matching.** On one listener, an exact name beats any wildcard, and a longer
+  wildcard beats a shorter one. Above, `ads.googleapis.com` is denied, the rest
+  of `googleapis.com` and below is allowed, and `api.weather.com` is allowed
+  but `weather.com` and `x.api.weather.com` are up to the default policy.
+  Rules on different listeners never interact. Any name works, down to
+  `*.com`.
+- **`deny`** only exists on `http` and `tls` listeners, where it narrows a
+  wildcard or answers a name for good under `ask`. A port with no rule already
+  refuses connections, and `tcp` and `udp` have no name to deny.
+- **DNS** answers a name if any listener would let it through: an allow
+  matches it, or no rule does and the default isn't `deny`. A `tcp` or `udp`
+  rule's name always resolves; above, `redis` does and `redsi` doesn't.
+- **Lines** are split on spaces, and everything from `#` to the end of a line
+  is a comment.
+
+The proxy refuses to start, and `PUT /rules` refuses the change, if two rules
+can't both be true:
+
+- two kinds on one port: `kproxy can't add a tcp listener on port 443 because
+  it already has a tls listener`. TCP and UDP ports are separate, so
+  `tcp :53` and `udp :53` can coexist, but `http`, `tls` and `tcp` all use TCP
+  ports.
+- a second rule on a `tcp` or `udp` port, which has no name to tell them apart.
+- the same name twice on one listener.
+- a port the proxy already uses for DNS or `-ingress`.
+
+It logs a warning, without refusing, for a `tls` rule that sends a name to a
+different host, and for a listener with only denies under `default deny`.
+
+With a rules file, the proxy loads it at startup and rewrites it (atomically,
+keeping its permissions) on every change, starting with a comment that says
+what the file is. Without one, rules live in memory until something pushes
+them with `PUT /rules`. Changing the rules opens and closes listeners to match.
 
 ### Forward Targets
 
-An allow rule can name a host and port to connect to, instead of the name
-asked for on its usual port. It is how an app on an internal network reaches
-one service on your LAN:
+A destination other than `*` sends a name somewhere other than where DNS
+would. It is how an app on an internal network reaches one service on your
+LAN:
 
 ```
-allow adguard rpi.lab.my-domain.com:3000
-allow nas 192.168.1.20:5000
+http adguard rpi.lab.my-domain.com:3000
+tcp :1883 mqtt 192.168.0.32:1883
 ```
 
 The app connects to `http://adguard`. Docker's resolver passes the name to the
 proxy, the proxy answers with itself, and the connection is piped to
-`rpi.lab.my-domain.com:3000`. The app still can't reach that address, or anything
-else on the LAN, directly. A bare name like `adguard` gets through only
-because its rule has a target: `allow adguard` alone is still refused, so the
-proxy's own DNS can't be used to reach arbitrary LAN names.
+`rpi.lab.my-domain.com:3000`. The app still can't reach that address, or
+anything else on the LAN, directly.
 
 - The host is a name or an IPv4 address, and the port is required and
   numeric. A name is resolved by the proxy's resolver (in Docker, the host's
-  DNS) on every connection, over IPv4.
-- Targets follow the same matching as any rule, so `allow example.com
-  1.2.3.4:443` pins every subdomain of `example.com` to that address.
-- Both schemes go to the one target, so the app must use the scheme its port
-  speaks.
-- The target sees `Host: adguard`, or SNI `adguard`, and HTTPS certificates
-  won't match that name.
+  DNS) on every connection, over IPv4, or for UDP once per client.
+- An `http` target sees `Host: adguard`. Servers that route by host name may
+  not answer to it.
+- A `tls` target sees SNI `adguard`, and its certificate won't match that
+  name, so the client's certificate check fails unless it skips it. The proxy
+  warns about these.
 - A container with the same name wins, because Docker resolves it first.
-- Only HTTP and HTTPS: the name comes from the `Host` header or SNI.
+- `tcp` and `udp` targets get whatever the client sends. Servers that tell
+  clients other addresses to connect to, like Redis Cluster or Kafka, don't
+  work, because the client can't reach those addresses.
 
 ## Ingress
 
@@ -206,7 +256,7 @@ ports, and Chrome uses its own profile.
 outside the repo:
 
 ```sh
-mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'default ask\nallow google.com\n' > ~/kproxy-test/rules.txt
+mkdir -p ~/kproxy-test && go build -o ~/kproxy-test/kproxy . && printf 'default ask\nhttps *.google.com\nhttp *.google.com\n' > ~/kproxy-test/rules.txt
 ```
 
 **2. Terminal 1: run the proxy.**
@@ -242,7 +292,7 @@ held:
 curl -sS -o /dev/null -w '%{http_code}\n' --connect-to ::127.0.0.1:8443 https://example.com/
 ```
 
-Click **allow** on `example.com` in the admin page within 30 seconds and curl
+Click **allow** on `*.example.com` in the admin page within 30 seconds and curl
 finishes with `200`. Click **deny** instead and it fails with `tlsv1 alert
 access denied`. Do nothing and the connection closes after 30 seconds, with
 `example.com` still pending. Plain HTTP goes to port 8080 the same way
@@ -261,7 +311,7 @@ open -na "Google Chrome" --args --user-data-dir="$HOME/kproxy-test/chrome-profil
 - `--disable-quic` stops Chrome trying HTTP/3, which runs over UDP; the proxy
   only handles TCP.
 
-Google itself loads, but pages look broken until you allow `gstatic.com`,
+Google itself loads, but pages look broken until you allow `*.gstatic.com`,
 where Google keeps its images and scripts. Pending also fills up with
 Chrome's own background traffic: `update.googleapis.com`,
 `content-autofill.googleapis.com`, `gvt1.com` and so on. Allow or deny them
@@ -286,7 +336,8 @@ short.
 | Flag | Default | |
 |---|---|---|
 | `-dns` | `:53` | DNS listen address, UDP and TCP |
-| `-http`, `-https` | `:80`, `:443` | proxy listen addresses |
+| `-http`, `-https` | `:80`, `:443` | listen addresses for the `http :80` and `tls :443` listeners; rules still call them 80 and 443 |
+| `-bind` | every address | address every other listener binds to |
 | `-admin` | `/run/kproxy/admin.sock` | admin unix socket |
 | `-admin-http` | | also serve the admin API and UI on this TCP address |
 | `-rules-file` | | load rules from and save them to this file |
@@ -310,12 +361,12 @@ out.
 |---|---|
 | `GET /` | web UI |
 | `GET /healthz` | `200` once rules are loaded, else `503` |
-| `GET /pending` | undecided hosts, grouped by root domain |
-| `POST /decide` | `{"domain": "github.com", "verdict": "allow"}`; no target |
+| `GET /pending` | undecided hosts, grouped by listener and root domain |
+| `POST /decide` | `{"kind": "tls", "port": 443, "name": "*.github.com", "verdict": "allow"}`, on an existing `http` or `tls` listener; no destination |
 | `GET /rules` | default policy and rules; `?format=text` for the rules file |
-| `PUT /rules` | replace everything: `{"default": "ask", "rules": [{"domain": "adguard", "verdict": "allow", "target": "rpi.lab.my-domain.com:3000"}]}` |
-| `DELETE /rules/{name}` | remove one rule; that name goes back to undecided |
-| `GET /stats` | per root domain, HTTP and HTTPS counted separately |
+| `PUT /rules` | replace everything: `{"default": "ask", "rules": [{"kind": "http", "port": 80, "name": "adguard", "verdict": "allow", "dest": "rpi.lab.my-domain.com:3000"}]}`; rules use the long form, with no shorthands |
+| `DELETE /rules/{kind}/{port}/{name}` | remove one rule, such as `/rules/tls/443/*.github.com`; that name goes back to undecided |
+| `GET /stats` | per root domain (or rule name, for `tcp` and `udp`), and per listener |
 
 ```sh
 curl --unix-socket admin.sock http://k/pending
@@ -348,5 +399,6 @@ go test -run '^$' -bench . -benchtime 3000x  # per-connection cost; run on Linux
 
 ## Not supported
 
-IPv6, ports other than 80 and 443, protocols other than HTTP and TLS, TLS
-termination, and different rules for different containers behind one proxy.
+IPv6, QUIC (HTTP/3 over UDP 443, which clients fall back from to TCP), TLS
+termination, listening on one address only for some rules, and different
+rules for different containers behind one proxy.

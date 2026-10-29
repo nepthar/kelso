@@ -1,9 +1,8 @@
-// kproxy is a DNS server and transparent HTTP/HTTPS proxy that controls
-// outbound connections by domain. Every A query is answered with the address
-// it arrived on; connections on 80 and 443 are matched by Host header or TLS
-// SNI against allow/deny rules and piped upstream, to what DNS says or to an
-// allow rule's fixed target, without TLS termination. It is administered over
-// a unix socket.
+// kproxy is a DNS server and transparent proxy that controls outbound
+// connections. DNS answers the names the rules allow with the address each
+// query arrived on. HTTP and TLS listeners match each connection's Host header
+// or SNI against the rules; TCP and UDP listeners send everything to one
+// destination. Nothing is decrypted. It is administered over a unix socket.
 package main
 
 import (
@@ -14,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -23,8 +23,9 @@ func main() {
 	}
 
 	dnsAddr := flag.String("dns", ":53", "DNS listen address (UDP and TCP)")
-	httpAddr := flag.String("http", ":80", "HTTP listen address")
-	httpsAddr := flag.String("https", ":443", "HTTPS listen address")
+	httpAddr := flag.String("http", ":80", "listen address for the http listener on port 80")
+	httpsAddr := flag.String("https", ":443", "listen address for the tls listener on port 443")
+	bind := flag.String("bind", "", "address every other listener binds to (default every address)")
 	adminSock := flag.String("admin", "/run/kproxy/admin.sock", "admin unix socket")
 	adminHTTP := flag.String("admin-http", "", "also serve the admin API and UI on this TCP address, e.g. 127.0.0.1:18099")
 	rulesFile := flag.String("rules-file", "", "load rules from and save them to this file")
@@ -49,26 +50,41 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+
+	reserved := map[portKey]string{}
+	if _, p, err := net.SplitHostPort(*dnsAddr); err == nil && validPort(p) {
+		n, _ := strconv.Atoi(p)
+		reserved[portKey{false, n}], reserved[portKey{true, n}] = "dns", "dns"
+	}
+	for _, in := range ingress {
+		reserved[portKey{in.udp, in.listen}] = "ingress"
+	}
 	engine := newEngine(*hold, nil)
+	proxy := &Proxy{
+		engine:   engine,
+		stats:    newStats(),
+		dial:     (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		slots:    make(chan struct{}, *maxConns),
+		bind:     *bind,
+		addrs:    map[portKey]string{{false, httpPort}: *httpAddr, {false, httpsPort}: *httpsAddr},
+		reserved: reserved,
+	}
+	engine.apply = proxy.apply
+	if err := proxy.apply(implicitRules); err != nil {
+		log.Fatal(err)
+	}
 	if initial != nil {
-		engine.Replace(initial)
+		if err := engine.Replace(initial); err != nil {
+			log.Fatal(err)
+		}
 	}
 	engine.persist = persist
-
-	proxy := &Proxy{
-		engine: engine,
-		stats:  newStats(),
-		dial:   (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		slots:  make(chan struct{}, *maxConns),
-	}
 
 	pc, err := net.ListenPacket("udp4", *dnsAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	dnsTCP := listen("tcp4", *dnsAddr)
-	httpLn := listen("tcp4", *httpAddr)
-	httpsLn := listen("tcp4", *httpsAddr)
 	os.Remove(*adminSock)
 	adminLn := listen("unix", *adminSock)
 	admin := adminHandler(engine, proxy.stats)
@@ -85,17 +101,14 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			go proxy.relayUDP(upc, in)
+			go proxy.ingressUDP(upc, in)
 		} else {
 			go proxy.serve(listen("tcp4", addr), proxy.relayTCP(in))
 		}
 	}
-	go serveDNSUDP(pc)
-	go serveDNSTCP(dnsTCP)
-	go proxy.serve(httpLn, proxy.handleHTTP)
-	go proxy.serve(httpsLn, proxy.handleHTTPS)
-	log.Printf("kproxy: DNS on %s, HTTP on %s, HTTPS on %s, rules loaded: %v",
-		pc.LocalAddr(), httpLn.Addr(), httpsLn.Addr(), engine.loaded())
+	go serveDNSUDP(pc, engine.Resolves)
+	go serveDNSTCP(dnsTCP, engine.Resolves)
+	log.Printf("kproxy: DNS on %s, rules loaded: %v", pc.LocalAddr(), engine.loaded())
 	log.Fatal(http.Serve(adminLn, admin))
 }
 

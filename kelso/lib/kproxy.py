@@ -100,22 +100,27 @@ def dynamic_range(subnet: str) -> str:
 def rules_text(endpoints: Mapping[str, Any], config: Mapping[str, str]) -> str:
   """The rules file for an app: everything in [endpoints] allowed, the rest denied.
 
-  A group is a list of domains, or a forward (anything with a `forward`
-  template), whose `${…}` are filled from `config`. Raises ValueError for a
-  forward that doesn't come out as host:port, naming the group.
+  A group is a list of domains, each allowed with its subdomains over HTTP and
+  HTTPS, or a forward (anything with a `forward` template): the group's name
+  over HTTP, sent to the template filled from `config`. Raises ValueError for
+  a forward that doesn't come out as host:port, naming the group.
   """
-  rules: dict[str, str] = {}
+  http: dict[str, str] = {}
+  https: set[str] = set()
   for group, entry in endpoints.items():
     if isinstance(entry, list):
       for name in entry:
-        rules.setdefault(endpoint_name(name), "")
+        pattern = "*." + endpoint_name(name)
+        http.setdefault(pattern, "")
+        https.add(pattern)
       continue
     value = EnvTemplate(entry.forward).safe_substitute(config)
     try:
-      rules[endpoint_name(group)] = " " + forward_target(value)
+      http[endpoint_name(group)] = " " + forward_target(value)
     except ValueError as e:
       raise ValueError(f"endpoint {group}: {e}") from None
-  lines = [f"allow {name}{target}" for name, target in sorted(rules.items())]
+  lines = [f"http {name}{dest}" for name, dest in sorted(http.items())]
+  lines += [f"https {name}" for name in sorted(https)]
   return "\n".join([RULES_HEADER, "default deny", *lines]) + "\n"
 
 

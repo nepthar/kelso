@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestRuleTargets(t *testing.T) {
+func TestRuleDestinations(t *testing.T) {
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "plain via "+r.Host)
 	}))
@@ -21,22 +21,22 @@ func TestRuleTargets(t *testing.T) {
 		io.WriteString(w, "secure")
 	}))
 	defer secure.Close()
+	plainAddr, secureAddr := plain.Listener.Addr().String(), secure.Listener.Addr().String()
 
 	e := newEngine(50*time.Millisecond, nil)
 	e.Replace(rules(DefaultDeny,
-		"adguard", "allow "+plain.Listener.Addr().String(),
-		"nas", "allow "+secure.Listener.Addr().String(),
-		"pinned.example.com", "allow "+plain.Listener.Addr().String(),
-		"byname", "allow localhost:"+strconv.Itoa(plain.Listener.Addr().(*net.TCPAddr).Port),
-		"bare", "allow",
+		"http adguard "+plainAddr,
+		"tls :443 nas "+secureAddr,
+		"http *.pinned.example.com "+plainAddr,
+		"http byname localhost:"+strconv.Itoa(plain.Listener.Addr().(*net.TCPAddr).Port),
 	))
 	p := &Proxy{engine: e, stats: newStats(), dial: (&net.Dialer{}).DialContext, slots: make(chan struct{}, 8)}
 	httpLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	httpsLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer httpLn.Close()
 	defer httpsLn.Close()
-	go p.serve(httpLn, p.handleHTTP)
-	go p.serve(httpsLn, p.handleHTTPS)
+	go p.serve(httpLn, p.handleTCP(httpPort))
+	go p.serve(httpsLn, p.handleTCP(httpsPort))
 
 	for _, host := range []string{"evil.com", "bare"} {
 		if code, _ := httpGet(t, httpLn.Addr().String(), host, 0); code != 503 {
@@ -53,11 +53,12 @@ func TestRuleTargets(t *testing.T) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}}
 	for url, want := range map[string]string{
-		"http://adguard/":            "plain via adguard",
-		"http://AdGuard:8080/":       "plain via AdGuard:8080",
-		"https://nas/":               "secure",
-		"http://pinned.example.com/": "plain via pinned.example.com",
-		"http://byname/":             "plain via byname",
+		"http://adguard/":              "plain via adguard",
+		"http://AdGuard:8080/":         "plain via AdGuard:8080",
+		"https://nas/":                 "secure",
+		"http://pinned.example.com/":   "plain via pinned.example.com",
+		"http://a.pinned.example.com/": "plain via a.pinned.example.com",
+		"http://byname/":               "plain via byname",
 	} {
 		resp, err := client.Get(url)
 		if err != nil {
@@ -71,14 +72,14 @@ func TestRuleTargets(t *testing.T) {
 	}
 	s := p.stats.Snapshot()
 	if s["adguard"]["http"].Allowed != 2 || s["nas"]["https"].Allowed != 1 ||
-		s["example.com"]["http"].Allowed != 1 || s[unknownDomain]["http"].Denied != 1 {
+		s["example.com"]["http"].Allowed != 2 || s["bare"]["http"].Denied != 1 {
 		t.Errorf("stats: %+v", s)
 	}
 }
 
-func TestBareNameRefusedBeforeRulesLoad(t *testing.T) {
+func TestIPRefusedBeforeRulesLoad(t *testing.T) {
 	p := &Proxy{engine: newEngine(time.Second, nil), stats: newStats()}
-	if o, _, _ := p.route("adguard", "http", "80"); o != Denied {
+	if o, _, _ := p.route("1.2.3.4", KindHTTP, httpPort); o != Denied {
 		t.Fatalf("got %v", o)
 	}
 }
