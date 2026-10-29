@@ -2,25 +2,26 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
 	"golang.org/x/net/publicsuffix"
 )
 
-// Policy is what the proxy does with a host no rule matches.
+// Policy is what a name-routed listener does with a name no rule matches.
 type Policy string
 
 const (
 	DefaultAllow Policy = "allow"
 	DefaultDeny  Policy = "deny"
-	DefaultAsk   Policy = "ask" // hold the connection and list the host as pending
+	DefaultAsk   Policy = "ask" // hold the connection and list the name as pending
 )
 
 func parsePolicy(s string) (Policy, error) {
@@ -46,25 +47,71 @@ func parseVerdict(s string) (Verdict, error) {
 	return "", fmt.Errorf("unknown verdict %q: use allow or deny", s)
 }
 
-// Rules is immutable once published to an Engine. A rule for a name matches
-// that name and every name ending in "."+name.
-type Rules struct {
-	Default Policy
-	Domains map[string]Rule
+// Kind is what a listener does with a connection. HTTP and TLS listeners route
+// by the name in the traffic (Host header, SNI), so many rules can share one;
+// TCP and UDP listeners send everything to their one rule's destination.
+type Kind string
+
+const (
+	KindHTTP Kind = "http"
+	KindTLS  Kind = "tls"
+	KindTCP  Kind = "tcp"
+	KindUDP  Kind = "udp"
+)
+
+func parseKind(s string) (Kind, error) {
+	switch k := Kind(s); k {
+	case KindHTTP, KindTLS, KindTCP, KindUDP:
+		return k, nil
+	}
+	return "", fmt.Errorf("unknown kind %q: use http, tls, tcp or udp", s)
 }
 
-// Rule is a verdict, plus for an allow an optional host (a name or IPv4
-// address) and port to connect to instead.
+func (k Kind) named() bool { return k == KindHTTP || k == KindTLS }
+
+// portKey is one listening socket. TCP and UDP ports are separate, and HTTP,
+// TLS and TCP listeners all use TCP ports.
+type portKey struct {
+	udp  bool
+	port int
+}
+
+func keyOf(k Kind, port int) portKey { return portKey{k == KindUDP, port} }
+
+// The listeners that always exist, written as "http" and "https" rules.
+const (
+	httpPort  = 80
+	httpsPort = 443
+)
+
+func implicit(k portKey) bool { return k == portKey{false, httpPort} || k == portKey{false, httpsPort} }
+
+// Rule is one line of the rules file. Name is an exact name or "*.name" (name
+// and everything below it) on HTTP and TLS listeners, and a label for the stats
+// and DNS on TCP and UDP ones. Dest is what an allow connects to: host:port,
+// or on HTTP and TLS "*:port" for the name asked for.
 type Rule struct {
+	Name    string
 	Verdict Verdict
-	Target  string
+	Dest    string
+	at      string // where the rule came from, for error messages
 }
 
-// lookup returns the most specific rule matching host.
-func (r *Rules) lookup(host string) (Rule, bool) {
+type Listener struct {
+	Kind  Kind
+	Port  int
+	Rules map[string]Rule
+}
+
+// match returns the most specific rule matching host: an exact name, then the
+// longest wildcard.
+func (l *Listener) match(host string) (Rule, bool) {
+	if r, ok := l.Rules[host]; ok {
+		return r, true
+	}
 	for name := host; ; {
-		if rule, ok := r.Domains[name]; ok {
-			return rule, true
+		if r, ok := l.Rules["*."+name]; ok {
+			return r, true
 		}
 		_, parent, ok := strings.Cut(name, ".")
 		if !ok {
@@ -74,35 +121,211 @@ func (r *Rules) lookup(host string) (Rule, bool) {
 	}
 }
 
-// newRule validates a rule's parts. A target is only allowed on an allow.
-func newRule(verdict, target string) (Rule, error) {
-	v, err := parseVerdict(verdict)
-	if err != nil {
-		return Rule{}, err
+// fixed returns a TCP or UDP listener's one rule.
+func (l *Listener) fixed() Rule {
+	for _, r := range l.Rules {
+		return r
 	}
-	if target == "" {
-		return Rule{Verdict: v}, nil
-	}
-	if v != Allow {
-		return Rule{}, fmt.Errorf("only an allow can have a target, not %s", v)
-	}
-	bad := fmt.Errorf("target %q must be HOST:PORT with a numeric port, like rpi.lan:3000 or 192.168.1.3:3000", target)
-	host, port, err := net.SplitHostPort(target)
-	if err != nil {
-		return Rule{}, bad
-	}
-	p, err := strconv.Atoi(port)
-	if err != nil || p < 1 || p > 65535 || port[0] < '0' || port[0] > '9' {
-		return Rule{}, bad
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if ip.To4() == nil {
-			return Rule{}, fmt.Errorf("target %q: only IPv4 addresses are supported", target)
+	return Rule{}
+}
+
+// Rules is immutable once published to an Engine.
+type Rules struct {
+	Default   Policy
+	Listeners map[portKey]*Listener
+}
+
+func newRules(p Policy) *Rules {
+	return &Rules{Default: p, Listeners: map[portKey]*Listener{
+		{false, httpPort}:  {Kind: KindHTTP, Port: httpPort, Rules: map[string]Rule{}},
+		{false, httpsPort}: {Kind: KindTLS, Port: httpsPort, Rules: map[string]Rule{}},
+	}}
+}
+
+func (r *Rules) clone() *Rules {
+	out := &Rules{Default: r.Default, Listeners: make(map[portKey]*Listener, len(r.Listeners))}
+	for k, l := range r.Listeners {
+		c := *l
+		c.Rules = make(map[string]Rule, len(l.Rules))
+		for n, rule := range l.Rules {
+			c.Rules[n] = rule
 		}
-	} else if host, err = ruleName(host); err != nil {
-		return Rule{}, bad
+		out.Listeners[k] = &c
 	}
-	return Rule{Verdict: v, Target: net.JoinHostPort(host, strconv.Itoa(p))}, nil
+	return out
+}
+
+// add validates one rule and adds it, creating its listener if needed. at
+// says where the rule came from, for later errors about it.
+func (r *Rules) add(kind Kind, port int, name string, verdict Verdict, dest, at string) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("port %d is out of range", port)
+	}
+	var err error
+	if kind.named() {
+		name, err = rulePattern(name)
+	} else {
+		name, err = ruleName(name)
+	}
+	if err != nil {
+		return err
+	}
+	switch {
+	case verdict == Deny && !kind.named():
+		return errors.New("deny needs a name to match; tcp and udp rules can't tell names apart")
+	case verdict == Deny && dest != "":
+		return errors.New("a deny has no destination")
+	case verdict == Deny:
+	case verdict != Allow:
+		return fmt.Errorf("unknown verdict %q: use allow or deny", verdict)
+	case dest == "" && !kind.named():
+		return fmt.Errorf("%s rule %s needs a destination HOST:PORT", kind, name)
+	case dest == "":
+		dest = "*:" + strconv.Itoa(port)
+	default:
+		if dest, err = parseDest(dest, kind.named()); err != nil {
+			return err
+		}
+	}
+
+	k := keyOf(kind, port)
+	l := r.Listeners[k]
+	switch {
+	case l == nil:
+		l = &Listener{Kind: kind, Port: port, Rules: map[string]Rule{}}
+		r.Listeners[k] = l
+	case l.Kind != kind:
+		return fmt.Errorf("kproxy can't add a %s listener on port %d because it already has a %s listener", kind, port, l.Kind)
+	case !kind.named() && len(l.Rules) > 0:
+		return fmt.Errorf("kproxy can't add %s listener %s on port %d because %s already uses it", kind, name, port, l.fixed().Name)
+	}
+	if prev, ok := l.Rules[name]; ok {
+		return fmt.Errorf("%s on %s :%d is already set (%s)", name, kind, port, prev.at)
+	}
+	l.Rules[name] = Rule{Name: name, Verdict: verdict, Dest: dest, at: at}
+	return nil
+}
+
+// remove deletes one rule, and its listener once empty unless it's one of the
+// listeners that always exist.
+func (r *Rules) remove(kind Kind, port int, name string) error {
+	k := keyOf(kind, port)
+	l := r.Listeners[k]
+	if l == nil || l.Kind != kind {
+		return errNoRule
+	}
+	if _, ok := l.Rules[name]; !ok {
+		return errNoRule
+	}
+	delete(l.Rules, name)
+	if len(l.Rules) == 0 && !implicit(k) {
+		delete(r.Listeners, k)
+	}
+	return nil
+}
+
+var errNoRule = errors.New("no such rule")
+
+// resolves reports whether DNS should answer host: some listener would take a
+// connection for it, or it is a TCP or UDP rule's name.
+func (r *Rules) resolves(host string) bool {
+	for _, l := range r.Listeners {
+		if !l.Kind.named() {
+			if _, ok := l.Rules[host]; ok {
+				return true
+			}
+			continue
+		}
+		if rule, ok := l.match(host); ok {
+			if rule.Verdict == Allow {
+				return true
+			}
+		} else if r.Default != DefaultDeny && rootDomain(host) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// each calls fn for every rule, in rules file order: the implicit HTTP and TLS
+// listeners, then the rest by port, and each listener's names grouped by
+// domain.
+func (r *Rules) each(fn func(*Listener, Rule)) {
+	keys := make([]portKey, 0, len(r.Listeners))
+	for k := range r.Listeners {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, func(a, b portKey) int {
+		if c := compareBool(!implicit(a), !implicit(b)); c != 0 {
+			return c
+		}
+		if a.port != b.port {
+			return a.port - b.port
+		}
+		return compareBool(a.udp, b.udp)
+	})
+	for _, k := range keys {
+		l := r.Listeners[k]
+		names := make([]string, 0, len(l.Rules))
+		for n := range l.Rules {
+			names = append(names, n)
+		}
+		slices.SortFunc(names, func(a, b string) int {
+			if c := strings.Compare(reversed(a), reversed(b)); c != 0 {
+				return c
+			}
+			return compareBool(!strings.HasPrefix(a, "*."), !strings.HasPrefix(b, "*."))
+		})
+		for _, n := range names {
+			fn(l, l.Rules[n])
+		}
+	}
+}
+
+func compareBool(a, b bool) int {
+	switch {
+	case a == b:
+		return 0
+	case a:
+		return 1
+	}
+	return -1
+}
+
+// reversed turns "*.ads.google.com" into "com.google.ads", so a domain sorts
+// next to its subdomains.
+func reversed(name string) string {
+	labels := strings.Split(strings.TrimPrefix(name, "*."), ".")
+	slices.Reverse(labels)
+	return strings.Join(labels, ".")
+}
+
+// warnings lists rules that are allowed but probably mistakes.
+func (r *Rules) warnings() []string {
+	var out []string
+	denyOnly := map[*Listener]bool{}
+	r.each(func(l *Listener, rule Rule) {
+		if _, seen := denyOnly[l]; !seen {
+			denyOnly[l] = true
+		}
+		if rule.Verdict == Allow {
+			denyOnly[l] = false
+		}
+		host, _, _ := net.SplitHostPort(rule.Dest)
+		if l.Kind == KindTLS && host != "*" && host != "" && host != rule.Name {
+			out = append(out, fmt.Sprintf("%s: tls :%d sends %s to %s, so certificate checks fail unless %s's certificate also covers %s",
+				rule.at, l.Port, rule.Name, rule.Dest, host, rule.Name))
+		}
+	})
+	if r.Default == DefaultDeny {
+		for l, only := range denyOnly {
+			if only && !implicit(keyOf(l.Kind, l.Port)) {
+				out = append(out, fmt.Sprintf("%s :%d has only denies, which narrow nothing under default deny", l.Kind, l.Port))
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 func normHost(h string) string { return strings.TrimSuffix(strings.ToLower(h), ".") }
@@ -141,7 +364,7 @@ func rootDomain(host string) string {
 	return rest[strings.LastIndex(rest, ".")+1:] + "." + suffix
 }
 
-// ruleName normalizes a rule entry: any domain name, down to a bare TLD.
+// ruleName normalizes a name: any domain name, down to a bare TLD.
 func ruleName(s string) (string, error) {
 	n := normHost(strings.TrimSpace(s))
 	if n == "" || net.ParseIP(n) != nil {
@@ -155,15 +378,99 @@ func ruleName(s string) (string, error) {
 	return n, nil
 }
 
+// rulePattern normalizes a name-routed rule's name: a name, or "*." and a name
+// for that name and everything below it.
+func rulePattern(s string) (string, error) {
+	base, wild := strings.CutPrefix(strings.TrimSpace(s), "*.")
+	n, err := ruleName(base)
+	if err != nil {
+		return "", fmt.Errorf("%q is not a domain name or *.domain", s)
+	}
+	if wild {
+		n = "*." + n
+	}
+	return n, nil
+}
+
+// parseDest normalizes HOST:PORT, where HOST is a name or IPv4 address and
+// PORT is numeric. star allows "*" for the name asked for.
+func parseDest(s string, star bool) (string, error) {
+	bad := fmt.Errorf("destination %q must be HOST:PORT with a numeric port, like rpi.lan:3000 or 192.168.1.3:3000", s)
+	host, port, err := net.SplitHostPort(s)
+	if err != nil || !validPort(port) {
+		return "", bad
+	}
+	p, _ := strconv.Atoi(port)
+	switch ip := net.ParseIP(host); {
+	case host == "*" && star:
+	case host == "*":
+		return "", fmt.Errorf("destination %q: only http and tls rules can use * for the name asked for", s)
+	case ip != nil && ip.To4() == nil:
+		return "", fmt.Errorf("destination %q: only IPv4 addresses are supported", s)
+	case ip != nil:
+	default:
+		if host, err = ruleName(host); err != nil {
+			return "", bad
+		}
+	}
+	return net.JoinHostPort(host, strconv.Itoa(p)), nil
+}
+
+const ruleSyntax = "want 'default <allow|deny|ask>', 'http <name> [<dest>|deny]', 'https <name> [deny]', " +
+	"'<http|tls> :<port> <name> [<dest>|deny]' or '<tcp|udp> :<port> <name> <dest>'"
+
+// parseLine turns one rule line, already split into fields, into add's
+// arguments. "http NAME" and "https NAME" are short for the listeners on 80
+// and 443.
+func parseLine(f []string) (kind Kind, port int, name string, verdict Verdict, dest string, err error) {
+	var rest []string
+	switch {
+	case (f[0] == "http" || f[0] == "https") && len(f) > 1 && !strings.HasPrefix(f[1], ":"):
+		kind, port, rest = KindHTTP, httpPort, f[1:]
+		if f[0] == "https" {
+			kind, port = KindTLS, httpsPort
+		}
+	case f[0] == "https" && len(f) > 1:
+		return "", 0, "", "", "", errors.New("https always means port 443; use tls :<port> for others")
+	case len(f) < 3:
+		return "", 0, "", "", "", errors.New(ruleSyntax)
+	default:
+		if kind, err = parseKind(f[0]); err != nil {
+			return "", 0, "", "", "", err
+		}
+		p, ok := strings.CutPrefix(f[1], ":")
+		if !ok || !validPort(p) {
+			return "", 0, "", "", "", fmt.Errorf("%s rules need a listening port like :6443, not %q", kind, f[1])
+		}
+		port, _ = strconv.Atoi(p)
+		rest = f[2:]
+	}
+	if len(rest) != 1 && len(rest) != 2 {
+		return "", 0, "", "", "", errors.New(ruleSyntax)
+	}
+	name, verdict = rest[0], Allow
+	if len(rest) == 2 {
+		if rest[1] == "deny" {
+			verdict = Deny
+		} else {
+			dest = rest[1]
+		}
+	}
+	if f[0] == "https" && dest != "" {
+		return "", 0, "", "", "", fmt.Errorf("https takes no destination; to send %s elsewhere write tls :443 %s %s", name, name, dest)
+	}
+	return kind, port, name, verdict, dest, nil
+}
+
 func parseRules(r io.Reader, defaultPolicy Policy) (*Rules, error) {
-	rules := &Rules{Default: defaultPolicy, Domains: map[string]Rule{}}
+	rules := newRules(defaultPolicy)
 	sc := bufio.NewScanner(r)
 	for n := 1; sc.Scan(); n++ {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+		line, _, _ := strings.Cut(sc.Text(), "#")
+		f := strings.Fields(line)
+		if len(f) == 0 {
 			continue
 		}
-		f := strings.Fields(line)
 		if f[0] == "default" && len(f) == 2 {
 			p, err := parsePolicy(f[1])
 			if err != nil {
@@ -172,33 +479,40 @@ func parseRules(r io.Reader, defaultPolicy Policy) (*Rules, error) {
 			rules.Default = p
 			continue
 		}
-		if len(f) != 2 && len(f) != 3 {
-			return nil, fmt.Errorf("line %d: want 'default <allow|deny|ask>' or '<allow|deny> <name> [host:port]'", n)
+		kind, port, name, verdict, dest, err := parseLine(f)
+		if err == nil {
+			err = rules.add(kind, port, name, verdict, dest, fmt.Sprintf("line %d", n))
 		}
-		d, err := ruleName(f[1])
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", n, err)
 		}
-		target := ""
-		if len(f) == 3 {
-			target = f[2]
-		}
-		rule, err := newRule(f[0], target)
-		if err != nil {
-			return nil, fmt.Errorf("line %d: %w", n, err)
-		}
-		rules.Domains[d] = rule
 	}
 	return rules, sc.Err()
 }
 
-func (r *Rules) sorted() []string {
-	ds := make([]string, 0, len(r.Domains))
-	for d := range r.Domains {
-		ds = append(ds, d)
+// line writes a rule the way the rules file does, using the http and https
+// shorthands where they say the same thing.
+func (l *Listener) line(rule Rule) string {
+	tail := rule.Dest
+	if rule.Verdict == Deny {
+		tail = "deny"
 	}
-	sort.Strings(ds)
-	return ds
+	var head string
+	switch star := "*:" + strconv.Itoa(l.Port); {
+	case l.Kind == KindHTTP && l.Port == httpPort:
+		head = "http"
+		if tail == star {
+			tail = ""
+		}
+	case l.Kind == KindTLS && l.Port == httpsPort && (tail == star || tail == "deny"):
+		head = "https"
+		if tail == star {
+			tail = ""
+		}
+	default:
+		head = fmt.Sprintf("%s :%d", l.Kind, l.Port)
+	}
+	return strings.TrimSpace(head + " " + rule.Name + " " + tail)
 }
 
 const rulesFileHeader = "# rules.txt for kproxy. Lists allowed domains. See github.com/nepthar/kelso/kproxy for more information"
@@ -206,21 +520,14 @@ const rulesFileHeader = "# rules.txt for kproxy. Lists allowed domains. See gith
 func (r *Rules) format() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\ndefault %s\n", rulesFileHeader, r.Default)
-	for _, d := range r.sorted() {
-		rule := r.Domains[d]
-		if rule.Target != "" {
-			fmt.Fprintf(&b, "%s %s %s\n", rule.Verdict, d, rule.Target)
-		} else {
-			fmt.Fprintf(&b, "%s %s\n", rule.Verdict, d)
-		}
-	}
+	r.each(func(l *Listener, rule Rule) { fmt.Fprintln(&b, l.line(rule)) })
 	return b.String()
 }
 
 func loadRulesFile(path string, defaultPolicy Policy) (*Rules, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
-		return &Rules{Default: defaultPolicy, Domains: map[string]Rule{}}, nil
+		return newRules(defaultPolicy), nil
 	}
 	if err != nil {
 		return nil, err

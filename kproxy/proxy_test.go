@@ -111,7 +111,7 @@ func TestDNSAnswer(t *testing.T) {
 			Questions: []dnsmessage.Question{{Name: dnsmessage.MustNewName("x.example.com."), Type: tc.typ, Class: dnsmessage.ClassINET}},
 		}
 		qb, _ := q.Pack()
-		rb, err := dnsAnswer(qb, self)
+		rb, err := dnsAnswer(qb, self, func(string) bool { return true })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -145,9 +145,29 @@ func testProxyN(t testing.TB, r *Rules, addr string, maxConns int) (*Proxy, stri
 	httpLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	httpsLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	t.Cleanup(func() { httpLn.Close(); httpsLn.Close() })
-	go p.serve(httpLn, p.handleHTTP)
-	go p.serve(httpsLn, p.handleHTTPS)
+	go p.serve(httpLn, p.handleTCP(httpPort))
+	go p.serve(httpsLn, p.handleTCP(httpsPort))
 	return p, httpLn.Addr().String(), httpsLn.Addr().String()
+}
+
+func TestDNSAnswerRefusesUnknownNames(t *testing.T) {
+	q := dnsmessage.Message{
+		Header:    dnsmessage.Header{ID: 7},
+		Questions: []dnsmessage.Question{{Name: dnsmessage.MustNewName("redsi."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}},
+	}
+	qb, _ := q.Pack()
+	var asked string
+	rb, err := dnsAnswer(qb, [4]byte{10, 0, 0, 2}, func(n string) bool { asked = n; return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m dnsmessage.Message
+	if err := m.Unpack(rb); err != nil {
+		t.Fatal(err)
+	}
+	if m.RCode != dnsmessage.RCodeNameError || len(m.Answers) != 0 || asked != "redsi." {
+		t.Fatalf("got %+v, asked %q", m, asked)
+	}
 }
 
 func httpGet(t *testing.T, proxyAddr, host string, size int) (int, int) {
@@ -174,7 +194,7 @@ func TestHTTPThroughProxy(t *testing.T) {
 		w.Write(bytes.Repeat([]byte("x"), n))
 	}))
 	defer up.Close()
-	p, httpAddr, _ := testProxy(t, rules(DefaultDeny, "example.com", "allow"), up.Listener.Addr().String())
+	p, httpAddr, _ := testProxy(t, rules(DefaultDeny, "http *.example.com"), up.Listener.Addr().String())
 
 	const big = 8 << 20
 	code, n := httpGet(t, httpAddr, "cdn.example.com", big)
@@ -202,7 +222,7 @@ func TestHTTPSThroughProxy(t *testing.T) {
 		io.WriteString(w, "hello")
 	}))
 	defer up.Close()
-	_, _, httpsAddr := testProxy(t, rules(DefaultAllow, "evil.com", "deny"), up.Listener.Addr().String())
+	_, _, httpsAddr := testProxy(t, rules(DefaultAllow, "https evil.com deny"), up.Listener.Addr().String())
 
 	get := func(serverName string) (string, error) {
 		client := &http.Client{Transport: &http.Transport{
@@ -250,7 +270,7 @@ func TestMaxConnsWaitsForASlot(t *testing.T) {
 			go func() { io.Copy(io.Discard, c); c.Close() }()
 		}
 	}()
-	p, httpAddr, _ := testProxyN(t, rules(DefaultDeny, "example.com", "allow"), up.Addr().String(), 1)
+	p, httpAddr, _ := testProxyN(t, rules(DefaultDeny, "http example.com"), up.Addr().String(), 1)
 	conns := func() int64 { return p.stats.Snapshot()["example.com"]["http"].Conns }
 	open := func() net.Conn {
 		c, err := net.Dial("tcp", httpAddr)

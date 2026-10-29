@@ -51,7 +51,7 @@ func proxyHTTPS(b *testing.B, httpsAddr string, hello []byte) int64 {
 
 func BenchmarkHTTPSConn(b *testing.B) {
 	hello := clientHello(b, "www.example.com")
-	_, _, httpsAddr := testProxy(b, rules(DefaultDeny, "example.com", "allow"), sinkServer(b, 0))
+	_, _, httpsAddr := testProxy(b, rules(DefaultDeny, "https *.example.com"), sinkServer(b, 0))
 	b.ReportAllocs()
 	for b.Loop() {
 		proxyHTTPS(b, httpsAddr, hello)
@@ -61,7 +61,7 @@ func BenchmarkHTTPSConn(b *testing.B) {
 func BenchmarkHTTPSThroughput(b *testing.B) {
 	const size = 64 << 20
 	hello := clientHello(b, "www.example.com")
-	_, _, httpsAddr := testProxy(b, rules(DefaultDeny, "example.com", "allow"), sinkServer(b, size))
+	_, _, httpsAddr := testProxy(b, rules(DefaultDeny, "https *.example.com"), sinkServer(b, size))
 	b.ReportAllocs()
 	b.SetBytes(size)
 	for b.Loop() {

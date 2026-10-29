@@ -28,19 +28,19 @@
 
 <h2>Pending</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
+  <thead><tr><th>Listener</th><th>Domain</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
   <tbody id="pending"></tbody>
 </table></div>
 
 <h2>Rules</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Domain</th><th>Verdict</th><th></th></tr></thead>
+  <thead><tr><th>Listener</th><th>Name</th><th>Verdict</th><th></th></tr></thead>
   <tbody id="rules"></tbody>
 </table></div>
 
 <h2>Traffic</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Domain</th><th>Scheme</th><th>Conns</th><th>Allowed</th><th>Denied</th><th>Timed out</th><th>Out</th><th>In</th></tr></thead>
+  <thead><tr><th>Domain</th><th>Listener</th><th>Conns</th><th>Allowed</th><th>Denied</th><th>Timed out</th><th>Out</th><th>In</th></tr></thead>
   <tbody id="stats"></tbody>
 </table></div>
 
@@ -68,8 +68,12 @@ async function send(method, path, body) {
   if (!r.ok) alert(await r.text());
   refresh();
 }
-const decide = (domain, verdict) => send("POST", "decide", { domain, verdict });
-const remove = (domain) => send("DELETE", `rules/${encodeURIComponent(domain)}`);
+const decide = (kind, port, name, verdict) => send("POST", "decide", { kind, port, name, verdict });
+const remove = (r) => send("DELETE", `rules/${r.kind}/${r.port}/${encodeURIComponent(r.name)}`);
+
+// listenerName writes a listener the way the rules file does.
+const listenerName = (kind, port) =>
+  kind === "http" && port === 80 ? "http" : kind === "tls" && port === 443 ? "https" : `${kind} :${port}`;
 
 const button = (label, onclick) => Object.assign(el("button", label), { onclick });
 
@@ -107,22 +111,26 @@ function pendingRows(p) {
   const shared = (n) => (p.shared || []).some((s) => s === n || s.endsWith("." + n));
 
   const rows = [];
-  const add = (n, depth, firstSeen, hits) => {
+  // Rows with something under them (the root, and names hosts share) decide a
+  // wildcard; a host on its own decides just that name.
+  const add = (n, pattern, depth, firstSeen, hits) => {
     const actions = el("td", undefined, "actions");
-    actions.append(button("allow", () => decide(n, "allow")), button("deny", () => decide(n, "deny")));
-    const name = el("td", n);
+    actions.append(button("allow", () => decide(p.kind, p.port, pattern, "allow")),
+      button("deny", () => decide(p.kind, p.port, pattern, "deny")));
+    const name = el("td", pattern);
     name.style.paddingLeft = `${0.5 + depth * 1.25}rem`;
     if (shared(n)) name.append(Object.assign(el("span", "shared", "tag"), { title: sharedTip }));
-    const r = row([name, el("td", firstSeen ? when(firstSeen) : "", "when"), el("td", hits ?? "", "n"), actions]);
+    const r = row([depth ? el("td") : el("td", listenerName(p.kind, p.port)), name,
+      el("td", firstSeen ? when(firstSeen) : "", "when"), el("td", hits ?? "", "n"), actions]);
     r.className = depth ? "host" : "group";
     rows.push(r);
   };
   const walk = (n, depth) => {
-    add(n, depth, hosts[n]?.first_seen, hosts[n]?.hits);
+    add(n, children[n] ? `*.${n}` : n, depth, hosts[n]?.first_seen, hosts[n]?.hits);
     for (const c of (children[n] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, depth + 1);
   };
-  add(p.domain, 0, p.first_seen, p.hits);
-  if (hosts[p.domain] && seen.length > 1) add(p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
+  add(p.domain, `*.${p.domain}`, 0, p.first_seen, p.hits);
+  if (hosts[p.domain] && seen.length > 1) add(p.domain, p.domain, 1, hosts[p.domain].first_seen, hosts[p.domain].hits);
   for (const c of (children[p.domain] || []).sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) walk(c, 1);
   rows.at(-1).classList.add("last");
   return rows;
@@ -134,15 +142,17 @@ async function refresh() {
       ["pending", "rules", "stats"].map((p) => fetch(p).then((r) => r.ok ? r.json() : null)));
 
     const pb = document.getElementById("pending");
-    pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(4)]));
+    pb.replaceChildren(...(pending?.length ? pending.flatMap(pendingRows) : [empty(5)]));
 
     document.getElementById("policy").textContent = rules ? rules.default : "rules not loaded";
     const rb = document.getElementById("rules");
     rb.replaceChildren(...(rules?.rules.length ? rules.rules.map((r) => {
       const actions = el("td", undefined, "actions");
-      actions.append(button("remove", () => remove(r.domain)));
-      return row([r.domain, r.target ? `${r.verdict} → ${r.target}` : r.verdict, actions]);
-    }) : [empty(3)]));
+      actions.append(button("remove", () => remove(r)));
+      const asked = r.dest && r.dest.startsWith("*:");
+      const verdict = r.verdict === "deny" ? "deny" : asked ? "allow" : `allow → ${r.dest}`;
+      return row([listenerName(r.kind, r.port), r.name, verdict, actions]);
+    }) : [empty(4)]));
 
     const sb = document.getElementById("stats");
     const srows = [];

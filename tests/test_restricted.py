@@ -86,9 +86,12 @@ def test_rules_file_allows_every_endpoint_and_denies_the_rest(tmp_path):
   spec = spec_of(tmp_path, RESTRICTED)
   assert kproxy.rules_text(spec.endpoints, {}).splitlines()[1:] == [
     "default deny",
-    "allow api.weather.com",
-    "allow fonts.gstatic.com",
-    "allow weather.com",
+    "http *.api.weather.com",
+    "http *.fonts.gstatic.com",
+    "http *.weather.com",
+    "https *.api.weather.com",
+    "https *.fonts.gstatic.com",
+    "https *.weather.com",
   ]
 
 
@@ -141,7 +144,7 @@ env = { NAS_URL = "http://nas" }
 def test_a_forward_takes_its_target_from_config(tmp_path):
   spec = spec_of(tmp_path, FORWARD)
   rules = kproxy.rules_text(spec.endpoints, {"nas_address": "NAS.lan:080"})
-  assert rules.splitlines()[1:] == ["default deny", "allow nas nas.lan:80"]
+  assert rules.splitlines()[1:] == ["default deny", "http nas nas.lan:80"]
   with pytest.raises(ValueError, match="endpoint nas: forward 'nas.lan' must be"):
     kproxy.rules_text(spec.endpoints, {"nas_address": "nas.lan"})
 
@@ -187,7 +190,7 @@ def test_loading_allocates_a_subnet_that_reloading_keeps(kelso_env):
   run_dir = kelso_env.run_root / "restricted-demo"
   compose = yaml.safe_load((run_dir / "compose.yml").read_text())
   assert compose["services"]["main"]["dns"] == [kproxy.proxy_address(subnet)]
-  assert "allow api.weather.com" in (run_dir / "kproxy" / "rules.txt").read_text()
+  assert "https *.api.weather.com" in (run_dir / "kproxy" / "rules.txt").read_text()
 
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert _subnet("restricted-demo") == subnet
@@ -214,14 +217,14 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   _write(kelso_env, FORWARD)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   # Unset config leaves the forward out; the missing value blocks start already.
-  assert "allow nas" not in _run_data("restricted-demo").kproxy_rules
+  assert "http nas" not in _run_data("restricted-demo").kproxy_rules
 
   set_ok = kelso_env.run(
     "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
   )
   assert set_ok.returncode == 0
   data = _run_data("restricted-demo")
-  assert "allow nas 10.0.0.5:5000" in data.kproxy_rules
+  assert "http nas 10.0.0.5:5000" in data.kproxy_rules
   assert data.config_env()[kproxy.RULES_ENV] == kproxy.rules_digest(data.kproxy_rules)
 
   assert (

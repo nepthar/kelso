@@ -13,8 +13,11 @@ import (
 
 const dnsTTL = 60
 
-// dnsAnswer answers every A query with self and every other query empty.
-func dnsAnswer(query []byte, self [4]byte) ([]byte, error) {
+// dnsAnswer answers A queries for names resolves accepts with self, and other
+// types for them empty. If it accepts none of the names asked about, the
+// answer is NXDOMAIN, so an app fails at the lookup instead of connecting and
+// being refused.
+func dnsAnswer(query []byte, self [4]byte, resolves func(string) bool) ([]byte, error) {
 	var p dnsmessage.Parser
 	h, err := p.Start(query)
 	if err != nil {
@@ -24,13 +27,23 @@ func dnsAnswer(query []byte, self [4]byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	known := make([]bool, len(qs))
+	rcode := dnsmessage.RCodeSuccess
+	if len(qs) > 0 {
+		rcode = dnsmessage.RCodeNameError
+	}
+	for i, q := range qs {
+		if known[i] = resolves(q.Name.String()); known[i] {
+			rcode = dnsmessage.RCodeSuccess
+		}
+	}
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{
 		ID:                 h.ID,
 		Response:           true,
 		OpCode:             h.OpCode,
 		RecursionDesired:   h.RecursionDesired,
 		RecursionAvailable: true,
-		RCode:              dnsmessage.RCodeSuccess,
+		RCode:              rcode,
 	})
 	b.EnableCompression()
 	if err := b.StartQuestions(); err != nil {
@@ -44,8 +57,8 @@ func dnsAnswer(query []byte, self [4]byte) ([]byte, error) {
 	if err := b.StartAnswers(); err != nil {
 		return nil, err
 	}
-	for _, q := range qs {
-		if q.Type != dnsmessage.TypeA || q.Class != dnsmessage.ClassINET {
+	for i, q := range qs {
+		if !known[i] || q.Type != dnsmessage.TypeA || q.Class != dnsmessage.ClassINET {
 			continue
 		}
 		rh := dnsmessage.ResourceHeader{Name: q.Name, Class: q.Class, TTL: dnsTTL}
@@ -60,7 +73,7 @@ func dnsAnswer(query []byte, self [4]byte) ([]byte, error) {
 // proxy's own address on the asker's network. The reply is sent from that
 // address too: on a socket bound to every address the kernel might otherwise
 // pick another, and the asker would drop the reply.
-func serveDNSUDP(pc net.PacketConn) {
+func serveDNSUDP(pc net.PacketConn, resolves func(string) bool) {
 	p := ipv4.NewPacketConn(pc)
 	if err := p.SetControlMessage(ipv4.FlagDst|ipv4.FlagInterface, true); err != nil {
 		log.Fatalf("dns/udp: %v", err)
@@ -75,7 +88,7 @@ func serveDNSUDP(pc net.PacketConn) {
 		if cm == nil || cm.Dst.To4() == nil {
 			continue
 		}
-		resp, err := dnsAnswer(buf[:n], [4]byte(cm.Dst.To4()))
+		resp, err := dnsAnswer(buf[:n], [4]byte(cm.Dst.To4()), resolves)
 		if err != nil {
 			continue
 		}
@@ -83,7 +96,7 @@ func serveDNSUDP(pc net.PacketConn) {
 	}
 }
 
-func serveDNSTCP(ln net.Listener) {
+func serveDNSTCP(ln net.Listener, resolves func(string) bool) {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -107,7 +120,7 @@ func serveDNSTCP(ln net.Listener) {
 				if _, err := io.ReadFull(c, q); err != nil {
 					return
 				}
-				resp, err := dnsAnswer(q, [4]byte(self))
+				resp, err := dnsAnswer(q, [4]byte(self), resolves)
 				if err != nil {
 					return
 				}

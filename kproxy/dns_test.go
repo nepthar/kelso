@@ -20,8 +20,9 @@ func TestDNSServerAnswersWithArrivalAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	go serveDNSUDP(pc)
-	go serveDNSTCP(ln)
+	resolves := func(string) bool { return true }
+	go serveDNSUDP(pc, resolves)
+	go serveDNSTCP(ln, resolves)
 
 	for _, network := range []string{"udp", "tcp"} {
 		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {

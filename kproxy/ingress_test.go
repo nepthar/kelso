@@ -77,7 +77,7 @@ func TestIngressUDP(t *testing.T) {
 	p := testIngressProxy()
 	pc, _ := net.ListenPacket("udp4", "127.0.0.1:0")
 	defer pc.Close()
-	go p.relayUDP(pc, ingress{target: echo.LocalAddr().String(), udp: true})
+	go p.ingressUDP(pc, ingress{target: echo.LocalAddr().String(), udp: true})
 
 	// Two clients, so replies have to find their way back to the right one.
 	for _, msg := range []string{"one", "two"} {

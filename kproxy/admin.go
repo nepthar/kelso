@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 )
 
 // browserGuard protects a TCP admin listener from other sites in the same
@@ -34,10 +35,14 @@ func browserGuard(h http.Handler) http.Handler {
 //go:embed ui.html
 var uiHTML []byte
 
+// ruleJSON is one rule as the admin API sends it: the long form of a rules
+// file line, with no shorthands.
 type ruleJSON struct {
-	Domain  string  `json:"domain"`
+	Kind    Kind    `json:"kind"`
+	Port    int     `json:"port"`
+	Name    string  `json:"name"`
 	Verdict Verdict `json:"verdict"`
-	Target  string  `json:"target,omitempty"`
+	Dest    string  `json:"dest,omitempty"`
 }
 
 type rulesJSON struct {
@@ -73,22 +78,22 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		d, err := ruleName(req.Domain)
-		if err == nil {
-			_, err = parseVerdict(string(req.Verdict))
-		}
-		if err == nil && req.Target != "" {
-			err = fmt.Errorf("decide sets a verdict only: send a target with PUT /rules")
+		_, err := parseVerdict(string(req.Verdict))
+		if err == nil && req.Dest != "" {
+			err = fmt.Errorf("decide sets a verdict only: send a destination with PUT /rules")
 		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := e.Decide(d, req.Verdict); err != nil {
+		switch err := e.Decide(req.Kind, req.Port, req.Name, req.Verdict); {
+		case errors.Is(err, errNotLoaded):
 			http.Error(w, err.Error(), http.StatusConflict)
-			return
+		case err != nil:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusNoContent)
 		}
-		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("PUT /rules", func(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +108,7 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			return
 		}
 		if err := e.Replace(rules); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -122,20 +127,23 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 			return
 		}
 		out := rulesJSON{Default: rules.Default, Rules: []ruleJSON{}}
-		for _, d := range rules.sorted() {
-			rule := rules.Domains[d]
-			out.Rules = append(out.Rules, ruleJSON{d, rule.Verdict, rule.Target})
-		}
+		rules.each(func(l *Listener, rule Rule) {
+			out.Rules = append(out.Rules, ruleJSON{l.Kind, l.Port, rule.Name, rule.Verdict, rule.Dest})
+		})
 		writeJSON(w, out)
 	})
 
-	mux.HandleFunc("DELETE /rules/{name}", func(w http.ResponseWriter, r *http.Request) {
-		name, err := ruleName(r.PathValue("name"))
+	mux.HandleFunc("DELETE /rules/{kind}/{port}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		kind, err := parseKind(r.PathValue("kind"))
+		port, perr := strconv.Atoi(r.PathValue("port"))
+		if err == nil && perr != nil {
+			err = fmt.Errorf("port %q is not a number", r.PathValue("port"))
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		switch err := e.Remove(name); {
+		switch err := e.Remove(kind, port, r.PathValue("name")); {
 		case errors.Is(err, errNoRule):
 			http.Error(w, err.Error(), http.StatusNotFound)
 		case err != nil:
@@ -157,17 +165,16 @@ func (rj rulesJSON) toRules() (*Rules, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules := &Rules{Default: m, Domains: map[string]Rule{}}
-	for _, r := range rj.Rules {
-		d, err := ruleName(r.Domain)
-		if err != nil {
-			return nil, err
+	rules := newRules(m)
+	for i, r := range rj.Rules {
+		at := fmt.Sprintf("rule %d", i+1)
+		kind, err := parseKind(string(r.Kind))
+		if err == nil {
+			err = rules.add(kind, r.Port, r.Name, r.Verdict, r.Dest, at)
 		}
-		rule, err := newRule(string(r.Verdict), r.Target)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", d, err)
+			return nil, fmt.Errorf("%s: %w", at, err)
 		}
-		rules.Domains[d] = rule
 	}
 	return rules, nil
 }
