@@ -21,7 +21,8 @@ rule() { # rule <kind> <port> <name> <verdict> [dest]
 }
 rules="{\"default\":\"ask\",\"rules\":[$(rule tls 443 '*.example.com' allow),$(rule http 80 '*.example.com' allow),\
 $(rule tls 443 '*.example.org' deny),$(rule http 80 '*.example.org' deny),\
-$(rule http 80 lanweb allow 172.30.98.10:8080),$(rule tcp 9000 lantcp allow 172.30.98.10:8080)]}"
+$(rule http 80 lanweb allow 172.30.98.10:8080),$(rule tcp 9000 lantcp allow 172.30.98.10:8080),\
+{\"kind\":\"tcp\",\"port\":20001,\"ingress\":true,\"name\":\"web\",\"verdict\":\"allow\",\"dest\":\"internal-web:8080\"}]}"
 # Skips kproxy's DNS, for checking what the proxy does with a name DNS refuses.
 pinned() { c curl -sS -m 10 --resolve "example.org:$1:172.30.99.2" "${@:2}"; }
 
@@ -57,6 +58,10 @@ expect "target listed in rules" '"dest":"172.30.98.10:8080"' "$(admin http://k/r
 expect "unlisted bare name not resolved" "Could not resolve" "$(c curl -sS -m 5 http://otherlan/)"
 expect "tcp rule reaches LAN" "200" "$(code http://lantcp:9000/passwd)"
 expect "tcp rule's name only" "Could not resolve" "$(c curl -sS -m 5 http://lantpc:9000/passwd)"
+lan() { docker compose exec -T lan-web "$@" 2>&1; }
+expect "lan can't reach the app directly" "bad address" "$(lan wget -q -T 3 -O /dev/null http://internal-web:8080/passwd)"
+expect "ingress reaches the app" "root:" "$(lan wget -q -T 5 -O - http://proxy:20001/passwd)"
+expect "ingress name not resolved" "NXDOMAIN" "$(c nslookup web)"
 
 held=$(mktemp)
 c curl -sS -m 10 -o /dev/null -w '%{http_code}' https://github.com/ >"$held" &

@@ -136,6 +136,54 @@ func TestTCPAndUDPRulesForward(t *testing.T) {
 	}
 }
 
+func TestIngressRelaysIn(t *testing.T) {
+	p := listenerProxy(t)
+	tcpPort, udpPort := freePort(t, "tcp"), freePort(t, "udp")
+	err := p.engine.Replace(rules(DefaultDeny,
+		fmt.Sprintf("ingress tcp :%d web %s", tcpPort, tcpEcho(t)),
+		fmt.Sprintf("ingress udp :%d dns %s", udpPort, udpEcho(t)),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := net.Dial("tcp4", fmt.Sprintf("127.0.0.1:%d", tcpPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Write([]byte("in"))
+	c.(*net.TCPConn).CloseWrite()
+	got, _ := io.ReadAll(c)
+	c.Close()
+	if string(got) != "hi:in" {
+		t.Fatalf("tcp: got %q", got)
+	}
+
+	// Two clients, so replies have to find their way back to the right one.
+	for _, msg := range []string{"one", "two"} {
+		u, err := net.Dial("udp4", fmt.Sprintf("127.0.0.1:%d", udpPort))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer u.Close()
+		u.SetDeadline(time.Now().Add(2 * time.Second))
+		u.Write([]byte(msg))
+		buf := make([]byte, 100)
+		n, err := u.Read(buf)
+		if err != nil || string(buf[:n]) != "echo:"+msg {
+			t.Fatalf("udp %s: got %q, %v", msg, buf[:n], err)
+		}
+	}
+
+	s := p.stats.Snapshot()
+	if s["web"][fmt.Sprintf("ingress tcp :%d", tcpPort)].Allowed != 1 ||
+		s["dns"][fmt.Sprintf("ingress udp :%d", udpPort)].Allowed != 2 {
+		t.Fatalf("stats: %+v", s)
+	}
+	if p.engine.Resolves("web") {
+		t.Fatal("DNS answers an ingress name")
+	}
+}
+
 func TestReservedPortsAreRefused(t *testing.T) {
 	p := listenerProxy(t)
 	p.reserved[portKey{true, 5353}] = "dns"

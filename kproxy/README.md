@@ -76,14 +76,18 @@ https ads.googleapis.com     deny
 tls :6443 x.someapi.com      x.someapi.com:443
 tcp :9669 redis              redis.lab.my-domain.com:9669
 udp :2343 video-stream       cam0.lab.my-domain.com:2343
+
+ingress tcp :20001 web       main:8080
+ingress udp :20002 discovery main:10001
 ```
 
-The long form is `<kind> :<port> <name> [<dest>|deny]`:
+The long form is `[ingress] <kind> :<port> <name> [<dest>|deny]`:
 
 | Kind | Name | Destination |
 |---|---|---|
 | `http`, `tls` | a name, or `*.name` for the name and everything below it | optional: `HOST:PORT`, or `*:PORT` for the name asked for; defaults to `*:<port>` |
 | `tcp`, `udp` | a label, for the stats and DNS | required: `HOST:PORT` |
+| `ingress tcp`, `ingress udp` | a label, for the stats | required: `HOST:PORT` |
 
 `http NAME [...]` is short for `http :80 NAME [...]`, and `https NAME [deny]`
 is short for `tls :443 NAME *:443`. `https` takes no destination, so the
@@ -101,7 +105,8 @@ line that sends a TLS name somewhere else is always the long one (see
   refuses connections, and `tcp` and `udp` have no name to deny.
 - **DNS** answers a name if any listener would let it through: an allow
   matches it, or no rule does and the default isn't `deny`. A `tcp` or `udp`
-  rule's name always resolves; above, `redis` does and `redsi` doesn't.
+  rule's name always resolves; above, `redis` does and `redsi` doesn't. An
+  ingress name never does.
 - **Lines** are split on spaces, and everything from `#` to the end of a line
   is a comment.
 
@@ -112,9 +117,10 @@ can't both be true:
   it already has a tls listener`. TCP and UDP ports are separate, so
   `tcp :53` and `udp :53` can coexist, but `http`, `tls` and `tcp` all use TCP
   ports.
-- a second rule on a `tcp` or `udp` port, which has no name to tell them apart.
+- a second rule on a `tcp` or `udp` port, ingress or not, which has no name to
+  tell them apart.
 - the same name twice on one listener.
-- a port the proxy already uses for DNS or `-ingress`.
+- the port the proxy uses for DNS.
 
 It logs a warning, without refusing, for a `tls` rule that sends a name to a
 different host, and for a listener with only denies under `default deny`.
@@ -156,20 +162,24 @@ anything else on the LAN, directly.
 ## Ingress
 
 Containers on an `internal: true` network can't publish ports, so nothing
-outside can reach them directly. `-ingress LISTEN=HOST:PORT` relays the other
-way: kproxy listens on `LISTEN` and pipes each connection to `HOST:PORT`, with
-no rules checked. Add `/udp` for a UDP port:
+outside can reach them directly. An `ingress` rule relays the other way:
+kproxy listens on the port and pipes everything to the destination, the same
+as an outbound `tcp` or `udp` rule.
 
 ```
--ingress 20001=main:8080 -ingress 20002=main:10001/udp
+ingress tcp :20001 web main:8080
+ingress udp :20002 discovery main:10001
 ```
 
-Publish `LISTEN` on the kproxy container, and the app is reachable through it.
-`HOST` is resolved on every connection, so a compose service name works.
+Publish the port on the kproxy container, and the app is reachable through
+it. The destination is resolved on every connection, so a compose service
+name works. Unlike an outbound rule, DNS never answers an ingress rule's name,
+and the stats and web UI show it as ingress.
 
 The app sees kproxy's address as every client's. For UDP, kproxy keeps a
-socket towards the target for each client address and drops it after two
-minutes without a reply, at most 1,024 at once.
+socket towards the destination for each client address, for outbound and
+ingress rules alike, and drops it after two minutes without a reply, at most
+1,024 at once.
 
 ## Running it
 
@@ -344,7 +354,6 @@ short.
 | `-default` | `deny` | default policy for a rules file that doesn't set one |
 | `-hold` | `60s` | how long the `ask` policy holds a connection |
 | `-max-conns` | `1024` | most client connections open at once |
-| `-ingress` | | `LISTEN=HOST:PORT[/udp]`, repeatable; see [Ingress](#ingress) |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
 rules loaded.

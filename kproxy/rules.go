@@ -97,10 +97,41 @@ type Rule struct {
 	at      string // where the rule came from, for error messages
 }
 
+// Listener is one port and what it does. An ingress listener is a TCP or UDP
+// one that relays connections in to the app rather than out of it: the same
+// forwarder, but DNS never answers its name.
 type Listener struct {
-	Kind  Kind
-	Port  int
-	Rules map[string]Rule
+	Kind    Kind
+	Port    int
+	Ingress bool
+	Rules   map[string]Rule
+}
+
+// String names a listener the way the rules file writes it.
+func (l *Listener) String() string { return listenerName(l.Kind, l.Port, l.Ingress) }
+
+// listenerName names a listener the way the rules file writes it: plain
+// "http" and "https" for the ones that always exist.
+func listenerName(k Kind, port int, ingress bool) string {
+	switch {
+	case k == KindHTTP && port == httpPort:
+		return "http"
+	case k == KindTLS && port == httpsPort:
+		return "https"
+	case ingress:
+		return fmt.Sprintf("ingress %s :%d", k, port)
+	}
+	return fmt.Sprintf("%s :%d", k, port)
+}
+
+// ruleSpec is one rule as written, before add validates it.
+type ruleSpec struct {
+	Kind    Kind
+	Port    int
+	Ingress bool
+	Name    string
+	Verdict Verdict
+	Dest    string
 }
 
 // match returns the most specific rule matching host: an exact name, then the
@@ -157,9 +188,13 @@ func (r *Rules) clone() *Rules {
 
 // add validates one rule and adds it, creating its listener if needed. at
 // says where the rule came from, for later errors about it.
-func (r *Rules) add(kind Kind, port int, name string, verdict Verdict, dest, at string) error {
+func (r *Rules) add(s ruleSpec, at string) error {
+	kind, port, name, verdict, dest := s.Kind, s.Port, s.Name, s.Verdict, s.Dest
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("port %d is out of range", port)
+	}
+	if s.Ingress && kind.named() {
+		return fmt.Errorf("ingress is tcp or udp, not %s", kind)
 	}
 	var err error
 	if kind.named() {
@@ -190,14 +225,18 @@ func (r *Rules) add(kind Kind, port int, name string, verdict Verdict, dest, at 
 
 	k := keyOf(kind, port)
 	l := r.Listeners[k]
+	what, a := string(kind), "a"
+	if s.Ingress {
+		what, a = "ingress "+what, "an"
+	}
 	switch {
 	case l == nil:
-		l = &Listener{Kind: kind, Port: port, Rules: map[string]Rule{}}
+		l = &Listener{Kind: kind, Port: port, Ingress: s.Ingress, Rules: map[string]Rule{}}
 		r.Listeners[k] = l
 	case l.Kind != kind:
-		return fmt.Errorf("kproxy can't add a %s listener on port %d because it already has a %s listener", kind, port, l.Kind)
-	case !kind.named() && len(l.Rules) > 0:
-		return fmt.Errorf("kproxy can't add %s listener %s on port %d because %s already uses it", kind, name, port, l.fixed().Name)
+		return fmt.Errorf("kproxy can't add %s %s listener on port %d because it already has a %s listener", a, what, port, l.Kind)
+	case !kind.named():
+		return fmt.Errorf("kproxy can't add %s listener %s on port %d because %s already uses it", what, name, port, l.fixed().Name)
 	}
 	if prev, ok := l.Rules[name]; ok {
 		return fmt.Errorf("%s on %s :%d is already set (%s)", name, kind, port, prev.at)
@@ -227,9 +266,12 @@ func (r *Rules) remove(kind Kind, port int, name string) error {
 var errNoRule = errors.New("no such rule")
 
 // resolves reports whether DNS should answer host: some listener would take a
-// connection for it, or it is a TCP or UDP rule's name.
+// connection for it, or it is an outbound TCP or UDP rule's name.
 func (r *Rules) resolves(host string) bool {
 	for _, l := range r.Listeners {
+		if l.Ingress {
+			continue
+		}
 		if !l.Kind.named() {
 			if _, ok := l.Rules[host]; ok {
 				return true
@@ -248,8 +290,8 @@ func (r *Rules) resolves(host string) bool {
 }
 
 // each calls fn for every rule, in rules file order: the implicit HTTP and TLS
-// listeners, then the rest by port, and each listener's names grouped by
-// domain.
+// listeners, then the other outbound ones by port, then ingress by port, and
+// each listener's names grouped by domain.
 func (r *Rules) each(fn func(*Listener, Rule)) {
 	keys := make([]portKey, 0, len(r.Listeners))
 	for k := range r.Listeners {
@@ -257,6 +299,9 @@ func (r *Rules) each(fn func(*Listener, Rule)) {
 	}
 	slices.SortFunc(keys, func(a, b portKey) int {
 		if c := compareBool(!implicit(a), !implicit(b)); c != 0 {
+			return c
+		}
+		if c := compareBool(r.Listeners[a].Ingress, r.Listeners[b].Ingress); c != 0 {
 			return c
 		}
 		if a.port != b.port {
@@ -416,50 +461,64 @@ func parseDest(s string, star bool) (string, error) {
 	return net.JoinHostPort(host, strconv.Itoa(p)), nil
 }
 
-const ruleSyntax = "want 'default <allow|deny|ask>', 'http <name> [<dest>|deny]', 'https <name> [deny]', " +
-	"'<http|tls> :<port> <name> [<dest>|deny]' or '<tcp|udp> :<port> <name> <dest>'"
+func validPort(s string) bool {
+	p, err := strconv.Atoi(s)
+	return err == nil && p >= 1 && p <= 65535 && s[0] >= '0' && s[0] <= '9'
+}
 
-// parseLine turns one rule line, already split into fields, into add's
-// arguments. "http NAME" and "https NAME" are short for the listeners on 80
-// and 443.
-func parseLine(f []string) (kind Kind, port int, name string, verdict Verdict, dest string, err error) {
+const ruleSyntax = "want 'default <allow|deny|ask>', 'http <name> [<dest>|deny]', 'https <name> [deny]', " +
+	"'<http|tls> :<port> <name> [<dest>|deny]', '<tcp|udp> :<port> <name> <dest>' " +
+	"or 'ingress <tcp|udp> :<port> <name> <dest>'"
+
+// parseLine turns one rule line, already split into fields, into a rule for
+// add to check. "http NAME" and "https NAME" are short for the listeners on 80
+// and 443, and "ingress" in front of a tcp or udp rule makes it relay in.
+func parseLine(f []string) (ruleSpec, error) {
+	var s ruleSpec
+	if f[0] == "ingress" {
+		s.Ingress, f = true, f[1:]
+		if len(f) == 0 || (f[0] != string(KindTCP) && f[0] != string(KindUDP)) {
+			return s, errors.New("ingress needs tcp or udp: ingress <tcp|udp> :<port> <name> <dest>")
+		}
+	}
 	var rest []string
 	switch {
 	case (f[0] == "http" || f[0] == "https") && len(f) > 1 && !strings.HasPrefix(f[1], ":"):
-		kind, port, rest = KindHTTP, httpPort, f[1:]
+		s.Kind, s.Port, rest = KindHTTP, httpPort, f[1:]
 		if f[0] == "https" {
-			kind, port = KindTLS, httpsPort
+			s.Kind, s.Port = KindTLS, httpsPort
 		}
 	case f[0] == "https" && len(f) > 1:
-		return "", 0, "", "", "", errors.New("https always means port 443; use tls :<port> for others")
+		return s, errors.New("https always means port 443; use tls :<port> for others")
 	case len(f) < 3:
-		return "", 0, "", "", "", errors.New(ruleSyntax)
+		return s, errors.New(ruleSyntax)
 	default:
-		if kind, err = parseKind(f[0]); err != nil {
-			return "", 0, "", "", "", err
+		kind, err := parseKind(f[0])
+		if err != nil {
+			return s, err
 		}
 		p, ok := strings.CutPrefix(f[1], ":")
 		if !ok || !validPort(p) {
-			return "", 0, "", "", "", fmt.Errorf("%s rules need a listening port like :6443, not %q", kind, f[1])
+			return s, fmt.Errorf("%s rules need a listening port like :6443, not %q", kind, f[1])
 		}
-		port, _ = strconv.Atoi(p)
-		rest = f[2:]
+		s.Kind, rest = kind, f[2:]
+		s.Port, _ = strconv.Atoi(p)
 	}
 	if len(rest) != 1 && len(rest) != 2 {
-		return "", 0, "", "", "", errors.New(ruleSyntax)
+		return s, errors.New(ruleSyntax)
 	}
-	name, verdict = rest[0], Allow
+	s.Name, s.Verdict = rest[0], Allow
 	if len(rest) == 2 {
 		if rest[1] == "deny" {
-			verdict = Deny
+			s.Verdict = Deny
 		} else {
-			dest = rest[1]
+			s.Dest = rest[1]
 		}
 	}
-	if f[0] == "https" && dest != "" {
-		return "", 0, "", "", "", fmt.Errorf("https takes no destination; to send %s elsewhere write tls :443 %s %s", name, name, dest)
+	if f[0] == "https" && s.Dest != "" {
+		return s, fmt.Errorf("https takes no destination; to send %s elsewhere write tls :443 %s %s", s.Name, s.Name, s.Dest)
 	}
-	return kind, port, name, verdict, dest, nil
+	return s, nil
 }
 
 func parseRules(r io.Reader, defaultPolicy Policy) (*Rules, error) {
@@ -479,9 +538,9 @@ func parseRules(r io.Reader, defaultPolicy Policy) (*Rules, error) {
 			rules.Default = p
 			continue
 		}
-		kind, port, name, verdict, dest, err := parseLine(f)
+		s, err := parseLine(f)
 		if err == nil {
-			err = rules.add(kind, port, name, verdict, dest, fmt.Sprintf("line %d", n))
+			err = rules.add(s, fmt.Sprintf("line %d", n))
 		}
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", n, err)
@@ -509,6 +568,8 @@ func (l *Listener) line(rule Rule) string {
 		if tail == star {
 			tail = ""
 		}
+	case l.Ingress:
+		head = fmt.Sprintf("ingress %s :%d", l.Kind, l.Port)
 	default:
 		head = fmt.Sprintf("%s :%d", l.Kind, l.Port)
 	}

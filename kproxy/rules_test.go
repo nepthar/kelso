@@ -113,6 +113,8 @@ func TestParseAndFormatRules(t *testing.T) {
 		"tls :6443 x.someapi.com x.someapi.com:443",
 		"tls :6553 *.someapi.com",
 		"http :8080 api.example.com",
+		"ingress udp :20002 dns main:10001",
+		"ingress tcp :20001 web Main:8080",
 	)
 	got := r.format()
 	wantLines := []string{
@@ -130,6 +132,8 @@ func TestParseAndFormatRules(t *testing.T) {
 		"tls :6553 *.someapi.com *:6553",
 		"http :8080 api.example.com *:8080",
 		"tcp :9669 redis redis.lab.my-domain.com:9669",
+		"ingress tcp :20001 web main:8080",
+		"ingress udp :20002 dns main:10001",
 	}
 	if strings.Join(wantLines, "\n")+"\n" != got {
 		t.Fatalf("format:\n%s", got)
@@ -172,6 +176,12 @@ func TestBadRules(t *testing.T) {
 		"udp :53 dns 1.1.1.1:53\nudp :53 x 1.1.1.1:53": "kproxy can't add udp listener x on port 53 because dns already uses it",
 		"tls :6443 a.com\nhttp :6443 b.com":            "kproxy can't add a http listener on port 6443 because it already has a tls listener",
 		"https a.com\nhttps A.com. deny":               "a.com on tls :443 is already set (line 1)",
+		"ingress http :8080 web main:8080":             "ingress needs tcp or udp",
+		"ingress":                                      "ingress needs tcp or udp",
+		"ingress tcp :20001 web":                       "needs a destination HOST:PORT",
+		"ingress tcp :20001 web deny":                  "deny needs a name to match",
+		"ingress tcp :443 web main:8443":               "kproxy can't add an ingress tcp listener on port 443 because it already has a tls listener",
+		"tcp :9669 redis redis.lan:9669\ningress tcp :9669 web main:80": "kproxy can't add ingress tcp listener web on port 9669 because redis already uses it",
 	} {
 		_, err := parseRules(strings.NewReader(line), DefaultDeny)
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -195,7 +205,7 @@ func TestReadmeExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Default != DefaultDeny || len(r.Listeners) != 5 || len(r.warnings()) != 0 {
+	if r.Default != DefaultDeny || len(r.Listeners) != 7 || len(r.warnings()) != 0 {
 		t.Fatalf("got %s, warnings %q", r.format(), r.warnings())
 	}
 }
@@ -206,8 +216,10 @@ func TestResolves(t *testing.T) {
 		"https ads.googleapis.com deny",
 		"http adguard rpi.lab.my-domain.com:3000",
 		"tcp :9669 redis redis.lab.my-domain.com:9669",
+		"ingress tcp :20001 web main:8080",
 	)
 	for host, want := range map[string]bool{
+		"web":                 false,
 		"docs.googleapis.com": true,
 		"googleapis.com":      true,
 		"ads.googleapis.com":  false,
@@ -223,8 +235,8 @@ func TestResolves(t *testing.T) {
 	// Under ask, a name resolves unless every listener denies it: the deny is
 	// only on 443, and port 80 would still ask.
 	r.Default = DefaultAsk
-	r.add(KindHTTP, httpPort, "ads.googleapis.com", Deny, "", "test")
-	r.add(KindHTTP, httpPort, "tracker.com", Deny, "", "test")
+	r.add(ruleSpec{Kind: KindHTTP, Port: httpPort, Name: "ads.googleapis.com", Verdict: Deny}, "test")
+	r.add(ruleSpec{Kind: KindHTTP, Port: httpPort, Name: "tracker.com", Verdict: Deny}, "test")
 	for host, want := range map[string]bool{
 		"example.com":        true,
 		"ads.googleapis.com": false,
@@ -281,8 +293,9 @@ func TestRulesFile(t *testing.T) {
 	if err != nil || r.Default != DefaultAllow || len(r.Listeners) != 2 {
 		t.Fatalf("missing file: %+v, %v", r, err)
 	}
-	r.add(KindTLS, 443, "example.com", Deny, "", "test")
-	r.add(KindHTTP, 80, "nas", Allow, "192.168.1.20:5000", "test")
+	r.add(ruleSpec{Kind: KindTLS, Port: 443, Name: "example.com", Verdict: Deny}, "test")
+	r.add(ruleSpec{Kind: KindHTTP, Port: 80, Name: "nas", Verdict: Allow, Dest: "192.168.1.20:5000"}, "test")
+	r.add(ruleSpec{Kind: KindTCP, Port: 20001, Ingress: true, Name: "web", Verdict: Allow, Dest: "main:8080"}, "test")
 	if err := writeRulesFile(path, r); err != nil {
 		t.Fatal(err)
 	}

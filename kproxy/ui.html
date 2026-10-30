@@ -72,8 +72,9 @@ const decide = (kind, port, name, verdict) => send("POST", "decide", { kind, por
 const remove = (r) => send("DELETE", `rules/${r.kind}/${r.port}/${encodeURIComponent(r.name)}`);
 
 // listenerName writes a listener the way the rules file does.
-const listenerName = (kind, port) =>
-  kind === "http" && port === 80 ? "http" : kind === "tls" && port === 443 ? "https" : `${kind} :${port}`;
+const listenerName = (kind, port, ingress) =>
+  kind === "http" && port === 80 ? "http" : kind === "tls" && port === 443 ? "https"
+    : `${ingress ? "ingress " : ""}${kind} :${port}`;
 
 const button = (label, onclick) => Object.assign(el("button", label), { onclick });
 
@@ -151,7 +152,7 @@ async function refresh() {
       actions.append(button("remove", () => remove(r)));
       const asked = r.dest && r.dest.startsWith("*:");
       const verdict = r.verdict === "deny" ? "deny" : asked ? "allow" : `allow → ${r.dest}`;
-      return row([listenerName(r.kind, r.port), r.name, verdict, actions]);
+      return row([listenerName(r.kind, r.port, r.ingress), r.name, verdict, actions]);
     }) : [empty(4)]));
 
     const sb = document.getElementById("stats");

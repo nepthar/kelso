@@ -212,10 +212,6 @@ class AppSpec:
   def network_mode(self) -> str:
     return self.manifest.app.network_mode
 
-  @property
-  def endpoints(self) -> Mapping[str, list[str]]:
-    return self.manifest.endpoints
-
 
 def _build(manifest: Manifest, app: AppID) -> AppSpec:
   # One flat namespace: `_validate_config` has already refused a name in both
