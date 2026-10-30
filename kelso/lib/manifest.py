@@ -21,7 +21,6 @@ from pydantic import (
 from kelso.lib.apps import AppID
 from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS
 from kelso.lib.cronexpr import CronSchedule
-from kelso.lib.kproxy import KPROXY_SERVICE, endpoint_name, forward_target
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
@@ -32,7 +31,7 @@ from kelso.lib.util import (
   Identifier,
 )
 
-NetworkMode = Literal["open", "restricted", "host"]
+NetworkMode = Literal["normal", "host"]
 VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
 
 
@@ -45,7 +44,7 @@ class AppSection(BaseModel):
 
   app_id: str | None = None
   version: str
-  network_mode: NetworkMode = "open"
+  network_mode: NetworkMode = "normal"
   display_name: str = ""
   description: str = ""
   author: str = ""
@@ -272,15 +271,6 @@ class CronEntry(BaseModel):
   args: str = ""
 
 
-class ForwardEntry(BaseModel):
-  """An [endpoints] name the app connects to, sent on to a fixed host:port."""
-
-  model_config = ConfigDict(extra="forbid")
-
-  # host:port, usually a `${config}` reference; resolved on every start.
-  forward: str
-
-
 class Manifest(BaseModel):
   """Parsed kelso TOML for a bundle or catalog service definition."""
 
@@ -295,9 +285,6 @@ class Manifest(BaseModel):
   commands: dict[Identifier, CommandEntry] = Field(default_factory=dict)
   cron: dict[Identifier, CronEntry] = Field(default_factory=dict)
   connections: dict[Identifier, ConnectionEntry] = Field(default_factory=dict)
-  # Named groups of domains a restricted app may reach; each entry also covers
-  # its subdomains. A forward is instead a name the app connects to itself.
-  endpoints: dict[Identifier, list[str] | ForwardEntry] = Field(default_factory=dict)
 
 
 def parse_manifest(data: bytes, app: AppID, source: Path) -> Manifest:
@@ -351,75 +338,6 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_commands(manifest))
   errors.extend(_validate_cron(manifest))
   errors.extend(_validate_connections(manifest))
-  errors.extend(_validate_network(manifest))
-  return errors
-
-
-# Compose keys that would let a restricted unit reach out around kproxy.
-_RESTRICTED_COMPOSE_KEYS = frozenset({"dns", "networks"})
-
-
-def _validate_network(manifest: Manifest) -> list[str]:
-  errors: list[str] = []
-  mode = manifest.app.network_mode
-  config_keys = set(manifest.config) | set(manifest.adv_config)
-  for group, entry in manifest.endpoints.items():
-    where = f"[endpoints.{group}]"
-    if isinstance(entry, ForwardEntry):
-      errors.extend(f"{where}: {e}" for e in _forward_errors(group, entry, config_keys))
-      if mode != "restricted":
-        errors.append(
-          f"{where}: a forward needs network_mode = 'restricted', since only "
-          "kproxy can send the app on to it"
-        )
-      continue
-    for name in entry:
-      try:
-        endpoint_name(name)
-      except ValueError as e:
-        errors.append(f"{where}: {e}")
-  if mode == "host" and manifest.endpoints:
-    errors.append(
-      "[endpoints]: network_mode 'host' can't limit outbound traffic; "
-      "use network_mode = 'restricted'"
-    )
-  if mode != "restricted":
-    return errors
-  if KPROXY_SERVICE in manifest.run:
-    errors.append(
-      f"[run.{KPROXY_SERVICE}]: network_mode 'restricted' uses that name for "
-      "its proxy; rename the unit"
-    )
-  for unit_name, run_entry in manifest.run.items():
-    clashes = _RESTRICTED_COMPOSE_KEYS & run_entry.compose.keys()
-    if clashes:
-      errors.append(
-        f"[run.{unit_name}.compose]: network_mode 'restricted' manages "
-        f"{', '.join(sorted(clashes))}"
-      )
-  return errors
-
-
-def _forward_errors(
-  group: str, entry: ForwardEntry, config_keys: set[str]
-) -> list[str]:
-  errors = []
-  try:
-    endpoint_name(group)
-  except ValueError as e:
-    errors.append(str(e))
-  refs = EnvTemplate(entry.forward).get_identifiers()
-  unknown = sorted(set(refs) - config_keys)
-  if unknown:
-    errors.append(
-      f"forward references {', '.join(f'${{{r}}}' for r in unknown)}, "
-      "which is not in [config] or [adv_config]"
-    )
-  elif not refs:
-    try:
-      forward_target(entry.forward)
-    except ValueError as e:
-      errors.append(str(e))
   return errors
 
 

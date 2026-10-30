@@ -5,7 +5,6 @@ from pathlib import Path
 
 import yaml
 
-from kelso.lib import kproxy
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
@@ -225,7 +224,6 @@ class LoadResult:
 def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ...]]:
   """Rebuild everything derived from the loaded copy in the run dir."""
   _clear_and_reallocate_ports(spec, ctx)
-  _allocate_subnet(spec, ctx)
 
   run_data = load_run_data(spec, ctx)
   if run_data.load_blockers:
@@ -233,7 +231,6 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
   dropped = _rebuild_volume_links(spec, run_data)
   _rebuild_kelso_dirs(spec, run_data.run_path)
-  _rebuild_kproxy_dir(spec, run_data)
   with open(ctx.loaded_paths(spec.app).compose_path, "w") as f:
     yaml.safe_dump(make_compose_dict(spec, run_data), f, sort_keys=False)
 
@@ -251,32 +248,6 @@ def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
     script.parent.mkdir(parents=True)
     script.write_text(kelso_cmd(spec, unit_name))
     script.chmod(0o755)
-
-
-def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """A restricted app keeps its subnet across loads; any other app has none."""
-  hdb = ctx.kelso_db
-  if spec.network_mode != "restricted":
-    hdb.clear_subnet(spec.app)
-  elif hdb.get_subnet(spec.app) is None:
-    hdb.set_subnet(spec.app, hdb.next_free_subnet())
-
-
-def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
-  """`kproxy/`, kproxy's rules file and admin socket, for a restricted app."""
-  shutil.rmtree(run_data.run_path / kproxy.KPROXY_RUN_DIR, ignore_errors=True)
-  if spec.network_mode == "restricted":
-    write_kproxy_rules(run_data)
-
-
-def write_kproxy_rules(run_data: AppRunData) -> None:
-  """Write kproxy's rules from current config. Start does this too, since a
-  forward's config may have changed since the load."""
-  if run_data.kproxy_rules is None:
-    return
-  root = run_data.run_path / kproxy.KPROXY_RUN_DIR
-  root.mkdir(exist_ok=True)
-  (root / "rules.txt").write_text(run_data.kproxy_rules)
 
 
 @dataclass(frozen=True)

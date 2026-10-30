@@ -223,7 +223,7 @@ func (e *Engine) Decide(kind Kind, port int, name string, v Verdict) error {
 	}
 	next := cur.clone()
 	next.remove(kind, port, name)
-	if err := next.add(kind, port, name, v, "", "decided"); err != nil {
+	if err := next.add(ruleSpec{Kind: kind, Port: port, Name: name, Verdict: v}, "decided"); err != nil {
 		return err
 	}
 	return e.publish(next)

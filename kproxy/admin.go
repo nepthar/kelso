@@ -40,6 +40,7 @@ var uiHTML []byte
 type ruleJSON struct {
 	Kind    Kind    `json:"kind"`
 	Port    int     `json:"port"`
+	Ingress bool    `json:"ingress,omitempty"`
 	Name    string  `json:"name"`
 	Verdict Verdict `json:"verdict"`
 	Dest    string  `json:"dest,omitempty"`
@@ -128,7 +129,7 @@ func adminHandler(e *Engine, s *Stats) http.Handler {
 		}
 		out := rulesJSON{Default: rules.Default, Rules: []ruleJSON{}}
 		rules.each(func(l *Listener, rule Rule) {
-			out.Rules = append(out.Rules, ruleJSON{l.Kind, l.Port, rule.Name, rule.Verdict, rule.Dest})
+			out.Rules = append(out.Rules, ruleJSON{l.Kind, l.Port, l.Ingress, rule.Name, rule.Verdict, rule.Dest})
 		})
 		writeJSON(w, out)
 	})
@@ -170,7 +171,7 @@ func (rj rulesJSON) toRules() (*Rules, error) {
 		at := fmt.Sprintf("rule %d", i+1)
 		kind, err := parseKind(string(r.Kind))
 		if err == nil {
-			err = rules.add(kind, r.Port, r.Name, r.Verdict, r.Dest, at)
+			err = rules.add(ruleSpec{kind, r.Port, r.Ingress, r.Name, r.Verdict, r.Dest}, at)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", at, err)

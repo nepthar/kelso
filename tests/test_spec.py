@@ -29,7 +29,7 @@ image = "alpine:latest"
   )
 
   assert spec.app == "demo"
-  assert spec.network_mode == "open"
+  assert spec.network_mode == "normal"
   assert spec.routes == {}
   assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
     "subdomain": ("demo", "option"),

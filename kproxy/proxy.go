@@ -260,11 +260,11 @@ func writeHTTPError(c net.Conn, code int, msg string) {
 // speaks first work.
 func (p *Proxy) forwardTCP(c net.Conn, l *Listener) {
 	rule := l.fixed()
-	ctr := p.stats.conn(rule.Name, scheme(KindTCP, l.Port))
+	ctr := p.stats.conn(rule.Name, l.String())
 	ctr.record(Allowed, false)
 	up, err := p.dial(context.Background(), "tcp4", rule.Dest)
 	if err != nil {
-		log.Printf("tcp :%d %s: %v", l.Port, rule.Name, err)
+		log.Printf("%s %s: %v", l, rule.Name, err)
 		return
 	}
 	defer up.Close()
@@ -280,22 +280,10 @@ func (p *Proxy) udpTarget(port int) func() (string, *counters) {
 			return "", nil
 		}
 		rule := l.fixed()
-		ctr := p.stats.conn(rule.Name, scheme(KindUDP, port))
+		ctr := p.stats.conn(rule.Name, l.String())
 		ctr.record(Allowed, false)
 		return rule.Dest, ctr
 	}
-}
-
-// scheme names a listener in the stats: plain "http" and "https" for the
-// ones that always exist.
-func scheme(k Kind, port int) string {
-	switch {
-	case k == KindHTTP && port == httpPort:
-		return "http"
-	case k == KindTLS && port == httpsPort:
-		return "https"
-	}
-	return fmt.Sprintf("%s :%d", k, port)
 }
 
 // route counts the connection and decides it, returning the address to dial:
@@ -304,7 +292,7 @@ func scheme(k Kind, port int) string {
 func (p *Proxy) route(host string, kind Kind, port int) (Outcome, *counters, string) {
 	name := normHost(host)
 	if name == "" || net.ParseIP(name) != nil {
-		ctr := p.stats.conn(unknownDomain, scheme(kind, port))
+		ctr := p.stats.conn(unknownDomain, listenerName(kind, port, false))
 		ctr.record(Denied, false)
 		return Denied, ctr, ""
 	}
@@ -312,7 +300,7 @@ func (p *Proxy) route(host string, kind Kind, port int) (Outcome, *counters, str
 	if domain == "" {
 		domain = name
 	}
-	ctr := p.stats.conn(domain, scheme(kind, port))
+	ctr := p.stats.conn(domain, listenerName(kind, port, false))
 	o, held, rule := p.engine.Check(context.Background(), port, name)
 	ctr.record(o, held)
 	addr := rule.Dest

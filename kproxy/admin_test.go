@@ -42,7 +42,8 @@ func TestPutAndGetRules(t *testing.T) {
 		{"kind":"http","port":80,"name":"adguard","verdict":"allow","dest":"rpi.lab.my-domain.com:3000"},
 		{"kind":"tls","port":443,"name":"*.googleapis.com","verdict":"allow"},
 		{"kind":"tls","port":443,"name":"ads.googleapis.com","verdict":"deny"},
-		{"kind":"udp","port":2343,"name":"video","verdict":"allow","dest":"cam0.lan:2343"}]}`
+		{"kind":"udp","port":2343,"name":"video","verdict":"allow","dest":"cam0.lan:2343"},
+		{"kind":"tcp","port":20001,"ingress":true,"name":"web","verdict":"allow","dest":"main:8080"}]}`
 	if code := put(body); code != 204 {
 		t.Fatalf("put: %d", code)
 	}
@@ -50,9 +51,10 @@ func TestPutAndGetRules(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/rules", nil))
 	var got rulesJSON
 	json.Unmarshal(w.Body.Bytes(), &got)
-	if got.Default != DefaultAsk || len(got.Rules) != 4 ||
-		got.Rules[1] != (ruleJSON{KindTLS, 443, "*.googleapis.com", Allow, "*:443"}) ||
-		got.Rules[2] != (ruleJSON{KindTLS, 443, "ads.googleapis.com", Deny, ""}) {
+	if got.Default != DefaultAsk || len(got.Rules) != 5 ||
+		got.Rules[1] != (ruleJSON{KindTLS, 443, false, "*.googleapis.com", Allow, "*:443"}) ||
+		got.Rules[2] != (ruleJSON{KindTLS, 443, false, "ads.googleapis.com", Deny, ""}) ||
+		got.Rules[4] != (ruleJSON{KindTCP, 20001, true, "web", Allow, "main:8080"}) {
 		t.Fatalf("get: %+v", got)
 	}
 	for _, bad := range []string{

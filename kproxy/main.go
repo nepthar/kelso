@@ -2,7 +2,8 @@
 // connections. DNS answers the names the rules allow with the address each
 // query arrived on. HTTP and TLS listeners match each connection's Host header
 // or SNI against the rules; TCP and UDP listeners send everything to one
-// destination. Nothing is decrypted. It is administered over a unix socket.
+// destination, outbound or, for ingress, in to the app. Nothing is decrypted.
+// It is administered over a unix socket.
 package main
 
 import (
@@ -32,8 +33,6 @@ func main() {
 	defaultFlag := flag.String("default", "deny", "default policy (allow, deny or ask) for a rules file that doesn't set one")
 	hold := flag.Duration("hold", 60*time.Second, "how long the ask policy holds a connection no rule matches")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
-	var ingress ingresses
-	flag.Var(&ingress, "ingress", "relay LISTEN=HOST:PORT[/udp]: connections on port LISTEN go to HOST:PORT, unchecked (repeatable)")
 	flag.Parse()
 
 	policy, err := parsePolicy(*defaultFlag)
@@ -55,9 +54,6 @@ func main() {
 	if _, p, err := net.SplitHostPort(*dnsAddr); err == nil && validPort(p) {
 		n, _ := strconv.Atoi(p)
 		reserved[portKey{false, n}], reserved[portKey{true, n}] = "dns", "dns"
-	}
-	for _, in := range ingress {
-		reserved[portKey{in.udp, in.listen}] = "ingress"
 	}
 	engine := newEngine(*hold, nil)
 	proxy := &Proxy{
@@ -94,18 +90,6 @@ func main() {
 		log.Printf("kproxy: admin UI at http://%s/", ln.Addr())
 	}
 
-	for _, in := range ingress {
-		addr := fmt.Sprintf(":%d", in.listen)
-		if in.udp {
-			upc, err := net.ListenPacket("udp4", addr)
-			if err != nil {
-				log.Fatal(err)
-			}
-			go proxy.ingressUDP(upc, in)
-		} else {
-			go proxy.serve(listen("tcp4", addr), proxy.relayTCP(in))
-		}
-	}
 	go serveDNSUDP(pc, engine.Resolves)
 	go serveDNSTCP(dnsTCP, engine.Resolves)
 	log.Printf("kproxy: DNS on %s, rules loaded: %v", pc.LocalAddr(), engine.loaded())

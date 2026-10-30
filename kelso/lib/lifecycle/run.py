@@ -20,7 +20,6 @@ from kelso.lib.lifecycle.load import (
   load,
   materialize,
   unlink_host_volumes,
-  write_kproxy_rules,
 )
 from kelso.lib.lifecycle.routes import (
   preflight_app_routes,
@@ -88,7 +87,6 @@ def start(
   # Rebuilt from scratch every start, so a bind recorded since the last one --
   # loading does not touch these -- takes effect now.
   link_host_volumes(spec, run_data)
-  write_kproxy_rules(run_data)
 
   try:
     docker_run_command(
