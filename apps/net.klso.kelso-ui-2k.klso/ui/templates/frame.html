@@ -1,0 +1,36 @@
+{#- What a window shows: the page head, the banners, and the two modals every
+  page shares. The window around it is the desktop's (desktop.html).
+
+  A page fills `content`, and optionally `commands` (the window's command
+  bar, of `command` and `job_button(bar=true)`), `actions` (verbs beside the title),
+  `head` (stylesheets), `statusbar` (98.css `status-bar-field`s, pinned under
+  the page) and `scripts`. Refresh is the window's, in its address bar.
+-#}
+{% extends "base.html" %}
+{% from "macros.html" import notice_banner %}
+{% block body %}
+<div class="app">
+{% if self.commands()|trim %}<div class="cmdbar" role="toolbar">{% block commands %}{% endblock %}</div>{% endif %}
+<main>
+  <div class="head"><h1>{{ title }}</h1>
+    {%- block actions %}{% endblock %}</div>
+  {% if NO_PASSWORD %}
+  <div class="error"><h2>No password</h2><p>kelso-ui's <code>no_password</code> is set, so anyone who can reach this page can run kelso. For testing only. Turn it off with <code>kelso config kelso-ui-2k --set no_password=off</code> and restart kelso-ui-2k.</p></div>
+  {% endif %}
+  {% if daemon_api is not none and daemon_api != NEEDS_API %}
+  <div class="error"><h2>Version mismatch</h2><p>This page was built for kelso API {{ NEEDS_API }}, but kelsod speaks {{ daemon_api }}. Buttons and status may be wrong until the two match.</p>
+    <p>Reload this app and start it again:<br><code>kelso load kelso-ui-2k</code><br><code>kelso start kelso-ui-2k</code></p></div>
+  {% endif %}
+  {{ notice_banner(ok, err) }}
+  {% block content %}{% endblock %}
+</main>
+{% if self.statusbar()|trim %}<div class="status-bar">{% block statusbar %}{% endblock %}</div>{% endif %}
+</div>
+{% include "modals.html" %}
+<script src="{{ asset('js/shell.js') }}"></script>
+<script src="{{ asset('js/confirm.js') }}"></script>
+<script src="{{ asset('js/jobs.js') }}"></script>
+<script src="{{ asset('js/tabs.js') }}"></script>
+<script src="{{ asset('js/columns.js') }}"></script>
+{% block scripts %}{% endblock %}
+{% endblock %}

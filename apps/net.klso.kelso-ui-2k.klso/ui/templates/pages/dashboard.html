@@ -1,0 +1,83 @@
+{% extends "frame.html" %}
+{% from "macros.html" import job_button, pill, sub, app_status, app_units %}
+
+{#- A resource's meter: ten rows of two segments, lit from the bottom to its
+  current %, as Task Manager draws one. -#}
+{% macro meter(r) -%}
+<div class="meter"{% if r.title %} title="{{ r.title }}"{% endif %}>
+  <svg class="meter-bars" viewBox="0 0 40 100" aria-hidden="true">
+    {%- for i in range(10) %}{% set lit = ' class="lit"' if r.current is not none and r.current > i * 10 else '' %}
+    <rect x="3" y="{{ 91 - i * 10 }}" width="16" height="7"{{ lit|safe }}/><rect x="21" y="{{ 91 - i * 10 }}" width="16" height="7"{{ lit|safe }}/>
+    {%- endfor %}
+  </svg>
+  <span>{{ r.current ~ ' %' if r.current is not none else '—' }}</span>
+</div>
+{%- endmacro %}
+
+{% block content %}
+<menu role="tablist">
+  <li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li><li role="tab" aria-selected="false"><a href="#host-system">System</a></li>
+</menu>
+
+<div class="window tabpanel" role="tabpanel" id="host-apps">
+{% if not apps %}
+<div class="card"><p class="empty">No apps loaded yet. Pick one from <a href="/catalog">Repos</a>.</p></div>
+{% else %}
+<div class="card scroll"><table><thead><tr>
+  <th>App</th><th>Status</th><th>Units</th><th>Config</th><th>Version</th><th>Volumes</th><th>Last action</th>
+</tr></thead><tbody>
+{% for app in apps %}
+<tr>
+  <td class="name"><a href="/apps/{{ app.app_id|urlencode }}">{{ app.get('display_name') or app.app_id }}</a>{{ sub(app.app_id) }}</td>
+  <td>{{ app_status(app) }}</td>
+  <td class="muted">{{ app_units(app) }}</td>
+  <td>
+    {%- if app.get('configured') is none %}<span class="muted">—</span>
+    {%- elif app.configured == 'ready' %}{{ pill('ready', 'running') }}
+    {%- else %}{{ pill('needs config', 'bad') }}{% endif -%}
+  </td>
+  <td class="muted">{{ app.get('version') or '—' }}
+    {%- if app.get('update_version') %} <span class="update">{{ job_button('Update ' ~ app.version ~ ' → ' ~ app.update_version, 'update', icon='arrow-up-circle-outline',
+        title='Update ' ~ (app.get('display_name') or app.app_id),
+        desc='Updates ' ~ app.app_id ~ ' from ' ~ app.version ~ ' to ' ~ app.update_version ~ ". It is backed up first.",
+        args={'app': app.app_id}, done='/host') }}</span>{% endif -%}
+  </td>
+  <td class="muted">{{ app.get('volume_count', 0) }}</td>
+  <td class="muted">{{ app.get('last_action') or '—' }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+
+<div class="window tabpanel" role="tabpanel" id="host-system" hidden>
+<div class="row lede-line">
+  <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
+  {#- Longer spans wait on rolled-up metrics; only the last hour is kept at full detail. -#}
+  <select class="timeframe" aria-label="Time frame">
+    <option selected>1 hour</option>
+    <option disabled>1 day</option>
+    <option disabled>1 week</option>
+  </select>
+</div>
+{% for r in resources %}
+<fieldset class="group resource">
+  <legend>{{ r.name }} · {{ r.total }}</legend>
+  <div class="resource-row">
+    {{ meter(r) }}
+    <div class="history"><div class="history-plot">
+      {%- if r.line %}<svg viewBox="{{ graph_box }}" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ r.line }}"/></svg>
+      {%- else %}<span class="history-none">no samples yet</span>{% endif -%}
+    </div></div>
+  </div>
+  {% if r.notes %}<p class="resource-notes">Holds {{ r.notes }}</p>{% endif %}
+</fieldset>
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block statusbar %}
+<p class="status-bar-field">Apps: {{ apps|length }}</p>
+<p class="status-bar-field">CPU: {{ cpu ~ '%' if cpu is not none else '—' }}</p>
+<p class="status-bar-field">RAM: {{ ram ~ '%' if ram is not none else '—' }}</p>
+{% endblock %}

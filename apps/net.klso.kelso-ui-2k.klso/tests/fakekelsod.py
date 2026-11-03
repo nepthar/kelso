@@ -1,0 +1,728 @@
+"""A stand-in kelsod: canned JSON over real HTTP, so the UI's client is exercised.
+
+The fixtures are shaped after a live kelsod's responses and bent to hit every
+branch the pages have -- an app that is running, one that is unloaded, one
+with issues; a mirrored repo and one that is not; a secret that is set and one
+that is not. `EVIL` is planted in every free-text field: if it ever reaches a
+page unescaped, a test fails.
+"""
+
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
+
+from websockets.sync.server import serve
+
+EVIL = '<i data-evil="1">\'"&amp;</i>'
+
+
+def _field(name, **kw):
+  base = {
+    "name": name,
+    "value": None,
+    "default": None,
+    "secret": False,
+    "secret_set": False,
+    "desc": "",
+    "section": "config",
+    "required": False,
+    "choices": None,
+    "multi": False,
+    "empty_value": None,
+    "primary_desc": "",
+  }
+  base.update(kw)
+  return base
+
+
+APPS = [
+  {
+    "app_id": "kelso-ui",
+    "display_name": "Kelso UI",
+    "version": "0.6.0",
+    "status": "healthy",
+    "state": "loaded",
+    "containers": {"running": 1, "total": 1},
+    "configured": "ready",
+    "changes_pending": False,
+    "volume_count": 4,
+    "last_action": "started",
+  },
+  {
+    "app_id": "jellyfin",
+    "display_name": f"Jellyfin {EVIL}",
+    "version": None,
+    "status": "stopped",
+    "state": "loaded",
+    "containers": {"running": 0, "total": 0},
+    "configured": "missing",
+    "changes_pending": True,
+    "volume_count": 0,
+    "last_action": None,
+  },
+  {
+    "app_id": "mealie",
+    "display_name": "Mealie",
+    "version": "1.2.0",
+    "status": "stopped",
+    "state": "unloaded",
+    "containers": {"running": 0, "total": 2},
+    "configured": None,
+    "changes_pending": False,
+    "volume_count": 1,
+    "last_action": "unloaded",
+  },
+  {
+    "app_id": "immich",
+    "display_name": "Immich",
+    "version": "3.1.0",
+    "update_version": "3.2.0",
+    "status": "degraded",
+    "state": "loaded",
+    "containers": {"running": 3, "total": 4},
+    "configured": "ready",
+    "changes_pending": False,
+    "volume_count": 3,
+    "last_action": "started",
+  },
+]
+
+APP_DETAIL = {
+  **APPS[0],
+  "description": f"Web interface {EVIL}",
+  "author": f"Jordan {EVIL}",
+  "url": "https://example.com/help",
+  "metadata": {
+    "version": "0.6.0",
+    "subdomain": "kelso",
+    "display_name": "Kelso UI",
+    "description": "ignored",
+    "main": "main",
+    "note": EVIL,
+  },
+  "manifest_stale": True,
+  "changes_pending": True,
+  "units": [
+    {
+      "name": "main",
+      "image": "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
+      "state": "running",
+      "environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "${admin_pass}"},
+      "resolved_environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "<secret>"},
+      "command": ["/app/start.sh", EVIL],
+      "volumes": [
+        {"name": "ui", "path": "/app", "kind": "app", "readonly": True, "desc": EVIL},
+        {"name": "tls", "path": "/tls", "kind": "data", "readonly": False, "desc": ""},
+      ],
+    },
+    {
+      "name": "worker",
+      "image": "busybox",
+      "state": None,
+      "environment": {},
+      "command": [],
+      "volumes": [],
+    },
+  ],
+  "routes": [
+    {
+      "name": "main",
+      "unit": "main",
+      "container_port": 8080,
+      "host_port": 10001,
+      "url": "https://kelso.example.test",
+      "published_url": "https://kelso.example.test",
+      "host_url": "http://10.0.0.5:10001",
+      "providers": [
+        {"tag": "web", "url": "https://kelso.example.test"},
+        {"tag": "lan", "url": "https://kelso.lan.test"},
+      ],
+    },
+    {
+      "name": "admin",
+      "unit": "main",
+      "container_port": 9000,
+      "host_port": None,
+      "url": None,
+      "published_url": None,
+      "host_url": None,
+      "providers": [],
+    },
+  ],
+  "volumes": [
+    {
+      "name": "ui",
+      "kind": "app",
+      "readonly": True,
+      "path": "$app/ui",
+      "bytes": 79549702,
+      "bind": None,
+    },
+    {
+      "name": "conn",
+      "kind": "host",
+      "readonly": False,
+      "path": None,
+      "bytes": None,
+      "bind": None,
+    },
+    {
+      "name": "media",
+      "kind": "host",
+      "readonly": False,
+      "path": "/mnt/media",
+      "bytes": 0,
+      "bind": "media",
+    },
+  ],
+  "commands": [
+    {"name": "test", "desc": f"Run a test {EVIL}", "unit": "main"},
+    {"name": "bare", "desc": "", "unit": "main"},
+  ],
+  "issues": [
+    {
+      "problem": f"volume conn is not bound {EVIL}",
+      "fix": "kelso config kelso-ui --set admin_pass=x",
+    },
+    {"problem": "no fix offered"},
+  ],
+}
+
+# An app with nothing declared, unloaded, stopped: the empty branches.
+APP_BARE = {
+  **APPS[2],
+  "description": "",
+  "metadata": {"app_id": "mealie"},
+  "manifest_stale": False,
+  "units": [],
+  "routes": [],
+  "volumes": [],
+  "commands": [],
+  "issues": [],
+}
+
+APP_CONFIG = {
+  "title": "kelso-ui",
+  "note": "",
+  "missing": ["admin_pass", "tuning"],
+  "fields": [
+    _field("api_address", value=EVIL, default="", desc=f"host:port {EVIL}"),
+    _field("admin_pass", secret=True, secret_set=False, desc="password"),
+    _field("token", secret=True, secret_set=True),
+    _field("subdomain", value="kelso", default="kelso", section="option"),
+    _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
+    _field("route.none", choices=[], multi=True, empty_value="none"),
+    _field(
+      "route.main",
+      value="web,lan",
+      choices=["lan", "web", EVIL],
+      multi=True,
+      empty_value="none",
+      primary_desc=f"Primary route: passed to the app as {EVIL}",
+    ),
+    _field("backup.movies", value="on", choices=["on", "off"]),
+    _field("tuning", section="advanced"),
+    _field("debug", section="advanced", default="0"),
+    _field("start_order", section="option", default="6"),
+  ],
+}
+
+CATALOG = {
+  "contested": {"mealie": ["examples", "github"]},
+  "catalogs": [
+    {"name": "local", "apps": []},
+    {
+      "name": "examples",
+      "apps": [
+        {
+          "app_id": "kelso-ui",
+          "display_name": "Kelso UI",
+          "version": "0.6.0",
+          "description": f"Web interface {EVIL}",
+          "repo": "examples",
+          "state": "loaded",
+          "configured": "ready",
+          "manifest": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
+          "text": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
+          "markdown": False,
+          "editable": True,
+          "base": f"hash {EVIL}",
+          "manifest_stale": True,
+          "warnings": [
+            {
+              "run_unit": "main",
+              "message": f"Free-form options {EVIL}",
+              "options": ["privileged", EVIL],
+            }
+          ],
+        },
+        {
+          "app_id": "mealie",
+          "display_name": "Mealie",
+          "version": None,
+          "description": "",
+          "repo": "examples",
+          "state": "available",
+          "configured": "missing",
+          "manifest": "",
+          "manifest_stale": False,
+          "warnings": [],
+        },
+        {
+          "app_id": "broken",
+          "display_name": None,
+          "version": None,
+          "error": "manifest broken.klso/manifest.toml: not valid TOML",
+          "description": None,
+          "repo": "examples",
+          "state": "available",
+          "configured": None,
+          "manifest": None,
+          "text": f"\nnot toml {EVIL}",
+          "markdown": True,
+          "editable": True,
+          "base": "b",
+          "manifest_stale": False,
+          "warnings": [],
+        },
+      ],
+    },
+    {
+      "name": "github",
+      "apps": [
+        {
+          "app_id": "mealie",
+          "display_name": "Mealie",
+          "version": "2.0",
+          "description": "Recipes",
+          "repo": "github",
+          "state": "unloaded",
+          "configured": "ready",
+          "manifest": "[app]\n",
+          "manifest_stale": False,
+          "warnings": [],
+        },
+      ],
+    },
+  ],
+}
+
+REPOS = {
+  "repos": [
+    {
+      "name": "local",
+      "location": "/k/repos/local",
+      "url": None,
+      "exists": True,
+      "removable": False,
+      "bound_apps": [],
+      "sha": None,
+      "updated_at": None,
+    },
+    {
+      "name": "examples",
+      "location": f"/code/{EVIL}",
+      "url": None,
+      "exists": True,
+      "removable": True,
+      "bound_apps": ["kelso-ui", "mealie"],
+      "sha": None,
+      "updated_at": None,
+    },
+    {
+      "name": "github",
+      "location": "github://u/r/main/apps",
+      "url": "github://u/r/main/apps",
+      "exists": False,
+      "removable": True,
+      "bound_apps": [],
+      "sha": "0123456789abcdef",
+      "updated_at": "2026-09-23T15:03:00Z",
+    },
+  ]
+}
+
+VOLUMES = {
+  "volumes": [
+    {
+      "app_id": "kelso-ui",
+      "name": "tls",
+      "kind": "data",
+      "use": "in use",
+      "bytes": 864,
+    },
+    {
+      "app_id": "mealie",
+      "name": EVIL,
+      "kind": "data",
+      "use": "orphaned",
+      "bytes": None,
+    },
+    {
+      "app_id": "jellyfin",
+      "name": "cache",
+      "kind": "temp",
+      "use": "idle",
+      "bytes": 0,
+    },
+    {
+      "app_id": "jellyfin",
+      "name": "config",
+      "kind": "data",
+      "use": "idle",
+      "bytes": 601653,
+    },
+  ],
+  "kelso_dirs": [
+    {"name": "run", "description": f"Loaded apps {EVIL}", "bytes": 1024**3},
+  ],
+  "volume_roots": [
+    {
+      "kind": "data",
+      "path": "/k/volumes/data",
+      "bytes": 25,
+      "device": f"/dev/sda1 {EVIL}",
+      "mountpoint": "/",
+      "used": 75,
+      "available": 25,
+    },
+    {
+      "kind": "bulk",
+      "path": "/mnt/gone",
+      "bytes": None,
+      "device": None,
+      "mountpoint": None,
+      "used": None,
+      "available": None,
+    },
+  ],
+}
+
+HOST_VOLUMES = {
+  "host_volumes": [
+    {
+      "tag": "kelso_conn",
+      "path": "/k/var/conn",
+      "readonly": False,
+      "require_mount": False,
+      "exists": True,
+      "bytes": 0,
+    },
+    {
+      "tag": "media",
+      "path": f"/mnt/{EVIL}",
+      "readonly": True,
+      "require_mount": True,
+      "exists": False,
+      "bytes": None,
+    },
+  ]
+}
+
+BACKUPS = {
+  "kelso_id": "3fa9c2d1",
+  "schedule": "0 3 * * *",
+  "keep": {"daily": 3, "weekly": 2, "monthly": 1, "manual": 5},
+  "last_run": {
+    "run": "20260923-030000",
+    "time": "2026-09-23T03:00:00Z",
+    "reason": "scheduled",
+    "everything": True,
+    "backed_up": ["kelso-ui"],
+    "failed": [f"mealie: {EVIL}"],
+  },
+  "destination": "/mnt/nas/kelso",
+  "problem": None,
+  "backups": [
+    {
+      "id": "20260923-030000",
+      "app_id": "kelso-ui",
+      "app_version": "0.6.0",
+      "reason": "scheduled",
+      "taken_at": "2026-09-23T03:00:00Z",
+      "size": 48213,
+    },
+    {
+      "id": "20260920-120000",
+      "app_id": EVIL,
+      "app_version": "",
+      "reason": "manual",
+      "taken_at": "2026-09-20T12:00:00Z",
+      "size": 7340032,
+    },
+  ],
+}
+
+ROUTE_PROVIDERS = {
+  "route_providers": [
+    {"tag": "web", "kind": "nginx_proxy_manager", "domain": "example.test"},
+    {"tag": "odd name", "kind": "pangolin", "domain": EVIL},
+  ],
+  "kinds": ["cloudflare_tunnel", "nginx_proxy_manager", "pangolin"],
+}
+
+PUBLISHED_ROUTES = {
+  "routes": [
+    {
+      "subdomain": "mealie",
+      "url": "https://mealie.example.test",
+      "destination": "10.0.0.5:41001",
+      "app": "mealie",
+    },
+    {
+      "subdomain": "nas",
+      "url": f"https://nas.example.test/{EVIL}",
+      "destination": EVIL,
+      "app": None,
+    },
+  ]
+}
+
+PROVIDER_CONFIG = {
+  "title": "route provider web (nginx_proxy_manager)",
+  "note": f"Check it with `kelso route check web` {EVIL}",
+  "missing": ["password"],
+  "fields": [
+    _field("domain", value="example.test", required=True),
+    _field("password", secret=True, required=True),
+  ],
+}
+
+NEW_PROVIDER_CONFIG = {
+  "title": "route provider fresh (pangolin)",
+  "note": None,
+  "missing": [],
+  "fields": [],
+}
+
+CRON = {
+  "cron": [
+    {
+      "app_id": "mealie",
+      "job": "nightly",
+      "command": "cleanup",
+      "schedule": "0 3 * * *",
+      "next_at": "2026-09-24T03:00:00+00:00",
+      "status": "scheduled",
+    },
+    {
+      "app_id": "jellyfin",
+      "job": EVIL,
+      "command": "scan",
+      "schedule": "0 4 * * *",
+      "next_at": "2026-09-24T04:00:00+00:00",
+      "status": "skip",
+    },
+  ]
+}
+
+CRON_RUNS = {
+  "activity": [
+    {
+      "ts": "2026-09-23T03:00:04Z",
+      "app_id": "mealie",
+      "verb": "cron",
+      "args": {"job": "nightly", "command": "cleanup"},
+      "status": "ok",
+      "duration_ms": 2100,
+      "log": "2026-09-23T030002Z.mealie.cron.log",
+      "available": True,
+    },
+  ]
+}
+
+ACTIVITY = {
+  "activity": [
+    {
+      "ts": "2026-09-23T16:00:00Z",
+      "app_id": "mealie",
+      "verb": "cmd",
+      "status": "detached",
+      "duration_ms": 300000,
+      "log": "2026-09-23T155500Z.mealie.cmd.log",
+      "available": True,
+      "started_by": "kelso_ui",
+    },
+    {
+      "ts": "2026-09-23T15:03:04Z",
+      "app_id": "kelso-ui",
+      "verb": "backup",
+      "status": "ok",
+      "started_by": "kelso_ui",
+      "duration_ms": 1505,
+      "log": "2026-09-23T150302Z.kelso-ui.backup.log",
+      "available": True,
+    },
+    {
+      "ts": "2026-09-23T03:26:05Z",
+      "app_id": None,
+      "verb": "repo-update",
+      "status": "failed",
+      "duration_ms": None,
+      "log": "x.log",
+      "available": False,
+    },
+    {
+      "ts": "2026-09-22T03:26:05Z",
+      "app_id": EVIL,
+      "verb": EVIL,
+      "status": EVIL,
+      "duration_ms": 4,
+      "log": EVIL,
+      "available": True,
+    },
+  ]
+}
+
+METRICS = {
+  "since": 1790181950,
+  "until": 1790185550,
+  "metrics": {
+    "host_cpu_used_ratio": [{"t": 1790182164, "v": 0.016}, {"t": 1790182464, "v": 0.5}],
+    "host_mem_used_ratio": [],
+    "host_drive_used_ratio/sda2": [{"t": 1790185550, "v": 0.42}],
+  },
+}
+
+HOST = {
+  "cpus": 6,
+  "memory_bytes": 8 * 1024**3,
+  "disks": [
+    {
+      "device": "/dev/sda2",
+      "mountpoint": "/",
+      "total_bytes": 2 * 1024**4,
+      "holds": ["bulk", "backups", EVIL],
+      "gauge": "host_drive_used_ratio/sda2",
+    }
+  ],
+}
+
+LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n"}
+
+GET = {
+  "/version": {
+    "kelso": "0.1.0",
+    "api": 1,
+    "hostname": f"tycho {EVIL}",
+    "kelso_root": f"/home/kelso {EVIL}",
+  },
+  "/apps": {"apps": APPS},
+  "/apps/kelso-ui": APP_DETAIL,
+  "/apps/kelso-ui/config-request": APP_CONFIG,
+  "/apps/kelso-ui/logs": LOGS,
+  "/apps/mealie": APP_BARE,
+  "/apps/mealie/config-request": {"title": "mealie", "fields": [], "missing": []},
+  "/catalog": CATALOG,
+  "/repos": REPOS,
+  "/volumes": VOLUMES,
+  "/host-volumes": HOST_VOLUMES,
+  "/backups": BACKUPS,
+  "/route-providers": ROUTE_PROVIDERS,
+  "/route-providers/web/config-request": PROVIDER_CONFIG,
+  "/route-providers/web/routes": PUBLISHED_ROUTES,
+  "/route-providers/fresh/config-request?kind=pangolin": NEW_PROVIDER_CONFIG,
+  "/activity?limit=100": ACTIVITY,
+  "/cron": CRON,
+  "/activity?verb=cron&limit=25": CRON_RUNS,
+  "/activity/x.log": {"text": "log text"},
+  "/metrics?prefix=host_&hours=1": METRICS,
+  "/host": HOST,
+  "/jobs/j1": {"id": "j1", "state": "done", "log": "x.log"},
+}
+
+
+class FakeKelsod:
+  """Serve `GET` on a free port. `posts` records what the UI sent.
+
+  `fail` set to a message makes every request answer 500 with it -- kelsod
+  refusing, as the UI sees it.
+  """
+
+  def __init__(self):
+    self.posts = []
+    self.fail = None
+    self.api = 1
+    fake = self
+
+    class Handler(BaseHTTPRequestHandler):
+      def log_message(self, *args):
+        pass
+
+      def _send(self, status, body):
+        raw = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+      def do_GET(self):
+        if fake.fail:
+          return self._send(500, {"error": fake.fail})
+        path = unquote(self.path)
+        if path == "/version":
+          return self._send(200, {**GET["/version"], "api": fake.api})
+        if path in GET:
+          return self._send(200, GET[path])
+        return self._send(404, {"error": f"no fixture for {path}"})
+
+      def _write(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(length) or b"null")
+        fake.posts.append((self.command, unquote(self.path), body))
+        if fake.fail:
+          return self._send(500, {"error": fake.fail})
+        if self.path == "/jobs":
+          return self._send(202, {"id": "j1", "state": "queued"})
+        return self._send(200, {"ok": True})
+
+      do_POST = _write
+      do_DELETE = _write
+
+    self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    self.address = f"127.0.0.1:{self.server.server_address[1]}"
+    self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+  def start(self):
+    self.thread.start()
+    return self
+
+  def stop(self):
+    self.server.shutdown()
+
+
+class FakeConsole:
+  """kelsod's console socket: echoes, and closes the way kelsod would.
+
+  Bytes come back as sent and text comes back as `ctl:<text>`; typing `exit`
+  ends it with "exited 0". Any app but kelso-ui is refused, as a stopped one is.
+  kelsod speaks websocket where FakeKelsod speaks plain HTTP, so this listens
+  on its own port and a test points the UI at it.
+  """
+
+  def __init__(self):
+    self.paths = []
+    fake = self
+
+    def handler(ws):
+      path = ws.request.path
+      fake.paths.append(path)
+      if not path.startswith(("/apps/kelso-ui/console", "/host/console")):
+        ws.send(b"mealie is not running\r\n")
+        ws.close(4001, "mealie is not running")
+        return
+      for message in ws:
+        if message == b"exit\r":
+          ws.close(1000, "exited 0")
+          return
+        ws.send(message if isinstance(message, bytes) else b"ctl:" + message.encode())
+
+    self.server = serve(handler, "127.0.0.1", 0, compression=None)
+    self.address = f"127.0.0.1:{self.server.socket.getsockname()[1]}"
+    self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+  def start(self):
+    self.thread.start()
+    return self

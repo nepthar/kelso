@@ -1,0 +1,7 @@
+{#- What a refused request gets: rate limited, or from another site. No reload
+  button: for a rate limit, that is more of the problem. -#}
+{% extends "solo.html" %}
+{% block content %}
+<div class="notice contested"><p>{{ message }}</p></div>
+<p class="solo-hint">{{ hint }}{% if command %}<br><code>{{ command }}</code>{% endif %}</p>
+{% endblock %}
