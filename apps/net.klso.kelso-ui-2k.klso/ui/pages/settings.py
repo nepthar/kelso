@@ -9,7 +9,11 @@ router = APIRouter()
 
 @router.get("/settings")
 def settings_page(page: PageDep):
-  chosen = settings.load().get("background") or {}
+  problem = None
+  try:
+    chosen = settings.load().get("background") or {}
+  except RuntimeError as e:
+    chosen, problem = {}, str(e)
   generated = settings.id_colors(INSTANCE_ID)
   top, bottom = settings.background(INSTANCE_ID)
   return page.render(
@@ -19,6 +23,7 @@ def settings_page(page: PageDep):
     generated=generated,
     top=top,
     bottom=bottom,
+    **({"err": problem} if problem else {}),
   )
 
 

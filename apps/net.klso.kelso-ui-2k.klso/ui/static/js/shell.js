@@ -1,14 +1,7 @@
-// What every window's page shares: dialogs, the helpers that follow the
-// theme, and timestamps in the viewer's own zone.
+// What every window's page shares: dialogs, the colour helper for what is
+// drawn outside CSS, and timestamps in the viewer's own zone.
 (function () {
   var root = document.documentElement;
-
-  function store(key, value) {
-    try {
-      if (value) localStorage.setItem(key, value);
-      else localStorage.removeItem(key);
-    } catch (e) {}
-  }
 
   // A link marked data-dialog opens as a dialog window over this one, and a
   // data-close control closes the dialog it is in. A page opened on its own
@@ -28,21 +21,13 @@
     }
   });
 
-  // --- theme -------------------------------------------------------------
-  // What other scripts use to follow the theme: the current value of a token,
-  // the same colour at some opacity, and an event when the theme changes.
-  // Anything drawn in token colours outside CSS -- a chart, a terminal --
-  // reads through these and redraws on `kelso:themechange`.
-  function token(name) {
-    return getComputedStyle(root).getPropertyValue(name).trim();
-  }
-  // A token as rgba(), resolved by the browser so a theme may write any CSS
-  // colour. Drawn to a pixel because computed style reports color-mix() as
+  // A token's colour as rgba(), for what is drawn outside CSS (the terminal).
+  // Drawn to a pixel because computed style reports color-mix() as
   // color(srgb ...), which xterm does not read.
   var pixel = null;
   function color(name) {
     var probe = document.createElement("span");
-    probe.style.color = token(name);
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
     document.body.appendChild(probe);
     var computed = getComputedStyle(probe).color;
     probe.remove();
@@ -53,19 +38,7 @@
     var d = pixel.getImageData(0, 0, 1, 1).data;
     return "rgba(" + d[0] + "," + d[1] + "," + d[2] + "," + +(d[3] / 255).toFixed(3) + ")";
   }
-  function rgba(name, alpha) {
-    return color(name).replace(/,[\d.]+\)$/, "," + alpha + ")");
-  }
-  function setTheme(id) {
-    if (window.kelso.themes.indexOf(id) < 0 || id === root.dataset.theme) return;
-    root.dataset.theme = id;
-    store("kelso-theme", id === window.kelso.themes[0] ? "" : id);
-    document.dispatchEvent(new CustomEvent("kelso:themechange", { detail: { theme: id } }));
-  }
-  window.kelso.token = token;
   window.kelso.color = color;
-  window.kelso.rgba = rgba;
-  window.kelso.setTheme = setTheme;
 
   // Timestamps ship as UTC in `datetime`; only the browser knows the viewer's
   // zone, so the friendly text is filled in here. Absolute local time stays on

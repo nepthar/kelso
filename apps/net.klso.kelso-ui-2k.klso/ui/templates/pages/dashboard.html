@@ -6,8 +6,8 @@
 {% macro meter(r) -%}
 <div class="meter"{% if r.title %} title="{{ r.title }}"{% endif %}>
   <svg class="meter-bars" viewBox="0 0 40 100" aria-hidden="true">
-    {%- for i in range(10) %}{% set lit = ' class="lit"' if r.current is not none and r.current > i * 10 else '' %}
-    <rect x="3" y="{{ 91 - i * 10 }}" width="16" height="7"{{ lit|safe }}/><rect x="21" y="{{ 91 - i * 10 }}" width="16" height="7"{{ lit|safe }}/>
+    {%- for i in range(10) %}{% set lit = r.current is not none and r.current > i * 10 %}
+    <rect x="3" y="{{ 91 - i * 10 }}" width="16" height="7"{% if lit %} class="lit"{% endif %}/><rect x="21" y="{{ 91 - i * 10 }}" width="16" height="7"{% if lit %} class="lit"{% endif %}/>
     {%- endfor %}
   </svg>
   <span>{{ r.current ~ ' %' if r.current is not none else '—' }}</span>

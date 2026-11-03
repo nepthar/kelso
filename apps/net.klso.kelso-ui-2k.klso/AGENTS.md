@@ -55,14 +55,17 @@ kelsod endpoint gets a fixture in `fakekelsod.py`.
 98.css (`static/vendor/`) draws windows and controls; `static/classic.css`
 turns them into Windows 2000 (the gradient title bar) set in IBM Plex Sans, and draws
 the desktop. Reach for 98.css's classes and elements first: a page's sections
-are `fieldset.group` with a `legend`. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for anything bold; Geist Mono at 12px.
-`static/kelso.css` lays pages out from the tokens in `static/themes/win2k.css` and
-holds no colour of its own. No per-page `<style>`, no inline `style=`: only
-`desktop.js` sets positions, through the CSSOM.
+are `fieldset.group` with a `legend`. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for anything bold; IBM Plex Mono, also Text, at 12px.
+`static/kelso.css` lays pages out from the tokens in `static/theme.css` and
+holds no colour of its own; a property classic.css sets is not set there too,
+and 98.css's bevels are classic.css's `--raised`, `--pressed`, `--sunken`,
+`--frame` and `--etched`. A surface's one committing button is 98.css's
+`default`. No per-page `<style>`, no inline `style=`: scripts set only
+positions, sizes and custom properties, through the CSSOM.
 
-**Color carries meaning.** `--coral` is the accent, and in this theme it is
-highlight navy. `--gold` wants attention, `--rosewood` destroys, `--ok` is
-healthy. The token names are kelso-ui's, kept so its pages need no changes.
+**Color carries meaning.** `--coral` is the accent, highlight navy here.
+`--gold` wants attention, `--rosewood` destroys, `--ok` is healthy. The token
+names are kelso-ui's, kept so its pages need no changes.
 
 **Artwork is ours.** Icons are drawn for this app. No Microsoft
 assets.

@@ -41,11 +41,10 @@ matches.
 | `pages/` | One router per feature: its pages, form posts and JSON |
 | `templates/` | All markup. `desktop.html` is the desktop, `frame.html` what a window shows, `macros.html` the components |
 | `static/js/desktop.js` | Windows, icons, the taskbar and start menu |
-| `static/kelso.css` | The pages' styles; no colours of its own |
+| `static/kelso.css` | How pages are laid out; no colours of its own |
 | `static/classic.css` | The desktop, the type, and kelso's components as classic controls |
 | `static/icons/` | Original artwork, drawn for this app |
-| `static/themes/` | One file per theme: its colour tokens and nothing else |
-| `themes.py` | The theme registry, and the tokens every theme must set |
+| `static/theme.css` | The colour tokens, and nothing else |
 | `settings.py` | The desktop's own settings (its background), kept in the `settings` volume |
 | `static/js/` | One script per behaviour, loaded by the pages that need it |
 | `static/vendor/` | Third-party browser code, pinned and served from here |

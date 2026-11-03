@@ -19,7 +19,6 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from icons import favicon, mdi
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from themes import THEMES
 
 HERE = Path(__file__).parent
 STATIC = HERE / "static"
@@ -130,7 +129,6 @@ templates.globals.update(
   icon_url=icon_url,
   desktop_colors=lambda: settings.background(INSTANCE_ID),
   nav=NAV,
-  themes=THEMES,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
   NO_PASSWORD=auth.TESTING_NO_PASSWORD,
@@ -143,10 +141,7 @@ templates.filters["brand"] = brand
 
 def render(request, template, title, *, status_code=200, headers=None, **context):
   """A whole page. `ok` / `err` in the query become the notice banner."""
-  path = request.url.path
   frame = {
-    "path": path,
-    "active": nav_active(path),
     "title": title,
     "version": "",
     "daemon_api": None,
@@ -208,6 +203,19 @@ def api_error(request, exc: ApiError):
     status_code=502,
     message=str(exc),
   )
+
+
+def local_path(value):
+  """`value` if it is a path on this server, else None.
+
+  Browsers drop tabs and newlines from a URL and read `\\` as `/`, so
+  `/<tab>/x` and `/\\x` are other sites as surely as `//x` is.
+  """
+  if not value.startswith("/") or "\\" in value or value[1:2] == "/":
+    return None
+  if any(ord(c) < 32 or ord(c) == 127 for c in value):
+    return None
+  return value
 
 
 def see(location, **params):

@@ -1,5 +1,6 @@
-/* win2k -- the only theme: button face grey, highlight navy, a cmd.exe well */
-:where(:root), [data-theme="win2k"] {
+/* The colour tokens: button face grey, highlight navy, a cmd.exe well.
+   tests/test_themes.py holds them to a contrast floor. */
+:root {
   color-scheme: light;
 
   --void: #000000;    /* wells: logs, terminals, sparklines */

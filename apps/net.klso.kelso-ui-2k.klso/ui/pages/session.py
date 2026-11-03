@@ -3,14 +3,22 @@
 import auth
 from api import ApiError, api
 from fastapi import APIRouter, Request
-from web import NO_STORE, field, known_hostname, remember_hostname, render, see
+from web import (
+  NO_STORE,
+  field,
+  known_hostname,
+  local_path,
+  remember_hostname,
+  render,
+  see,
+)
 
 router = APIRouter()
 
 
 def safe_next(value):
   """A path on this server, or `/`. Keeps `?next=` from becoming a redirector."""
-  return value if value.startswith("/") and not value.startswith("//") else "/"
+  return local_path(value) or "/"
 
 
 def _hostname():

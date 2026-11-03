@@ -2,7 +2,7 @@
    Everything 98.css does not draw, and what it draws as 98 rather than 2000:
    the desktop around the windows, the type, the title bar's gradient, and
    kelso's own components as classic controls. Loaded after kelso.css, which
-   stays free of colour literals; the system palette lives here.
+   holds layout only; the system palette lives here.
    --------------------------------------------------------------------------- */
 /* Plex's Text weight (450) is its regular for screens: a step heavier than 400. */
 @font-face {
@@ -14,8 +14,16 @@
   src: url("vendor/ibm-plex-sans-1.1.0/IBMPlexSans-SemiBold.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Geist Mono"; font-weight: 100 900; font-display: swap;
-  src: url("vendor/geist-1.9.0/GeistMono-Variable.woff2") format("woff2");
+  font-family: "IBM Plex Mono"; font-weight: 450; font-display: swap;
+  src: url("vendor/ibm-plex-mono-2.5.0/IBMPlexMono-Text.woff2") format("woff2");
+}
+:root {
+  /* 98.css's bevels, named once. */
+  --raised: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+  --pressed: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+  --sunken: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --frame: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
+  --etched: inset 1px 1px grey, inset -1px -1px #fff;
 }
 [hidden] { display: none !important; }
 
@@ -25,13 +33,12 @@ body, .title-bar, .window, button, input, label, legend, li[role=tab], option, s
 }
 b, strong, th, legend { font-weight: 600; }
 .window { color: var(--fg); background: var(--bg); }
-a { color: #0000ee; }
-a:visited { color: #0000ee; }
+a, a:visited { color: #0000ee; }
 
 /* 98.css paints button text as a shadow on transparent; icons are currentColor. */
 button { color: var(--fg); text-shadow: none; background: var(--bg); }
 button:not(:disabled):active { text-shadow: none; }
-button:disabled, button[disabled] { color: var(--off); text-shadow: 1px 1px 0 #fff; }
+button:disabled { color: var(--off); text-shadow: 1px 1px 0 #fff; }
 button:focus-visible, a:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 a:focus-visible { outline-offset: 0; }
 /* 98.css draws these from a sibling <label>; ours sit inside theirs. */
@@ -39,8 +46,7 @@ input[type=radio], input[type=checkbox] {
   appearance: auto; -webkit-appearance: auto; position: static; opacity: 1; margin: 0 4px 0 0;
 }
 input:not([type]) {
-  height: 21px; padding: 3px 4px; border: 0; border-radius: 0; background: #fff;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  height: 21px; padding: 3px 4px; border: 0; background: #fff; box-shadow: var(--sunken);
 }
 input:focus, select:focus { outline: none; }
 input::placeholder { color: var(--off); }
@@ -48,142 +54,78 @@ label { gap: 4px; }
 
 button.icon { min-width: 0; padding: 0 4px; line-height: 0; }
 button.icon svg, a.btn.icon svg { width: 16px; height: 16px; fill: currentColor; display: block; }
-button.tag { min-width: 0; min-height: 23px; padding: 0 6px; }
-button.tag[aria-pressed="true"] {
-  background: #e4e2dc;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+button.tag { min-width: 0; min-height: 23px; padding: 0 6px; background: var(--bg); }
+button.tag[aria-pressed="true"], button.toggle[aria-pressed="true"] {
+  background: #e4e2dc; box-shadow: var(--pressed);
 }
 button.tag[aria-pressed="true"][data-primary] { font-weight: 600; }
 button.link, .update button.icon {
   min-width: 0; min-height: 0; padding: 0; background: none; box-shadow: none; color: #0000ee;
-  text-decoration: underline;
 }
-button.toggle[aria-pressed="true"] {
-  background: #e4e2dc;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
-}
-/* The committing action is the default button: a black outline. */
-.cfg-save, #job-go, #ask-go, .signin-go, .edit-save, .edit-done,
-.app-card-head > .actions > .job-open {
-  box-shadow: inset -2px -2px #0a0a0a, inset 1px 1px #0a0a0a, inset 2px 2px #fff,
-    inset -3px -3px grey, inset 3px 3px #dfdfdf;
-}
+button.link { text-decoration: underline; }
 a.btn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: 23px; min-width: 75px; padding: 0 12px; box-sizing: border-box;
-  color: var(--fg); background: var(--bg); text-decoration: none;
-  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+  min-height: 23px; min-width: 75px; padding: 0 12px;
+  color: var(--fg); background: var(--bg); text-decoration: none; box-shadow: var(--raised);
 }
-a.btn:active, a.btn[aria-current="true"] {
-  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
-}
+a.btn:active, a.btn[aria-current="true"] { box-shadow: var(--pressed); }
 a.btn.icon { min-width: 0; padding: 0 4px; line-height: 0; }
 
-/* Headings. A page's sections are group boxes; a loose h2 is a bold label. */
-h1 { font: 600 15px var(--sans); letter-spacing: 0; }
-h2 {
-  margin: 14px 0 6px; font: 600 13px var(--sans); letter-spacing: 0;
-  text-transform: none; color: var(--fg); gap: 8px;
-}
-h2::after { background: var(--line); box-shadow: 0 1px #fff; }
-h3 { font: 600 13px var(--sans); letter-spacing: 0; text-transform: none; color: var(--fg); }
-.lede { margin: 0 0 8px; color: var(--fg); }
-
+/* A page's sections are group boxes. */
 fieldset.group { margin: 0 0 10px; padding: 6px 10px 10px; min-width: 0; }
 fieldset.group > legend { padding: 0 3px; background: var(--bg); color: var(--fg); }
-.app-top { gap: 10px; }
 .app-top > fieldset.group { margin: 0; }
-.apphead h2 { font-size: 15px; }
+.app-top + .notice, .app-top + .error, .app-top + fieldset.group { margin-top: 10px; }
 
 /* Data is a list view: sunken white, with raised column headers. */
-.card {
-  border: 0; background: #fff;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-  padding: 2px;
-}
-.card.pad {
-  border: 0; border-radius: 0; background: var(--bg); padding: 8px; margin-bottom: 8px;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #fff;
-}
-.card.entry { background: none; box-shadow: none; padding: 6px 0; }
+.card { background: #fff; box-shadow: var(--sunken); padding: 2px; }
 /* Inside a group box a form sits on the window, as a property sheet's does. */
 fieldset.group .cfg-form table, fieldset.group > .scroll > table.kv { background: none; }
-th {
-  padding: 2px 6px; font: 600 13px var(--sans); text-transform: none; color: var(--fg);
-  background: var(--bg); border: 0;
-  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
-}
-td { padding: 3px 6px; border-bottom: 1px solid var(--hair); }
-th:first-child, td:first-child { padding-left: 6px; }
-td.muted:not(.wrap), td.path { font-size: 12px; }
+/* 98.css's header is 98's silver; 2000's face is the window's. */
+table > thead > tr > th { background: var(--bg); }
 tbody tr:hover td { background: #e8eef8; }
 .catalog-row:hover td, .catalog-row:focus-within td { background: var(--coral); color: var(--ink); }
 td.name a { color: #0000ee; }
-table.kv td.key { font-weight: normal; }
-.empty { padding: 20px 0; }
-
-details.reveal > summary { color: var(--fg); }
-details.reveal > summary:hover { color: var(--fg); text-decoration: underline; }
-.card > details.reveal { border-top: 0; padding: 0 6px; }
-
-.dot { width: 8px; height: 8px; border-radius: 0; box-shadow: inset -1px -1px rgba(0,0,0,.35); }
-code { background: #c4c0b7; border: 0; padding: 0 3px; border-radius: 0; color: var(--fg); }
-pre, pre *, .job-out, .logs-out { font-family: var(--mono); }
-pre, .job-out { color: var(--ansi-7); border: 0; border-radius: 0; }
-.notice, .error {
-  background: #ffffe1; border: 1px solid #000; border-radius: 0; margin-bottom: 10px; padding: 6px 8px;
-}
-.error h2 { font-size: 13px; }
-.error h2::after { display: none; }
-.tag { border-radius: 0; background: #c4c0b7; font-size: 12px; line-height: 18px; }
-button.tag { background: var(--bg); }
-.sub { font-size: 13px; }
-.console { border: 0; border-radius: 0; }
+td.field input[type=checkbox] { vertical-align: middle; margin: 0; }
+.dot { box-shadow: inset -1px -1px rgba(0, 0, 0, .35); }
+code, .tag { background: #c4c0b7; }
+.notice, .error { background: #ffffe1; border: 1px solid #000; }
 
 /* Dialogs inside a window. */
-.shade { background: transparent; }
-.job-modal {
-  padding: 3px; gap: 0; width: min(30rem, 100%); max-height: 100%; border: 0; border-radius: 0;
-}
 .job-modal .title-bar { flex: none; }
-.job-modal h2 { font-size: 13px; }
 .job-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; overflow: auto; }
-.job-modal p { font-size: 13px; color: var(--fg); }
-.job-bar { justify-content: flex-end; gap: 6px; }
 #job-progress { width: 100%; flex: none; height: 14px; }
-.job-out { min-height: 9rem; }
-.job-choice {
-  border: 0; border-radius: 0; background: #fff; padding: 4px 6px;
-  box-shadow: inset 1px 1px grey, inset -1px -1px #fff;
-}
+.job-choice { background: #fff; box-shadow: var(--etched); }
 .job-choice:has(input:checked) { background: var(--coral); color: var(--ink); }
 .job-choice:has(input:checked) .sub { color: var(--ink); }
-.app-card {
-  border: 0; border-radius: 0; background: var(--bg);
-  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
-}
-.app-card h2 { color: var(--fg); }
-.app-card-manifest {
-  color: var(--fg); padding: 6px 8px; background: #f4f3ef;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-}
+.app-card { box-shadow: var(--frame); }
+.app-card-manifest { padding: 6px 8px; background: #f4f3ef; color: var(--fg); }
 
 /* --- window chrome: Windows 2000's title bar ----------------------------- */
 .title-bar { background: linear-gradient(90deg, #0a246a, #a6caf0); padding: 2px 2px 2px 3px; }
-.title-bar-text { font-weight: 600; }
+.title-bar-text {
+  display: flex; align-items: center; gap: 3px; min-width: 0; margin-right: 6px;
+  font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.title-bar-text span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.title-bar-controls { flex: none; }
 .title-bar-controls button { min-width: 16px; min-height: 14px; width: 16px; height: 14px; }
 .title-bar-controls button + button { margin-left: 0; }
 .title-bar-controls button[aria-label=Close] { margin-left: 2px; }
 
 /* Sign in and refusals: one dialog on the desktop. */
 html:has(.solo), body:has(.solo) { background: var(--desk-bottom, #3a6ea5); }
-.solo { background: linear-gradient(var(--desk-top), var(--desk-bottom)); flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.solo {
+  flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: linear-gradient(var(--desk-top), var(--desk-bottom));
+}
 .solo-box { width: 22rem; max-width: 100%; }
-.solo-body { padding: 12px; display: block; }
+.solo-body { padding: 12px; }
 .solo-box form { display: flex; flex-direction: column; gap: 6px; }
 .solo-box input[type=password] { width: 100%; }
+.solo-box .notice, .solo-box .error { margin-bottom: 0; }
 .signin-go { align-self: flex-end; margin: 4px 0 0; }
-.solo-hint { margin: 12px 0 0; color: var(--fg); }
+.solo-hint { margin: 12px 0 0; }
 
 /* --- the desktop --------------------------------------------------------- */
 html:has(.desktop), body:has(.desktop) { background: var(--desk-bottom, #3a6ea5); }
@@ -208,7 +150,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .is-off .desk-glyph img { filter: grayscale(1) opacity(.8); }
 .desk-glyph::after {
   content: ""; position: absolute; right: -3px; bottom: -2px; width: 8px; height: 8px;
-  border: 1px solid #000; background: transparent;
+  border: 1px solid #000;
 }
 .is-system .desk-glyph::after { display: none; }
 .is-ok .desk-glyph::after { background: #00c000; }
@@ -224,12 +166,10 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .desk-windows { position: absolute; inset: 0; pointer-events: none; }
 .win { position: absolute; display: flex; flex-direction: column; pointer-events: auto; min-width: 0; }
 .win .title-bar { flex: none; touch-action: none; }
-.title-bar-text { display: flex; align-items: center; gap: 3px; min-width: 0; margin-right: 6px; }
-.title-bar-text span, .title-bar-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .win-icon { width: 16px; height: 16px; flex: none; }
-.title-bar-controls { flex: none; }
 .win.inactive .title-bar { background: linear-gradient(90deg, #808080, #c0c0c0); }
 .win.inactive .title-bar-text { color: #d4d0c8; }
+/* Beats the position and size desktop.js writes on the element. */
 .win.maximized {
   left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important;
 }
@@ -242,29 +182,31 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .win-bar button, .win-bar .btn { min-width: 0; height: 21px; min-height: 21px; padding: 0 6px; }
 .win-nav { display: flex; flex: none; }
 .win-bar label { flex: 1; min-width: 0; color: var(--fg); }
-.win-address { flex: 1; min-width: 0; width: 100%; height: 21px !important; padding: 1px 4px !important; }
+.win-bar input.win-address {
+  flex: 1; min-width: 0; width: 100%; height: 21px; padding: 1px 4px;
+  background-color: #fff; color: var(--fg);
+}
 .win-out { flex: none; }
 .win-frame {
-  flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg);
-  box-shadow: inset 1px 1px grey, inset -1px -1px #fff;
+  flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); box-shadow: var(--etched);
 }
 .win-status { flex: none; margin-top: 2px; }
 .win-resize {
   position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
   touch-action: none;
 }
+.win.is-dialog .win-bar, .win.is-dialog .win-resize,
+.win.is-dialog [aria-label=Minimize], .win.is-dialog [aria-label=Maximize] { display: none; }
 
 .taskbar {
   position: absolute; inset: auto 0 0 0; height: 32px; display: flex; align-items: center; gap: 4px;
-  padding: 2px 2px 2px 2px; background: var(--bg); box-shadow: inset 0 1px #dfdfdf, inset 0 2px #fff;
+  padding: 2px; background: var(--bg); box-shadow: inset 0 1px #dfdfdf, inset 0 2px #fff;
 }
 .start-button {
   display: flex; align-items: center; gap: 4px; min-width: 0; height: 26px; min-height: 26px;
   padding: 0 6px 0 4px; font-weight: 600;
 }
-.start-button.active {
-  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
-}
+.start-button.active { box-shadow: var(--pressed); }
 .start-button .mdi { width: 16px; height: 16px; fill: #0a246a; flex: none; }
 .task-list {
   flex: 1; min-width: 0; height: 26px; display: flex; gap: 3px; overflow: hidden;
@@ -275,15 +217,14 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   min-height: 26px; padding: 0 6px; text-align: left;
 }
 .task.active:not(:disabled) {
-  font-weight: 600;
+  font-weight: 600; box-shadow: var(--pressed);
   background: repeating-conic-gradient(#fff 0 25%, var(--bg) 0 50%) 0 0 / 2px 2px;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
 }
 .task img { width: 16px; height: 16px; flex: none; }
 .task span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tray {
   display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; white-space: nowrap;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey;
+  box-shadow: var(--etched);
 }
 .tray-dot { width: 8px; height: 8px; background: #00c000; border: 1px solid #000; }
 .tray-dot.bad { background: #e00000; }
@@ -305,11 +246,15 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   max-height: calc(100vh - 60px); overflow: auto;
 }
-.start-list hr { width: calc(100% - 4px); margin: 3px 2px; border: 0; border-top: 1px solid grey; border-bottom: 1px solid #fff; }
+.start-list hr {
+  width: calc(100% - 4px); margin: 3px 2px; border: 0;
+  border-top: 1px solid grey; border-bottom: 1px solid #fff;
+}
 .start-apps p { margin: 6px 8px; color: var(--muted); }
 .start-apps .desk-icon, .start-item {
-  display: flex; align-items: center; flex-direction: row; justify-content: flex-start; gap: 8px; width: 100%; height: 30px; min-height: 30px;
-  padding: 0 8px 0 4px; color: var(--fg); background: none; box-shadow: none; text-align: left;
+  display: flex; align-items: center; flex-direction: row; justify-content: flex-start; gap: 8px;
+  width: 100%; height: 30px; min-height: 30px; padding: 0 8px 0 4px;
+  color: var(--fg); background: none; box-shadow: none; text-align: left;
 }
 .start-apps .desk-glyph img, .start-item img { width: 20px; height: 20px; filter: none; }
 .start-apps .desk-glyph::after { display: none; }
@@ -323,8 +268,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 
 .desk-menu {
   position: absolute; z-index: 100001; min-width: 140px; padding: 2px;
-  background: var(--bg);
-  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
+  background: var(--bg); box-shadow: var(--frame);
 }
 .desk-menu button {
   display: block; width: 100%; min-height: 24px; padding: 0 18px; text-align: left;
@@ -343,21 +287,14 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   padding: 0; line-height: 1;
 }
 
-/* --- small fixes over kelso.css's layout --------------------------------- */
-.sub { font-family: var(--sans); color: var(--muted); }
-td.field input[type=checkbox] { vertical-align: middle; margin: 0; }
-.app-top + .notice, .app-top + .error, .app-top + fieldset.group { margin-top: 10px; }
-.win-address:read-only { background-color: #fff; color: var(--fg); }
-
 /* --- command bar, tabs, dialogs ------------------------------------------ */
-.app { flex-direction: column; }
 .cmdbar {
   flex: none; display: flex; flex-wrap: wrap; align-items: stretch; gap: 1px; padding: 2px 4px;
   border-bottom: 1px solid grey; box-shadow: 0 1px #fff; margin-bottom: 1px;
 }
 .cmdbar .cmd {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  min-width: 64px; min-height: 52px; padding: 3px 6px; box-sizing: border-box;
+  min-width: 64px; min-height: 52px; padding: 3px 6px;
   color: var(--fg); background: none; box-shadow: none; text-decoration: none;
   font-size: 12px; line-height: 1.15; white-space: nowrap;
 }
@@ -365,13 +302,9 @@ td.field input[type=checkbox] { vertical-align: middle; margin: 0; }
 .cmdbar .cmd-go svg { fill: var(--ok); }
 .cmdbar .cmd-stop svg { fill: var(--bad); }
 .cmdbar .cmd:hover:not(:disabled) { box-shadow: inset -1px -1px grey, inset 1px 1px #fff; }
-.cmdbar .cmd:not(:disabled):active { box-shadow: inset 1px 1px grey, inset -1px -1px #fff; text-shadow: none; }
+.cmdbar .cmd:not(:disabled):active { box-shadow: var(--etched); }
 .cmdbar .cmd:disabled svg { fill: var(--off); }
 .cmd-sep { margin: 4px 3px; border-left: 1px solid grey; border-right: 1px solid #fff; }
-/* A window whose head holds nothing but its (hidden) title takes no room for it. */
-main > .head:not(:has(> :not(h1))) { display: none; }
-html.standalone main > .head { display: flex; }
-html.standalone main > .head h1 { display: block; }
 
 menu[role=tablist] { margin: 4px 0 -2px; }
 menu[role=tablist] > li, menu[role=tablist] > li[aria-selected=true] { background: var(--bg); }
@@ -385,11 +318,8 @@ menu[role=tablist] > li > a { margin: 3px 10px; color: var(--fg); }
 .field-row-stacked input:not([type=radio]):not([type=checkbox]):not([type=color]),
 .field-row-stacked select { width: 100%; }
 .field-row-stacked > label { align-self: flex-start; }
-.win.is-dialog .win-bar, .win.is-dialog .win-resize,
-.win.is-dialog [aria-label=Minimize], .win.is-dialog [aria-label=Maximize] { display: none; }
 
 /* --- columns ------------------------------------------------------------- */
-th { position: sticky; }
 .col-grip {
   position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; z-index: 1; cursor: col-resize;
   touch-action: none;
@@ -399,10 +329,10 @@ table.sized { table-layout: fixed; }
 table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
 
 /* --- disk usage, in the drive Properties palette ------------------------- */
-.usage { height: 14px; background: #ff00ff; border: 1px solid #000; }
+.usage { background: #ff00ff; border: 1px solid #000; }
 .usage .mine { fill: #0000ff; }
 .usage .other { fill: #008080; }
-.usage-key { display: flex; align-items: center; gap: 6px; margin: 4px 6px; color: var(--fg); }
+.usage-key { display: flex; align-items: center; gap: 6px; margin: 4px 6px; }
 .swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid #000; margin-left: 8px; }
 .swatch:first-child { margin-left: 0; }
 .swatch.mine { background: #0000ff; }
@@ -415,8 +345,8 @@ table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
 /* --- settings ------------------------------------------------------------ */
 .settings-bg { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .bg-preview {
-  width: 160px; height: 110px; flex: none;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  width: 160px; height: 110px; flex: none; box-shadow: var(--sunken);
+  background: linear-gradient(var(--desk-top), var(--desk-bottom));
 }
 .bg-custom { gap: 12px; margin-left: 20px; }
 .bg-custom input[type=color] { width: 44px; height: 23px; padding: 0 2px; }
@@ -426,12 +356,9 @@ table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
 .app > .status-bar { flex: none; margin: 2px 2px 0; }
 .status-bar-field { margin: 0; }
 .resource-row { display: flex; gap: 10px; align-items: stretch; }
-.meter, .history {
-  background: #000;
-  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-}
+.meter, .history { background: #000; box-shadow: var(--sunken); }
 .meter {
-  flex: none; width: 80px; padding: 8px 2px 6px; box-sizing: border-box;
+  flex: none; width: 80px; padding: 8px 2px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   color: #00ff00; font: 12px var(--mono);
 }
