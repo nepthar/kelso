@@ -1,0 +1,62 @@
+{#- The desktop. Icons are server-rendered; windows are made in desktop.js from
+  the template below, each an iframe of an ordinary page. -#}
+{% extends "base.html" %}
+{% set brand = hostname|default('', true)|brand %}
+{% block body %}
+<div class="desktop" id="desktop" data-route-icon="{{ icon_url('route') }}">
+  <div class="desk-icons" id="desk-icons">{% include "_desk_icons.html" %}</div>
+  <div class="desk-windows" id="desk-windows"></div>
+</div>
+
+{% if NO_PASSWORD or (daemon_api is not none and daemon_api != NEEDS_API) %}
+<div class="balloon" id="balloon" role="alert">
+  <button type="button" class="balloon-close" aria-label="Dismiss">×</button>
+  {% if NO_PASSWORD %}<p><b>No password.</b> Anyone who can reach this page can run kelso. For testing only.</p>{% endif %}
+  {% if daemon_api is not none and daemon_api != NEEDS_API %}<p><b>Version mismatch.</b> Built for kelso API {{ NEEDS_API }}, but kelsod speaks {{ daemon_api }}. Reload this app.</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="window start-menu" id="start-menu" hidden>
+  <div class="start-band"><span>kelso <b>{{ brand }}</b></span></div>
+  <div class="start-list">
+    <div class="start-apps" id="start-apps"></div>
+    <hr>
+    {% for item in nav %}
+    <button type="button" class="start-item" data-title="{{ item.label }}" data-src="{{ item.href }}" data-icon="{{ icon_url(item.icon) }}"><img src="{{ icon_url(item.icon) }}" alt="">{{ item.label }}</button>
+    {% endfor %}
+    <hr>
+    <form method="post" action="/logout"><button type="submit" class="start-item"><img src="{{ icon_url('signout') }}" alt="">Sign out…</button></form>
+  </div>
+</div>
+
+<div class="desk-menu" id="desk-menu" role="menu" hidden></div>
+
+<div class="taskbar">
+  <button type="button" class="start-button" id="start-button" aria-haspopup="menu" aria-expanded="false" aria-controls="start-menu">{{ mdi('dune') }}<span>Start</span></button>
+  <div class="task-list" id="task-list"></div>
+  <div class="tray" title="kelso {{ version }} over {{ where }}{{ ' · ' ~ INSTANCE_ID if INSTANCE_ID }}">
+    <span class="tray-dot" id="tray-dot"></span>
+    <span class="tray-host">{{ brand }}</span>
+    <time id="tray-clock"></time>
+  </div>
+</div>
+
+<template id="window-tpl">
+<div class="window win" role="dialog">
+  <div class="title-bar">
+    <div class="title-bar-text"><img class="win-icon" src="{{ icon_url('app') }}" alt=""><span class="win-title"></span></div>
+    <div class="title-bar-controls"><button type="button" aria-label="Minimize"></button><button type="button" aria-label="Maximize"></button><button type="button" aria-label="Close"></button></div>
+  </div>
+  <div class="win-bar">
+    <span class="win-nav"><button type="button" class="win-back" disabled>&#9664; Back</button><button type="button" class="win-forward" disabled>Forward &#9654;</button></span>
+    <label>Address <input type="text" class="win-address" readonly></label>
+    <a class="btn win-out" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+    <button type="button" class="win-refresh">Refresh</button>
+  </div>
+  <iframe class="win-frame" title="window"></iframe>
+  <div class="status-bar win-status" hidden><p class="status-bar-field">Blank? This app refuses to open inside another page. Use Open in new tab.</p></div>
+  <div class="win-resize" aria-hidden="true"></div>
+</div>
+</template>
+<script src="{{ asset('js/desktop.js') }}"></script>
+{% endblock %}

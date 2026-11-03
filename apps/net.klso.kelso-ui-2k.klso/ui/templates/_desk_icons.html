@@ -1,0 +1,28 @@
+{#- Every icon on the desktop. The whole page's first paint, and what
+  /desktop/icons sends when desktop.js re-reads them. Expects `apps`, `routes`.
+  desktop.js opens an icon from its data attributes. -#}
+{% macro icon(label, img, src="", url="", state="", kind="", logs="", shell="", title="") -%}
+<button type="button" class="desk-icon{{ ' is-' ~ state if state }}{{ ' is-' ~ kind if kind }}" title="{{ title or label }}"
+  data-title="{{ label }}" data-icon="{{ icon_url(img) }}"
+  {%- if src %} data-src="{{ src }}"{% endif %}
+  {%- if url %} data-url="{{ url }}"{% endif %}
+  {%- if logs %} data-logs="{{ logs }}"{% endif %}
+  {%- if shell %} data-shell="{{ shell }}"{% endif %}>
+  <span class="desk-glyph"><img src="{{ icon_url(img) }}" alt="" draggable="false"></span>
+  <span class="desk-label">{{ label }}</span>
+</button>
+{%- endmacro %}
+{#- The desktop's colours ride along, so a saved change repaints it. -#}
+<span hidden class="desk-colors" data-colors="{{ desktop_colors()|join(',') }}"></span>
+{% for item in nav %}
+{{ icon(item.label, item.icon, src=item.href, kind='system') }}
+{% endfor %}
+{% for app in apps %}
+{% set here = '/apps/' ~ app.app_id|urlencode %}
+{{ icon(app.get('display_name') or app.app_id, 'app', src=here, state=app.desk_state, kind='app',
+    logs=here ~ '/logs', shell=(here ~ '/console') if app.desk_state != 'off' else '',
+    title=(app.app_id ~ ': ' ~ (app.get('status') or 'unknown'))) }}
+{% endfor %}
+{% for route in routes %}
+{{ icon(route.label, 'route', url=route.url, state=route.state, kind='route', title=route.url) }}
+{% endfor %}

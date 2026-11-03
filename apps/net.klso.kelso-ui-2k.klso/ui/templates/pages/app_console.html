@@ -1,0 +1,25 @@
+{% extends "frame.html" %}
+{% from "macros.html" import empty, terminal %}
+{% set here = '/apps/' ~ app_id|urlencode %}
+
+{% block head %}<link rel="stylesheet" href="{{ asset('vendor/xterm-6.0.0/xterm.css') }}">{% endblock %}
+
+{#- One link per running unit when there is a choice; the open one is current. -#}
+{% block actions %}<span class="head-actions">
+{%- if running|length > 1 %}<span class="row actions">
+  {%- for name in running %}<a class="btn" href="{{ here }}/console?unit={{ name|urlencode }}"{% if name == unit %} aria-current="true"{% endif %}>{{ name }}</a>{% endfor -%}
+</span>{% endif %}</span>{% endblock %}
+
+{% block content %}
+{% if unit %}
+{% call terminal(here ~ '/console/ws?unit=' ~ unit|urlencode) %}A shell in the <span class="mono">{{ unit }}</span> container.{% endcall %}
+{% else %}
+{{ empty('Nothing in this app is running. Start it to open a console.') }}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}{% if unit %}
+<script src="{{ asset('vendor/xterm-6.0.0/xterm.js') }}"></script>
+<script src="{{ asset('vendor/xterm-addon-fit-0.11.0/addon-fit.js') }}"></script>
+<script src="{{ asset('js/console.js') }}"></script>
+{% endif %}{% endblock %}
