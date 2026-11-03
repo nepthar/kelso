@@ -10,7 +10,8 @@
     var custom = form.querySelector("input[name=mode]:checked").value === "custom";
     pickers.forEach(function (p) { p.disabled = !custom; });
     var pair = custom ? [pickers[0].value, pickers[1].value] : generated;
-    preview.style.background = "linear-gradient(" + pair[0] + ", " + pair[1] + ")";
+    preview.style.setProperty("--desk-top", pair[0]);
+    preview.style.setProperty("--desk-bottom", pair[1]);
   }
   form.addEventListener("input", paint);
   form.addEventListener("change", paint);

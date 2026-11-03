@@ -39,9 +39,6 @@
   term.open(box);
   fit.fit();
 
-  document.addEventListener("kelso:themechange", function () {
-    term.options.theme = theme();
-  });
   new ResizeObserver(function () { fit.fit(); }).observe(box);
 
   var ws = null;

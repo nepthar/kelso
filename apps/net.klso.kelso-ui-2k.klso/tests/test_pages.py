@@ -530,3 +530,30 @@ def test_a_bulk_volume_backup_is_a_checkbox(client, fake):
   assert row.index('type="hidden" name="set.backup.movies" value="off"') < row.index(
     'type="checkbox" name="set.backup.movies" value="on" checked'
   )
+
+
+@pytest.mark.parametrize(
+  "then",
+  [
+    "//evil.test",
+    "/\\evil.test",
+    "/\t/evil.test",
+    "/\n/evil.test",
+    "https://evil.test",
+  ],
+)
+def test_done_never_continues_off_this_server(client, fake, then):
+  text = client.get("/done", params={"then": then, "ok": "Saved"}).text
+  assert '<a class="done-next" href="/host?ok=Saved">' in text
+
+
+def test_done_continues_to_a_local_path_with_its_notice(client, fake):
+  text = client.get("/done", params={"then": "/routes", "ok": "Saved web"}).text
+  assert '<a class="done-next" href="/routes?ok=Saved+web">' in text
+
+
+@pytest.mark.parametrize("value", ["//evil.test", "/\\evil.test", "/\t/evil.test", "x"])
+def test_sign_in_next_stays_on_this_server(value):
+  from pages import session
+
+  assert session.safe_next(value) == "/"

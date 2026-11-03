@@ -13,7 +13,7 @@
 </button>
 {%- endmacro %}
 {#- The desktop's colours ride along, so a saved change repaints it. -#}
-<span hidden class="desk-colors" data-colors="{{ desktop_colors()|join(',') }}"></span>
+<script type="application/json" class="desk-colors">{{ desktop_colors()|list|tojson }}</script>
 {% for item in nav %}
 {{ icon(item.label, item.icon, src=item.href, kind='system') }}
 {% endfor %}

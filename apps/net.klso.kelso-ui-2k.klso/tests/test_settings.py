@@ -35,7 +35,9 @@ def test_custom_colours_are_saved_and_painted(client, fake):
   saved = json.loads(SETTINGS.read_text())["background"]
   assert saved == {"mode": "custom", "top": "#aa0000", "bottom": "#00aa00"}
   assert _colors(client.get("/").text) == ["#aa0000", "#00aa00"]
-  assert 'data-colors="#aa0000,#00aa00"' in client.get("/desktop/icons").text
+  assert (
+    'class="desk-colors">["#aa0000", "#00aa00"]' in client.get("/desktop/icons").text
+  )
 
 
 def test_a_colour_that_is_not_hex_is_refused(client, fake):
@@ -51,3 +53,12 @@ def test_going_back_to_the_id(client, fake):
   )
   client.post("/settings", data={"mode": "id", "top": "#aa0000", "bottom": "#00aa00"})
   assert _colors(client.get("/").text) == list(settings.id_colors(""))
+
+
+def test_a_bad_settings_file_is_named_and_never_breaks_a_page(client, fake):
+  SETTINGS.write_text("{not json")
+  assert _colors(client.get("/login").text) == list(settings.id_colors(""))
+  text = client.get("/settings").text
+  assert "is not a settings file" in text
+  client.post("/settings", data={"mode": "id", "top": "", "bottom": ""})
+  assert json.loads(SETTINGS.read_text())["background"]["mode"] == "id"

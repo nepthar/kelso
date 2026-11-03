@@ -3,5 +3,5 @@
 {% extends "frame.html" %}
 {% block content %}
 {% if message %}<div class="notice">{{ message }}</div>{% endif %}
-<p><a href="{{ then }}">Continue</a></p>
+<p><a class="done-next" href="{{ target }}">Continue</a></p>
 {% endblock %}

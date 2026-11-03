@@ -102,10 +102,11 @@
   its own label, desc, verb and args; the operator picks before Run is live.
   `icon` is an MDI name, and then `label` is the tooltip rather than the text.
   `done` is where to land once the job has run; the default is a reload.
+  `default` draws it as the surface's one default button (98.css).
   The JSON attributes are single-quoted: `tojson` escapes ' but not ".
 -#}
-{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false, bar=false, tone="") -%}
-<button type="button" class="job-open{{ ' cmd' if bar else (' icon' if icon) }}{{ ' cmd-' ~ tone if tone }}{{ ' danger' if danger }}"
+{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false, bar=false, tone="", default=false) -%}
+<button type="button" class="job-open{{ ' cmd' if bar else (' icon' if icon) }}{{ ' cmd-' ~ tone if tone }}{{ ' danger' if danger }}{{ ' default' if default }}"
   {%- if not enabled %} disabled{% endif %}
   {%- if icon and not bar %} title="{{ label }}" aria-label="{{ label }}"{% endif %}
   data-verb="{{ verb }}" data-title="{{ title }}" data-desc="{{ desc }}"

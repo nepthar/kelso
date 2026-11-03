@@ -3,12 +3,12 @@
 Which icons there are is decided here; how windows behave is js/desktop.js.
 """
 
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from api import ApiError, api, where
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-from web import NO_STORE, PageDep, templates
+from web import NO_STORE, PageDep, local_path, templates
 
 router = APIRouter()
 
@@ -57,8 +57,10 @@ def desktop(page: PageDep):
 @router.get("/done")
 def done(page: PageDep, then: str = "/host", ok: str = ""):
   """Where a dialog lands once it has done its work; desktop.js closes it."""
-  local = then.startswith("/") and not then.startswith(("//", "/\\"))
-  return page.render("done.html", "Done", then=then if local else "/host", message=ok)
+  target = local_path(then) or "/host"
+  if ok:
+    target += ("&" if "?" in target else "?") + urlencode({"ok": ok})
+  return page.render("done.html", "Done", target=target, message=ok)
 
 
 @router.get("/desktop/icons")

@@ -60,12 +60,12 @@
   }
 
   // A dialog that has done its work lands on /done: it closes, and the window
-  // that opened it goes to `then` with the notice.
-  function finish(win, query) {
-    var then = query.get("then") || "/host";
-    if (!/^\/[^\/\\]/.test(then)) then = "/host";
-    var ok = query.get("ok");
-    if (ok) then += (then.indexOf("?") < 0 ? "?" : "&") + "ok=" + encodeURIComponent(ok);
+  // that opened it goes where the page's Continue link does, which the server
+  // has already held to this origin.
+  function finish(win) {
+    var link = win.frame.contentDocument.querySelector(".done-next");
+    var url = link && new URL(link.href);
+    var then = url && url.origin === location.origin ? url.pathname + url.search : "/host";
     var opener = windows.indexOf(win.opener) >= 0 ? win.opener : null;
     closeWindow(win);
     if (!opener) { open({ src: then, title: "" }); return; }
@@ -167,7 +167,7 @@
     try { inner = win.frame.contentWindow.location; } catch (e) { return; }
     if (inner.pathname === "/login") { location.href = "/login"; return; }
     if (inner.href === "about:blank") return;
-    if (inner.pathname === "/done") { finish(win, new URLSearchParams(inner.search)); return; }
+    if (inner.pathname === "/done") { finish(win); return; }
     var path = inner.pathname + inner.search;
     win.key = path;
     win.address.value = path;
@@ -175,7 +175,8 @@
     leaveBy(win, win.frame.contentDocument);
     var title = win.frame.contentDocument.title.replace(/ · kelso$/, "");
     if (title) setTitle(win, title);
-    refreshIcons();
+    // A saved form or a finished dialog may have changed what the desktop shows.
+    if (/[?&]ok=/.test(path)) refreshIcons();
   }
 
   function dragging(handle, start, move) {
@@ -385,9 +386,7 @@
   setInterval(refreshIcons, POLL);
 
   function paint() {
-    var colors = icons.querySelector(".desk-colors").getAttribute("data-colors").split(",");
-    document.documentElement.style.setProperty("--desk-top", colors[0]);
-    document.documentElement.style.setProperty("--desk-bottom", colors[1]);
+    window.kelso.paintDesktop(JSON.parse(icons.querySelector(".desk-colors").textContent));
   }
 
   // --- start menu --------------------------------------------------------

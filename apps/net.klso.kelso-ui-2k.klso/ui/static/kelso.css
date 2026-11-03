@@ -1,25 +1,21 @@
 /* ---------------------------------------------------------------------------
-   Tokens. The colours are a theme's: static/themes/<id>.css, one file each,
-   registered in themes.py. Nothing in this file is a colour literal -- a hex
-   value here would be one theme's colour leaking into all of them.
-
-   What is here is geometry, and the tokens derived from a theme's so that no
-   theme has to repeat them.
+   How pages are laid out. Colours come from the tokens in theme.css; nothing
+   in this file is a colour literal. 98.css draws the controls and classic.css
+   paints them and the desktop; a property set there is not set here.
    --------------------------------------------------------------------------- */
 :root {
   --bad: var(--rosewood);
   --warn: var(--gold);
 
-  /* The terminal draws on the gutter's black-most surface, in light grey,
-     with the one accent as its cursor. Its sixteen colours are the theme's. */
+  /* The terminal draws on the darkest surface, in light grey, with the one
+     accent as its cursor. Its sixteen colours are the theme's. */
   --term-bg: var(--void);
   --term-fg: var(--ansi-7);
   --term-cursor: var(--coral);
   --term-selection: color-mix(in srgb, var(--coral) 30%, transparent);
 
-  --r: 2px;           /* one radius, near-square */
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 html { height: 100%; background: var(--bg); }
 * { box-sizing: border-box; }
@@ -28,131 +24,67 @@ body {
   background: var(--bg); color: var(--fg);
   font: 450 13px/1.45 var(--sans);
 }
-.app { position: relative; flex: 1; display: flex; min-width: 0; min-height: 0; }
+.app {
+  position: relative; flex: 1; display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+}
+
 /* --- page head ---------------------------------------------------------- */
 main { flex: 1; padding: 10px 14px 24px; min-width: 0; overflow: auto; }
-.head {
-  position: relative;
-  display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-}
-/* The window's title bar names the page. */
-main > .head h1 { display: none; }
-h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -0.012em; }
-/* Beside the title on the head's baseline: what the page is, in one phrase. */
-.head-sub { color: var(--dim); font-size: 13px; margin: 0; }
-.head a { color: var(--dim); text-decoration: none; font-size: 13px; }
-.head a:hover { color: var(--coral); }
-.head .head-actions {
-  order: 1; align-self: center;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-}
-.head > a { order: 2; margin-left: auto; }
-
-/* --- section labels ------------------------------------------------------
-   A small lowercase label with a rule running to the right edge. Hierarchy
-   comes from this and from space, so most content needs no box at all. */
-h2 {
-  font-size: 13px; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: lowercase; color: var(--dim);
-  margin: 32px 0 12px; display: flex; align-items: center; gap: 12px;
-}
-h2::after { content: ""; order: 1; flex: 1; height: 1px; background: var(--line); }
-h2:first-child { margin-top: 0; }
-/* Beside the label, before the rule -- the same reading path as `.head`. */
-h2 .act {
-  order: 0; display: flex; gap: 8px; font-weight: 400; font-size: 13px;
-  letter-spacing: 0; text-transform: none;
-}
-h2 .act button { padding: 2px 9px; font-size: 13px; }
-h3 {
-  font-size: 13px; letter-spacing: .08em; text-transform: lowercase;
-  color: var(--muted); margin: 20px 0 8px; font-weight: 600;
-}
-.lede { color: var(--dim); margin: -4px 0 12px; max-width: 68ch; font-size: 13px; }
+.head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+/* In a window the title bar names the page; a head with nothing else goes. */
+html:not(.standalone) main > .head h1,
+html:not(.standalone) main > .head:not(:has(> :not(h1))) { display: none; }
+h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.head .head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+h3 { margin: 20px 0 8px; font-size: 13px; font-weight: 600; }
+.lede { margin: 0 0 8px; max-width: 68ch; }
 /* A repo's provenance line: long enough to want the full width. */
-.lede.repo-meta { max-width: none; color: var(--muted); font-size: 13px; }
-.lede.repo-meta .mono { font-size: 13px; }
+.lede.repo-meta { max-width: none; color: var(--muted); }
 .warnish { color: var(--warn); }
-
-/* --- surfaces ------------------------------------------------------------
-   `.card` around a table is just a pair of rules; only `.pad` fills. */
-.card { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.card.pad {
-  border: 1px solid var(--line); border-radius: var(--r);
-  background: var(--panel); padding: 16px;
-}
-.card.entry { padding: 6px 0; border-bottom: none; }
 .scroll { overflow-x: auto; }
 
 /* --- tables --------------------------------------------------------------
-   Headers are small lowercase mono, not uppercase tracked grey. Identifiers,
-   versions, sizes and counts are mono so columns actually line up. */
+   98.css draws the header and pads the cells. */
 table { width: 100%; border-collapse: collapse; }
-th {
-  text-align: left; font-size: 13px; font-weight: 400; color: var(--muted);
-  font-family: var(--mono);
-  text-transform: lowercase; letter-spacing: 0; font-size: 13px;
-  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line);
-  white-space: nowrap; vertical-align: middle;
-}
-td {
-  padding: 5px 14px 5px 0; border-bottom: 1px solid var(--hair);
-  white-space: nowrap; vertical-align: middle;
-}
-th:first-child, td:first-child { padding-left: 2px; }
+th { text-align: left; white-space: nowrap; }
+td { border-bottom: 1px solid var(--hair); white-space: nowrap; vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
-td.name { font-weight: 600; color: var(--fg); }
+td.name { font-weight: 600; }
 th.act, td.act { width: 1%; text-align: right; padding: 2px 2px 2px 0; }
 td.act button.icon { padding: 2px 4px; }
 td.act button + button { margin-left: 8px; }
 /* A version's update offer: just the glyph, sitting in the line of text. */
-.update button.icon {
-  display: inline-block; vertical-align: -2px; padding: 0; border: none;
-  background: none; color: var(--coral);
-}
+.update button.icon { display: inline-block; vertical-align: -2px; }
 .update button.icon svg { width: 14px; height: 14px; }
-.update button.icon:hover:not(:disabled) { color: var(--fg); }
-.sub {
-  display: block; font-size: 13px; color: var(--muted); font-weight: 400;
-  font-family: var(--mono);
-}
-tbody tr:hover td { background: color-mix(in srgb, var(--coral) 5%, transparent); }
+.sub { display: block; color: var(--muted); }
 /* Paths are long and matter; let them wrap rather than push the row's
    controls off the edge. */
 td.path { white-space: normal; word-break: break-all; min-width: 16ch; }
 td.wrap { white-space: normal; min-width: 20ch; }
-td.name a { color: inherit; text-decoration: none; }
-td.name a:hover { color: var(--coral); }
 td.path a { color: inherit; }
-td.path a:hover { color: var(--coral); }
-
-/* Secondary table columns are data, not chrome: readable, and mono so that
-   versions, sizes, ids and paths line up down the column. `.wrap` is prose
-   (descriptions, hints) and stays in the text face. */
+/* Secondary columns are data, mono so that versions, sizes, ids and paths
+   line up down the column. `.wrap` is prose and stays in the text face. */
 td.muted { color: var(--dim); }
-td.muted:not(.wrap), td.path {
-  font-family: var(--mono); font-size: 12px;
-}
-td.muted.wrap { color: var(--muted); font-size: 13px; }
+td.muted:not(.wrap), td.path { font-family: var(--mono); font-size: 12px; }
+td.muted.wrap { color: var(--muted); }
 
-/* --- status --------------------------------------------------------------
-   Square markers, matching the geometry everywhere else. */
-.pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
-.dot { width: 6px; height: 6px; border-radius: 1px; background: var(--off); flex: none; }
+/* --- status -------------------------------------------------------------- */
+.pill { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+.dot { width: 8px; height: 8px; background: var(--off); flex: none; }
 .dot.running { background: var(--ok); }
 .dot.exited { background: var(--warn); }
 .dot.bad { background: var(--bad); }
-/* A name labelling what it sits beside: hairline, mono, never coloured. */
+/* A name labelling what it sits beside, never coloured. */
 .tag {
   display: inline-block; padding: 0 6px; border: 1px solid var(--line);
-  border-radius: var(--r); color: var(--dim); line-height: 18px; vertical-align: 1px;
+  color: var(--dim); line-height: 18px; vertical-align: 1px;
   font-family: var(--mono); font-size: 12px;
 }
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); font-size: 12px; }
 
-/* --- controls ------------------------------------------------------------
-   98.css draws the controls and classic.css adapts kelso's; this is layout. */
+/* --- forms --------------------------------------------------------------- */
 /* Out of the layout until something changes, so a form ends at its last field. */
 .cfg-form .cfg-actions { display: none; justify-content: flex-end; padding: 8px 0 0; }
 .cfg-form.is-dirty .cfg-actions { display: flex; }
@@ -164,103 +96,51 @@ td.muted.wrap { color: var(--muted); font-size: 13px; }
 
 /* --- rows and wells ------------------------------------------------------ */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-/* `display: flex` outranks the UA stylesheet's [hidden] { display: none }. */
-.row[hidden] { display: none; }
 .row .grow { flex: 1; min-width: 200px; }
 .row.between { justify-content: space-between; width: 100%; }
 .apphead { margin-bottom: 10px; }
+.apphead .lede { margin: 8px 0 2px; }
 /* The app page's first row: what the app is, beside its manifest. */
-.reachable { margin-top: 10px; font-size: 13px; }
+.app-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.reachable { margin-top: 10px; }
 .reachable .key { font-weight: 600; }
-.app-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
 /* A page's lede with one control pushed to the right edge. */
 .lede-line { gap: 8px; margin-bottom: 12px; }
 .lede-line .lede { margin: 0; }
 .lede-line > :not(.lede) { margin-left: auto; }
-.apphead h2 {
-  margin: 0; font-size: 15px; font-weight: 600; text-transform: none;
-  letter-spacing: -0.012em; color: var(--fg); display: block;
-}
-.apphead h2::after { display: none; }
-.apphead .lede { margin: 8px 0 2px; }
-table.kv td { vertical-align: middle; }
-table.kv td.key { font-weight: 600; white-space: nowrap; width: 1%; padding-right: 28px; }
-table.kv td.key .sub { font-weight: 400; }
+table.kv td.key { white-space: nowrap; width: 1%; padding-right: 28px; }
 table.kv td.field { width: 1%; white-space: nowrap; }
 pre {
-  margin: 10px 0 0; padding: 12px 14px; background: var(--void);
-  border: 1px solid var(--line); border-radius: var(--r);
-  overflow-x: auto; font-size: 12px; white-space: pre-wrap;
-  font-family: var(--mono);
+  margin: 10px 0 0; padding: 12px 14px; overflow-x: auto; white-space: pre-wrap;
+  background: var(--void); color: var(--ansi-7); font: 12px var(--mono);
 }
-code {
-  font-family: var(--mono); font-size: 12px;
-  background: var(--panel); border: 1px solid var(--line);
-  padding: 0 5px; border-radius: var(--r); color: var(--dim);
-}
-.empty { padding: 48px 0; color: var(--muted); text-align: center; font-size: 13px; }
+code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
+.empty { padding: 20px 0; color: var(--muted); text-align: center; }
 
-/* --- notices -------------------------------------------------------------
-   A colour-bearing left rule rather than a coloured box. */
+/* --- notices ------------------------------------------------------------- */
+.notice, .error { padding: 6px 8px; margin-bottom: 10px; }
 .notice.contested ul { margin: 6px 0 0; padding-left: 18px; }
-.notice.contested li { margin-bottom: 3px; font-size: 13px; color: var(--dim); }
-.notice, .error {
-  border: 1px solid var(--line); border-left: 2px solid var(--ok);
-  border-radius: var(--r); padding: 12px 16px; margin-bottom: 20px;
-  background: var(--panel);
-}
-.error { border-left-color: var(--bad); }
-.notice.contested { border-left-color: var(--warn); }
-.error h2 {
-  margin: 0 0 8px; font-size: 13px; color: var(--bad); display: block;
-  text-transform: none; letter-spacing: 0;
-}
-.error h2::after { display: none; }
-.error p { margin: 0 0 4px; font-size: 13px; }
+.notice.contested li { margin-bottom: 3px; color: var(--dim); }
+.error h2 { margin: 0 0 8px; font-size: 13px; color: var(--bad); }
+.error p { margin: 0 0 4px; }
 .error ul { margin: 6px 0 0; padding-left: 18px; }
 .error li { margin-bottom: 4px; }
 
-/* --- disclosure ---------------------------------------------------------- */
-details.reveal > summary {
-  cursor: pointer; color: var(--dim); padding: 6px 0;
-  list-style-position: inside;
-}
-details.reveal > summary:hover { color: var(--coral); }
-.card > details.reveal { border-top: 1px solid var(--hair); }
-.card.pad > details.reveal { border-top: none; margin-top: 12px; }
-
-/* --- catalog / overlays --------------------------------------------------- */
+/* --- overlays ------------------------------------------------------------ */
 .catalog-row { cursor: pointer; }
-.catalog-row:hover td { background: color-mix(in srgb, var(--coral) 8%, transparent); }
 .shade {
   position: fixed; inset: 0; z-index: 20;
   /* A contested id opens one card per repo, side by side. */
   display: flex; align-items: center; justify-content: center; gap: 20px;
   padding: 32px;
-  background: color-mix(in srgb, var(--void) 72%, transparent);
 }
-.shade[hidden] { display: none; }
-.job-modal {
-  background: var(--bg); border: 1px solid var(--line);
-  border-radius: var(--r); width: min(36rem, 100%);
-  padding: 20px; display: flex; flex-direction: column; gap: 12px;
-  max-height: min(80vh, 100%);
-}
-.job-modal h2 {
-  margin: 0; font-size: 15px; font-weight: 600; display: block;
-  text-transform: none; letter-spacing: -0.01em; color: var(--fg);
-}
-.job-modal h2::after { display: none; }
-.job-modal p { margin: 0; font-size: 13px; color: var(--dim); }
-.job-bar { width: 100%; }
+.job-modal { width: min(30rem, 100%); max-height: 100%; display: flex; flex-direction: column; }
+.job-modal p { margin: 0; }
+.job-bar { width: 100%; justify-content: flex-end; gap: 6px; }
 .job-fields { width: 100%; gap: 10px; }
 .job-out {
-  margin: 0; min-height: 12rem; max-height: 40vh; overflow: auto;
-  padding: 12px; background: var(--void); border-radius: var(--r);
-  font-size: 12px; white-space: pre-wrap;
-  font-family: var(--mono);
-  border: 1px solid var(--line); border-left: 2px solid var(--line);
-  transition: border-color 400ms ease;
+  margin: 0; min-height: 9rem; max-height: 40vh; overflow: auto; padding: 12px;
+  border-left: 2px solid var(--line); transition: border-color 400ms ease;
 }
 .job-out.ok { border-left-color: var(--ok); }
 .job-out.bad { border-left-color: var(--bad); }
@@ -270,48 +150,31 @@ details.reveal > summary:hover { color: var(--coral); }
    the fit addon subtracts; on this box it would push the last row out. */
 .console {
   height: calc(100vh - 92px); overflow: hidden;
-  background: var(--term-bg); border: 1px solid var(--line); border-radius: var(--r);
-  font: 12px var(--mono);
+  background: var(--term-bg); font: 12px var(--mono);
 }
-.console:focus-within { border-color: var(--coral); }
-/* A closed session: its output stays readable, but nothing here is live. */
-.console.ended, .console.ended:focus-within { border-color: var(--line); }
 .console .xterm { height: 100%; padding: 8px 12px; }
 /* xterm.css paints this #000 (as `.xterm .xterm-viewport`, and loads later); the
    theme only reaches the element inside it. */
 .console .xterm .xterm-viewport { background: var(--term-bg); }
 
 .job-choices { display: flex; flex-direction: column; gap: 8px; }
-.job-choices[hidden] { display: none; }
-.job-choice {
-  display: flex; gap: 10px; align-items: flex-start; color: var(--fg);
-  border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px;
-  cursor: pointer; font-size: 13px;
-}
-.job-choice:hover { border-color: var(--dim); }
-.job-choice:has(input:checked) { border-color: var(--coral); }
+.job-choice { display: flex; gap: 10px; align-items: flex-start; padding: 4px 6px; cursor: pointer; }
 .job-choice .sub { margin-top: 2px; }
 
 /* --- app card ------------------------------------------------------------- */
 .app-card {
   display: flex; flex-direction: row; align-items: stretch;
-  background: var(--bg); border: 1px solid var(--line);
-  border-radius: var(--r); width: min(88rem, 100%);
+  background: var(--bg); width: min(88rem, 100%);
   max-height: min(92vh, 100%); overflow: hidden;
   padding: 16px; gap: 16px;
 }
-.app-card[hidden] { display: none; }
 .app-card-head {
   flex: 0 0 21rem; width: 21rem;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--line); padding-right: 16px;
   overflow: auto;
 }
-.app-card h2 {
-  margin: 0 0 2px; font-size: 16px; font-weight: 600; display: block;
-  text-transform: none; letter-spacing: -0.01em; color: var(--fg);
-}
-.app-card h2::after { display: none; }
+.app-card h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
 .app-card .lede { margin: 8px 0 12px; }
 .app-card-intro > :last-child { margin-bottom: 0; }
 /* margin-top:auto rather than a fixed footer: the head scrolls, and buttons
@@ -320,52 +183,39 @@ details.reveal > summary:hover { color: var(--coral); }
   margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line);
 }
 .app-card .stale {
-  margin: 10px 0 0; padding: 8px 12px; font-size: 13px;
-  color: var(--dim); background: var(--panel);
-  border-left: 2px solid var(--warn); border-radius: var(--r);
+  margin: 10px 0 0; padding: 8px 12px;
+  color: var(--dim); background: var(--panel); border-left: 2px solid var(--warn);
 }
 /* Free-form docker options the manifest passes through. Louder than `.stale`:
    a tinted ground as well as a rule, because this is the one thing on the card
    the operator is being asked to agree to. */
 .app-card .passthru {
-  margin: 12px 0 0; padding: 10px 12px; font-size: 13px;
-  border-left: 2px solid var(--bad); border-radius: var(--r);
+  margin: 12px 0 0; padding: 10px 12px; color: var(--dim);
+  border-left: 2px solid var(--bad);
   background: color-mix(in srgb, var(--bad) 10%, var(--panel));
-  color: var(--dim);
 }
-.app-card .passthru b {
-  display: block; margin-bottom: 6px; font-weight: 600; color: var(--bad);
-}
+.app-card .passthru b { display: block; margin-bottom: 6px; color: var(--bad); }
 .app-card .passthru p { margin: 0 0 8px; }
 .app-card .passthru ul { margin: 0; padding-left: 16px; }
 .app-card .passthru li { margin: 3px 0; }
-.app-card .passthru li .mono { color: var(--fg); font-size: 13px; }
+.app-card .passthru li .mono { color: var(--fg); }
 .app-card-manifest {
   flex: 1 1 auto; min-width: 0; min-height: 16rem; overflow: auto;
-  margin: 0; padding: 4px 0 0;
-  background: none; border: 0; border-radius: 0;
-  font: 12px/1.5 var(--mono);
-  white-space: pre; color: var(--dim);
+  margin: 0; font: 12px/1.5 var(--mono); white-space: pre;
 }
-.app-card-manifest code {
-  background: none; border: 0; padding: 0; font: inherit; color: inherit;
-}
+.app-card-manifest code { padding: 0; background: none; font: inherit; color: inherit; }
 /* Editing a card's manifest in place: the editor, then the diff it made,
    each taking the manifest's spot. The card's own actions step aside so Save
-   is the one filled control. */
+   is the one default button. */
 .app-card.editing > .app-card-manifest,
 .app-card.editing .app-card-head > .actions { display: none; }
 .app-card-edit, .app-card-saved {
   flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px;
 }
-.app-card-edit[hidden], .app-card-saved[hidden] { display: none; }
 .app-card-edit textarea {
   flex: 1 1 auto; min-height: 16rem; resize: none; tab-size: 2;
-  background: var(--void); color: var(--fg); border: 1px solid var(--line);
-  border-radius: var(--r); padding: 8px 10px; white-space: pre; overflow: auto;
-  font: 12px/1.5 var(--mono);
+  padding: 8px 10px; white-space: pre; overflow: auto; font: 12px/1.5 var(--mono);
 }
-.app-card-edit textarea:focus { outline: 2px solid var(--coral); outline-offset: 1px; }
 .app-card-edit .error { margin: 0; }
 .app-card-edit .error p { white-space: pre-wrap; }
 .app-card-edit .row, .app-card-saved .row { gap: 8px; justify-content: flex-end; }
@@ -379,20 +229,6 @@ details.reveal > summary:hover { color: var(--coral); }
 .hljs-number, .hljs-literal { color: var(--ok); }
 .hljs-punctuation, .hljs-meta { color: var(--muted); }
 
-/* --- the no-nav surface --------------------------------------------------
-   Sign in and rate limited: the frame, the rule under the wordmark, and the
-   one thing the page is for. Nothing to navigate to from either. */
-.app.solo { align-items: center; justify-content: center; padding: 24px; }
-.solo-box { width: 21rem; max-width: 100%; }
-.solo-box .head { margin-bottom: 20px; }
-.solo-box form { display: flex; flex-direction: column; gap: 8px; }
-.solo-box input[type=password] { width: 100%; padding: 8px 10px; }
-.solo-box .notice, .solo-box .error { margin-bottom: 0; }
-.signin-go { margin-top: 8px; align-self: flex-start; }
-.solo-hint {
-  margin: 20px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7;
-}
-
 /* A "now" line across a timeline table, between what is to come and what ran. */
 tr.now-cursor td { padding: 0; border: 0; height: 18px; position: relative; }
 tr.now-cursor td::before {
@@ -400,16 +236,12 @@ tr.now-cursor td::before {
   border-top: 1px solid var(--coral);
 }
 tr.now-cursor span {
-  position: relative; background: var(--bg); color: var(--coral);
-  font-size: 13px; padding: 0 8px 0 0;
+  position: relative; background: var(--bg); color: var(--coral); padding: 0 8px 0 0;
 }
 
 /* --- charts --------------------------------------------------------------- */
 td.grow { width: 100%; min-width: 120px; }
-.usage { display: block; width: 100%; height: 10px; background: var(--void); border: 1px solid var(--line); }
-.usage .mine { fill: var(--coral); }
-.usage .other { fill: var(--muted); }
-.uplot { font-family: inherit; }
+.usage { display: block; width: 100%; height: 14px; }
 
 @media (max-width: 52rem) {
   .app-top { grid-template-columns: minmax(0, 1fr); }

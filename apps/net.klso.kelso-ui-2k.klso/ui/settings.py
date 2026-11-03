@@ -18,18 +18,25 @@ PLAIN = ("#3a6ea5", "#3a6ea5")
 
 
 def load():
+  """The saved settings. Raises RuntimeError naming the fix if the file is bad."""
   try:
-    return json.loads(PATH.read_text())
+    values = json.loads(PATH.read_text())
   except FileNotFoundError:
     return {}
+  except ValueError as e:
+    values = e
+  if not isinstance(values, dict):
+    raise RuntimeError(
+      f"{PATH} is not a settings file. Save in Settings to replace it, or delete it."
+    )
+  return values
 
 
 def save(values):
-  """Merge `values` into the file. Raises OSError naming the fix."""
-  merged = load() | values
+  """Replace the file with `values`. Raises OSError naming the fix."""
   temp = PATH.with_suffix(".tmp")
   try:
-    temp.write_text(json.dumps(merged, indent=2))
+    temp.write_text(json.dumps(values, indent=2))
     temp.replace(PATH)
   except OSError as e:
     raise OSError(
@@ -54,8 +61,14 @@ def id_colors(instance_id):
 
 
 def background(instance_id):
-  """The desktop's (top, bottom) colours: the saved custom pair, or the id's."""
-  chosen = load().get("background") or {}
+  """The desktop's (top, bottom) colours: the saved custom pair, or the id's.
+
+  A bad settings file paints the id's colours; the Settings window says why.
+  """
+  try:
+    chosen = load().get("background") or {}
+  except RuntimeError:
+    chosen = {}
   pair = (chosen.get("top"), chosen.get("bottom"))
   if chosen.get("mode") == "custom" and all(HEX.match(c or "") for c in pair):
     return pair
