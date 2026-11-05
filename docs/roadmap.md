@@ -40,9 +40,9 @@ uptime for stability and reversibility every time.
 
 ### Where it sits
 
-Hosted agent-native platforms such as [Ample](https://ample.computer/) have the
-same loop (an agent runs `plan`, then `up`, and reads an exit code) on someone
-else's cloud. Kelso is that loop on your own machine: your data stays home, the
+Hosted agent-native platforms have the same loop (an agent runs `plan`, then
+`up`, and reads an exit code) on someone else's cloud. Kelso is that loop on
+your own machine: your data stays home, the
 bundle is a file you keep, and pulling the plug is always an option. Home server
 GUIs (CasaOS, Umbrel, Unraid's apps) are app stores with a human clicking. Kelso
 is not competing with either on their terms.
@@ -181,10 +181,16 @@ live.
   what they are doing can work however they like; an agent follows the docs, so
   the docs give it one way.
 - **`kelso new <app> --template <name>`** scaffolds a bundle in `repos/local`
-  from a small matrix of language and framework templates: static site; Python,
-  Python with FastAPI; Ruby, Ruby with Rails; Node, Node with Express. Each is
-  the pattern kelso-ui already uses: a pinned runtime image, the app's source as
-  an `app` volume, and a start script. No image to build or host.
+  from a small matrix of language and framework templates. Each is the pattern
+  kelso-ui already uses: a pinned runtime image, the app's source as an `app`
+  volume, and a start script. No image to build or host. A plain language
+  template (`python`, `node`, `ruby`) runs a start command the author names, so
+  it also covers any framework the matrix leaves out.
+  - First: `static` (files served by a static file server), `python`,
+    `fastapi`, `rails`.
+  - Then: `flask`, `django`, `node`, `express`, `nextjs`, `vite-react`, `ruby`
+    (with Sinatra), `go`.
+  - Not PHP, in any form.
 - **Dependencies install on start.** The start script installs what the
   lockfile names (`pip install`, `bundle install`, `npm ci`) into a `temp`
   volume, then starts the app. The first start is slow and later ones reuse the
@@ -227,9 +233,6 @@ live.
 - **Record where it came from.** A bundle loaded from a URL or repo records its
   source and commit, so `update` knows where to look and `inspect` can say who
   you are trusting.
-- **`kelso share <app>`** writes a bundle back out as a single `.klso.md`, its
-  manifest and files plus the prose an agent wrote about it, ready to commit or
-  send. Secrets and config values never go with it.
 - **Repos stay plain git.** A repo is still a folder on GitHub. No registry, no
   accounts, no review queue.
 
