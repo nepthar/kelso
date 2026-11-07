@@ -366,8 +366,9 @@ not v2 work, but v2 is built so that it needs no rework:
   For a hosted box it has to be served over HTTPS, since the person may have no
   `ssh` of their own.
 - **An agent with no shell at all** (a chat app rather than a coding agent)
-  cannot run kelso. Serving kelsod's API over HTTPS for it is possible later,
-  and would need [scoped credentials](#scoped-credentials). No MCP.
+  cannot run kelso. It could get an [access token](#one-ui-for-several-hosts)
+  for kelsod's API over HTTPS, the same way a kelso-ui does, and later
+  [scoped credentials](#scoped-credentials). No MCP.
 
 ### 7. Hearing about problems
 
@@ -434,10 +435,56 @@ covers the common case with a database inside each app. A shared server needs a
 way to back up and restore one app's database without the others, which a copy
 of a volume cannot do.
 
+### One UI for several hosts
+A person with two or three boxes runs one kelso-ui for all of them. It acts on
+one host at a time: a host switcher, and pages that are the same as today's.
+Over that sits an "All hosts" overview that asks every host for its apps and
+shows them with a host column. A host that does not answer shows as
+unreachable with when it was last seen; it does not break the page.
+
+- **kelso-ui talks to other hosts through kelsod's API, over TLS with a token**,
+  not over `ssh`. `ssh` stays the transport for setting up a host and deploying
+  to it, which are a person's or an agent's acts. A UI that runs all the time
+  holds a credential for the API it uses and nothing more: an `ssh` key, however
+  restricted, is a login to the machine.
+- **The host list lives in kelso-ui**, in a `data` volume, so it is backed up
+  with it.
+- **Each box has a stable ID**, derived from the recovery phrase like its other
+  keys, so a box restored from its phrase is the same host. kelsod returns it,
+  with a display name, from `/version`, and wherever more than one host is
+  visible an app is `host/app`.
+- **kelso-ui uses nothing but kelsod's API.** Anything it reads or does on its
+  own box without kelsod -- the store, compose files, docker -- moves into the
+  API first. This and the box ID are worth doing before the rest, while they
+  are small.
+- **Hosts on different kelso versions** are a later problem. Until then every
+  host runs the same version.
+
+**Access tokens.** kelsod issues tokens to anything that asks and that the
+person approves; it does not know or care that the asker is kelso-ui.
+
+1. The asker sends `POST /access-request` with an ID of its own and a line a
+   person can read ("kelso-ui on rpi.lab.my-domain.com"). kelsod returns an
+   `access_request_id` that only the asker knows, and a short code that both
+   sides show.
+2. The person approves the request on that box (`kelso access approve`, or the
+   box's own UI), checking that the codes match.
+3. The asker polls with its `access_request_id`. After approval the answer is
+   the token, once. Its credential is then `<asker id>.<token>`.
+
+Requests expire unanswered in a few minutes. kelsod keeps tokens hashed, and
+`kelso access list` and `kelso access revoke` show and remove them. kelsod
+serves TLS with its own certificate; the asker records its fingerprint on the
+first request, and the code both sides show is derived from it, so matching
+codes also mean nobody sat in between. kelsod listens on TCP only once the
+person turns it on.
+
 ### Scoped credentials
-Today an agent gets whatever its `ssh` login gets. A token for kelsod's API
-scoped to verbs (deploy and read logs, but not restore, purge or read
-secrets) lets a person hand an agent less than the whole machine.
+Today an agent gets whatever its `ssh` login gets, and an access token gets all
+of kelsod's API. A token scoped to verbs (deploy and read logs, but not
+restore, purge or read secrets) lets a person hand an agent, or a UI, less than
+the whole machine. Scopes would be chosen when the request is made and shown
+when it is approved.
 
 ### Sleeping apps
 Not running by default, started by a cron job or an incoming request.
