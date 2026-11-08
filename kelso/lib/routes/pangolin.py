@@ -55,7 +55,7 @@ class PangolinRouteProvider(RouteProvider):
     return cls(
       api_key=api_key,
       kelso_domain=conf.domain,
-      kelso_address=ctx.config.kelso_address,
+      route_address=ctx.config.route_address,
       **args,
     )
 
@@ -66,7 +66,7 @@ class PangolinRouteProvider(RouteProvider):
     org_id: str,
     site: str,
     kelso_domain: str,
-    kelso_address: str,
+    route_address: str,
     shared_policy: str | None = None,
     # A string when it comes from config.toml, where every arg is one.
     timeout: float | str = 30.0,
@@ -81,7 +81,7 @@ class PangolinRouteProvider(RouteProvider):
     self.kelso_domain = kelso_domain
     # LAN IP/hostname of the docker host Pangolin forwards traffic to. The
     # app's published port is reachable there.
-    self.kelso_address = kelso_address
+    self.route_address = route_address
     self.shared_policy = shared_policy or None
     self._resolved_policy_id: int | None = None
     self._timeout = float(timeout)
@@ -266,7 +266,7 @@ class PangolinRouteProvider(RouteProvider):
     return data.get("targets", [])
 
   def _set_target(self, resource: dict, port: int, scheme: str) -> None:
-    """Point the resource at ``kelso_address:port``, replacing any targets."""
+    """Point the resource at ``route_address:port``, replacing any targets."""
     rid = resource["resourceId"]
     for target in self._targets(resource):
       self._request("DELETE", f"/target/{target['targetId']}", "deleteTarget")
@@ -277,7 +277,7 @@ class PangolinRouteProvider(RouteProvider):
       "createTarget",
       json={
         "siteId": self._site_id(),
-        "ip": self.kelso_address,
+        "ip": self.route_address,
         "port": port,
         "method": scheme,
         "mode": "http",
@@ -323,7 +323,7 @@ class PangolinRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Create (or update) a resource routing domain -> kelso_address:port."""
+    """Create (or update) a resource routing domain -> route_address:port."""
     # Resolve first so a missing policy refuses before we create a resource.
     self._policy_id()
     domain_name = self._domain_name(subdomain, domain)
@@ -336,7 +336,7 @@ class PangolinRouteProvider(RouteProvider):
       logger.info(
         "updating Pangolin resource for %s -> %s:%d",
         domain_name,
-        self.kelso_address,
+        self.route_address,
         port,
       )
       resource = existing
@@ -344,7 +344,7 @@ class PangolinRouteProvider(RouteProvider):
       logger.info(
         "creating Pangolin resource for %s -> %s:%d",
         domain_name,
-        self.kelso_address,
+        self.route_address,
         port,
       )
       resource = self._request(

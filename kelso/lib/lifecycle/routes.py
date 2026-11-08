@@ -70,7 +70,7 @@ def register_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
       route.subdomain,
       domain,
       route.scheme,
-      ctx.config.kelso_address or "<kelso_address unset>",
+      ctx.config.route_address or "<route_address unset>",
       host_port,
     )
 

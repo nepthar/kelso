@@ -192,8 +192,13 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 }
 .win-status { flex: none; margin-top: 2px; }
 .win-resize {
-  position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
   touch-action: none;
+}
+.win-resize::after {
+  content: ""; position: absolute; right: 4px; bottom: 4px; width: 11px; height: 11px;
+  background: repeating-linear-gradient(135deg, transparent 0 1px, #fff 1px 2px, #808080 2px 4px);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 .win.is-dialog .win-bar, .win.is-dialog .win-resize,
 .win.is-dialog [aria-label=Minimize], .win.is-dialog [aria-label=Maximize] { display: none; }

@@ -1,6 +1,6 @@
 {#- A kelsod ConfigRequest as one form. Submitting posts `set.<name>` for each
   field to `action`; `web.submitted_values` reads them back. js/configform.js
-  keeps Save hidden until something has changed. -#}
+  keeps Save and Cancel hidden until something has changed. -#}
 
 {% macro _control(f) -%}
 {% if f.get('choices') == ['on', 'off'] %}
@@ -31,7 +31,8 @@
     {%- for c in f.choices %}<option value="{{ c }}"{% if c == f.get('value') %} selected{% endif %}>{{ c }}</option>{% endfor -%}
   </select>
 {%- elif f.secret %}
-  <input type="password" name="set.{{ f.name }}" placeholder="{{ 'set — type to replace' if f.secret_set else 'not set' }}" autocomplete="new-password">
+  {#- The placeholder, never the value: a blank secret leaves what is on file. -#}
+  <input type="password" name="set.{{ f.name }}" placeholder="{{ '••••••••' if f.secret_set else '' }}" autocomplete="new-password">
 {%- else %}
   <input name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" placeholder="{{ f.default ~ ' (default)' if f.get('default') is not none else '' }}">
 {%- endif %}
@@ -41,8 +42,7 @@
 <div class="scroll"><table class="kv"><tbody>
 {% for f in fields %}
 <tr><td class="key">{{ f.name }}
-  {%- if f.secret %}<span class="sub">secret</span>{% endif %}
-  {%- if f.name in missing %}<span class="sub warnish">required</span>{% endif %}</td>
+  {%- if f.name in missing %}<span class="req warnish" title="Required, not set">*</span>{% endif %}</td>
   <td class="field">{{ _control(f) }}</td>
   <td class="muted wrap">{{ f.get('desc') or '' }}</td></tr>
 {% endfor %}
@@ -85,7 +85,7 @@
   {% if dialog %}
   <div class="cfg-actions dialog-buttons"><button type="submit" class="cfg-save default">Save</button><button type="button" data-close>Cancel</button></div>
   {% else %}
-  <div class="cfg-actions"><button type="submit" class="cfg-save default" disabled>Save</button></div>
+  <div class="cfg-actions"><button type="submit" class="cfg-save default" disabled>Save</button><button type="button" class="cfg-cancel">Cancel</button></div>
   {% endif %}
 </form>
 {% endif %}

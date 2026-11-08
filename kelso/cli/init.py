@@ -34,11 +34,16 @@ CONFIG_TEMPLATE = """\
 repos_root = "repos"
 port_base = 41000
 
-# The address by which kelso is reachable on your network, used for setting
-# up routes. Every route provider that proxies traffic points at it, so it is
-# required as soon as one is configured. A top-level key: keep it above the
-# first [table].
-# kelso_address = "10.0.0.5"
+# Where route providers send traffic: the address they reach this host at.
+# Required as soon as one is configured. On Docker Desktop, where they run in
+# containers, it is host.docker.internal. A top-level key, like link_address:
+# keep both above the first [table].
+# route_address = "10.0.0.5"
+
+# The host in links people click: the `<-` URLs `kelso inspect` prints and
+# the web UI. Defaults to route_address, then localhost. Set it when
+# route_address is a name only containers can use, as on Docker Desktop.
+# link_address = "10.0.0.5"
 
 # Routes are auto-assigned to this provider tag on first load (like a config
 # default), unless marked private=true in the manifest. The reserved tag
@@ -94,7 +99,7 @@ schedule = "0 3 * * *"
 # password_secret = "route_provider.web.password"
 
 # Pangolin publishes each route as a public HTTP resource on `domain`, with a
-# target on `site` pointing at kelso_address. `endpoint` must be https -- the
+# target on `site` pointing at route_address. `endpoint` must be https -- the
 # API key is a bearer token on every call. `org_id` and `site` are the names in
 # the Pangolin dashboard URL: .../<org_id>/settings/sites/<site>/general. Store
 # the key with `kelso system secret route_provider.tunnel.api_key`.
@@ -288,7 +293,7 @@ def run(args: argparse.Namespace, _ctx) -> None:
   template = CONFIG_TEMPLATE
   if address:
     template = template.replace(
-      '# kelso_address = "10.0.0.5"', f'kelso_address = "{address}"'
+      '# route_address = "10.0.0.5"', f'route_address = "{address}"'
     )
   config_path.write_text(template)
 
@@ -303,10 +308,10 @@ def run(args: argparse.Namespace, _ctx) -> None:
   print(f"Initialized kelso {kelso_id} at {root}")
   print(f"  config:      {config_path}")
   if address:
-    print(f"  address:     {address} (detected; edit kelso_address if it is wrong)")
+    print(f"  address:     {address} (detected; edit route_address if it is wrong)")
   else:
     print(
-      "  address:     not detected; set kelso_address before adding a route provider"
+      "  address:     not detected; set route_address before adding a route provider"
     )
   print(f"  conf:        {root / CONF_DIR} (master.key, kelsodb, apps)")
   print(f"  repos:       {root / 'repos'}")

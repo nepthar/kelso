@@ -512,7 +512,7 @@ the invoking user and cannot touch what the app's containers wrote.
   brief "manifest" section of a few key-value pairs. There should be a way to
   pop open a view of the whole loaded manifest, as kelso loaded it.
 - **A routes guide.** Leading with Cloudflare Tunnel, then Nginx Proxy Manager
-  (with its wildcard certificate) and Pangolin: what `kelso_address` is for, and
+  (with its wildcard certificate) and Pangolin: what `route_address` is for, and
   assigning, publishing and checking a route. Today the only documentation is
   the comments in the generated `config.toml`.
 - **"What kelso does to your containers."** One section listing everything

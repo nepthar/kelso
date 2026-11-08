@@ -58,6 +58,7 @@ td.act button + button { margin-left: 8px; }
 .update button.icon { display: inline-block; vertical-align: -2px; }
 .update button.icon svg { width: 14px; height: 14px; }
 .sub { display: block; color: var(--muted); }
+.req { margin-left: 3px; font-weight: 600; }
 /* Paths are long and matter; let them wrap rather than push the row's
    controls off the edge. */
 td.path { white-space: normal; word-break: break-all; min-width: 16ch; }

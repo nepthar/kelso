@@ -75,7 +75,7 @@ def route_receipt_lines(
     spec,
     run_data,
     published_route_urls(spec, run_data, ctx),
-    host=ctx.config.kelso_address or "localhost",
+    host=ctx.config.link_address,
   )
   return [
     _labeled_line("Routes:" if i == 0 else "", line) for i, line in enumerate(reach)
@@ -172,7 +172,7 @@ def location_receipt(
     spec,
     run_data,
     published_route_urls(spec, run_data, ctx),
-    host=ctx.config.kelso_address or "localhost",
+    host=ctx.config.link_address,
   )
   for i, line in enumerate(routes):
     rows.append(("Routes:" if i == 0 else "", line))

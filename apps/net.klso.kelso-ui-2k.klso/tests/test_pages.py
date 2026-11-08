@@ -290,8 +290,10 @@ def test_config_form(client, fake):
   assert 'placeholder="0 (default)"' in advanced
   assert 'name="set.start_order"' in options
   assert 'name="set.subdomain"' in options
-  assert 'placeholder="set — type to replace"' in basic
-  assert 'placeholder="not set"' in basic
+  assert '<input type="password" name="set.token" placeholder="••••••••"' in form
+  assert '<input type="password" name="set.admin_pass" placeholder=""' in basic
+  assert '<span class="sub">secret</span>' not in form
+  assert '<button type="button" class="cfg-cancel">Cancel</button>' in form
   assert '<option value="kelso_conn" selected>' in basic
   # A pick-several field: no text box, only a tag per choice, the picks
   # pressed, the first marked primary, and the comma list in a hidden input.
@@ -557,3 +559,13 @@ def test_sign_in_next_stays_on_this_server(value):
   from pages import session
 
   assert session.safe_next(value) == "/"
+
+
+def test_app_volumes_say_their_access_in_a_column(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  assert "read-only" not in text
+  volumes = text.split("<legend>Volumes</legend>")[1].split("</table>")[0]
+  assert "<th>Access</th>" in volumes
+  rows = volumes.split("<tr>")[2:]
+  assert '<td class="muted">read</td>' in rows[0]
+  assert '<td class="muted">read/write</td>' in rows[1]

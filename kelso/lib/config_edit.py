@@ -219,9 +219,9 @@ def remove_route_provider(ctx: KelsoCtx, tag: str) -> None:
     del providers[tag]
 
 
-def set_kelso_address(ctx: KelsoCtx, address: str) -> None:
-  """Set the top-level `kelso_address` every route provider points traffic at."""
+def set_route_address(ctx: KelsoCtx, address: str) -> None:
+  """Set the top-level `route_address` every route provider points traffic at."""
   if not address:
-    raise ValueError("kelso_address cannot be empty")
+    raise ValueError("route_address cannot be empty")
   with edit_config(ctx) as document:
-    document["kelso_address"] = address
+    document["route_address"] = address

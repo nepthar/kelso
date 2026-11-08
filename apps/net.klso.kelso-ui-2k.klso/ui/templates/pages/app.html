@@ -125,10 +125,11 @@
 <legend>Volumes</legend>
 <div class="card">
 {% if not app.get('volumes') %}{{ empty('This app declares no volumes.') }}{% else %}
-<div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Host path</th><th>Size</th></tr></thead><tbody>
+<div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Access</th><th>Host path</th><th>Size</th></tr></thead><tbody>
 {% for v in app.volumes %}
 <tr><td class="key">{{ v.name }}</td>
-  <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+  <td class="muted">{{ v.kind }}</td>
+  <td class="muted">{{ 'read' if v.readonly else 'read/write' }}</td>
   <td class="path"><span class="muted">{{ 'not bound' if v.kind == 'host' and not v.get('bind') else v.path or '—' }}</span></td>
   <td class="muted">{{ v.bytes|size }}</td></tr>
 {% endfor %}
@@ -151,10 +152,11 @@
   {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
   <h3>Volumes</h3>
   {% if not unit.get('volumes') %}{{ empty('No volumes mounted.') }}{% else %}
-  <div class="card"><div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Mounted at</th><th>Desc</th></tr></thead><tbody>
+  <div class="card"><div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Access</th><th>Mounted at</th><th>Desc</th></tr></thead><tbody>
   {% for v in unit.volumes %}
   <tr><td class="key">{{ v.name }}</td>
-    <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+    <td class="muted">{{ v.kind }}</td>
+  <td class="muted">{{ 'read' if v.readonly else 'read/write' }}</td>
     <td class="muted path">{{ v.path }}</td>
     <td class="muted wrap">{{ v.get('desc') or '' }}</td></tr>
   {% endfor %}
