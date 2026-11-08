@@ -94,6 +94,28 @@ def test_editing_the_run_copy_is_lost_on_the_next_load(kelso_env):
   assert not (kelso_env.run_root / app_id / "app_bundle" / "stowaway.txt").exists()
 
 
+def test_reloading_updates_the_run_copy_in_place(kelso_env):
+  """Docker Desktop keeps binding a replaced folder's old inode; keep them."""
+  app_id = "ports-demo"
+  catalog = kelso_env.local_repo / f"{app_id}.klso"
+  (catalog / "ui").mkdir()
+  (catalog / "ui" / "page.html").write_text("one")
+  (catalog / "shape").mkdir()
+  assert kelso_env.run("load", app_id).returncode == 0
+
+  run_copy = kelso_env.run_root / app_id / "app_bundle"
+  before = {p: (run_copy / p).stat().st_ino for p in ("", "ui", "ui/page.html")}
+  (catalog / "ui" / "page.html").write_text("two")
+  (catalog / "shape").rmdir()
+  (catalog / "shape").write_text("now a file")
+
+  assert kelso_env.run("load", app_id).returncode == 0
+  assert {p: (run_copy / p).stat().st_ino for p in before} == before
+  assert (run_copy / "ui" / "page.html").read_text() == "two"
+  assert (run_copy / "shape").read_text() == "now a file"
+  assert not (run_copy.parent / ".app_bundle.incoming").exists()
+
+
 def test_load_preserves_config_and_volume_contents(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0

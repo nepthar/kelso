@@ -33,10 +33,7 @@ from kelso.lib.secrets import SecretGenerationError, generate_secret
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import now_ts, same_path
 
-# Scratch names used while swapping in a new loaded copy. Both are inside the run
-# dir so the swap is a rename on one filesystem rather than a second copy.
 INCOMING = ".app_bundle.incoming"
-OUTGOING = ".app_bundle.outgoing"
 
 
 def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
@@ -53,10 +50,8 @@ def _load_incoming(source: Path, run_path: Path) -> Path:
   """Extract the bundle into ``var/run/<id>/.app_bundle.incoming`` (not yet live)."""
   bundle = load_bundle(source)
   incoming = run_path / INCOMING
-  outgoing = run_path / OUTGOING
-  for scratch in (incoming, outgoing):
-    if scratch.exists():
-      shutil.rmtree(scratch)
+  if incoming.exists():
+    shutil.rmtree(incoming)
 
   bundle.extract_to(incoming)
   return incoming
@@ -64,13 +59,41 @@ def _load_incoming(source: Path, run_path: Path) -> Path:
 
 def _commit_incoming(paths: LoadedAppPaths, incoming: Path) -> None:
   """Promote a validated incoming copy to ``app_bundle/``."""
-  outgoing = paths.run_path / OUTGOING
   loaded = paths.bundle_path_in_run
-  if loaded.exists():
-    os.replace(loaded, outgoing)
-  os.replace(incoming, loaded)
-  if outgoing.exists():
-    shutil.rmtree(outgoing)
+  if loaded.is_dir():
+    _sync_into(incoming, loaded)
+    shutil.rmtree(incoming)
+  else:
+    os.replace(incoming, loaded)
+
+
+def _remove(path: Path) -> None:
+  if path.is_dir() and not path.is_symlink():
+    shutil.rmtree(path)
+  else:
+    path.unlink()
+
+
+def _sync_into(src: Path, dst: Path) -> None:
+  """Make `dst` match `src`, keeping the inode of every entry that survives."""
+  # Docker Desktop's VM caches lookups of bind sources by name. Replacing a
+  # folder or file under app_bundle/ leaves that cache pointing at the deleted
+  # one, and the next bind fails with "bind source path does not exist".
+  for old in dst.iterdir():
+    if not (src / old.name).exists(follow_symlinks=False):
+      _remove(old)
+  for new in src.iterdir():
+    target = dst / new.name
+    if new.is_dir() and not new.is_symlink():
+      if target.is_symlink() or (target.exists() and not target.is_dir()):
+        _remove(target)
+      target.mkdir(exist_ok=True)
+      _sync_into(new, target)
+      continue
+    if target.is_symlink() or new.is_symlink() or target.is_dir():
+      if target.exists(follow_symlinks=False):
+        _remove(target)
+    shutil.copy2(new, target, follow_symlinks=False)
 
 
 def _discard_incoming(run_path: Path) -> None:
