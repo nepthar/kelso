@@ -5,8 +5,9 @@ resolve it into a definition independent of any loaded copy.
 """
 
 import pytest
+from pydantic import ValidationError
 
-from kelso.lib.manifest import ConfigError
+from kelso.lib.manifest import ConfigError, VolumeEntry
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import (
   KELSO_APP_ID_LABEL,
@@ -464,3 +465,15 @@ cmd = "true"
 run_unit = "missing"
 """,
     )
+
+
+@pytest.mark.parametrize(
+  "src", ["/etc", "../x", "a/../../x", "a/../b", "./a", "a//b", "a/", "", "a\\..\\b"]
+)
+def test_app_volume_src_outside_the_bundle_is_refused(src):
+  with pytest.raises(ValidationError, match="inside the bundle"):
+    VolumeEntry(kind="app", src=src)
+
+
+def test_app_volume_src_may_be_a_nested_path():
+  assert VolumeEntry(kind="app", src="conf/app.toml").src == "conf/app.toml"

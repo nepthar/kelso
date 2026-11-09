@@ -72,6 +72,13 @@ class VolumeEntry(BaseModel):
   def check_src(self) -> Self:
     if self.src and self.kind != "app":
       raise ValueError("src: can only be set for app volumes")
+    if self.src is not None:
+      parts = self.src.split("/")
+      if "\\" in self.src or any(part in ("", ".", "..") for part in parts):
+        raise ValueError(
+          f"src: {self.src!r} must be a path inside the bundle, like "
+          '"ui" or "conf/app.toml": no leading or trailing /, and no . or .. parts'
+        )
     return self
 
 
