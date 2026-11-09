@@ -93,11 +93,11 @@
   {% else %}<span class="muted">path is missing</span>{% endif %}</td>
   <td class="muted">{{ r.get('bytes')|size }}</td>
   <td class="muted">{{ r.available|size }}</td>
-  <td class="muted path"{% if r.device %} title="{{ r.device }}"{% endif %}>{{ r.mountpoint or '—' }}</td>
+  <td class="muted path grow"{% if r.device %} title="{{ r.device }}"{% endif %}>{{ r.mountpoint or '—' }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>
-<p class="usage-key"><span class="swatch mine"></span>This kind <span class="swatch other"></span>Everything else <span class="swatch free"></span>Free</p>
+<p class="usage-key"><span class="swatch mine"></span>kelso volumes <span class="swatch other"></span>Everything else <span class="swatch free"></span>Free</p>
 {% endif %}
 </div>
 </fieldset>

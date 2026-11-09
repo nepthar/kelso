@@ -98,7 +98,9 @@ class Bucket:
 
 # One budget for the whole process, not one per client: behind a reverse proxy
 # every request arrives from the proxy's address. `/static` is outside both --
-# a refused stylesheet renders a page that looks broken rather than limited.
+# a refused stylesheet renders a page that looks broken rather than limited. So
+# is `/icons/`: a menu asks for one per app and link at once, and a refused icon
+# would fall back to the drawn one while spending the budget the page needs.
 general = Bucket(10, 1.0)
 signin = Bucket(10, 3600.0)
 
@@ -161,7 +163,7 @@ async def _admit(request, call_next):
   # Everything answers to the general bucket; a sign-in attempt answers to both,
   # so a flood spends itself on the per-second budget before it can eat far into
   # the hour's worth of guesses.
-  if not general.check():
+  if not path.startswith("/icons/") and not general.check():
     return _limited(request, general, GENERAL_HINT)
   if path == "/login" and request.method == "POST" and not signin.check():
     return _limited(request, signin, auth_hint(signin.retry_after()), RELOAD)

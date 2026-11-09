@@ -20,32 +20,53 @@ def _state(app):
   return "ok" if app.get("status") in ("healthy", "ok", "finished") else "bad"
 
 
-def _routes(app):
+def _links(app, detail):
   """An app's reachable routes, each by its primary URL.
 
   A route with no http(s) URL has nothing a window could open.
   """
-  try:
-    detail = api(f"/apps/{quote(app['app_id'], safe='')}")
-  except ApiError:
-    return []
   name = app.get("display_name") or app["app_id"]
   found = []
   for route in detail.get("routes", []):
     url = route.get("published_url") or route.get("host_url") or ""
     if url.startswith(("https://", "http://")):
       label = name if route["name"] == "main" else f"{name} {route['name']}"
-      found.append({"label": label, "url": url, "state": _state(app)})
+      found.append(
+        {
+          "app_id": app["app_id"],
+          "name": route["name"],
+          "label": label,
+          "url": url,
+          "state": _state(app),
+        }
+      )
+  return found
+
+
+def _apps():
+  """Loaded apps, each with what its start menu folder lists."""
+  found = []
+  for app in api("/apps").get("apps", []):
+    if app.get("state") != "loaded":
+      continue
+    try:
+      detail = api(f"/apps/{quote(app['app_id'], safe='')}")
+    except ApiError:
+      detail = {}
+    found.append(
+      {
+        **app,
+        "desk_state": _state(app),
+        "links": _links(app, detail),
+        "commands": detail.get("commands") or [],
+      }
+    )
   return found
 
 
 def _icons():
-  apps = [
-    {**a, "desk_state": _state(a)}
-    for a in api("/apps").get("apps", [])
-    if a.get("state") == "loaded"
-  ]
-  return {"apps": apps, "routes": [r for a in apps for r in _routes(a)]}
+  apps = _apps()
+  return {"apps": apps, "routes": [r for a in apps for r in a["links"]]}
 
 
 @router.get("/")

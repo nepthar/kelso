@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from frontdoor import front_door
 from pages import (
   activity,
+  appicons,
   apps,
   backups,
   catalog,
@@ -46,6 +47,7 @@ for feature in (
   activity,
   settings,
   jobs,
+  appicons,
 ):
   app.include_router(feature.router)
 

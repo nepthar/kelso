@@ -65,7 +65,7 @@ class NavItem(NamedTuple):
 # static/icons/.
 NAV = (
   NavItem("/host", "Host", "host"),
-  NavItem("/catalog", "Repos", "repos"),
+  NavItem("/catalog", "Apps & Repos", "repos"),
   NavItem("/volumes", "Volumes", "volumes"),
   NavItem("/backups", "Backups", "backups"),
   NavItem("/routes", "Routes", "routes"),

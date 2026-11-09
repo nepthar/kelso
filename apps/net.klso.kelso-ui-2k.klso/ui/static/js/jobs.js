@@ -171,6 +171,22 @@
     });
   });
 
+  // The start menu opens a page at #run=<verb>, or #run=cmd:<name>, to press
+  // one of its job buttons. The hash goes first, so a reload runs nothing.
+  function runFromHash() {
+    var want = /^#run=(.+)$/.exec(location.hash);
+    if (!want) return;
+    history.replaceState(null, "", location.pathname + location.search);
+    var parts = decodeURIComponent(want[1]).split(":");
+    var btn = Array.prototype.filter.call(document.querySelectorAll(".job-open[data-verb]"), function (b) {
+      if (b.getAttribute("data-verb") !== parts[0]) return false;
+      return parts.length < 2 || JSON.parse(b.getAttribute("data-args")).command === parts[1];
+    })[0];
+    if (btn && !btn.disabled) btn.click();
+  }
+  runFromHash();
+  window.addEventListener("hashchange", runFromHash);
+
   go.addEventListener("click", submit);
   close.addEventListener("click", hide);
   dismiss.addEventListener("click", hide);

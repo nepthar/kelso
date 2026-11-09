@@ -14,6 +14,13 @@
 </div>
 {%- endmacro %}
 
+{% block commands %}
+{{ job_button('Start all', 'up', icon='play', bar=true, tone='go', title='Start all apps',
+    desc='Starts every loaded app, in start_order groups 1 to 9, waiting for each group to be ready before the next.') }}
+{{ job_button('Stop all', 'down', icon='stop', bar=true, tone='stop', title='Stop all apps',
+    desc='Stops every running app, including this web interface, in start_order groups 9 down to 1. Data, configuration and published routes are untouched. To bring them back, run kelso up on the host.') }}
+{% endblock %}
+
 {% block content %}
 <menu role="tablist">
   <li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li><li role="tab" aria-selected="false"><a href="#host-system">System</a></li>
@@ -21,7 +28,7 @@
 
 <div class="window tabpanel" role="tabpanel" id="host-apps">
 {% if not apps %}
-<div class="card"><p class="empty">No apps loaded yet. Pick one from <a href="/catalog">Repos</a>.</p></div>
+<div class="card"><p class="empty">No apps loaded yet. Pick one from <a href="/catalog">Apps &amp; Repos</a>.</p></div>
 {% else %}
 <div class="card scroll"><table><thead><tr>
   <th>App</th><th>Status</th><th>Units</th><th>Config</th><th>Version</th><th>Volumes</th><th>Last action</th>

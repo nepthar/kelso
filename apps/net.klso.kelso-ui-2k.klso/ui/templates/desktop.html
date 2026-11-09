@@ -16,17 +16,20 @@
 </div>
 {% endif %}
 
+{% import "_menu.html" as menu %}
+{% set top = ('/activity', '/logs', '/settings') %}
 <div class="window start-menu" id="start-menu" hidden>
   <div class="start-band"><span>kelso <b>{{ brand }}</b></span></div>
-  <div class="start-list">
-    <div class="start-apps" id="start-apps"></div>
-    <hr>
-    {% for item in nav %}
-    <button type="button" class="start-item" data-title="{{ item.label }}" data-src="{{ item.href }}" data-icon="{{ icon_url(item.icon) }}"><img src="{{ icon_url(item.icon) }}" alt="">{{ item.label }}</button>
-    {% endfor %}
-    <hr>
-    <form method="post" action="/logout"><button type="submit" class="start-item"><img src="{{ icon_url('signout') }}" alt="">Sign out…</button></form>
-  </div>
+  <ul class="menu start-list" role="menu">
+    {% call menu.folder('Apps', 'app') %}{% endcall %}
+    {% call menu.folder('System', 'host') %}
+      {% for i in nav if i.href not in top and i.href != '/host/console' %}{{ menu.item(i.label, i.icon, src=i.href) }}{% endfor %}
+    {% endcall %}
+    {% for i in nav if i.href in top %}{{ menu.item(i.label, i.icon, src=i.href) }}{% endfor %}
+    {{ menu.sep() }}
+    {% for i in nav if i.href == '/host/console' %}{{ menu.item(i.label ~ '…', i.icon, src=i.href) }}{% endfor %}
+    <li role="none"><form method="post" action="/logout"><button type="submit" role="menuitem" class="menu-item"><span class="menu-glyph"><img src="{{ icon_url('signout') }}" alt=""></span><span class="menu-label">Sign out…</span></button></form></li>
+  </ul>
 </div>
 
 <div class="desk-menu" id="desk-menu" role="menu" hidden></div>

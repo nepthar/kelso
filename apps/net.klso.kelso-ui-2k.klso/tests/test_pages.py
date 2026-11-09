@@ -142,16 +142,33 @@ def test_notice_banner_escapes(client, fake):
   assert '<div class="notice">Added x</div>' in client.get("/volumes?ok=Added+x").text
 
 
-def test_the_desktop_has_an_icon_per_loaded_app_and_section(client, fake):
+def test_the_start_menu_has_a_folder_per_loaded_app(client, fake):
   text = client.get("/").text
+  assert "is-app" not in text, "apps are no longer desktop icons"
   assert 'data-src="/apps/kelso-ui"' in text
-  assert 'data-logs="/apps/kelso-ui/logs"' in text
-  assert 'data-shell="/apps/kelso-ui/console"' in text
+  assert 'data-src="/apps/kelso-ui/logs"' in text
+  assert 'data-src="/apps/kelso-ui/console"' in text
+  assert 'data-run="cmd:test"' in text
+  assert 'data-run="stop"' in text, "kelso-ui is running"
+  assert 'data-run="start"' in text, "jellyfin is stopped"
   assert 'data-src="/apps/immich"' in text
   assert 'data-src="/apps/mealie"' not in text, "unloaded"
-  assert 'data-shell="/apps/jellyfin/console"' not in text, "nothing running"
+  assert 'data-src="/apps/jellyfin/console"' not in text, "nothing running"
+  assert 'data-run="up"' in text and 'data-run="down"' in text
+  assert 'data-title="main"' in text and 'kelso.example.test"' in text, "a link"
   for item in web.NAV:
     assert f'data-src="{item.href}"' in text
+
+
+def test_an_app_without_commands_still_lists_the_folder_greyed(client, fake):
+  text = client.get("/").text
+  assert 'class="menu-item is-empty"' in text
+  assert "(Empty)" in text
+
+
+def test_host_offers_start_and_stop_for_every_app(client, fake):
+  verbs = {b["verb"] for b in _job_buttons(client.get("/host").text)}
+  assert {"up", "down"} <= verbs
 
 
 def test_a_route_icon_is_its_primary_url(client, fake):
@@ -169,7 +186,7 @@ def test_a_route_that_is_not_http_gets_no_icon(client, fake, monkeypatch):
   assert 'data-url="http://10.0.0.5:10001"' not in client.get("/").text
 
 
-def test_an_app_kelsod_cannot_describe_keeps_its_icon(client, fake):
+def test_an_app_kelsod_cannot_describe_keeps_its_folder(client, fake):
   """immich has a list entry and no detail fixture: its routes are just absent."""
   text = client.get("/desktop/icons").text
   assert 'data-src="/apps/immich"' in text
@@ -474,7 +491,7 @@ def test_host_opens_on_apps_with_the_status_bar_below(client, fake):
 
 def test_volume_roots_name_their_disk_by_mount_point(client, fake):
   text = client.get("/volumes").text
-  assert '<td class="muted path" title="/dev/sda1 &lt;i' in text
+  assert '<td class="muted path grow" title="/dev/sda1 &lt;i' in text
   assert ">/</td>" in text
 
 

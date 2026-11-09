@@ -1,0 +1,33 @@
+{#- Start menu entries. desktop.js opens a submenu on click and acts on an
+  entry from its data attributes: `src` opens a window, `url` a route window,
+  and `run` opens `src` and asks its page to start that job button. -#}
+{#- An entry's icon: the drawn `img`, or `icon`, an address on this server. -#}
+{% macro glyph(img, icon="") -%}
+<span class="menu-glyph">{% if icon or img %}<img src="{{ icon or icon_url(img) }}" alt="">{% endif %}</span>
+{%- endmacro %}
+
+{% macro item(label, img="", src="", url="", run="", title="", cls="", disabled=false, icon="") -%}
+<li role="none"><button type="button" role="menuitem" class="menu-item{{ ' ' ~ cls if cls }}"
+  {%- if disabled %} disabled{% endif %}
+  {%- if title %} title="{{ title }}"{% endif %}
+  data-title="{{ label }}"
+  {%- if icon or img %} data-icon="{{ icon or icon_url(img) }}"{% endif %}
+  {%- if src %} data-src="{{ src }}"{% endif %}
+  {%- if url %} data-url="{{ url }}"{% endif %}
+  {%- if run %} data-run="{{ run }}"{% endif %}>
+  {{ glyph(img, icon) }}
+  <span class="menu-label">{{ label }}</span>
+</button></li>
+{%- endmacro %}
+
+{#- A submenu. Its entries are the caller's body. -#}
+{% macro folder(label, img="folder", cls="", icon="") -%}
+<li role="none" class="has-sub"><button type="button" role="menuitem" class="menu-item{{ ' ' ~ cls if cls }}" aria-haspopup="menu" aria-expanded="false">
+  {{ glyph(img, icon) }}
+  <span class="menu-label">{{ label }}</span>
+</button><ul class="menu" role="menu">{{ caller() }}</ul></li>
+{%- endmacro %}
+
+{% macro note(text) -%}<li role="none" class="menu-note">{{ text }}</li>{%- endmacro %}
+
+{% macro sep() -%}<li role="separator" class="menu-sep"></li>{%- endmacro %}

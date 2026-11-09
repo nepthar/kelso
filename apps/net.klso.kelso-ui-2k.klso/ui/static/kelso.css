@@ -241,7 +241,7 @@ tr.now-cursor span {
 }
 
 /* --- charts --------------------------------------------------------------- */
-td.grow { width: 100%; min-width: 120px; }
+td.grow { width: 50%; min-width: 120px; }
 .usage { display: block; width: 100%; height: 14px; }
 
 @media (max-width: 52rem) {

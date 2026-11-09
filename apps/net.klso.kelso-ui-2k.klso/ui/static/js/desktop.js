@@ -10,7 +10,7 @@
   var template = document.getElementById("window-tpl");
   var startButton = document.getElementById("start-button");
   var startMenu = document.getElementById("start-menu");
-  var startApps = document.getElementById("start-apps");
+  var startApps = startMenu.querySelector(".start-list > .has-sub > .menu");
   var contextMenu = document.getElementById("desk-menu");
   var trayDot = document.getElementById("tray-dot");
   var trayClock = document.getElementById("tray-clock");
@@ -99,13 +99,14 @@
 
   function place(win) {
     if (win.opener) {
-      var dw = Math.min(520, desk.clientWidth - 20);
+      var dw = Math.min(680, desk.clientWidth - 20);
       var dh = Math.min(440, desk.clientHeight - 20);
       var o = win.opener.el;
       win.el.style.width = dw + "px";
       win.el.style.height = dh + "px";
       win.el.style.left = Math.max(0, Math.min(o.offsetLeft + (o.offsetWidth - dw) / 2, desk.clientWidth - dw)) + "px";
       win.el.style.top = Math.max(0, Math.min(o.offsetTop + 40, desk.clientHeight - dh)) + "px";
+      win.el.style.visibility = "hidden";
       return;
     }
     var w = Math.min(920, desk.clientWidth - 40);
@@ -175,8 +176,24 @@
     leaveBy(win, win.frame.contentDocument);
     var title = win.frame.contentDocument.title.replace(/ · kelso$/, "");
     if (title) setTitle(win, title);
+    if (win.opener) fitHeight(win);
     // A saved form or a finished dialog may have changed what the desktop shows.
     if (/[?&]ok=/.test(path)) refreshIcons();
+  }
+
+  // A dialog is as tall as its page's content, up to the desk.
+  function fitHeight(win) {
+    var doc = win.frame.contentDocument;
+    var main = doc.querySelector("main");
+    win.el.style.visibility = "";
+    if (!main) return;
+    var around = doc.body.clientHeight - main.offsetHeight;
+    main.style.flex = "none";
+    var content = main.offsetHeight;
+    main.style.flex = "";
+    var chrome = win.el.offsetHeight - win.frame.clientHeight;
+    var room = desk.clientHeight - win.el.offsetTop;
+    win.el.style.height = Math.max(200, Math.min(room, Math.ceil(chrome + around + content))) + "px";
   }
 
   function dragging(handle, start, move) {
@@ -309,12 +326,9 @@
   });
 
   // --- icons -------------------------------------------------------------
-  function openIcon(icon, src) {
+  function openIcon(icon) {
     closeMenus();
-    open({
-      src: src || icon.dataset.src, url: src ? "" : icon.dataset.url,
-      title: icon.dataset.title, icon: icon.dataset.icon
-    });
+    open({ src: icon.dataset.src, url: icon.dataset.url, title: icon.dataset.title, icon: icon.dataset.icon });
   }
 
   function select(icon) {
@@ -354,8 +368,6 @@
     var data = icon.dataset;
     contextMenu.textContent = "";
     menuItem("Open", function () { openIcon(icon); });
-    if (data.logs) menuItem("Logs", function () { openIcon(icon, data.logs); });
-    if (data.shell) menuItem("Shell", function () { openIcon(icon, data.shell); });
     if (data.url) menuItem("Open in new tab", function () { window.open(data.url, "_blank", "noopener"); });
     contextMenu.hidden = false;
     contextMenu.style.left = Math.min(event.clientX, window.innerWidth - contextMenu.offsetWidth) + "px";
@@ -390,20 +402,43 @@
   }
 
   // --- start menu --------------------------------------------------------
+  function setOpen(li, on) {
+    li.classList.toggle("open", on);
+    li.firstElementChild.setAttribute("aria-expanded", String(on));
+    if (on) { lift(li.lastElementChild); return; }
+    li.querySelectorAll(".has-sub.open").forEach(function (o) { setOpen(o, false); });
+  }
+
+  // A folder's menu hangs from its row, and rides up if it would go under the taskbar.
+  function lift(menu) {
+    menu.style.top = "";
+    if (getComputedStyle(menu).position === "static") return;
+    var over = menu.getBoundingClientRect().bottom - startMenu.getBoundingClientRect().bottom;
+    if (over > 0) menu.style.top = Math.max(-menu.parentElement.getBoundingClientRect().top, parseFloat(getComputedStyle(menu).top) - over) + "px";
+  }
+
+  function toggle(li) {
+    li.parentElement.querySelectorAll(":scope > .has-sub.open").forEach(function (o) {
+      if (o !== li) setOpen(o, false);
+    });
+    setOpen(li, !li.classList.contains("open"));
+  }
+
+  function runIn(src, run) {
+    var found = windows.filter(function (w) { return w.key === src; })[0];
+    if (!found) { open({ src: src + "#run=" + encodeURIComponent(run), title: "" }); return; }
+    restore(found);
+    found.frame.contentWindow.location.hash = "run=" + encodeURIComponent(run);
+  }
+
   function showStart(on) {
+    startMenu.querySelectorAll(".has-sub.open").forEach(function (o) { setOpen(o, false); });
     startMenu.hidden = !on;
     startButton.setAttribute("aria-expanded", String(on));
     startButton.classList.toggle("active", on);
     if (!on) return;
     startApps.textContent = "";
-    icons.querySelectorAll(".is-app").forEach(function (icon) {
-      startApps.appendChild(icon.cloneNode(true));
-    });
-    if (!startApps.children.length) {
-      var none = document.createElement("p");
-      none.textContent = "No apps loaded. Pick one from Repos.";
-      startApps.appendChild(none);
-    }
+    startApps.appendChild(icons.querySelector(".start-apps-tpl").content.cloneNode(true));
   }
 
   function closeMenus() {
@@ -413,8 +448,12 @@
 
   startButton.addEventListener("click", function () { showStart(startMenu.hidden); });
   startMenu.addEventListener("click", function (event) {
-    var item = event.target.closest(".desk-icon, .start-item");
-    if (item) openIcon(item);
+    var item = event.target.closest(".menu-item");
+    if (!item || item.disabled || item.type === "submit") return;
+    var li = item.parentElement;
+    if (li.classList.contains("has-sub")) { toggle(li); return; }
+    if (item.dataset.run) { closeMenus(); runIn(item.dataset.src, item.dataset.run); }
+    else openIcon(item);
   });
   document.addEventListener("click", function (event) {
     if (!event.target.closest("#start-menu, #start-button, #desk-menu")) closeMenus();
