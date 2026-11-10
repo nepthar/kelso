@@ -4,9 +4,8 @@
 
 {% block head %}<link rel="stylesheet" href="{{ asset('vendor/xterm-6.0.0/xterm.css') }}">{% endblock %}
 
-{% block refresh %}{% endblock %}
 {#- One link per running unit when there is a choice; the open one is current. -#}
-{% block actions %}<span class="head-actions"><a class="btn" href="{{ here }}">Back to app</a>
+{% block actions %}<span class="head-actions">
 {%- if running|length > 1 %}<span class="row actions">
   {%- for name in running %}<a class="btn" href="{{ here }}/console?unit={{ name|urlencode }}"{% if name == unit %} aria-current="true"{% endif %}>{{ name }}</a>{% endfor -%}
 </span>{% endif %}</span>{% endblock %}

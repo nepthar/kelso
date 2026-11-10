@@ -24,7 +24,9 @@ def test_host_volume_create_and_delete(client, fake):
     "/volumes",
     data={"action": "create", "tag": "media", "path": "/mnt/m", "readonly": "on"},
   )
-  assert response.headers["location"] == "/volumes?ok=Added+host+volume+media"
+  assert (
+    response.headers["location"] == "/done?ok=Added+host+volume+media&then=%2Fvolumes"
+  )
   response = client.post("/volumes", data={"action": "delete", "tag": "media"})
   assert response.headers["location"] == "/volumes?ok=Removed+host+volume+media"
   assert fake.posts == [
@@ -54,7 +56,7 @@ def test_route_provider_new_keeps_kind_on_error(client, fake):
 
 def test_route_provider_saved(client, fake):
   response = client.post("/routes/web", data={"set.domain": "example.test"})
-  assert response.headers["location"] == "/routes?ok=Saved+web"
+  assert response.headers["location"] == "/done?ok=Saved+web&then=%2Froutes"
   assert fake.posts[0][1] == "/route-providers/web/config-response"
 
 

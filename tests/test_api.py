@@ -942,7 +942,7 @@ def test_configuring_a_route_provider_through_the_api(kelso_env, client):
     json={
       "values": {
         "domain": "example.com",
-        "kelso_address": "10.0.0.5",
+        "route_address": "10.0.0.5",
         "account_id": "acct-1",
         "tunnel_id": "tun-1",
         "api_token": "cf-token",

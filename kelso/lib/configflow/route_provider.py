@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
-from kelso.lib.config_edit import set_kelso_address, set_route_provider
+from kelso.lib.config_edit import set_route_address, set_route_provider
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.routes import PROVIDERS, RouteProvider
 
@@ -24,8 +24,8 @@ DOMAIN_FIELD = ConfigField(
 
 # Global rather than per-provider, but a provider cannot be written without it.
 ADDRESS_FIELD = ConfigField(
-  name="kelso_address",
-  desc="LAN address this host is reachable at, e.g. 10.0.0.5",
+  name="route_address",
+  desc="Address route providers reach this host at, e.g. 10.0.0.5",
 )
 
 
@@ -75,8 +75,8 @@ def route_provider_config_request(
   for declared in (DOMAIN_FIELD, ADDRESS_FIELD, *provider.config_fields()):
     if declared.name == "domain":
       value = existing.domain if existing else None
-    elif declared.name == "kelso_address":
-      value = ctx.config.kelso_address or None
+    elif declared.name == "route_address":
+      value = ctx.config.route_address or None
     elif declared.secret:
       value = None
     else:
@@ -120,15 +120,15 @@ def apply_route_provider_config(
     raise ValueError(f"route_provider.{tag} needs a domain")
 
   written = []
-  address = response.values.get("kelso_address")
-  if address and address != ctx.config.kelso_address:
-    set_kelso_address(ctx, address)
-    written.append("kelso_address")
+  address = response.values.get("route_address")
+  if address and address != ctx.config.route_address:
+    set_route_address(ctx, address)
+    written.append("route_address")
 
   args = dict(existing.args) if existing else {}
   for field in request.fields:
     value = response.values.get(field.name)
-    if not value or field.name in ("domain", "kelso_address"):
+    if not value or field.name in ("domain", "route_address"):
       continue
     if field.secret:
       ref = secret_ref(tag, field.name)

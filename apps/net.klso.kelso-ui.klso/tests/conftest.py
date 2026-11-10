@@ -5,6 +5,7 @@ Run from ui/:  uv run pytest
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,8 @@ _fake = FakeKelsod().start()
 os.environ["KELSO_API"] = _fake.address
 os.environ["ADMIN_PASSWORD"] = PASSWORD
 os.environ.pop("KELSO_UI_NO_AUTH", None)
+SETTINGS = Path(tempfile.mkdtemp()) / "settings.json"
+os.environ["KELSO_UI_SETTINGS"] = str(SETTINGS)
 sys.path.insert(0, str(Path(__file__).parent.parent / "ui"))
 
 import frontdoor  # noqa: E402
@@ -34,6 +37,11 @@ def fake():
   yield _fake
   _fake.fail = None
   _fake.api = 1
+
+
+@pytest.fixture(autouse=True)
+def fresh_settings():
+  SETTINGS.unlink(missing_ok=True)
 
 
 @pytest.fixture(autouse=True)

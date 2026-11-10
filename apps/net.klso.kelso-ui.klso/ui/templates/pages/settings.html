@@ -1,0 +1,21 @@
+{% extends "frame.html" %}
+
+{% block content %}
+<form method="post" action="/settings" class="settings-form">
+<fieldset class="group">
+  <legend>Background</legend>
+  <p class="lede">The desktop and sign-in are painted in this, so you can tell machines running kelso apart.</p>
+  <div class="settings-bg">
+    <div class="bg-preview" id="bg-preview" data-generated="{{ generated|join(',') }}"></div>
+    <div class="field-row-stacked">
+      <label><input type="radio" name="mode" value="id"{% if not custom %} checked{% endif %}> <span>From this install's id{% if INSTANCE_ID %} <span class="mono">{{ INSTANCE_ID }}</span>{% endif %}</span></label>
+      <label><input type="radio" name="mode" value="custom"{% if custom %} checked{% endif %}> Custom</label>
+      <div class="field-row bg-custom"><label>Top <input type="color" name="top" value="{{ top }}"></label><label>Bottom <input type="color" name="bottom" value="{{ bottom }}"></label></div>
+    </div>
+  </div>
+</fieldset>
+<div class="dialog-buttons"><button type="submit" class="default">Save</button></div>
+</form>
+{% endblock %}
+
+{% block scripts %}<script src="{{ asset('js/settings.js') }}"></script>{% endblock %}

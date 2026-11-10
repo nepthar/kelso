@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><defs>
+<linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fc3ff"/><stop offset="1" stop-color="#1c63d6"/></linearGradient>
+<linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#e8a93a"/></linearGradient>
+<linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfd6e6"/></linearGradient>
+<linearGradient id="d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6e88e"/><stop offset="1" stop-color="#2f9e36"/></linearGradient>
+<linearGradient id="e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6e4dc"/><stop offset="1" stop-color="#a6a498"/></linearGradient>
+</defs><circle cx="24" cy="24" r="18" fill="url(#c)" stroke="#1c63d6" stroke-width="3.4"/><path d="M24 12v12l9 5" fill="none" stroke="#27406e" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="24" r="2" fill="#b3261e"/></svg>

@@ -45,9 +45,16 @@ async def post_routes(request: Request):
 
 
 @router.get("/routes/new")
-def new(tag: str = "", kind: str = ""):
-  """The add row is a GET form; its tag belongs in the path, not the query."""
-  return see(f"/routes/{quote(tag.strip())}", kind=kind)
+def new(page: PageDep, tag: str = "", kind: str = ""):
+  """The New route provider dialog: a name and a kind, then that kind's form.
+
+  The first step is a GET form; its tag belongs in the path, not the query.
+  """
+  if tag.strip():
+    return see(f"/routes/{quote(tag.strip())}", kind=kind)
+  page.title = "New route provider"
+  kinds = api("/route-providers")["kinds"]
+  return page.render("pages/route_new.html", "New route provider", kinds=kinds)
 
 
 @router.get("/routes/{tag}")
@@ -74,4 +81,4 @@ async def post_provider(tag: str, request: Request):
     )
   except ApiError as e:
     return see(f"/routes/{quote(tag)}", kind=kind or None, err=str(e))
-  return see("/routes", ok=f"Saved {tag}")
+  return see("/done", ok=f"Saved {tag}", then="/routes")

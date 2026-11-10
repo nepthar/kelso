@@ -583,9 +583,7 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
         "host_port": assigned.host_port if assigned else None,
         "url": run_data.route_urls.get(name),
         "published_url": providers[0]["url"] if providers else None,
-        "host_url": host_url(
-          spec, run_data, name, ctx.config.kelso_address or "localhost"
-        ),
+        "host_url": host_url(spec, run_data, name, ctx.config.link_address),
         "providers": providers,
       }
     )

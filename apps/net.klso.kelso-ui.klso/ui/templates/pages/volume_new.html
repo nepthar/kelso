@@ -1,0 +1,16 @@
+{% extends "frame.html" %}
+
+{% block content %}
+<form method="post" action="/volumes">
+<input type="hidden" name="action" value="create">
+<fieldset class="group">
+  <legend>Host volume</legend>
+  <p class="lede">A named folder on this machine that apps may bind to.</p>
+  <div class="field-row-stacked"><label for="hv-tag">Name</label><input id="hv-tag" name="tag" placeholder="e.g. media" required autofocus></div>
+  <div class="field-row-stacked"><label for="hv-path">Path</label><input id="hv-path" name="path" placeholder="/mnt/media" required></div>
+  <div class="field-row"><label><input type="checkbox" name="readonly"> Read-only</label></div>
+  <div class="field-row"><label><input type="checkbox" name="require_mount"> Require a mounted disk</label></div>
+</fieldset>
+<div class="dialog-buttons"><button type="submit" class="default">Add</button><button type="button" data-close>Cancel</button></div>
+</form>
+{% endblock %}

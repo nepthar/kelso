@@ -4,15 +4,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} · kelso</title>
 <link rel="icon" type="image/svg+xml" href="{{ FAVICON }}">
-{#- Every theme is linked: each is a few hundred bytes of tokens, and having
-  them all here lets the menu preview any of them and switch without a load. -#}
-{% for theme in themes %}
-<link rel="stylesheet" href="{{ asset('themes/' ~ theme.id ~ '.css') }}">
-{% endfor %}
-{#- Read by boot.js, which runs next, to pick up the saved theme before paint. -#}
-<script type="application/json" id="kelso-themes">{{ themes|map(attribute='id')|list|tojson }}</script>
+<link rel="stylesheet" href="{{ asset('theme.css') }}">
+{#- The desktop's two colours (settings.py), painted by boot.js before first paint. -#}
+<script type="application/json" id="kelso-desktop">{{ desktop_colors()|list|tojson }}</script>
 <script src="{{ asset('js/boot.js') }}"></script>
+<link rel="stylesheet" href="{{ asset('vendor/98.css-0.1.21/98.css') }}">
 <link rel="stylesheet" href="{{ asset('kelso.css') }}">
+<link rel="stylesheet" href="{{ asset('classic.css') }}">
 {% block head %}{% endblock %}
 </head>
 <body>

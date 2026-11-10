@@ -1,21 +1,23 @@
 {% extends "frame.html" %}
 {% from "macros.html" import job_button, when %}
 
+{% block commands %}
+{{ job_button('Back up kelso', 'backup', icon='database-export', bar=true, title='Back up everything',
+    desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
+    enabled=not view.get('problem')) }}
+{% endblock %}
+
 {% block content %}
 {% set keep = view.get('keep') or {} %}
 {% set last = view.get('last_run') %}
-<div class="row lede-line">
-  <p class="lede">Backups of apps and kelso {{ view.kelso_id }}</p>
-  {{ job_button('Back up kelso', 'backup', title='Back up everything',
-      desc='Backs up every app and kelso itself. Each app is stopped for the moment its data is read, then started again.',
-      enabled=not view.get('problem')) }}
-</div>
+<p class="lede">Backups of apps and kelso {{ view.kelso_id }}</p>
 
 {% if view.get('problem') %}
 <div class="error"><h2>Backups cannot run</h2><p>{{ view.problem }}</p></div>
 {% endif %}
 
-<div class="card">
+<fieldset class="group">
+<legend>Settings</legend>
 <div class="scroll"><table class="kv"><tbody>
   <tr><td class="key">Backups to</td><td class="mono">{{ view.get('destination') or '—' }}</td></tr>
   <tr><td class="key">Schedule</td><td class="mono">{{ view.schedule or 'none' }}</td></tr>
@@ -26,9 +28,10 @@
   </td></tr>
 </tbody></table></div>
 {% if last and last.failed %}<ul>{% for f in last.failed %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
-</div>
+</fieldset>
 
-<h2>Backups</h2>
+<fieldset class="group">
+<legend>Backups</legend>
 <div class="card">
 {% if not view.backups %}
 <p class="empty">No backups yet.</p>
@@ -58,4 +61,5 @@
 </tbody></table></div>
 {% endif %}
 </div>
+</fieldset>
 {% endblock %}

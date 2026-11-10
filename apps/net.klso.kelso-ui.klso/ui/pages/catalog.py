@@ -1,4 +1,4 @@
-"""The Repos page: the repos apps come from, and the bundles in each of them."""
+"""The Apps & Repos page: the repos apps come from, and the bundles in each of them."""
 
 from urllib.parse import quote
 
@@ -26,7 +26,7 @@ def catalog(page: PageDep, app: str = ""):
       bundle["contested"] = contested.get(app_id) or []
   return page.render(
     "pages/catalog.html",
-    "Repos",
+    "Apps & Repos",
     catalogs=catalogs,
     repos={repo.get("name"): repo for repo in repos},
     contested=contested,

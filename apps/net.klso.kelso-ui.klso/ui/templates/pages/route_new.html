@@ -1,0 +1,14 @@
+{% extends "frame.html" %}
+
+{% block content %}
+<form method="get" action="/routes/new">
+<fieldset class="group">
+  <legend>Route provider</legend>
+  <p class="lede">Where app routes are published, one per domain. Name it, pick its kind, and its settings come next.</p>
+  <div class="field-row-stacked"><label for="rp-tag">Name</label><input id="rp-tag" name="tag" placeholder="e.g. web" required autofocus></div>
+  <div class="field-row-stacked"><label for="rp-kind">Kind</label>
+    <select id="rp-kind" name="kind" required>{% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select></div>
+</fieldset>
+<div class="dialog-buttons"><button type="submit" class="default">Next</button><button type="button" data-close>Cancel</button></div>
+</form>
+{% endblock %}

@@ -48,6 +48,21 @@
 {%- else %}{{ pill(status, 'bad') }}{% endif -%}
 {%- endmacro %}
 
+{#- An app's state as a square marker and its word. Expects an /apps entry. -#}
+{% macro app_status(app) -%}
+{% if app.get('state') == 'unloaded' %}{{ pill('unloaded', 'exited') }}
+{%- else %}{% set status = app.get('status') or 'unknown' %}
+{{- pill(status, {'healthy': 'running', 'ok': 'running', 'finished': 'running', 'degraded': 'exited'}.get(status, '')) }}{% endif %}
+{%- endmacro %}
+
+{#- An app's containers, running/total, unless nothing is loaded for them to belong to. -#}
+{% macro app_units(app) -%}
+{% set containers = app.get('containers') or {} %}
+{% if app.get('state') == 'unloaded' %}data and config kept
+{%- elif containers.get('total') %}{{ containers.get('running', 0) }}/{{ containers.total }}
+{%- else %}none{% endif %}
+{%- endmacro %}
+
 {% macro sub(text, cls="") -%}
 <span class="{{ 'sub ' ~ cls if cls else 'sub' }}">{{ text }}</span>
 {%- endmacro %}
@@ -87,19 +102,31 @@
   its own label, desc, verb and args; the operator picks before Run is live.
   `icon` is an MDI name, and then `label` is the tooltip rather than the text.
   `done` is where to land once the job has run; the default is a reload.
+  `default` draws it as the surface's one default button (98.css).
   The JSON attributes are single-quoted: `tojson` escapes ' but not ".
 -#}
-{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false) -%}
-<button type="button" class="job-open{{ ' icon' if icon }}{{ ' danger' if danger }}"
+{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false, bar=false, tone="", default=false) -%}
+<button type="button" class="job-open{{ ' cmd' if bar else (' icon' if icon) }}{{ ' cmd-' ~ tone if tone }}{{ ' danger' if danger }}{{ ' default' if default }}"
   {%- if not enabled %} disabled{% endif %}
-  {%- if icon %} title="{{ label }}" aria-label="{{ label }}"{% endif %}
+  {%- if icon and not bar %} title="{{ label }}" aria-label="{{ label }}"{% endif %}
   data-verb="{{ verb }}" data-title="{{ title }}" data-desc="{{ desc }}"
   data-args='{{ (args or {})|tojson }}' data-fields='{{ fields|tojson }}' data-choices='{{ choices|tojson }}'
   {%- if done %} data-done="{{ done }}"{% endif %}
   {%- if autorun %} data-autorun="1"{% endif %}>
-  {{- mdi(icon) if icon else label -}}
+  {%- if bar %}{{ mdi(icon) }}<span>{{ label }}</span>{% else %}{{ mdi(icon) if icon else label }}{% endif -%}
 </button>
 {%- endmacro %}
+
+{#- An entry on a window's command bar (frame.html's `commands`): an icon over
+  its label. `dialog` opens `href` as a dialog window over this one, via
+  shell.js. `tone`: go or stop, for a verb whose colour means something.
+  `job_button(..., bar=true)` is the same entry for a verb that runs a job. -#}
+{% macro command(label, icon, href, dialog=false, tone="") -%}
+<a class="cmd{{ ' cmd-' ~ tone if tone }}" href="{{ href }}"{% if dialog %} data-dialog="{{ label }}"{% endif %}>{{ mdi(icon) }}<span>{{ label }}</span></a>
+{%- endmacro %}
+
+{#- The separator between groups of commands. -#}
+{% macro command_gap() -%}<span class="cmd-sep" aria-hidden="true"></span>{%- endmacro %}
 
 {#- Opens a finished run's log in the job modal, read-only. -#}
 {% macro log_button(label, log, status, title, cls="link") -%}

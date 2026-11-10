@@ -67,7 +67,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     return cls(
       api_token=api_token,
       kelso_domain=conf.domain,
-      kelso_address=ctx.config.kelso_address,
+      route_address=ctx.config.route_address,
       **args,
     )
 
@@ -77,7 +77,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     tunnel_id: str,
     api_token: str,
     kelso_domain: str,
-    kelso_address: str,
+    route_address: str,
     zone_id: str = "",
     # A string when it comes from config.toml, where every arg is one.
     timeout: float | str = 30.0,
@@ -86,7 +86,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     self.tunnel_id = tunnel_id
     self._api_token = api_token
     self.kelso_domain = kelso_domain
-    self.kelso_address = kelso_address
+    self.route_address = route_address
     self._zone_id = zone_id or None
     self._timeout = float(timeout)
     self._session = requests.Session()
@@ -253,11 +253,11 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     except RouteProviderError as e:
       errors.append(f"Cloudflare tunnel {self.tunnel_id} is not usable: {e}")
 
-    if not self.kelso_address:
-      errors.append("kelso_address is unset, so routes have nowhere to point")
-    elif self.kelso_address in LOOPBACK_ADDRESSES:
+    if not self.route_address:
+      errors.append("route_address is unset, so routes have nowhere to point")
+    elif self.route_address in LOOPBACK_ADDRESSES:
       errors.append(
-        f"kelso_address is {self.kelso_address!r}, which inside the cloudflared "
+        f"route_address is {self.route_address!r}, which inside the cloudflared "
         f"container means the container itself. Set it to the LAN address of the "
         f"host running the apps (or host.docker.internal on Docker Desktop)"
       )
@@ -271,14 +271,14 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Route hostname -> kelso_address:port, over the tunnel."""
+    """Route hostname -> route_address:port, over the tunnel."""
     hostname = self._hostname(subdomain, domain)
 
     record = self._dns_record(hostname)
     if record is not None and self._dns_owner(record) != app:
       raise refuse_foreign_route(hostname, self._dns_owner(record))
 
-    service = f"{scheme}://{self.kelso_address}:{port}"
+    service = f"{scheme}://{self.route_address}:{port}"
     config = self._config()
     rules = [rule for rule in self._rules(config) if rule.get("hostname") != hostname]
     logger.info("routing %s -> %s over tunnel %s", hostname, service, self.tunnel_id)

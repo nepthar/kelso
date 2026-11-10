@@ -177,7 +177,7 @@ CF = CloudflareTunnelRouteProvider
 
 CF_ANSWERS = {
   "domain": "example.com",
-  "kelso_address": "10.0.0.5",
+  "route_address": "10.0.0.5",
   "account_id": "acct-1",
   "tunnel_id": "tun-1",
   "api_token": "cf-token",
@@ -234,7 +234,7 @@ def test_provider_request_asks_for_the_secret_not_its_reference(kelso_env):
   request = route_provider_config_request("cf", CF, ctx_for(kelso_env))
 
   names = [f.name for f in request.fields]
-  assert names[:2] == ["domain", "kelso_address"]
+  assert names[:2] == ["domain", "route_address"]
   assert "api_token" in names
   assert "api_token_secret" not in names
 

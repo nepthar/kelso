@@ -130,11 +130,10 @@ def test_the_host_shell_is_relayed_too(client, kelsod):
   assert kelsod.paths == ["/host/console?started_by=kelso_ui"]
 
 
-def test_the_nav_offers_the_host_shell_and_lights_it(client, fake):
+def test_the_desktop_offers_the_host_shell(client, fake):
   assert "tycho " in client.get("/").text
-  assert 'href="/host/console" title="Host shell">' in client.get("/").text
+  assert 'data-src="/host/console"' in client.get("/").text
   shell = client.get("/host/console").text
-  assert 'href="/host/console" title="Host shell" class="active"' in shell
   assert '<span class="mono">$KELSO_ROOT</span> is' in shell
   assert "/home/kelso " in shell
   assert "Back to dashboard" not in shell

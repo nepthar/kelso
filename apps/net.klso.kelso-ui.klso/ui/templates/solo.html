@@ -1,10 +1,10 @@
-{#- A page with no nav: the frame, the rule under the wordmark, and one thing. -#}
+{#- A page with no desktop behind it: one dialog on the desktop. -#}
 {% extends "base.html" %}
 {% block body %}
-<div class="app solo">
-<div class="solo-box">
-  <div class="head"><h1>{{ hostname|default('', true)|brand }}</h1><p class="head-sub">{{ title|lower }}</p></div>
-  {% block content %}{% endblock %}
+<div class="solo">
+<div class="window solo-box">
+  <div class="title-bar"><div class="title-bar-text">{{ hostname|default('', true)|brand }}: {{ title|lower }}</div></div>
+  <div class="solo-body">{% block content %}{% endblock %}</div>
 </div>
 </div>
 {% endblock %}

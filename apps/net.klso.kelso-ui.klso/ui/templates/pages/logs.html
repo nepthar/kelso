@@ -1,0 +1,17 @@
+{% extends "frame.html" %}
+{% from "macros.html" import empty, app_status, app_units %}
+
+{% block content %}
+<p class="lede">The last lines each app's containers printed. What kelso itself did is in Activity.</p>
+<div class="card scroll">
+{% if not apps %}{{ empty('No apps loaded.') }}{% else %}
+<table><thead><tr><th>App</th><th>Status</th><th>Units</th></tr></thead><tbody>
+{% for app in apps %}
+<tr><td class="name"><a href="/apps/{{ app.app_id|urlencode }}/logs">{{ app.get('display_name') or app.app_id }}</a></td>
+  <td>{{ app_status(app) }}</td>
+  <td class="muted">{{ app_units(app) }}</td></tr>
+{% endfor %}
+</tbody></table>
+{% endif %}
+</div>
+{% endblock %}

@@ -119,17 +119,31 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
   assert ["compose", "down"] in calls
 
 
-def test_start_receipt_uses_kelso_address_for_local_urls(kelso_env):
+def test_start_receipt_uses_route_address_for_local_urls(kelso_env):
   kelso_env.config.write_text(
     kelso_env.config.read_text().replace(
       "port_base = 41000\n",
-      'port_base = 41000\nkelso_address = "10.0.0.5"\n',
+      'port_base = 41000\nroute_address = "10.0.0.5"\n',
     )
   )
   started = kelso_env.run("start", "ports-demo")
   assert started.returncode == 0, started.stderr
   assert "http://10.0.0.5:41000" in started.stdout
   assert "http://localhost:41000" not in started.stdout
+
+
+def test_start_receipt_prefers_link_address_for_local_urls(kelso_env):
+  kelso_env.config.write_text(
+    kelso_env.config.read_text().replace(
+      "port_base = 41000\n",
+      'port_base = 41000\nroute_address = "host.docker.internal"\n'
+      'link_address = "10.0.0.7"\n',
+    )
+  )
+  started = kelso_env.run("start", "ports-demo")
+  assert started.returncode == 0, started.stderr
+  assert "http://10.0.0.7:41000" in started.stdout
+  assert "host.docker.internal" not in started.stdout
 
 
 def test_rm_removes_run_state_configuration_and_managed_volumes(kelso_env):
@@ -911,7 +925,7 @@ def _with_npm_provider(kelso_env) -> str:
   """Add a route provider whose password is a system secret; returns its name."""
   text = kelso_env.config.read_text()
   kelso_env.config.write_text(
-    'kelso_address = "10.0.0.5"\n' + text + "\n[route_provider.lan]\n"
+    'route_address = "10.0.0.5"\n' + text + "\n[route_provider.lan]\n"
     'kind = "nginx_proxy_manager"\n'
     'domain = "home.lan"\n'
     "[route_provider.lan.args]\n"
@@ -1741,7 +1755,7 @@ def test_a_route_removed_by_hand_is_warned_about_and_skipped(
 def test_registering_a_route_names_where_it_points(kelso_env, stub_provider):
   stub_provider()
   kelso_env.config.write_text(
-    'kelso_address = "192.0.2.10"\n' + kelso_env.config.read_text()
+    'route_address = "192.0.2.10"\n' + kelso_env.config.read_text()
   )
   started = kelso_env.run("start", "routes-demo")
   assert started.returncode == 0, started.stderr
@@ -1932,7 +1946,7 @@ def test_init_writes_the_address_it_detects(kelso_env, tmp_path, monkeypatch):
   root = tmp_path / "fresh"
   result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
   assert result.returncode == 0, result.stderr
-  assert load_config_file(root / "config.toml").kelso_address == "10.0.0.7"
+  assert load_config_file(root / "config.toml").route_address == "10.0.0.7"
   assert "10.0.0.7 (detected" in result.stdout
 
 
@@ -1943,8 +1957,8 @@ def test_init_leaves_the_address_unset_when_it_finds_none(
   root = tmp_path / "fresh"
   result = run_at(kelso_env, root, "init", "--yes", "--no-mirror")
   assert result.returncode == 0, result.stderr
-  assert load_config_file(root / "config.toml").kelso_address == ""
-  assert "set kelso_address before adding a route provider" in result.stdout
+  assert load_config_file(root / "config.toml").route_address == ""
+  assert "set route_address before adding a route provider" in result.stdout
 
 
 def test_init_yes_takes_the_default_root_without_asking(kelso_env, tmp_path):

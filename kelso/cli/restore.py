@@ -79,7 +79,7 @@ def _restore_everything(path: Path, ctx: KelsoCtx, *, yes: bool) -> None:
       f"there if they should."
     )
   print(
-    "\nApps are stopped. Check config.toml's host volumes and kelso_address for "
+    "\nApps are stopped. Check config.toml's host volumes and route_address for "
     "this machine (`kelso system doctor` reports paths that are not there), "
     "then start them with `kelso up`."
   )

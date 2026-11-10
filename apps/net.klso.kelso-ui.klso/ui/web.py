@@ -13,12 +13,12 @@ from typing import Annotated, NamedTuple
 from urllib.parse import urlencode
 
 import auth
+import settings
 from api import ApiError, api
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from icons import favicon, mdi
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from themes import THEMES
 
 HERE = Path(__file__).parent
 STATIC = HERE / "static"
@@ -61,29 +61,26 @@ class NavItem(NamedTuple):
   icon: str
 
 
+# The system icons on the desktop and in the start menu. `icon` names a file in
+# static/icons/.
 NAV = (
-  NavItem("/", "Dashboard", "home-outline"),
-  NavItem("/catalog", "Repos", "book-multiple-outline"),
-  NavItem("/volumes", "Volumes", "database-outline"),
-  NavItem("/backups", "Backups", "database-export"),
-  NavItem("/routes", "Routes", "network-outline"),
-  NavItem("/cron", "Cron", "clock-outline"),
-  NavItem("/activity", "Activity", "file-document-multiple-outline"),
+  NavItem("/host", "Host", "host"),
+  NavItem("/catalog", "Apps & Repos", "repos"),
+  NavItem("/volumes", "Volumes", "volumes"),
+  NavItem("/backups", "Backups", "backups"),
+  NavItem("/routes", "Routes", "routes"),
+  NavItem("/cron", "Cron", "cron"),
+  NavItem("/activity", "Activity", "activity"),
+  NavItem("/logs", "Logs", "logs"),
+  NavItem("/host/console", "Shell", "shell"),
+  NavItem("/settings", "Settings", "settings"),
 )
-# In the nav's foot, with theme and sign out: the way onto the host itself.
-HOST = NavItem("/host/console", "Host", "console")
 
 
 def nav_active(path):
-  """The nav entry a path belongs to; an app's page lights Dashboard, its list."""
-  if path.startswith("/host"):
-    return HOST
-  if path.startswith("/apps"):
-    return NAV[0]
-  for item in NAV:
-    if path == item.href or (item.href != "/" and path.startswith(item.href + "/")):
-      return item
-  return None
+  """The nav entry a path belongs to, the longest match winning."""
+  matches = [i for i in NAV if path == i.href or path.startswith(i.href + "/")]
+  return max(matches, key=lambda i: len(i.href), default=None)
 
 
 @cache
@@ -98,6 +95,10 @@ def asset(name):
   except OSError:
     version = "dev"
   return f"/static/{name}?v={version}"
+
+
+def icon_url(name):
+  return asset(f"icons/{name}.svg")
 
 
 def fmt_size(n):
@@ -125,13 +126,13 @@ templates = Environment(
 templates.globals.update(
   asset=asset,
   mdi=mdi,
+  icon_url=icon_url,
+  desktop_colors=lambda: settings.background(INSTANCE_ID),
   nav=NAV,
-  host=HOST,
-  themes=THEMES,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
   NO_PASSWORD=auth.TESTING_NO_PASSWORD,
-  # Mojave's coral: a tab icon has no theme, and this reads on light and dark.
+  # A tab icon has no theme, and this reads on light and dark.
   FAVICON=favicon("dune", "#f08a4b"),
 )
 templates.filters["size"] = fmt_size
@@ -140,10 +141,7 @@ templates.filters["brand"] = brand
 
 def render(request, template, title, *, status_code=200, headers=None, **context):
   """A whole page. `ok` / `err` in the query become the notice banner."""
-  path = request.url.path
   frame = {
-    "path": path,
-    "active": nav_active(path),
     "title": title,
     "version": "",
     "daemon_api": None,
@@ -205,6 +203,19 @@ def api_error(request, exc: ApiError):
     status_code=502,
     message=str(exc),
   )
+
+
+def local_path(value):
+  """`value` if it is a path on this server, else None.
+
+  Browsers drop tabs and newlines from a URL and read `\\` as `/`, so
+  `/<tab>/x` and `/\\x` are other sites as surely as `//x` is.
+  """
+  if not value.startswith("/") or "\\" in value or value[1:2] == "/":
+    return None
+  if any(ord(c) < 32 or ord(c) == 127 for c in value):
+    return None
+  return value
 
 
 def see(location, **params):

@@ -1,46 +1,18 @@
-{#- The app frame: nav, the page head, and the two modals every page shares.
+{#- What a window shows: the page head, the banners, and the two modals every
+  page shares. The window around it is the desktop's (desktop.html).
 
-  A page fills `content`, and optionally `actions` (verbs beside the title),
-  `head` (stylesheets) and `scripts`. Override `refresh` with nothing on a
-  page whose Refresh would be one more thing beside the title than it needs.
+  A page fills `content`, and optionally `commands` (the window's command
+  bar, of `command` and `job_button(bar=true)`), `actions` (verbs beside the title),
+  `head` (stylesheets), `statusbar` (98.css `status-bar-field`s, pinned under
+  the page) and `scripts`. Refresh is the window's, in its address bar.
 -#}
 {% extends "base.html" %}
 {% from "macros.html" import notice_banner %}
 {% block body %}
 <div class="app">
-<nav>
-  {%- set brand = hostname|default('', true)|brand %}
-  <div class="brand"><a class="mark" href="https://www.nps.gov/moja/kelso-dunes.htm" target="_blank" rel="noopener noreferrer" title="Kelso Dunes" aria-label="Kelso Dunes">{{ mdi('dune') }}</a>
-    <div class="who"><span class="name" title="{{ hostname|default(brand, true) }}">{{ brand }}</span>
-      <span class="ver">kelso{% if version %} {{ version }}{% endif %}</span>
-      {%- if INSTANCE_ID %}<span class="ver">{{ INSTANCE_ID }}</span>{% endif %}</div></div>
-  {% for item in nav %}
-  <a href="{{ item.href }}" title="{{ item.label }}"{% if item == active %} class="active"{% endif %}>{{ mdi(item.icon) }}<span class="label">{{ item.label }}</span></a>
-  {% endfor %}
-  <div class="nav-foot">
-  <a href="{{ host.href }}" title="Host shell"{% if host == active %} class="active"{% endif %}>{{ mdi(host.icon) }}<span class="label">{{ host.label }}</span></a>
-  {#- The theme menu. shell.js opens it beside the nav; each item previews its
-    theme by carrying that theme's data-theme, which scopes its tokens. -#}
-  <button type="button" class="nav-theme" title="theme" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-menu">
-    {{- mdi("palette-outline") }}<span class="label">theme</span>
-  </button>
-  <div class="theme-menu" id="theme-menu" role="menu" aria-label="Theme" hidden>
-    {% for theme in themes %}
-    <button type="button" role="menuitemradio" aria-checked="false" data-theme-id="{{ theme.id }}">
-      <span class="theme-swatch" data-theme="{{ theme.id }}" aria-hidden="true"><i></i><i></i><i></i></span>{{ theme.name }}</button>
-    {% endfor %}
-  </div>
-  <form class="nav-out" method="post" action="/logout">
-    <button type="submit" title="Sign out">
-      {{- mdi("logout") }}<span class="label">sign out</span>
-    </button>
-  </form>
-  </div>
-  <button type="button" class="nav-toggle" aria-label="Collapse sidebar">‹</button>
-</nav>
+{% if self.commands()|trim %}<div class="cmdbar" role="toolbar">{% block commands %}{% endblock %}</div>{% endif %}
 <main>
-  <div class="head"><h1>{{ title }}</h1>
-    {%- block refresh %}<a href="{{ path|urlencode }}">Refresh</a>{% endblock %}
+  <div class="head"><a class="to-desktop" href="/">‹ Desktop</a><h1>{{ title }}</h1>
     {%- block actions %}{% endblock %}</div>
   {% if NO_PASSWORD %}
   <div class="error"><h2>No password</h2><p>kelso-ui's <code>no_password</code> is set, so anyone who can reach this page can run kelso. For testing only. Turn it off with <code>kelso config kelso-ui --set no_password=off</code> and restart kelso-ui.</p></div>
@@ -52,10 +24,13 @@
   {{ notice_banner(ok, err) }}
   {% block content %}{% endblock %}
 </main>
+{% if self.statusbar()|trim %}<div class="status-bar">{% block statusbar %}{% endblock %}</div>{% endif %}
 </div>
 {% include "modals.html" %}
 <script src="{{ asset('js/shell.js') }}"></script>
 <script src="{{ asset('js/confirm.js') }}"></script>
 <script src="{{ asset('js/jobs.js') }}"></script>
+<script src="{{ asset('js/tabs.js') }}"></script>
+<script src="{{ asset('js/columns.js') }}"></script>
 {% block scripts %}{% endblock %}
 {% endblock %}

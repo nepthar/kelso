@@ -1,0 +1,63 @@
+{#- Every icon on the desktop, and the start menu's Apps folder. The whole
+  page's first paint, and what /desktop/icons sends when desktop.js re-reads
+  them. Expects `apps`, `routes`. desktop.js opens an icon from its data
+  attributes. -#}
+{% import "_menu.html" as menu %}
+{% macro icon(label, img, src="", url="", state="", kind="", title="", pic="") -%}
+<button type="button" class="desk-icon{{ ' is-' ~ state if state }}{{ ' is-' ~ kind if kind }}" title="{{ title or label }}"
+  data-title="{{ label }}" data-icon="{{ pic or icon_url(img) }}"
+  {%- if src %} data-src="{{ src }}"{% endif %}
+  {%- if url %} data-url="{{ url }}"{% endif %}>
+  <span class="desk-glyph"><img src="{{ pic or icon_url(img) }}" alt="" draggable="false"></span>
+  <span class="desk-label">{{ label }}</span>
+</button>
+{%- endmacro %}
+{#- The desktop's colours ride along, so a saved change repaints it. -#}
+<script type="application/json" class="desk-colors">{{ desktop_colors()|list|tojson }}</script>
+{% for item in nav %}
+{{ icon(item.label, item.icon, src=item.href, kind='system') }}
+{% endfor %}
+{% for route in routes %}
+{{ icon(route.label, 'route', url=route.url, state=route.state, kind='route', title=route.url,
+    pic='/icons/' ~ route.app_id|urlencode ~ '/' ~ route.name|urlencode) }}
+{% endfor %}
+
+{#- Each loaded app's folder, as the app page offers it; desktop.js copies this
+  into the start menu when it opens. -#}
+<template class="start-apps-tpl">
+{% for app in apps %}
+{% set here = '/apps/' ~ app.app_id|urlencode %}
+{% set name = app.get('display_name') or app.app_id %}
+{% set units = app.get('containers') or {} %}
+{% set running = app.get('status') not in ('stopped', 'finished', None) %}
+{% set mine = '/icons/' ~ app.app_id|urlencode %}
+{% call menu.folder(name, 'app', cls='is-' ~ app.desk_state, icon=mine) %}
+  {{ menu.note((app.get('status') or 'unknown') ~ ' · ' ~ (units.get('running') or 0) ~ '/' ~ (units.get('total') or 0) ~ ' running') }}
+  {{ menu.item(name, 'app', src=here, cls='menu-default', icon=mine) }}
+  {{ menu.sep() }}
+  {% call menu.folder('Links', cls='' if app.links else 'is-empty') %}
+    {% for link in app.links %}{{ menu.item(link.name, 'route', url=link.url, title=link.url, icon=mine ~ '/' ~ link.name|urlencode) }}{% else %}{{ menu.note('(Empty)') }}{% endfor %}
+  {% endcall %}
+  {% call menu.folder('Commands', cls='' if app.commands else 'is-empty') %}
+    {% for c in app.commands %}{{ menu.item(c.name, 'command', src=here, run='cmd:' ~ c.name, title=c.get('desc') or '') }}{% else %}{{ menu.note('(Empty)') }}{% endfor %}
+  {% endcall %}
+  {{ menu.sep() }}
+  {% if running %}
+  {{ menu.item('Stop', 'stop', src=here, run='stop') }}
+  {{ menu.item('Restart', 'restart', src=here, run='restart') }}
+  {% else %}
+  {{ menu.item('Start', 'start', src=here, run='start') }}
+  {% endif %}
+  {{ menu.item('Reload', 'reload', src=here, run='load') }}
+  {{ menu.item('Back up', 'backups', src=here, run='backup') }}
+  {{ menu.sep() }}
+  {{ menu.item('Logs', 'logs', src=here ~ '/logs') }}
+  {% if app.desk_state != 'off' %}{{ menu.item('Console', 'shell', src=here ~ '/console') }}{% endif %}
+{% endcall %}
+{% else %}
+{{ menu.note('No apps loaded. Pick one from Apps & Repos.') }}
+{% endfor %}
+{{ menu.sep() }}
+{{ menu.item('Start all apps', 'start', src='/host', run='up') }}
+{{ menu.item('Stop all apps', 'stop', src='/host', run='down') }}
+</template>

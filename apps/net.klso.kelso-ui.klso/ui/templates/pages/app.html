@@ -1,57 +1,56 @@
 {% extends "frame.html" %}
-{% from "macros.html" import byline, pill, sub, tag, kv_table, job_button, empty %}
+{% from "macros.html" import byline, pill, sub, tag, kv_table, job_button, command, command_gap, empty, app_status, app_units %}
 {% from "configform.html" import config_form %}
 {% set app_id = app.app_id %}
 {% set name = app.get('display_name') or app_id %}
 {% set here = '/apps/' ~ app_id|urlencode %}
 {% set loaded = app.get('state') == 'loaded' %}
 
-{% block refresh %}{% endblock %}
 
-{#- Logs and, while something runs, the console; then start or stop, reload,
-  back up, remove. Each verb opens the job modal. Only one of start/stop can
-  apply, so only that one is drawn. -#}
-{% block actions %}
-<span class="head-actions"><a class="btn icon" href="{{ here }}/logs" title="Logs" aria-label="Logs">{{ mdi('text-box-outline') }}</a>
-{%- if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}<a class="btn icon" href="{{ here }}/console" title="Console" aria-label="Console">{{ mdi('console') }}</a>{% endif -%}
-<div class="row actions">
+{#- The command bar: logs and, while something runs, the console; then start
+  or stop, restart, reload; back up, remove. Each verb opens the job modal.
+  Only one of start/stop can apply, so only that one is drawn. -#}
+{% block commands %}
+{{ command('Logs', 'text-box-outline', here ~ '/logs') }}
+{% if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}{{ command('Console', 'console', here ~ '/console') }}{% endif %}
+{{ command_gap() }}
 {% if app.status not in ('stopped', 'finished', None) %}
-  {{ job_button('Stop', 'stop', icon='stop', title='Stop ' ~ name, args={'app': app_id},
-      desc='Stops ' ~ app_id ~ "'s containers. Its data, configuration and published routes are untouched.") }}
-  {{ job_button('Restart', 'restart', icon='restart', title='Restart ' ~ name, args={'app': app_id},
-      desc='Stops ' ~ app_id ~ ' and starts it again from its loaded copy, so configuration changed since it started takes effect.') }}
+{{ job_button('Stop', 'stop', icon='stop', bar=true, tone='stop', title='Stop ' ~ name, args={'app': app_id},
+    desc='Stops ' ~ app_id ~ "'s containers. Its data, configuration and published routes are untouched.") }}
+{{ job_button('Restart', 'restart', icon='restart', bar=true, title='Restart ' ~ name, args={'app': app_id},
+    desc='Stops ' ~ app_id ~ ' and starts it again from its loaded copy, so configuration changed since it started takes effect.') }}
 {% else %}
-  {{ job_button('Start', 'start', icon='play', title='Start ' ~ name, args={'app': app_id},
-      desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
+{{ job_button('Start', 'start', icon='play', bar=true, tone='go', title='Start ' ~ name, args={'app': app_id},
+    desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
 {% endif %}
-  {{ job_button('Reload', 'load', icon='reload', title='Reload ' ~ name, args={'app': app_id},
-      desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
-  {{ job_button('Back up', 'backup', icon='database-export', title='Back up ' ~ name, args={'app': app_id},
-      desc='Backs up ' ~ app_id ~ "'s data volumes, configuration and loaded copy, and the bulk volumes turned on in its configuration. The app is stopped for the moment its data is read and started again after.",
-      enabled=loaded) }}
-  {#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
-  {{ job_button('Remove', icon='delete-outline', title='Remove ' ~ name, danger=true,
-      desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and Back up.',
-      choices=[
-        {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
-         'desc': 'Stops it, unpublishes its routes and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
-        {'label': 'Empty temp and logs', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'temp'},
-         'desc': 'Empties its temp and logs volumes. It must be stopped, and stays loaded.'},
-        {'label': 'Empty all data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'},
-         'desc': 'Empties every volume, keeping its configuration, so it starts as if just loaded. It must be stopped, and stays loaded.'},
-        {'label': 'Remove', 'verb': 'rm', 'args': {'app': app_id},
-         'desc': 'Unloads it and deletes its temp and logs volumes. It must be stopped. Data and configuration are kept.'},
-        {'label': 'Purge', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'purge'},
-         'desc': 'Removes everything kelso holds: the loaded copy, every volume, the configuration and secrets, and its address. It must be stopped. The catalog copy survives.'},
-      ]) }}
-</div></span>
+{{ job_button('Reload', 'load', icon='reload', bar=true, title='Reload ' ~ name, args={'app': app_id},
+    desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
+{{ command_gap() }}
+{{ job_button('Back up', 'backup', icon='database-export', bar=true, title='Back up ' ~ name, args={'app': app_id},
+    desc='Backs up ' ~ app_id ~ "'s data volumes, configuration and loaded copy, and the bulk volumes turned on in its configuration. The app is stopped for the moment its data is read and started again after.",
+    enabled=loaded) }}
+{#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
+{{ job_button('Remove', icon='delete-outline', bar=true, tone='stop', title='Remove ' ~ name, danger=true,
+    desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and Back up.',
+    choices=[
+      {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
+       'desc': 'Stops it, unpublishes its routes and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
+      {'label': 'Empty temp and logs', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'temp'},
+       'desc': 'Empties its temp and logs volumes. It must be stopped, and stays loaded.'},
+      {'label': 'Empty all data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'},
+       'desc': 'Empties every volume, keeping its configuration, so it starts as if just loaded. It must be stopped, and stays loaded.'},
+      {'label': 'Remove', 'verb': 'rm', 'args': {'app': app_id},
+       'desc': 'Unloads it and deletes its temp and logs volumes. It must be stopped. Data and configuration are kept.'},
+      {'label': 'Purge', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'purge'},
+       'desc': 'Removes everything kelso holds: the loaded copy, every volume, the configuration and secrets, and its address. It must be stopped. The catalog copy survives.'},
+    ]) }}
 {% endblock %}
 
 {% block content %}
 <div class="app-top">
-<section>
-<h2>Info</h2>
-<div class="apphead">{% include "pages/_app_status.html" %}
+<fieldset class="group">
+<legend>Info</legend>
+<div class="apphead">{{ app_status(app) }}{{ sub(app_units(app)) }}
   <p class="lede">{{ app.get('description') or '' }}</p>
   {{ byline(app) }}
   <p class="muted mono">{{ app_id }}</p>
@@ -73,13 +72,13 @@
   </div>
   {% endif %}
 </div>
-</section>
-<section>
-<h2>Manifest</h2>
+</fieldset>
+<fieldset class="group">
+<legend>Manifest</legend>
 {% set skip = ['display_name', 'description', 'app_id', 'author', 'url'] %}
 {% set pairs = (app.get('metadata') or {})|dictsort(true)|rejectattr(0, 'in', skip)|list %}
-<div class="card">{{ kv_table(pairs) if pairs else empty('No extra metadata.') }}</div>
-</section>
+{{ kv_table(pairs) if pairs else empty('No extra metadata.') }}
+</fieldset>
 </div>
 
 {#- The repo's manifest has moved on from the copy this app was loaded
@@ -98,10 +97,13 @@
 </ul></div>
 {% endif %}
 
-<h2>Configuration</h2>
-<div class="card">{{ config_form(config, here, {'action': 'config'}) }}</div>
+<fieldset class="group">
+<legend>Configuration</legend>
+{{ config_form(config, here, {'action': 'config'}) }}
+</fieldset>
 
-<h2>Commands</h2>
+<fieldset class="group">
+<legend>Commands</legend>
 <div class="card">
 {% if not app.get('commands') %}{{ empty('This app declares no commands.') }}{% else %}
 <div class="scroll"><table><thead><tr><th>Command</th><th>Description</th><th>Unit</th><th class="act"></th></tr></thead><tbody>
@@ -117,52 +119,62 @@
 </tbody></table></div>
 {% endif %}
 </div>
+</fieldset>
 
-<h2>Volumes</h2>
+<fieldset class="group">
+<legend>Volumes</legend>
 <div class="card">
 {% if not app.get('volumes') %}{{ empty('This app declares no volumes.') }}{% else %}
-<div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Host path</th><th>Size</th></tr></thead><tbody>
+<div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Access</th><th>Host path</th><th>Size</th></tr></thead><tbody>
 {% for v in app.volumes %}
 <tr><td class="key">{{ v.name }}</td>
-  <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+  <td class="muted">{{ v.kind }}</td>
+  <td class="muted">{{ 'read' if v.readonly else 'read/write' }}</td>
   <td class="path"><span class="muted">{{ 'not bound' if v.kind == 'host' and not v.get('bind') else v.path or '—' }}</span></td>
   <td class="muted">{{ v.bytes|size }}</td></tr>
 {% endfor %}
 </tbody></table></div>
 {% endif %}
 </div>
+</fieldset>
 
-<h2>Run units</h2>
-{% for unit in app.get('units', []) %}
+<fieldset class="group">
+<legend>Run units</legend>
+{% set units = app.get('units', []) %}
+{% if not units %}{{ empty('No run units.') }}{% else %}
+<menu role="tablist">
+  {%- for unit in units %}<li role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}"><a href="#unit-{{ loop.index }}">{{ unit.name }}</a></li>{% endfor -%}
+</menu>
+{% for unit in units %}
 {% set state = unit.get('state') %}
-<div class="card pad">
-  <div class="row between"><b>{{ unit.name }}</b>{{ pill(state or 'not created', 'running' if state in ('running', 'finished') else ('exited' if state else '')) }}</div>
-  <div class="muted mono">{{ unit.image }}</div>
+<div class="window tabpanel" role="tabpanel" id="unit-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+  <div class="row between">{{ pill(state or 'not created', 'running' if state in ('running', 'finished') else ('exited' if state else '')) }}<span class="muted mono">{{ unit.image }}</span></div>
   {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
   <h3>Volumes</h3>
   {% if not unit.get('volumes') %}{{ empty('No volumes mounted.') }}{% else %}
-  <div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Mounted at</th><th>Desc</th></tr></thead><tbody>
+  <div class="card"><div class="scroll"><table><thead><tr><th>Volume</th><th>Kind</th><th>Access</th><th>Mounted at</th><th>Desc</th></tr></thead><tbody>
   {% for v in unit.volumes %}
   <tr><td class="key">{{ v.name }}</td>
-    <td class="muted">{{ v.kind }}{% if v.readonly %}{{ sub('read-only') }}{% endif %}</td>
+    <td class="muted">{{ v.kind }}</td>
+  <td class="muted">{{ 'read' if v.readonly else 'read/write' }}</td>
     <td class="muted path">{{ v.path }}</td>
     <td class="muted wrap">{{ v.get('desc') or '' }}</td></tr>
   {% endfor %}
-  </tbody></table></div>
+  </tbody></table></div></div>
   {% endif %}
   {% if unit.get('environment') %}
   {% set resolved = unit.get('resolved_environment') or {} %}
-  <details class="reveal"><summary>Environment</summary>
-  <div class="scroll"><table class="kv"><thead><tr><th>Variable</th><th>In the manifest</th><th>Value</th></tr></thead><tbody>
+  <h3>Environment</h3>
+  <div class="card"><div class="scroll"><table class="kv"><thead><tr><th>Variable</th><th>In the manifest</th><th>Value</th></tr></thead><tbody>
   {% for k, v in unit.environment|dictsort(true) %}
   <tr><td class="key">{{ k }}</td><td class="muted path">{{ v }}</td><td class="muted path">{{ resolved.get(k, '') }}</td></tr>
   {% endfor %}
-  </tbody></table></div></details>
+  </tbody></table></div></div>
   {% endif %}
 </div>
-{% else %}
-{{ empty('No run units.') }}
 {% endfor %}
+{% endif %}
+</fieldset>
 {% endblock %}
 
 {% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/tagpick.js') }}"></script>{% endblock %}

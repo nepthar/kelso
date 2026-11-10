@@ -1,5 +1,17 @@
 # Kelso UI
 
+A desktop over ordinary pages. `/` is `templates/desktop.html` and
+`static/js/desktop.js`; every other page is an ordinary page shown in a window's
+iframe, and does not know it. A new section is a page plus a `NAV` entry in
+`web.py` and an icon in `static/icons/`.
+
+**Kelso's words stay.** The desktop borrows Windows 2000's shapes, not its names: Host,
+not My Computer. A new metaphor has to name something kelso already has.
+
+**Pages frame only each other,** and a window may frame any http(s) route, so
+`frontdoor.py` allows both and `desktop.js` sandboxes the route. A page opened
+outside a window works as a plain page; only route windows offer a tab of their own.
+
 Server-rendered HTML over the kelsod admin socket. No client framework, no
 build step. Read the root `AGENTS.md` first — everything there applies.
 
@@ -23,9 +35,7 @@ a second page needs the same thing.
 or `data-*` attribute, and a page loads it from its `scripts` block with
 `asset('js/<name>.js')`. Third-party code is vendored under `static/vendor/`
 at a pinned version, never loaded from a CDN: kelso-ui must work on a host
-with no internet access. Fonts are the exception -- nice to have, never
-needed -- so every font stack ends in system faces and `boot.js` requests
-Plex without the page waiting on it. Data a script needs goes in a
+with no internet access. Data a script needs goes in a
 `<script type="application/json">` block, which the policy allows. The
 console page is the one exception on styles: xterm.js writes its layout into
 `<style>` elements, so that page alone sends `TERMINAL_CSP`, which allows
@@ -42,103 +52,33 @@ kelsod endpoint gets a fixture in `fakekelsod.py`.
 
 ## The visual language
 
-**Commit to a few decisions and apply them everywhere.** A small set of
-specific choices, held without exception, is what makes an interface look
-considered. Reaching for a new value because this one spot wants it is what
-makes it look assembled. When a screen needs something the language doesn't
-have, say so and we'll add it to the language — don't add it locally.
+98.css (`static/vendor/`) draws windows and controls; `static/classic.css`
+turns them into Windows 2000 (the gradient title bar) set in IBM Plex Sans, and draws
+the desktop. Reach for 98.css's classes and elements first: a page's sections
+are `fieldset.group` with a `legend`. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for anything bold; IBM Plex Mono, also Text, at 12px.
+`static/kelso.css` lays pages out from the tokens in `static/theme.css` and
+holds no colour of its own; a property classic.css sets is not set there too,
+and 98.css's bevels are classic.css's `--raised`, `--pressed`, `--sunken`,
+`--frame` and `--etched`. A surface's one committing button is 98.css's
+`default`. No per-page `<style>`, no inline `style=`: scripts set only
+positions, sizes and custom properties, through the CSSOM.
 
-**Every style lives in `static/kelso.css`.** No per-page `<style>` blocks, no
-inline `style=` attributes, no color or size literals in templates. Pages
-emit semantic class names; if the class doesn't exist yet, add it to the
-stylesheet.
+**Color carries meaning.** `--coral` is the accent, highlight navy here.
+`--gold` wants attention, `--rosewood` destroys, `--ok` is healthy.
 
-**Adding a theme** is one file and one line. Copy
-`ui/static/themes/rally.css` to `ui/static/themes/<id>.css`, change its
-selector to `[data-theme="<id>"]` and its values, and add
-`Theme("<id>", "<name>")` to `THEMES` in `ui/themes.py`. The head links, the
-ids `boot.js` accepts and the nav's theme menu all come from that list. Then
-`uv run pytest tests/test_themes.py`: a theme must set every token in `TOKENS`
-and nothing else, as `#rrggbb`, and clear the contrast floors -- 4.5:1 for
-`--dim`, `--muted` and the terminal's colours, 3:1 for the accents -- or it
-fails. Anything drawn outside CSS (a chart, a terminal) reads colours through
-`kelso.token()` / `kelso.rgba()` and redraws on the `kelso:themechange` event.
+**Artwork is ours.** Icons are drawn for this app. No Microsoft
+assets.
 
-**Build with the tokens, never past them.** If you type a hex value, a radius,
-or a font stack anywhere outside a theme file or the `:root` block of
-`kelso.css`, you have gone around the design. A theme only sets these tokens.
+**A window's verbs are its command bar.** A page fills `commands` with the
+`command` macro, or `job_button(..., bar=true)` for a verb that runs a job.
+Something that needs a form opens as a dialog (`command(..., dialog=true)` or
+`data-dialog` on a link); its POST answers `see("/done", ok=..., then=...)` and
+the desktop closes it and refreshes its opener. Cancel is `data-close`. Groups
+of settings that are not read together are tabs (`menu[role=tablist]`, js/tabs.js).
 
-| Token | Job |
-|---|---|
-| `--void` | The gutter behind the app frame. Also the well inside inputs and `<pre>`. |
-| `--bg` | The ground everything sits on. |
-| `--panel` | Raised: wells, modals, notices. Reach for it only when something must lift off the ground. |
-| `--line` / `--hair` | A hairline that separates / one that barely does (table rows). |
-| `--fg` / `--dim` / `--muted` | Content / labels and secondary data / metadata and disabled. Three weights, one job each, at roughly 14:1, 9:1 and 5.5:1 against `--bg`. Recessive is a step down this ladder, never a step below it — `--muted` is the floor, and it still has to be legible in a bright room. The top of the ladder is not the maximum either: no theme uses full contrast, `#000` on `#fff` or the reverse. Ground and type are both tinted. |
-| `--coral` | The one accent. Actionable, active, focused. |
-| `--gold` `--rosewood` `--ok` | Attention / destructive and failed / healthy. |
-| `--ink` | Type on a coral fill. Whichever of dark or light reads against this theme's coral — dark on rally's bright coral, light on mojave day's rust — at 4.5:1 or better. |
-| `--ansi-0` … `--ansi-15` | The terminal's sixteen colours, drawn on `--void`. Set per theme; everything else about the terminal (`--term-bg`, `--term-fg`, `--term-cursor`, `--term-selection`) is derived in `kelso.css`. |
-| `--r` | The radius. There is one. |
-
-**Hierarchy comes from type and space before it comes from boxes.** A new
-group starts as an `h2` section label — small, lowercase, with a rule running
-to the right edge — and nothing else. `.card` is a pair of hairlines around a
-table. Only `.card.pad` fills, and only when the content is a well rather than
-a list. If two adjacent things both have borders, one of them is wrong.
-
-**Color carries meaning, never decoration.** Coral marks what you can act on.
-Gold wants attention, rosewood destroys, olive is healthy. Nothing on the page
-is colored for interest.
-
-**Actions sit beside the title, not at the far edge.** `.head-actions` follows
-the `h1` and `Refresh` is pushed right, so a page's verbs are inside the
-reading path instead of a screen-width away from it. Where exactly one of a
-pair can ever apply — start/stop — draw that one and leave the other out
-rather than rendering it disabled.
-
-**Page actions are words; row actions are icons.** A verb beside the `h1` is
-read once and has room for a label, so it gets one. A verb repeated down every
-row of a table would turn a column into a wall of the same word, so it gets a
-glyph and a `title`. Label an action for what it is about to do, not for the
-outcome you expect: `Remove` opens a chooser of uninstall, reset and purge, and
-naming it any one of those would be a lie.
-
-**One filled control per surface, and only where the surface asked for
-something.** A modal, a config row and an app card each have a thing you came
-to do — Run, Save, Install — and that control is filled coral with `--ink`. A
-page that shows you an app has no such thing, so nothing on it is filled;
-filling its lifecycle verb tells the reader the page wants them to stop the
-app, which it doesn't. Every other control is a hairline button with `--dim`
-type that brightens on hover, and destructive ones take `danger=true` on
-the `job_button` / `icon_button` macros for a rosewood hover.
-
-**Mono is structural, not stylistic.** Identifiers, versions, sizes, paths,
-ports, counts, durations and timestamps are IBM Plex Mono, so columns of them
-line up down the page. Prose — descriptions, hints, notices, empty states — is
-never mono. In tables this falls out of `td.muted:not(.wrap)`; keep prose
-cells classed `.wrap`.
-
-**Section labels and nav are lowercase.** Page titles (`h1`) and content
-(app names, descriptions) keep their own capitalization.
-
-**Square geometry.** `--r` is 2px, status markers are squares, and the app
-frame's top-left corner is chamfered. Nothing in this UI is round.
-
-**The ribbon is the identity and it appears exactly twice**: cutting the
-chamfered corner, and flattened onto the left end of the rule under the page
-title, where `.head::after` centres it on the 1px border and so takes no layout
-space of its own. The corner's geometry is load-bearing — `--chamfer` must stay
-wide enough to clear the band, whose centerline runs `(0, C) → (C, 0)` for
-`C = --ribbon-top + --ribbon/2`. Change one, check the other. Don't introduce
-a third instance.
-
-**Every interactive element gets a visible `:focus-visible` ring** in coral.
-
-**Layout rhythm comes off the scale**: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48,
-for margins between blocks, flex gaps and section spacing. Padding inside a
-control is optical, tuned once on the component in the stylesheet — read it off the
-existing rule rather than re-tuning it at the call site.
+**Row actions are icons.** Where exactly one of a pair can apply, draw that one. Label an action
+for what it is about to do. Mono is for identifiers, sizes and paths; prose
+never is.
 
 ## Working on it
 
@@ -157,6 +97,7 @@ without typing a password. Without it, `ADMIN_PASSWORD` is required —
 Plain http is fine here: the session cookie only asks to be `Secure` when the
 request that minted it arrived over TLS, which in the container it does.
 
-Run the tests, then look at every page you touched — `/`, `/apps/<id>`,
-`/apps/<id>/logs`, `/apps/<id>/console`, `/volumes`, `/catalog`, `/routes`, `/backups`,
-`/activity`, `/login` — plus the collapsed nav and one modal. Layout regressions here are invisible in a diff and obvious on screen.
+Run the tests, then look at the desktop and every window you touched: drag,
+resize, minimize, maximize, the start menu, right-click, one job dialog, and
+phone width, where every window is maximized. Layout regressions here are
+invisible in a diff and obvious on screen.

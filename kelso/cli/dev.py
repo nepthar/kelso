@@ -98,7 +98,7 @@ def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
       plan.spec,
       plan.run_data,
       plan.published,
-      host=ctx.config.kelso_address or "localhost",
+      host=ctx.config.link_address,
     )
   ):
     rows.append(("Routes:" if i == 0 else "", line))

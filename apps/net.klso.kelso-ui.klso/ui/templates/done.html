@@ -1,0 +1,7 @@
+{#- A dialog's last page. On the desktop it is never seen: desktop.js closes the
+  dialog as it loads. -#}
+{% extends "frame.html" %}
+{% block content %}
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+<p><a class="done-next" href="{{ target }}">Continue</a></p>
+{% endblock %}

@@ -42,5 +42,7 @@
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
     });
+    // configform.js's Cancel puts the list back and says so.
+    input.addEventListener("change", show);
   });
 })();

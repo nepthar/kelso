@@ -54,7 +54,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     return cls(
       password=password,
       kelso_domain=conf.domain,
-      kelso_address=ctx.config.kelso_address,
+      route_address=ctx.config.route_address,
       kelso_db=kelso_db,
       token=token,
       token_expire=token_expire,
@@ -67,7 +67,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     email: str,
     password: str,
     kelso_domain: str,
-    kelso_address: str,
+    route_address: str,
     kelso_db: KelsoStore | None = None,
     token: str | None = None,
     token_expire: float | None = None,
@@ -80,7 +80,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     self.kelso_domain = kelso_domain
     # LAN IP/hostname of the docker host that NPM forwards traffic to. The
     # app's published port is reachable there.
-    self.kelso_address = kelso_address
+    self.route_address = route_address
     self._kelso_db = kelso_db
     self._token = token
     self._token_expire = token_expire or 0.0
@@ -194,7 +194,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Create (or update) a proxy host pointing domain -> kelso_address:port."""
+    """Create (or update) a proxy host pointing domain -> route_address:port."""
     domain_name = self._domain_name(subdomain, domain)
     cert_id = self._wildcard_certificate_id()
     if cert_id is None:
@@ -206,7 +206,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     payload = {
       "domain_names": [domain_name],
       "forward_scheme": scheme,
-      "forward_host": self.kelso_address,
+      "forward_host": self.route_address,
       "forward_port": port,
       "access_list_id": 0,
       "certificate_id": cert_id,
@@ -230,7 +230,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
       logger.info(
         "updating NPM proxy host for %s -> %s:%d",
         domain_name,
-        self.kelso_address,
+        self.route_address,
         port,
       )
       self._request("PUT", f"/api/nginx/proxy-hosts/{existing['id']}", json=payload)
@@ -238,7 +238,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
       logger.info(
         "creating NPM proxy host for %s -> %s:%d",
         domain_name,
-        self.kelso_address,
+        self.route_address,
         port,
       )
       self._request("POST", "/api/nginx/proxy-hosts", json=payload)

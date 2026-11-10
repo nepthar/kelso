@@ -1,7 +1,7 @@
 [app]
 version      = "1.0.1"
 display_name = "Kelso UI"
-description  = "Web interface for kelso, over the kelsod admin socket"
+description  = "Web interface for kelso: apps and routes are icons, and everything opens in a window"
 
 [config]
 # Docker Desktop on macOS cannot carry the admin socket into a container: run
@@ -21,6 +21,7 @@ instance_id = { secret = true, default = "{hex:4}", desc = "Shown beside the hos
 ui   = { kind = "app", src = "ui", desc = "The application"}
 venv = { kind = "temp", desc = "virtual env, dependencies, etc." }
 tls  = { kind = "data", desc = "self-signed cert for the https listener" }
+settings = { kind = "data", desc = "the desktop's settings" }
 
 [connections]
 admin = { kind = "kelso.admin", desc = "kelsod's admin API, which this app is a face for" }
@@ -28,7 +29,7 @@ admin = { kind = "kelso.admin", desc = "kelsod's admin API, which this app is a 
 [run.main]
 image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
-volumes = { ui = "/app", venv = "/venv", tls = "/tls" }
+volumes = { ui = "/app", venv = "/venv", tls = "/tls", settings = "/settings" }
 connections = ["admin"]
 routes  = { main = { port = "8080", scheme = "https" } }
 # Accepting a TCP connection is enough: every page sits behind the sign-in and a
@@ -42,6 +43,7 @@ ADMIN_PASSWORD           = "${admin_pass}"
 KELSO_UI_NO_PASSWORD     = "${no_password}"
 KELSO_UI_ID              = "${instance_id}"
 TLS_DOMAIN               = "${klso.domain}"
+KELSO_UI_SETTINGS        = "/settings/settings.json"
 PORT                     = "8080"
 PYTHONUNBUFFERED         = "1"
 UV_PROJECT_ENVIRONMENT   = "/venv"

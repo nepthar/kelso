@@ -1,8 +1,11 @@
 {% extends "frame.html" %}
-{% from "macros.html" import pill, sub, icon_button %}
+{% from "macros.html" import pill, sub, icon_button, command %}
+
+{% block commands %}{{ command('New host volume', 'plus-box-outline', '/volumes/new', dialog=true) }}{% endblock %}
 
 {% block content %}
-<h2>Host volumes</h2>
+<fieldset class="group">
+<legend>Host volumes</legend>
 <p class="lede">Named volumes on this machine that apps may bind to</p>
 <div class="card">
 {% if not host_volumes %}
@@ -30,18 +33,10 @@
 </tbody></table></div>
 {% endif %}
 </div>
-<div class="card entry">
-  <form method="post" action="/volumes" class="row">
-    <input type="hidden" name="action" value="create">
-    <input name="tag" placeholder="name (e.g. media)" required>
-    <input name="path" placeholder="/mnt/media" required class="grow">
-    <label><input type="checkbox" name="readonly"> read-only</label>
-    <label><input type="checkbox" name="require_mount"> require mount</label>
-    {{ icon_button('add', 'plus-box-outline', submit=true) }}
-  </form>
-</div>
+</fieldset>
 
-<h2>App volumes</h2>
+<fieldset class="group">
+<legend>App volumes</legend>
 <p class="lede">Kelso-managed application storage. Sizes are refreshed hourly.</p>
 <div class="card">
 {% if not volumes %}
@@ -69,8 +64,10 @@
 </tbody></table></div>
 {% endif %}
 </div>
+</fieldset>
 
-<h2>Volume disks</h2>
+<fieldset class="group">
+<legend>Volume disks</legend>
 <p class="lede">Each kind of app volume, against the disk it is on</p>
 <div class="card">
 {% if not volume_roots %}
@@ -96,14 +93,17 @@
   {% else %}<span class="muted">path is missing</span>{% endif %}</td>
   <td class="muted">{{ r.get('bytes')|size }}</td>
   <td class="muted">{{ r.available|size }}</td>
-  <td class="muted path"{% if r.device %} title="{{ r.device }}"{% endif %}>{{ r.mountpoint or '—' }}</td>
+  <td class="muted path grow"{% if r.device %} title="{{ r.device }}"{% endif %}>{{ r.mountpoint or '—' }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>
+<p class="usage-key"><span class="swatch mine"></span>kelso volumes <span class="swatch other"></span>Everything else <span class="swatch free"></span>Free</p>
 {% endif %}
 </div>
+</fieldset>
 
-<h2>Kelso</h2>
+<fieldset class="group">
+<legend>Kelso</legend>
 <p class="lede">Kelso internal storage</p>
 <div class="card">
 {% if not kelso_dirs %}
@@ -118,4 +118,5 @@
 </tbody></table></div>
 {% endif %}
 </div>
+</fieldset>
 {% endblock %}

@@ -529,7 +529,7 @@ def _config(tmp_path: Path, route_providers: dict) -> Config:
     repos_root=tmp_path / "repos",
     master_key=master_key_from(TEST_SEED),
     port_base=41000,
-    kelso_address="192.168.1.10",
+    route_address="192.168.1.10",
     default_route_provider="web",
     route_providers={
       NONE_ROUTE_PROVIDER_TAG: RouteProviderEntry(
@@ -599,7 +599,7 @@ def _npm_provider():
     email="admin@example.com",
     password="test-password",
     kelso_domain="home.example",
-    kelso_address="192.168.1.10",
+    route_address="192.168.1.10",
   )
 
 
@@ -624,7 +624,7 @@ def test_documented_route_provider_config_constructs(tmp_path):
 
   assert isinstance(provider, NginxProxyManagerRouteProvider)
   assert provider.email == "admin@example.com"
-  assert provider.kelso_address == "192.168.1.10"
+  assert provider.route_address == "192.168.1.10"
   assert provider.kelso_domain == "home.example"
 
 
@@ -766,7 +766,7 @@ def _pangolin_provider(
     org_id="acme",
     site=site,
     kelso_domain="home.example",
-    kelso_address="192.168.1.10",
+    route_address="192.168.1.10",
     shared_policy=shared_policy,
   )
   provider._resolved_site_id = resolved
@@ -798,7 +798,7 @@ def test_pangolin_config_constructs(tmp_path):
   assert isinstance(provider, PangolinRouteProvider)
   assert provider.org_id == "acme"
   assert provider.site == SITE
-  assert provider.kelso_address == "192.168.1.10"
+  assert provider.route_address == "192.168.1.10"
   assert provider.kelso_domain == "home.example"
   assert provider.shared_policy is None
 
@@ -940,7 +940,7 @@ def test_pangolin_target_carries_the_resolved_site_id():
   assert target.kwargs["json"]["siteId"] == 7
 
 
-def test_config_requires_kelso_address_for_proxying_providers(tmp_path):
+def test_config_requires_route_address_for_proxying_providers(tmp_path):
   config = tmp_path / "config.toml"
   config.write_text(
     """
@@ -951,11 +951,11 @@ kind = "pangolin"
 domain = "home.example"
 """
   )
-  with pytest.raises(ValueError, match="kelso_address"):
+  with pytest.raises(ValueError, match="route_address"):
     load_config_file(config)
 
 
-def test_config_allows_missing_kelso_address_when_only_noop(tmp_path):
+def test_config_allows_missing_route_address_when_only_noop(tmp_path):
   config = tmp_path / "config.toml"
   config.write_text(
     """
@@ -966,7 +966,7 @@ kind = "noop"
 domain = "home.example"
 """
   )
-  assert load_config_file(config).kelso_address == ""
+  assert load_config_file(config).route_address == ""
 
 
 @pytest.mark.parametrize(
@@ -985,7 +985,7 @@ def test_pangolin_refuses_a_non_https_endpoint(endpoint):
       org_id="acme",
       site=SITE,
       kelso_domain="home.example",
-      kelso_address="192.168.1.10",
+      route_address="192.168.1.10",
     )
 
 
@@ -996,7 +996,7 @@ def test_pangolin_https_endpoint_keeps_case_and_drops_trailing_slash():
     org_id="acme",
     site=SITE,
     kelso_domain="home.example",
-    kelso_address="192.168.1.10",
+    route_address="192.168.1.10",
   )
   assert provider.endpoint == "HTTPS://Pangolin.Example:3003"
 
@@ -1446,7 +1446,7 @@ def _cf_provider(api=None):
     tunnel_id=TUNNEL,
     api_token="cf-token",
     kelso_domain="home.example",
-    kelso_address="192.168.1.10",
+    route_address="192.168.1.10",
   )
   provider._request = api or _FakeCloudflare()
   return provider
@@ -1473,7 +1473,7 @@ def test_documented_cloudflare_config_constructs(tmp_path):
 
   assert isinstance(provider, CloudflareTunnelRouteProvider)
   assert provider.tunnel_id == TUNNEL
-  assert provider.kelso_address == "192.168.1.10"
+  assert provider.route_address == "192.168.1.10"
   assert provider.kelso_domain == "home.example"
 
 
@@ -1660,13 +1660,13 @@ def test_cloudflare_validate_reports_a_locally_managed_tunnel():
   assert "locally managed" in error
 
 
-def test_cloudflare_validate_refuses_a_loopback_kelso_address():
+def test_cloudflare_validate_refuses_a_loopback_route_address():
   provider = CloudflareTunnelRouteProvider(
     account_id="acct-1",
     tunnel_id=TUNNEL,
     api_token="cf-token",
     kelso_domain="home.example",
-    kelso_address="localhost",
+    route_address="localhost",
   )
   provider._request = Mock(
     side_effect=lambda method, path, **kw: (

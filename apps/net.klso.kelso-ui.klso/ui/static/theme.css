@@ -1,0 +1,32 @@
+/* The colour tokens: button face grey, highlight navy, a cmd.exe well.
+   tests/test_themes.py holds them to a contrast floor. */
+:root {
+  color-scheme: light;
+
+  --void: #000000;    /* wells: logs, terminals, sparklines */
+  --bg: #d4d0c8;      /* button face: a window's ground */
+  --panel: #ffffff;   /* window background: lists and fields */
+  --line: #808080;    /* button shadow */
+  --hair: #e4e2dc;    /* rows that barely separate */
+
+  --fg: #000000;      /* window text */
+  --dim: #2b2b2b;     /* labels, secondary */
+  --muted: #555555;   /* metadata, disabled */
+
+  --rosewood: #a00000;
+  --coral: #0a246a;   /* the one accent: highlight navy */
+  --gold: #7a5c00;
+  --ok: #006400;
+
+  --ink: #ffffff;     /* highlight text */
+  --off: #808080;
+
+  --ansi-0: #000000;  --ansi-8: #808080;
+  --ansi-1: #e0564c;  --ansi-9: #ff6b6b;
+  --ansi-2: #3fc23f;  --ansi-10: #55ff55;
+  --ansi-3: #d8c23a;  --ansi-11: #ffff55;
+  --ansi-4: #6b9cf0;  --ansi-12: #8fb3ff;
+  --ansi-5: #c77fd0;  --ansi-13: #ff77ff;
+  --ansi-6: #3fbcc2;  --ansi-14: #55ffff;
+  --ansi-7: #c0c0c0;  --ansi-15: #ffffff;
+}

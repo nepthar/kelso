@@ -1,5 +1,5 @@
-// A config form's Save stays hidden and disabled until something in it has
-// changed, and goes again if every change is undone.
+// A config form's Save and Cancel stay hidden until something in it has
+// changed, and go again if every change is undone. Cancel undoes them all.
 (function () {
   document.querySelectorAll(".cfg-form").forEach(function (form) {
     // A pick-several field's value is a hidden input that js/tagpick.js sets.
@@ -7,7 +7,7 @@
       "input:not([type=hidden]), input[data-tag-pick], select"
     );
     var save = form.querySelector(".cfg-save");
-    if (!controls.length || !save) return;
+    if (!controls.length || !save || save.closest(".dialog-buttons")) return;
     // A checkbox's value never changes; whether it is checked does.
     function state(c) { return c.type === "checkbox" ? String(c.checked) : c.value; }
     var initial = Array.prototype.map.call(controls, state);
@@ -22,5 +22,16 @@
       c.addEventListener("input", dirty);
       c.addEventListener("change", dirty);
     });
+    var cancel = form.querySelector(".cfg-cancel");
+    if (cancel) {
+      cancel.addEventListener("click", function () {
+        controls.forEach(function (c, i) {
+          if (c.type === "checkbox") c.checked = initial[i] === "true";
+          else c.value = initial[i];
+          // tagpick.js redraws its tags from the hidden list on change.
+          c.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      });
+    }
   });
 })();

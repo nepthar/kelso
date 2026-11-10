@@ -1,11 +1,11 @@
 {% extends "frame.html" %}
 {% from "macros.html" import byline, job_button, when %}
 
-{% block actions %}
-<span class="head-actions">{{ job_button('+ Add Repo', 'repo-add', title='Add a repo', done='/catalog',
+{% block commands %}
+{{ job_button('Add repo', 'repo-add', icon='plus-box-outline', bar=true, title='Add a repo', done='/catalog',
     desc='Kelso mirrors the folder and every app in it becomes part of your catalog. Nothing is loaded or started.',
     fields=[{'name': 'url', 'placeholder': 'github://user/repo/branch/folder'},
-            {'name': 'name', 'placeholder': 'name (optional)'}]) }}</span>
+            {'name': 'name', 'placeholder': 'name (optional)'}]) }}
 {% endblock %}
 
 {#- Update and remove, beside a repo's heading. Only a subscribed repo has them. -#}
@@ -68,10 +68,10 @@
 <button type="button" class="card-close">Close</button>
 {% if not readable %}
 {% elif app.get('state') == 'loaded' %}
-  {{ job_button('Reload', 'load', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+  {{ job_button('Reload', 'load', title='Reload ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog', default=true,
       desc='Rebuilds ' ~ app_id ~ ' from ' ~ repo ~ ', restarting it if it is running. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% else %}
-  {{ job_button('Load', 'load', title='Load ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog',
+  {{ job_button('Load', 'load', title='Load ' ~ (app.get('display_name') or app_id), args={'app': target}, done='/catalog', default=true,
       desc='Loads ' ~ app_id ~ ' from ' ~ repo ~ ' so it can be started. Any data and configuration it already has are kept.' ~ warning_desc(app)) }}
 {% endif %}
 {%- if app.get('editable') %}<button type="button" class="edit-open">Edit</button>{% endif %}
@@ -86,11 +86,11 @@
   <textarea name="text" spellcheck="false" aria-label="{{ 'Bundle' if app.get('markdown') else 'Manifest' }}">
 {{ app.get('text') or '' }}</textarea>
   <div class="error" hidden><p></p></div>
-  <div class="row"><input name="message" class="grow" placeholder="what changed (optional)" aria-label="What changed"><button type="button" class="edit-cancel">Cancel</button><button type="submit" class="edit-save">Save</button></div>
+  <div class="row"><input name="message" class="grow" placeholder="what changed (optional)" aria-label="What changed"><button type="button" class="edit-cancel">Cancel</button><button type="submit" class="edit-save default">Save</button></div>
 </form>
 <div class="app-card-saved" hidden>
   <pre class="app-card-manifest"><code class="language-diff"></code></pre>
-  <div class="row"><span class="muted mono saved-note"></span><button type="button" class="edit-done">Done</button></div>
+  <div class="row"><span class="muted mono saved-note"></span><button type="button" class="edit-done default">Done</button></div>
 </div>
 {% endif %}
 </article>
@@ -111,11 +111,12 @@
 {% else %}
 {% for catalog in catalogs %}
 {% set repo = repos.get(catalog.name) or {} %}
-<h2>{{ catalog.name }}{{ repo_actions(repo) }}</h2>
-<p class="lede repo-meta"><span class="mono">{{ repo.get('location') }}</span>
+<fieldset class="group">
+<legend>{{ catalog.name }}</legend>
+<div class="row between repo-head"><p class="lede repo-meta"><span class="mono">{{ repo.get('location') }}</span>
   {%- if repo.get('sha') %} · <span class="mono">{{ repo.sha[:8] }}</span>{% endif %}
   {%- if repo.get('updated_at') %} · {{ when(repo.updated_at) }}{% endif %}
-  {%- if not repo.get('exists') %} · <span class="warnish">not mirrored yet</span>{% endif %}</p>
+  {%- if not repo.get('exists') %} · <span class="warnish">not mirrored yet</span>{% endif %}</p>{{ repo_actions(repo) }}</div>
 {% if not catalog.get('apps') %}
 <div class="card"><p class="empty">No apps here.</p></div>
 {% else %}
@@ -132,6 +133,7 @@
 {% endfor %}
 </tbody></table></div>
 {% endif %}
+</fieldset>
 {% endfor %}
 
 {#- Every card up front, hidden; catalog.js shows the one whose row was
