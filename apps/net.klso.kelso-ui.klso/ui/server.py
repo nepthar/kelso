@@ -11,15 +11,18 @@ from fastapi.staticfiles import StaticFiles
 from frontdoor import front_door
 from pages import (
   activity,
+  appicons,
   apps,
   backups,
   catalog,
   console,
   cron,
   dashboard,
+  desktop,
   jobs,
   routes,
   session,
+  settings,
   volumes,
 )
 from web import STATIC, api_error, render
@@ -32,6 +35,7 @@ app.add_exception_handler(ApiError, api_error)
 
 for feature in (
   session,
+  desktop,
   dashboard,
   apps,
   console,
@@ -41,7 +45,9 @@ for feature in (
   routes,
   cron,
   activity,
+  settings,
   jobs,
+  appicons,
 ):
   app.include_router(feature.router)
 

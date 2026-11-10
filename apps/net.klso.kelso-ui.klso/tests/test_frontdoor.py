@@ -104,7 +104,7 @@ def test_general_rate_limit(client, fake):
 def test_security_headers(anon, path):
   headers = anon.get(path).headers
   assert "script-src 'self'" in headers["content-security-policy"]
-  assert "frame-ancestors 'none'" in headers["content-security-policy"]
+  assert "frame-ancestors 'self'" in headers["content-security-policy"]
   assert headers["x-content-type-options"] == "nosniff"
 
 

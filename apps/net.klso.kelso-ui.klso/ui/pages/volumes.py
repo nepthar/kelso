@@ -29,13 +29,19 @@ def volumes(page: PageDep):
   )
 
 
+@router.get("/volumes/new")
+def new_host_volume(page: PageDep):
+  """The New host volume dialog."""
+  return page.render("pages/volume_new.html", "New host volume")
+
+
 @router.post("/volumes")
 async def post_volumes(request: Request):
   """Declare a host volume, drop one, or delete an orphaned app volume."""
   form = await request.form()
   action, tag = field(form, "action"), field(form, "tag")
-  try:
-    if action == "create":
+  if action == "create":
+    try:
       api(
         "/host-volumes",
         "POST",
@@ -46,7 +52,10 @@ async def post_volumes(request: Request):
           "require_mount": bool(form.get("require_mount")),
         },
       )
-      return see("/volumes", ok=f"Added host volume {tag}")
+    except ApiError as e:
+      return see("/volumes/new", err=str(e))
+    return see("/done", ok=f"Added host volume {tag}", then="/volumes")
+  try:
     if action == "delete":
       api(f"/host-volumes/{quote(tag)}", "DELETE")
       return see("/volumes", ok=f"Removed host volume {tag}")

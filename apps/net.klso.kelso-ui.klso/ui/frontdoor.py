@@ -26,22 +26,24 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 # Everything a page needs comes from this server -- it may be on a network with
-# no internet at all. The one exception is the fonts, which are optional (see
-# js/boot.js). No inline script anywhere: a script that got into a page some
-# other way cannot run.
-def _csp(style_src="'self' https://fonts.googleapis.com"):
+# no internet at all. No inline script anywhere: a script that got into a page
+# some other way cannot run. Pages frame only each other: every window on the
+# desktop is one. Any http(s) page may be framed, because a route window opens
+# an app wherever its route points; the iframe is sandboxed in js/desktop.js.
+def _csp(style_src="'self'"):
   return "; ".join(
     (
       "default-src 'self'",
       "script-src 'self'",
       f"style-src {style_src}",
-      "font-src https://fonts.gstatic.com",
+      "font-src 'self'",
       "img-src 'self' data:",
       "connect-src 'self'",
+      "frame-src 'self' http: https:",
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'self'",
-      "frame-ancestors 'none'",
+      "frame-ancestors 'self'",
     )
   )
 
@@ -50,13 +52,13 @@ CSP = _csp()
 
 # xterm.js lays out and colours the terminal through <style> elements it
 # creates, which the strict policy blocks. Only the console page sends this.
-TERMINAL_CSP = _csp("'self' 'unsafe-inline' https://fonts.googleapis.com")
+TERMINAL_CSP = _csp("'self' 'unsafe-inline'")
 
 SECURITY_HEADERS = {
   "Content-Security-Policy": CSP,
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
-  "X-Frame-Options": "DENY",
+  "X-Frame-Options": "SAMEORIGIN",
 }
 
 
@@ -96,7 +98,9 @@ class Bucket:
 
 # One budget for the whole process, not one per client: behind a reverse proxy
 # every request arrives from the proxy's address. `/static` is outside both --
-# a refused stylesheet renders a page that looks broken rather than limited.
+# a refused stylesheet renders a page that looks broken rather than limited. So
+# is `/icons/`: a menu asks for one per app and link at once, and a refused icon
+# would fall back to the drawn one while spending the budget the page needs.
 general = Bucket(10, 1.0)
 signin = Bucket(10, 3600.0)
 
@@ -159,7 +163,7 @@ async def _admit(request, call_next):
   # Everything answers to the general bucket; a sign-in attempt answers to both,
   # so a flood spends itself on the per-second budget before it can eat far into
   # the hour's worth of guesses.
-  if not general.check():
+  if not path.startswith("/icons/") and not general.check():
     return _limited(request, general, GENERAL_HINT)
   if path == "/login" and request.method == "POST" and not signin.check():
     return _limited(request, signin, auth_hint(signin.retry_after()), RELOAD)

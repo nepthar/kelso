@@ -1,4 +1,4 @@
-"""The Settings window: what kelso-ui-2k itself looks like."""
+"""The Settings window: what kelso-ui itself looks like."""
 
 import settings
 from fastapi import APIRouter, Request

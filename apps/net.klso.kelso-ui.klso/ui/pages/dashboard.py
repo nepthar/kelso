@@ -1,4 +1,4 @@
-"""The dashboard: what the host has and how busy it is, and every loaded app."""
+"""The Host window, after Task Manager: every app, and how busy the host is."""
 
 from api import api, where
 from fastapi import APIRouter
@@ -6,11 +6,12 @@ from web import PageDep, fmt_size
 
 router = APIRouter()
 
-# The usage line's box, in SVG units; CSS sizes it.
-SPARK_W, SPARK_H = 200, 40
+# A history graph's box, in SVG units: time across, 0-100% up. CSS sizes it
+# and draws the grid behind it.
+GRAPH_W, GRAPH_H = 600, 100
 
 
-@router.get("/")
+@router.get("/host")
 def dashboard(page: PageDep):
   host = api("/host")
   body = api("/metrics?prefix=host_&hours=1")
@@ -43,14 +44,13 @@ def dashboard(page: PageDep):
   ]
   return page.render(
     "pages/dashboard.html",
-    "Dashboard",
+    "Host",
     where=where(),
     apps=api("/apps").get("apps", []),
     resources=resources,
-    spark_w=SPARK_W,
-    spark_box=f"0 0 {SPARK_W} {SPARK_H}",
-    # 25%, 50% and 75%; the border stands for 0% and 100%.
-    spark_grid=[SPARK_H * q / 4 for q in (1, 2, 3)],
+    cpu=resources[0]["current"],
+    ram=resources[1]["current"],
+    graph_box=f"0 0 {GRAPH_W} {GRAPH_H}",
   )
 
 
@@ -58,6 +58,6 @@ def _line(points, since, until):
   """SVG polyline points for ratios over [since, until]: time across, 0-100% up."""
   span = max(until - since, 1)
   return " ".join(
-    f"{(p['t'] - since) / span * SPARK_W:.1f},{(1 - min(max(p['v'], 0), 1)) * SPARK_H:.1f}"
+    f"{(p['t'] - since) / span * GRAPH_W:.1f},{(1 - min(max(p['v'], 0), 1)) * GRAPH_H:.1f}"
     for p in points
   )

@@ -10,6 +10,8 @@ from fakekelsod import EVIL
 
 PAGES = [
   "/",
+  "/host",
+  "/logs",
   "/apps/kelso-ui",
   "/apps/mealie",
   "/apps/kelso-ui/logs",
@@ -23,6 +25,10 @@ PAGES = [
   "/routes",
   "/routes/web",
   "/routes/fresh?kind=pangolin",
+  "/routes/new",
+  "/volumes/new",
+  "/done?then=/routes&ok=Saved",
+  "/settings",
   "/cron",
   "/activity",
   "/login",
@@ -56,11 +62,7 @@ def test_every_asset_is_served(client, fake, path):
 
 @pytest.mark.parametrize("path", PAGES)
 def test_nothing_loads_from_off_the_box(client, fake, path):
-  """kelso-ui may run with no internet: everything it needs is under /static.
-
-  The fonts are the exception, and boot.js adds them from script so that a
-  page never waits on them; that is why no <link> for them is in the markup.
-  """
+  """kelso-ui may run with no internet: everything it needs is under /static."""
   text = client.get(path).text
   for url in re.findall(r'<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"', text):
     assert url.startswith(("/static/", "data:")), url
@@ -88,8 +90,7 @@ def test_routes_page_lists_published_routes(client, fake):
 @pytest.mark.parametrize(
   "path, location",
   [
-    ("/apps", "/"),
-    ("/logs", "/activity"),
+    ("/apps", "/host"),
     ("/routes/new?tag=fresh&kind=pangolin", "/routes/fresh?kind=pangolin"),
   ],
 )
@@ -103,11 +104,11 @@ def test_unknown_path_is_a_framed_404(client):
   response = client.get("/nope/x")
   assert response.status_code == 404
   assert "No such page." in response.text
-  assert "<nav>" in response.text
+  assert 'class="head"' in response.text
 
 
 def test_missing_version_is_a_dash_not_an_entity(client, fake):
-  row = client.get("/").text.split("/apps/jellyfin")[1].split("</tr>")[0]
+  row = client.get("/host").text.split("/apps/jellyfin")[1].split("</tr>")[0]
   assert "—" in row
   assert "&amp;mdash;" not in row
 
@@ -141,9 +142,61 @@ def test_notice_banner_escapes(client, fake):
   assert '<div class="notice">Added x</div>' in client.get("/volumes?ok=Added+x").text
 
 
-def test_nav_marks_the_section(client, fake):
-  text = client.get("/apps/kelso-ui").text
-  assert re.search(r'<a href="/" title="Dashboard" class="active">', text)
+def test_the_start_menu_has_a_folder_per_loaded_app(client, fake):
+  text = client.get("/").text
+  assert "is-app" not in text, "apps are no longer desktop icons"
+  assert 'data-src="/apps/kelso-ui"' in text
+  assert 'data-src="/apps/kelso-ui/logs"' in text
+  assert 'data-src="/apps/kelso-ui/console"' in text
+  assert 'data-run="cmd:test"' in text
+  assert 'data-run="stop"' in text, "kelso-ui is running"
+  assert 'data-run="start"' in text, "jellyfin is stopped"
+  assert 'data-src="/apps/immich"' in text
+  assert 'data-src="/apps/mealie"' not in text, "unloaded"
+  assert 'data-src="/apps/jellyfin/console"' not in text, "nothing running"
+  assert 'data-run="up"' in text and 'data-run="down"' in text
+  assert 'data-title="main"' in text and 'kelso.example.test"' in text, "a link"
+  for item in web.NAV:
+    assert f'data-src="{item.href}"' in text
+
+
+def test_an_app_without_commands_still_lists_the_folder_greyed(client, fake):
+  text = client.get("/").text
+  assert 'class="menu-item is-empty"' in text
+  assert "(Empty)" in text
+
+
+def test_host_offers_start_and_stop_for_every_app(client, fake):
+  verbs = {b["verb"] for b in _job_buttons(client.get("/host").text)}
+  assert {"up", "down"} <= verbs
+
+
+def test_a_route_icon_is_its_primary_url(client, fake):
+  text = client.get("/").text
+  assert 'data-url="https://kelso.example.test"' in text
+  assert "kelso.lan.test" not in text
+  assert 'data-title="Kelso UI admin"' not in text, "not reachable"
+
+
+def test_a_route_that_is_not_http_gets_no_icon(client, fake, monkeypatch):
+  bad = {**fakekelsod.APP_DETAIL["routes"][0], "published_url": "javascript:x"}
+  monkeypatch.setitem(
+    fakekelsod.GET, "/apps/kelso-ui", {**fakekelsod.APP_DETAIL, "routes": [bad]}
+  )
+  assert 'data-url="http://10.0.0.5:10001"' not in client.get("/").text
+
+
+def test_an_app_kelsod_cannot_describe_keeps_its_folder(client, fake):
+  """immich has a list entry and no detail fixture: its routes are just absent."""
+  text = client.get("/desktop/icons").text
+  assert 'data-src="/apps/immich"' in text
+  assert "<html" not in text
+
+
+def test_pages_may_be_framed_only_by_each_other(client, fake):
+  headers = client.get("/volumes").headers
+  assert "frame-ancestors 'self'" in headers["content-security-policy"]
+  assert headers["x-frame-options"] == "SAMEORIGIN"
 
 
 def _job_buttons(text):
@@ -177,12 +230,10 @@ def test_catalog_link_opens_its_card(client, fake):
   assert 'id="catalog-shade" class="shade" hidden>' in closed
 
 
-def test_nav_is_titled_with_the_daemons_hostname(client, fake):
+def test_the_desktop_is_titled_with_the_daemons_hostname(client, fake):
   text = client.get("/").text
-  brand = text.split('<div class="brand">')[1].split("</div>")[0]
-  assert '<span class="name" title="tycho &lt;i' in brand
-  assert '<a class="mark" href="https://www.nps.gov/moja/kelso-dunes.htm"' in brand
-  assert '<svg class="mdi"' in brand
+  assert '<span class="tray-host">tycho &lt;i' in text
+  assert '<div class="start-band"><span>kelso <b>tycho &lt;i' in text
 
 
 @pytest.mark.parametrize(
@@ -201,27 +252,27 @@ def test_brand_drops_the_last_dot_and_falls_back_to_the_instance_id(
   assert web.brand(hostname) == expected
 
 
-def test_nav_names_the_version_and_instance_id(client, fake, monkeypatch):
+def test_the_tray_names_the_version_and_instance_id(client, fake, monkeypatch):
   monkeypatch.setitem(web.templates.globals, "INSTANCE_ID", "1a2b")
-  brand = client.get("/").text.split('<div class="brand">')[1].split("</div>")[0]
-  assert '<span class="ver">kelso 0.1.0</span><span class="ver">1a2b</span>' in brand
+  tray = client.get("/").text.split('<div class="tray"')[1].split(">")[0]
+  assert "kelso 0.1.0 over" in tray and "1a2b" in tray
 
 
 def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
-  assert "<h1>tycho &lt;i" in client.get("/login").text
+  assert '<div class="title-bar-text">tycho &lt;i' in client.get("/login").text
 
 
 def test_sign_in_uses_the_hostname_kelsod_already_gave(client, fake):
   client.get("/")
   fake.fail = "down"
-  assert "<h1>tycho &lt;i" in client.get("/login").text
+  assert '<div class="title-bar-text">tycho &lt;i' in client.get("/login").text
 
 
 def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
   fake.fail = "down"
   response = client.get("/login")
   assert response.status_code == 200
-  assert "<h1>Kelso</h1>" in response.text
+  assert '<div class="title-bar-text">Kelso' in response.text
 
 
 def test_every_page_has_the_dune_favicon(client, fake):
@@ -246,16 +297,20 @@ def test_byline_links_only_an_http_url(client, fake, monkeypatch):
 def test_config_form(client, fake):
   text = client.get("/apps/kelso-ui").text
   form = text.split('class="cfg-form"')[1].split("</form>")[0]
-  basic, rest = form.split("<summary>Advanced config</summary>")
-  advanced, options = rest.split("<summary>App options</summary>")
-  # Missing fields stay out of the fold even when advanced.
+  assert '<a href="#cfg-params">Params</a>' in form
+  basic = form.split('id="cfg-params"')[1].split('role="tabpanel"')[0]
+  options = form.split('id="cfg-options"')[1].split('role="tabpanel"')[0]
+  advanced = form.split('id="cfg-advanced"')[1]
+  # Missing fields are on the first tab even when advanced.
   assert 'name="set.tuning"' in basic
   assert 'name="set.debug"' in advanced
   assert 'placeholder="0 (default)"' in advanced
   assert 'name="set.start_order"' in options
   assert 'name="set.subdomain"' in options
-  assert 'placeholder="set — type to replace"' in basic
-  assert 'placeholder="not set"' in basic
+  assert '<input type="password" name="set.token" placeholder="••••••••"' in form
+  assert '<input type="password" name="set.admin_pass" placeholder=""' in basic
+  assert '<span class="sub">secret</span>' not in form
+  assert '<button type="button" class="cfg-cancel">Cancel</button>' in form
   assert '<option value="kelso_conn" selected>' in basic
   # A pick-several field: no text box, only a tag per choice, the picks
   # pressed, the first marked primary, and the comma list in a hidden input.
@@ -282,14 +337,18 @@ def test_config_form(client, fake):
 
 def test_app_volumes_biggest_first(client, fake):
   text = client.get("/volumes").text
-  table = text.split("<h2>App volumes</h2>")[1].split("<h2>")[0]
+  table = text.split("<legend>App volumes</legend>")[1].split("<legend>")[0]
   sizes = re.findall(r'<td class="muted">([^<]*)</td>\s*<td class="act">', table)
   # 601653 B, 864 B, 0 B, then the one not measured yet.
   assert sizes == ["587.6 KB", "864.0 B", "0.0 B", "—"]
 
 
 def test_only_an_orphaned_volume_is_flagged_and_deletable(client, fake):
-  table = client.get("/volumes").text.split("<h2>App volumes</h2>")[1].split("<h2>")[0]
+  table = (
+    client.get("/volumes")
+    .text.split("<legend>App volumes</legend>")[1]
+    .split("<legend>")[0]
+  )
   rows = table.split("<tr>")[2:]
   orphaned = [row for row in rows if "orphaned" in row]
   assert len(orphaned) == 1
@@ -301,7 +360,7 @@ def test_only_an_orphaned_volume_is_flagged_and_deletable(client, fake):
 
 def test_volume_disks_split_the_disk_into_volume_other_and_free(client, fake):
   text = client.get("/volumes").text
-  section = text.split("<h2>Volume disks</h2>")[1].split("<h2>")[0]
+  section = text.split("<legend>Volume disks</legend>")[1].split("<legend>")[0]
   data, bulk = section.split("<tr>")[2:4]
   assert '<rect class="mine" x="0" width="25.0"' in data
   assert '<rect class="other" x="25.0" width="50.0"' in data
@@ -361,7 +420,9 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
   text = client.get("/apps/kelso-ui").text
   # The notices sit between the first row and the sections; not part of the order.
   headings = [
-    h for h in re.findall(r"<h2>([^<]+)</h2>", text) if h != "Not ready to start"
+    h
+    for h in re.findall(r"<legend>([^<]+)</legend>", text)
+    if h != "Not ready to start"
   ]
   assert headings[:6] == [
     "Info",
@@ -392,7 +453,7 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
 
 def test_app_environment_shows_the_manifest_and_what_it_resolves_to(client, fake):
   text = client.get("/apps/kelso-ui").text
-  env = text.split("<summary>Environment</summary>")[1].split("</details>")[0]
+  env = text.split("<h3>Environment</h3>")[1].split("</table>")[0]
   assert "<th>Variable</th><th>In the manifest</th><th>Value</th>" in env
   row = env.split('<td class="key">PASS</td>')[1].split("</tr>")[0]
   assert "${admin_pass}" in row
@@ -400,35 +461,44 @@ def test_app_environment_shows_the_manifest_and_what_it_resolves_to(client, fake
 
 
 def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
-  text = client.get("/").text
-  rows = text.split('<table class="tall">')[1].split("</table>")[0].split("<tr>")[2:]
-  cpu, memory, disk = rows
-  assert "Host CPU" in cpu and "6 CPUs" in cpu
-  # 1.6% at 214s into the hour, then 50% at 514s, on a 200x40 box.
-  assert '<polyline points="11.9,39.4 28.6,20.0"/>' in cpu and "50%" in cpu
-  assert re.findall(r'<line x1="0" x2="200" y1="([\d.]+)"', cpu) == [
-    "10.0",
-    "20.0",
-    "30.0",
-  ]
-  assert "Host memory" in memory and "8.0 GB" in memory and "no samples yet" in memory
+  text = client.get("/host").text
+  system = text.split('id="host-system"')[1]
+  cpu, memory, disk = system.split('<fieldset class="group resource">')[1:]
+  assert "<legend>Host CPU · 6 CPUs</legend>" in cpu
+  # 1.6% at 214s into the hour, then 50% at 514s, on a 600x100 box.
+  assert '<polyline points="35.7,98.4 85.7,50.0"/>' in cpu
+  assert "<span>50 %</span>" in cpu
+  assert cpu.count('class="lit"') == 10, "five rows of two lit at 50%"
+  assert "<legend>Host memory · 8.0 GB</legend>" in memory
+  assert "no samples yet" in memory and "lit" not in memory
   # Named by where it is mounted; the device, often unreadable, on hover.
-  assert ">Disk /<" in disk and 'title="/dev/sda2"' in disk
-  assert "2.0 TB" in disk and "42%" in disk
-  assert "bulk, backups, &lt;i" in disk
+  assert "<legend>Disk / · 2.0 TB</legend>" in disk and 'title="/dev/sda2"' in disk
+  assert "<span>42 %</span>" in disk
+  assert "Holds bulk, backups, &lt;i" in disk
   assert "<option disabled>1 day</option>" in text
+
+
+def test_host_opens_on_apps_with_the_status_bar_below(client, fake):
+  text = client.get("/host").text
+  assert (
+    '<li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li>' in text
+  )
+  assert 'id="host-system" hidden' in text
+  bar = text.split('<div class="status-bar">')[1].split("</div>")[0]
+  fields = [f.strip() for f in bar.split("</p>") if f.strip()]
+  assert [f.split(">")[-1] for f in fields] == ["Apps: 4", "CPU: 50%", "RAM: —"]
 
 
 def test_volume_roots_name_their_disk_by_mount_point(client, fake):
   text = client.get("/volumes").text
-  assert '<td class="muted path" title="/dev/sda1 &lt;i' in text
+  assert '<td class="muted path grow" title="/dev/sda1 &lt;i' in text
   assert ">/</td>" in text
 
 
 def test_dashboard_status_pills_by_health(client, fake):
   rows = {
     row.split('href="/apps/')[1].split('"')[0]: row
-    for row in client.get("/").text.split("<tr>")
+    for row in client.get("/host").text.split("<tr>")
     if 'href="/apps/' in row
   }
   assert 'class="dot running"></span>healthy' in rows["kelso-ui"]
@@ -439,7 +509,7 @@ def test_dashboard_status_pills_by_health(client, fake):
 def test_dashboard_offers_an_update_when_the_source_moved_on(client, fake):
   rows = {
     row.split('href="/apps/')[1].split('"')[0]: row
-    for row in client.get("/").text.split("<tr>")
+    for row in client.get("/host").text.split("<tr>")
     if 'href="/apps/' in row
   }
   assert 'data-verb="update"' in rows["immich"]
@@ -479,3 +549,44 @@ def test_a_bulk_volume_backup_is_a_checkbox(client, fake):
   assert row.index('type="hidden" name="set.backup.movies" value="off"') < row.index(
     'type="checkbox" name="set.backup.movies" value="on" checked'
   )
+
+
+@pytest.mark.parametrize(
+  "then",
+  [
+    "//evil.test",
+    "/\\evil.test",
+    "/\t/evil.test",
+    "/\n/evil.test",
+    "https://evil.test",
+  ],
+)
+def test_done_never_continues_off_this_server(client, fake, then):
+  text = client.get("/done", params={"then": then, "ok": "Saved"}).text
+  assert '<a class="done-next" href="/host?ok=Saved">' in text
+
+
+def test_done_continues_to_a_local_path_with_its_notice(client, fake):
+  text = client.get("/done", params={"then": "/routes", "ok": "Saved web"}).text
+  assert '<a class="done-next" href="/routes?ok=Saved+web">' in text
+
+
+@pytest.mark.parametrize("value", ["//evil.test", "/\\evil.test", "/\t/evil.test", "x"])
+def test_sign_in_next_stays_on_this_server(value):
+  from pages import session
+
+  assert session.safe_next(value) == "/"
+
+
+def test_app_volumes_say_their_access_in_a_column(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  assert "read-only" not in text
+  volumes = text.split("<legend>Volumes</legend>")[1].split("</table>")[0]
+  assert "<th>Access</th>" in volumes
+  rows = volumes.split("<tr>")[2:]
+  assert '<td class="muted">read</td>' in rows[0]
+  assert '<td class="muted">read/write</td>' in rows[1]
+
+
+def test_a_page_links_back_to_the_desktop(client):
+  assert '<a class="to-desktop" href="/">' in client.get("/apps/kelso-ui").text

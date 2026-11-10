@@ -39,19 +39,6 @@
   term.open(box);
   fit.fit();
 
-  document.addEventListener("kelso:themechange", function () {
-    term.options.theme = theme();
-  });
-  // Plex arrives after the terminal has measured its cells in a fallback face.
-  // Changing the family is what makes xterm measure again.
-  if (document.fonts) {
-    document.fonts.addEventListener("loadingdone", function () {
-      var family = term.options.fontFamily;
-      term.options.fontFamily = "monospace";
-      term.options.fontFamily = family;
-      fit.fit();
-    });
-  }
   new ResizeObserver(function () { fit.fit(); }).observe(box);
 
   var ws = null;

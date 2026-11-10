@@ -14,10 +14,14 @@
   var go = document.getElementById("job-go");
   var close = document.getElementById("job-close");
   var dismiss = document.getElementById("job-dismiss");
+  var progress = document.getElementById("job-progress");
   var timer = null, jobId = null, verb = null, fixed = {}, ran = false, done = null;
   var choices = [];
 
-  function stopPoll() { if (timer) { clearInterval(timer); timer = null; } }
+  function stopPoll() {
+    if (timer) { clearInterval(timer); timer = null; }
+    progress.hidden = true;
+  }
 
   function hide() {
     stopPoll();
@@ -81,6 +85,7 @@
     bar.hidden = true;
     dismiss.hidden = false;
     showText("queued\u2026");
+    progress.hidden = false;
     fetch("/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -88,11 +93,11 @@
     }).then(function (r) {
       return r.json().then(function (body) { return { ok: r.ok, body: body }; });
     }).then(function (res) {
-      if (!res.ok) { showText(res.body.error || "failed"); return; }
+      if (!res.ok) { progress.hidden = true; showText(res.body.error || "failed"); return; }
       jobId = res.body.id;
       timer = setInterval(poll, 1000);
       poll();
-    }).catch(function (err) { showText(String(err)); });
+    }).catch(function (err) { progress.hidden = true; showText(String(err)); });
   }
 
   document.querySelectorAll(".job-open").forEach(function (btn) {
@@ -165,6 +170,22 @@
       }
     });
   });
+
+  // The start menu opens a page at #run=<verb>, or #run=cmd:<name>, to press
+  // one of its job buttons. The hash goes first, so a reload runs nothing.
+  function runFromHash() {
+    var want = /^#run=(.+)$/.exec(location.hash);
+    if (!want) return;
+    history.replaceState(null, "", location.pathname + location.search);
+    var parts = decodeURIComponent(want[1]).split(":");
+    var btn = Array.prototype.filter.call(document.querySelectorAll(".job-open[data-verb]"), function (b) {
+      if (b.getAttribute("data-verb") !== parts[0]) return false;
+      return parts.length < 2 || JSON.parse(b.getAttribute("data-args")).command === parts[1];
+    })[0];
+    if (btn && !btn.disabled) btn.click();
+  }
+  runFromHash();
+  window.addEventListener("hashchange", runFromHash);
 
   go.addEventListener("click", submit);
   close.addEventListener("click", hide);

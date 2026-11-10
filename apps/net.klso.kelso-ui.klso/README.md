@@ -1,6 +1,29 @@
 # Kelso UI
 
-The kelso web interface. Reads kelso state over the admin socket that
+The kelso web interface, as a Windows 2000 style desktop. `/` is the desktop,
+a taskbar and a start menu. Every loaded app and every reachable route is an
+icon, and so is each section. Double click opens a window, which is an iframe
+of an ordinary server-rendered page, so nothing about a page changes to live in
+one. Right-click an app for its logs and shell.
+
+| Kelso | On the desktop |
+|---|---|
+| A loaded app | An icon; its badge is green, amber or grey for healthy, troubled or stopped |
+| An unloaded app | No icon. It is in Repos, with its data kept |
+| A route | A shortcut opening the app in a sandboxed window, or a new tab where it cannot |
+| Host, Repos, Volumes, Backups, Routes, Cron, Activity | Icons and start menu entries |
+| Logs | An icon listing apps; also an app's toolbar and right-click |
+| The host shell | The Shell icon; a container's shell is in its app's toolbar and right-click |
+| A job | A dialog inside the window that started it |
+| Sign out | The start menu's foot |
+| kelsod reachable | The tray's dot |
+| Which machine this is | The desktop's colours: drawn from the install's id, or picked in Settings |
+
+Some apps refuse to be framed (`X-Frame-Options`), which a page cannot detect,
+so a route window always offers Open in new tab. A browser will not show http
+inside https, so an http route under this https page goes straight to a tab.
+
+The interface reads kelso state over the admin socket that
 `kelsod` publishes and renders it server-side — no polling, no client
 framework, no build step. The `ui/` directory is the application. `start.sh`
 runs `uv sync` into a `temp` volume at `/venv`, writes a self-signed
@@ -15,10 +38,13 @@ matches.
 | `frontdoor.py` | Rate limits, the origin check, the session gate, security headers |
 | `web.py` | Rendering: the Jinja environment, `Page`, redirects, form fields |
 | `pages/` | One router per feature: its pages, form posts and JSON |
-| `templates/` | All markup. `frame.html` is the chrome, `macros.html` the components |
-| `static/kelso.css` | Every style; no colours of its own |
-| `static/themes/` | One file per theme: its colour tokens and nothing else |
-| `themes.py` | The theme registry, and the tokens every theme must set |
+| `templates/` | All markup. `desktop.html` is the desktop, `frame.html` what a window shows, `macros.html` the components |
+| `static/js/desktop.js` | Windows, icons, the taskbar and start menu |
+| `static/kelso.css` | How pages are laid out; no colours of its own |
+| `static/classic.css` | The desktop, the type, and kelso's components as classic controls |
+| `static/icons/` | Original artwork, drawn for this app |
+| `static/theme.css` | The colour tokens, and nothing else |
+| `settings.py` | The desktop's own settings (its background), kept in the `settings` volume |
 | `static/js/` | One script per behaviour, loaded by the pages that need it |
 | `static/vendor/` | Third-party browser code, pinned and served from here |
 | `icons.py` | The Material Design icon paths the templates draw |
@@ -109,12 +135,12 @@ whatever is in front of it — the password is never on the wire in the clear,
 even between a reverse proxy and this container.
 
 Everything a page needs comes from this server, since kelso may run on a
-network with no internet at all. The one exception is IBM Plex from Google
-Fonts, which is optional: it is requested from script so a page never waits on
-it, and without it the UI draws in the system faces. The
-Content-Security-Policy says as much: scripts only from `/static`, never
-inline, and the page cannot be framed. A script that got into a page some other
-way would not run.
+network with no internet at all. The Content-Security-Policy says as much:
+scripts only from `/static`, never inline, and only this server's own pages may
+frame it. A script that got into a page some other way would not run. It does
+allow this page to frame any http(s) URL, since a route window opens an app
+wherever its route points. That iframe is sandboxed, so the app inside cannot
+navigate the desktop around it.
 
 The session cookie is `SameSite=Lax`, which stops other *sites* from sending
 it, but kelso publishes every app on a subdomain beside this one and sibling

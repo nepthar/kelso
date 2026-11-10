@@ -1,4 +1,4 @@
-"""kelso-ui-2k's own settings: one JSON file in its `settings` volume.
+"""kelso-ui's own settings: one JSON file in its `settings` volume.
 
 Only the desktop background so far. Without a saved choice the background is
 drawn from the install's id, so each machine running kelso looks its own.

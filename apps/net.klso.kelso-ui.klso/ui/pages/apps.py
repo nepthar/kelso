@@ -12,8 +12,15 @@ router = APIRouter()
 
 @router.get("/apps")
 def apps_list():
-  """The list moved onto the dashboard; old links land there rather than 404."""
-  return see("/")
+  """The list lives in the Host window; old links land there rather than 404."""
+  return see("/host")
+
+
+@router.get("/logs")
+def logs_index(page: PageDep):
+  """The Logs icon: every loaded app, each a way into its logs."""
+  apps = [a for a in api("/apps").get("apps", []) if a.get("state") == "loaded"]
+  return page.render("pages/logs.html", "Logs", apps=apps)
 
 
 @router.get("/apps/{app_id}")
