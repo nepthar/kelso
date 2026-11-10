@@ -33,6 +33,17 @@
     }
   }
 
+  // Centred, a dialog dragged by its corner would grow from both sides and
+  // leave the pointer behind: pin it where it is before the drag starts.
+  var modal = shade.querySelector(".job-modal");
+  modal.addEventListener("pointerdown", function () {
+    if (outEl.hidden || modal.style.position) return;
+    var at = modal.getBoundingClientRect();
+    modal.style.position = "fixed";
+    modal.style.left = at.left + "px";
+    modal.style.top = at.top + "px";
+  });
+
   function showText(text) {
     outEl.hidden = false;
     outEl.textContent = text || "";
@@ -42,11 +53,13 @@
   function pullLog(log) {
     if (!log) return Promise.resolve();
     return fetch("/activity/" + encodeURIComponent(log)).then(function (r) {
-      if (!r.ok) return;
       return r.json().then(function (body) {
-        if (body && body.text != null) showText(body.text);
+        if (r.ok && body && body.text != null) showText(body.text);
+        else if (!r.ok && !outEl.textContent) showText((body && body.error) || "Could not read this run's output.");
       });
-    }).catch(function () {});
+    }).catch(function () {
+      if (!outEl.textContent) showText("Could not read this run's output.");
+    });
   }
 
   function poll() {
@@ -147,6 +160,7 @@
       outEl.textContent = "";
       outEl.classList.remove("ok", "bad");
       outEl.hidden = true;
+      modal.removeAttribute("style");
       bar.hidden = false;
       go.hidden = false;
       go.disabled = false;

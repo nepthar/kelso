@@ -147,6 +147,13 @@ code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
 }
 .job-out.ok { border-left-color: var(--ok); }
 .job-out.bad { border-left-color: var(--bad); }
+/* Showing output, the dialog resizes from its corner. A dragged one carries an
+   inline height, and its output takes what the dialog was given. */
+.job-modal:has(.job-out:not([hidden])) {
+  resize: both; overflow: hidden; min-width: 18rem; min-height: 12rem; max-width: 100%;
+}
+.job-modal[style*="height"] .job-body { flex: 1; }
+.job-modal[style*="height"] .job-out { flex: 1; max-height: none; }
 /* A page of nothing but logs, so it takes the height the modal's copy cannot. */
 .logs-out { max-height: none; height: calc(100vh - 92px); white-space: pre; }
 /* The terminal fills the same well. Padding sits on xterm's own element, which
