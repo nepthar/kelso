@@ -499,6 +499,26 @@ def test_missing_run_directory_with_container_refuses_lifecycle(kelso_env):
   assert kelso_env.docker_state.exists()
 
 
+def test_an_app_loaded_from_a_path_reloads_from_it_by_id(kelso_env):
+  elsewhere = kelso_env.root / "elsewhere" / "ports-demo.klso"
+  shutil.copytree(kelso_env.local_repo / "ports-demo.klso", elsewhere)
+  shutil.rmtree(kelso_env.local_repo / "ports-demo.klso")
+  assert kelso_env.run("load", str(elsewhere)).returncode == 0
+
+  manifest = elsewhere / "manifest.toml"
+  manifest.write_text(manifest.read_text() + "\n# edited at the source\n")
+  loaded = kelso_env.run("load", "ports-demo")
+  assert loaded.returncode == 0, loaded.stderr
+  copy = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
+  assert "# edited at the source" in copy.read_text()
+
+  # With the path gone there is no source: the error names where it was.
+  shutil.rmtree(elsewhere)
+  gone = kelso_env.run("load", "ports-demo")
+  assert gone.returncode != 0
+  assert str(elsewhere.resolve()) in gone.stderr
+
+
 def test_doctor_accepts_an_app_loaded_from_outside_every_repo(kelso_env, tmp_path):
   bundle = tmp_path / "elsewhere" / "ports-demo.klso"
   shutil.copytree(kelso_env.local_repo / "ports-demo.klso", bundle)
