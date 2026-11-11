@@ -5,7 +5,7 @@ import os
 import pytest
 
 from kelso.lib import recovery
-from kelso.lib.restic import Restic, ResticError
+from kelso.lib.restic import Restic, ResticError, _first_error
 from tests.conftest import TEST_SEED
 
 
@@ -75,3 +75,16 @@ def test_restic_times_come_back_in_utc(raw, utc):
   from kelso.lib.restic import _timestamp
 
   assert _timestamp(raw) == utc[:19] + "Z"
+
+
+def test_a_restic_failure_is_one_line_however_much_restic_said():
+  one = (
+    '{"message_type":"error","error":{"message":"failed to save /a: '
+    'input/output error"},"during":"archival","item":"/a"}'
+  )
+  stderr = "\n".join([one] * 400 + ['{"message_type":"exit_error","code":3}'])
+  assert _first_error(stderr) == (
+    "failed to save /a: input/output error (and 399 more errors)"
+  )
+  assert _first_error("Fatal: wrong password\n") == "Fatal: wrong password"
+  assert _first_error("") == ""

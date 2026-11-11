@@ -412,7 +412,7 @@ def run_backups(
         "reason": reason,
         "everything": everything,
         "backed_up": result.backed_up,
-        "failed": result.failed,
+        "failed": [failure[:120] for failure in result.failed],
       }
     )
 
