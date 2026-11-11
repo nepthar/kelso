@@ -52,6 +52,26 @@ WRONG_PASSWORD = 12
 LOCKED = 11
 
 
+def _first_error(stderr: str) -> str:
+  """Restic's first error as one line, and how many more followed it."""
+  errors = []
+  for line in stderr.splitlines():
+    try:
+      message = json.loads(line)
+    except ValueError:
+      message = line.strip()
+    if isinstance(message, dict):
+      if message.get("message_type") == "exit_error":
+        continue
+      message = (message.get("error") or {}).get("message") or message.get("message")
+    if message:
+      errors.append(str(message))
+  if not errors:
+    return ""
+  more = f" (and {len(errors) - 1} more errors)" if len(errors) > 1 else ""
+  return errors[0][:300] + more
+
+
 class ResticError(RuntimeError):
   def __init__(self, message: str, returncode: int | None = None) -> None:
     super().__init__(message)
@@ -184,10 +204,10 @@ class Restic:
       self.run(["unlock"], what="clear stale backup repository locks")
       result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
-      detail = result.stderr.strip()
+      detail = _first_error(result.stderr)
       raise ResticError(
         f"Unable to {what}: restic exited {result.returncode}"
-        + (f"\n{detail}" if detail else ""),
+        + (f": {detail}" if detail else ""),
         result.returncode,
       )
     return result.stdout
