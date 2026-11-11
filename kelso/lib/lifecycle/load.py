@@ -345,9 +345,12 @@ def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
     )
 
   if not entries:
-    # No catalog entry but a loaded copy: `start` runs that copy as-is.
     if ctx.is_loaded(app):
-      return LoadTarget(app, None, None)
+      # Loaded from a path: that path is its source, as a repo is for the
+      # rest. Without one, `start` runs the loaded copy as-is.
+      was = bound_to(app, ctx)
+      source = ctx.loaded_origin(app) if was and not was.startswith("repo ") else None
+      return LoadTarget(app, source if source and source.exists() else None, None)
     raise ValueError(f'No app found for "{app}"')
   if len(entries) > 1:
     entry = bound_entry(ctx, app, entries)
