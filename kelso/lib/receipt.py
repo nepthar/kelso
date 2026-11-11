@@ -280,6 +280,8 @@ def danger_callouts(spec: AppSpec) -> list[str]:
       callouts.append(f"writable host bind '{name}'")
   for name, connection in spec.manifest.connections.items():
     kind = CONNECTION_KINDS[connection.kind]
+    if kind.network:
+      continue
     callouts.append(f"connection '{name}' to {kind.desc}")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
   # bind.
