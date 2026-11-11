@@ -152,6 +152,9 @@ def compose_networks(subnet: str) -> dict[str, Any]:
   return {
     INTERNAL_NETWORK: {
       "internal": True,
+      # Without this the host has an address on the bridge, and units reach
+      # anything the host itself listens on (sshd, kelsod) through it.
+      "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"},
       "ipam": {"config": [{"subnet": subnet, "ip_range": dynamic_range(subnet)}]},
     },
     EGRESS_NETWORK: {},

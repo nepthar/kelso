@@ -73,6 +73,7 @@ def test_restricted_compose_puts_units_behind_kproxy(tmp_path):
   assert proxy["image"].startswith("kelso-kproxy:")
   assert compose["networks"]["internal"] == {
     "internal": True,
+    "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"},
     "ipam": {"config": [{"subnet": "10.250.3.0/24", "ip_range": "10.250.3.128/25"}]},
   }
 
