@@ -79,7 +79,7 @@ func TestRuleDestinations(t *testing.T) {
 
 func TestIPRefusedBeforeRulesLoad(t *testing.T) {
 	p := &Proxy{engine: newEngine(time.Second, nil), stats: newStats()}
-	if o, _, _ := p.route("1.2.3.4", KindHTTP, httpPort); o != Denied {
+	if o, _, _, _ := p.route("1.2.3.4", KindHTTP, httpPort); o != Denied {
 		t.Fatalf("got %v", o)
 	}
 }

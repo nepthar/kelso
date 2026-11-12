@@ -65,14 +65,14 @@ CONNECTION_KINDS = {
     ),
     ConnectionKind(
       "web",
-      "the domains it lists, over HTTP and HTTPS",
+      "the domains it lists, on the internet",
       None,
       lambda config, name: {},
       (),
     ),
     ConnectionKind(
       "forward",
-      "one address on your network, by this connection's name",
+      "one address on your own network, by this connection's name",
       None,
       lambda config, name: {"host": name, "url": f"http://{name}"},
       ("host", "url"),

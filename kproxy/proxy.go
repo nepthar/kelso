@@ -26,7 +26,10 @@ type Proxy struct {
 	engine *Engine
 	stats  *Stats
 	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
-	slots  chan struct{} // one per open client connection, shared by all listeners
+	// dialPublic dials a destination that came from the name a client asked
+	// for, and refuses private addresses. nil means dial.
+	dialPublic func(ctx context.Context, network, addr string) (net.Conn, error)
+	slots      chan struct{} // one per open client connection, shared by all listeners
 
 	bind     string             // address listeners bind to; "" for every address
 	addrs    map[portKey]string // full listen addresses overriding bind, for 80 and 443
@@ -194,7 +197,7 @@ func (p *Proxy) handleTLS(c net.Conn, port int) {
 	host, head := readSNI(c)
 	c.SetReadDeadline(time.Time{})
 
-	o, ctr, addr := p.route(host, KindTLS, port)
+	o, ctr, addr, byName := p.route(host, KindTLS, port)
 	switch o {
 	case Denied:
 		c.Write(tlsAccessDenied)
@@ -202,7 +205,7 @@ func (p *Proxy) handleTLS(c net.Conn, port int) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp4", addr)
+	up, err := p.dialer(byName)(context.Background(), "tcp4", addr)
 	if err != nil {
 		log.Printf("tls :%d %s: %v", port, host, err)
 		return
@@ -231,7 +234,7 @@ func (p *Proxy) handleHTTP(c net.Conn, port int) {
 	host, head := readHost(c)
 	c.SetReadDeadline(time.Time{})
 
-	o, ctr, addr := p.route(host, KindHTTP, port)
+	o, ctr, addr, byName := p.route(host, KindHTTP, port)
 	switch o {
 	case Denied:
 		writeHTTPError(c, 503, "blocked by egress proxy")
@@ -239,7 +242,7 @@ func (p *Proxy) handleHTTP(c net.Conn, port int) {
 	case TimedOut:
 		return
 	}
-	up, err := p.dial(context.Background(), "tcp4", addr)
+	up, err := p.dialer(byName)(context.Background(), "tcp4", addr)
 	if err != nil {
 		log.Printf("http :%d %s: %v", port, host, err)
 		writeHTTPError(c, 502, "upstream unreachable")
@@ -286,31 +289,42 @@ func (p *Proxy) udpTarget(port int) func() (string, *counters) {
 	}
 }
 
+// dialer picks how to dial: a destination taken from the name a client asked
+// for may only be a public address, since whoever runs that name's DNS chooses
+// it. A destination a rule spells out may be anywhere.
+func (p *Proxy) dialer(byName bool) func(context.Context, string, string) (net.Conn, error) {
+	if byName && p.dialPublic != nil {
+		return p.dialPublic
+	}
+	return p.dial
+}
+
 // route counts the connection and decides it, returning the address to dial:
 // the allowing rule's destination, with the name asked for in place of "*",
-// or that name on port. A missing name or IP literal is always denied.
-func (p *Proxy) route(host string, kind Kind, port int) (Outcome, *counters, string) {
+// or that name on port. byName reports that the address's host is that name.
+// A missing name or IP literal is always denied.
+func (p *Proxy) route(host string, kind Kind, port int) (o Outcome, ctr *counters, addr string, byName bool) {
 	name := normHost(host)
 	if name == "" || net.ParseIP(name) != nil {
 		ctr := p.stats.conn(unknownDomain, listenerName(kind, port, false))
 		ctr.record(Denied, false)
-		return Denied, ctr, ""
+		return Denied, ctr, "", false
 	}
 	domain := rootDomain(name)
 	if domain == "" {
 		domain = name
 	}
-	ctr := p.stats.conn(domain, listenerName(kind, port, false))
+	ctr = p.stats.conn(domain, listenerName(kind, port, false))
 	o, held, rule := p.engine.Check(context.Background(), port, name)
 	ctr.record(o, held)
-	addr := rule.Dest
+	addr = rule.Dest
 	if addr == "" {
 		addr = "*:" + strconv.Itoa(port)
 	}
 	if h, pt, _ := net.SplitHostPort(addr); h == "*" {
-		addr = net.JoinHostPort(name, pt)
+		addr, byName = net.JoinHostPort(name, pt), true
 	}
-	return o, ctr, addr
+	return o, ctr, addr, byName
 }
 
 func closeWrite(c net.Conn) {

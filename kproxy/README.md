@@ -30,8 +30,15 @@ runs one per app, but nothing in it is Kelso-specific.
   with no name (no SNI, no `Host`) or an IP address for a name. Names with no
   root domain (single labels, unknown TLDs, bare suffixes like `co.uk`) are
   never let through by the default policy, only by a rule naming them.
+- **Names reach the internet, not your network.** A name sent where its own
+  DNS says (`*`, the default) is only ever connected to a public address:
+  loopback, private ranges, link-local and shared address space are refused.
+  Whoever runs an allowed name's DNS can't point it at your LAN. To reach
+  something on your own network, give the rule a destination: see
+  [Forward Targets](#forward-targets).
 - **Rejections.** HTTP gets `503` with `Retry-After`; TLS gets an
-  `access_denied` alert.
+  `access_denied` alert. A refused private address is a failed connection:
+  `502` for HTTP, a closed connection for TLS, and the reason in the log.
 
 The proxy only sees connections made by name, so it needs the network layout
 in [In Docker](#in-docker) to stop an app connecting straight to an IP

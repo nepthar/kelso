@@ -150,12 +150,15 @@ kelso-ui does with `api_address`.
 
 The second family is what an app may reach over the network. These are what
 [`network_mode = "restricted"`](#network-modes) lets through, and they apply to
-the whole app, whichever units list them:
+the whole app, whichever units list them. Which kind to use depends on where
+the thing lives: anything on the internet is `web`, and anything on your own
+network (the LAN, this machine, a VPN like Tailscale) is a `forward`, whose
+address you set.
 
 | Kind | Gives the app | Properties |
 | --- | --- | --- |
-| `web` | The domains in `hosts`, and every subdomain of each, over HTTP and HTTPS. | none |
-| `forward` | One `host:port` on your network, reached over HTTP by the connection's name. | `host`: that name. `url`: `http://<name>`. |
+| `web` | The domains in `hosts`, and every subdomain of each, on the internet, over HTTP and HTTPS. | none |
+| `forward` | One `host:port` on your own network, reached over HTTP by the connection's name. | `host`: that name. `url`: `http://<name>`. |
 
 ```toml
 [connections]
@@ -164,13 +167,16 @@ fonts   = { kind = "web", hosts = ["fonts.googleapis.com", "fonts.gstatic.com"] 
 ```
 
 A `web` host is a domain name, not an IP address or a pattern: `*.weather.com`
-is refused, since `weather.com` already means that. `web` connections are
-allowed in `open` mode, where they change nothing, and refused in `host` mode,
-which can't limit what the app reaches.
+is refused, since `weather.com` already means that. A `web` connection never
+reaches your own network: when a listed domain resolves to a private address,
+the connection is refused, so whoever owns the domain can't later point it at
+your router or NAS. `web` connections are allowed in `open` mode, where they
+change nothing, and refused in `host` mode, which can't limit what the app
+reaches.
 
-A restricted app can't reach an IP address on your network directly. A
-`forward` gives it a name instead: the app connects to the connection's name,
-and kproxy sends that on to a fixed `host:port`, usually from config:
+A `forward` is how a restricted app reaches something on your own network. The
+app connects to the connection's name, and kproxy sends that on to the
+`host:port` in `to`, usually from config, so the address is yours to set:
 
 ```toml
 [config]

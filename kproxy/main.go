@@ -57,13 +57,14 @@ func main() {
 	}
 	engine := newEngine(*hold, nil)
 	proxy := &Proxy{
-		engine:   engine,
-		stats:    newStats(),
-		dial:     (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		slots:    make(chan struct{}, *maxConns),
-		bind:     *bind,
-		addrs:    map[portKey]string{{false, httpPort}: *httpAddr, {false, httpsPort}: *httpsAddr},
-		reserved: reserved,
+		engine:     engine,
+		stats:      newStats(),
+		dial:       (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		dialPublic: (&net.Dialer{Timeout: 10 * time.Second, Control: publicOnly}).DialContext,
+		slots:      make(chan struct{}, *maxConns),
+		bind:       *bind,
+		addrs:      map[portKey]string{{false, httpPort}: *httpAddr, {false, httpsPort}: *httpsAddr},
+		reserved:   reserved,
 	}
 	engine.apply = proxy.apply
 	if err := proxy.apply(implicitRules); err != nil {

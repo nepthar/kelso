@@ -5,6 +5,7 @@ from kelso.lib.connections import CONNECTION_KINDS
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData, provider_route_urls, resolved_subdomain
 from kelso.lib.spec import AppSpec
+from kelso.lib.util import EnvTemplate
 
 # Every label in these receipts pads to at least this, so the capability block
 # and the location block under it line up in one `kelso start`.
@@ -80,6 +81,38 @@ def route_receipt_lines(
   return [
     _labeled_line("Routes:" if i == 0 else "", line) for i, line in enumerate(reach)
   ]
+
+
+def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
+  """What a restricted app may reach, or that an open one's connections don't apply."""
+  network = {
+    name: entry
+    for name, entry in spec.manifest.connections.items()
+    if CONNECTION_KINDS[entry.kind].network
+  }
+  if spec.network_mode == "restricted":
+    head = (
+      "restricted: reaches only these" if network else "restricted: reaches nothing"
+    )
+  elif network:
+    head = "open: reaches anything; these only apply when restricted"
+  else:
+    return []
+  values = {} if run_data is None else run_data.config_values
+  shown = {
+    name: cv.value
+    for name, cv in values.items()
+    if cv.value and not (name in spec.config and spec.config[name].secret)
+  }
+  lines = [head]
+  for name, entry in network.items():
+    if entry.to is None:
+      lines.append(f"{name}: {', '.join(entry.hosts)}")
+    else:
+      lines.append(
+        f"{name}: http://{name} -> {EnvTemplate(entry.to).safe_substitute(shown)}"
+      )
+  return lines
 
 
 def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
@@ -218,6 +251,9 @@ def capability_receipt(
     lines.append(_labeled_line("Containers:", containers[0]))
     for extra in containers[1:]:
       lines.append(_labeled_line("", extra))
+
+  for i, line in enumerate(network_lines(spec, run_data)):
+    lines.append(_labeled_line("Network:" if i == 0 else "", line))
 
   if not compact:
     declared_ports: list[str] = []

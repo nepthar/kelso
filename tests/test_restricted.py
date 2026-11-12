@@ -13,6 +13,7 @@ from kelso.lib import kproxy
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.manifest import ConfigError
+from kelso.lib.receipt import network_lines
 from kelso.lib.run_layout import load_run_data, make_compose_dict
 from tests.conftest import spec_of
 from tests.test_compose import run_data
@@ -238,6 +239,10 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   assert set_ok.returncode == 0
   data = _run_data("restricted-demo")
   assert "http nas 10.0.0.5:5000" in data.kproxy_rules
+  assert network_lines(_spec("restricted-demo"), data) == [
+    "restricted: reaches only these",
+    "nas: http://nas -> 10.0.0.5:5000",
+  ]
   main = make_compose_dict(_spec("restricted-demo"), data)["services"]["main"]
   assert main["environment"]["NAS_URL"] == "http://nas"
   assert "/run/kelso/conn" not in str(main.get("volumes"))
@@ -249,3 +254,15 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   )
   blockers = [i.problem for i in _run_data("restricted-demo").start_blockers]
   assert any(p.startswith("connection nas: forward 'nope'") for p in blockers)
+
+
+def test_the_receipt_says_what_a_restricted_app_may_reach(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  started = kelso_env.run("start", "restricted-demo")
+  assert started.returncode == 0, started.stderr
+  assert "Network:     restricted: reaches only these" in started.stdout
+  assert "weather: api.weather.com, Weather.COM." in started.stdout
+
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  shown = kelso_env.run("load", "restricted-demo")
+  assert "open: reaches anything; these only apply when restricted" in shown.stdout
