@@ -145,7 +145,6 @@ nas = { kind = "http", address = "${nas_address}" }
 
 [run.main]
 image = "alpine"
-connections = ["nas"]
 env = { NAS_URL = "${conn.nas.url}" }
 """
 
@@ -294,7 +293,6 @@ def test_a_connection_may_not_share_a_units_name(tmp_path):
   clash = FORWARD.replace("nas = {", "main = {").replace(
     "conn.nas.url", "conn.main.url"
   )
-  clash = clash.replace('connections = ["nas"]', 'connections = ["main"]')
   with pytest.raises(ConfigError, match="a run unit is also called 'main'"):
     spec_of(tmp_path, clash)
 

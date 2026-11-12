@@ -52,7 +52,6 @@ creates.
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
-| `connections` | list of names | `[]` | `[connections]` this unit is given. See [`[connections.<name>]`](#connectionsname). |
 | `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
@@ -111,9 +110,10 @@ kelso config <app> --bind media=photos
 Something outside the app that it needs to reach, which kelso provides: the
 app names a kind, and kelso works out how to get it there on this machine.
 What the app needs to know about one is offered as
-`${conn.<name>.<property>}` to each run unit that lists it in its
-`connections`, and `[run.<unit>.env]` maps that to whatever names the app
-reads. A connection sets no environment variables itself.
+`${conn.<name>.<property>}`, which `[run.<unit>.env]` maps to whatever names
+the app reads. A unit is given a connection by referencing it there: kelso
+mounts what it needs only into the units that do. A connection sets no
+environment variables itself.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -138,7 +138,6 @@ admin = { kind = "kelso.admin" }
 
 [run.main]
 image       = "..."
-connections = ["admin"]
 
 [run.main.env]
 KELSO_SOCKET = "${conn.admin.socket}"
@@ -151,7 +150,7 @@ kelso-ui does with `api_address`.
 
 The second family is what an app may reach over the network. These are what
 [`network_mode = "restricted"`](#network-modes) lets through, and they apply to
-the whole app, whichever units list them. Which kind to use depends on where
+the whole app, whichever units reference them. Which kind to use depends on where
 the thing lives: anything on the internet is `web`, and anything on your own
 network (the LAN, this machine, a VPN like Tailscale) is `http`, whose
 address you set.
@@ -187,7 +186,6 @@ nas_address = { desc = "The NAS's address as host:port, like 192.168.1.20:5000" 
 nas = { kind = "http", address = "${nas_address}" }
 
 [run.main]
-connections = ["nas"]
 
 [run.main.env]
 NAS_URL = "${conn.nas.url}"

@@ -10,6 +10,7 @@ from kelso.lib.manifest import (
   Manifest,
   RunEntry,
   parse_manifest,
+  unit_connections,
   unlisted_compose_options,
 )
 from kelso.lib.options import APP_OPTIONS
@@ -115,7 +116,7 @@ class AppRunUnit:
   shell: tuple[str, ...]
   # The argv a healthcheck runs, or None to leave the image's own.
   healthcheck: tuple[str, ...] | None
-  # Names in `[connections]` attached to this unit.
+  # Names in `[connections]` this unit's env references, which it is given.
   connections: tuple[str, ...]
   compose_extra: Mapping[str, Any]
 
@@ -325,7 +326,7 @@ def _resolve_run_units(
       restart=run_entry.restart,
       shell=tuple(run_entry.shell),
       healthcheck=_healthcheck_argv(run_entry),
-      connections=tuple(run_entry.connections),
+      connections=unit_connections(manifest, run_entry),
       compose_extra=run_entry.compose,
     )
 

@@ -432,8 +432,6 @@ the local repository or `restic copy` mirrors one into the other each night.
 and `http` connections. What is left:
 
 - **A `tcp` connection kind.** kproxy already relays a TCP port to one address.
-- **Units get a connection by referencing it,** instead of listing it in
-  `connections = [...]`.
 
 ### Services
 Let a bundle say "give me a postgres database and a login" and be given one

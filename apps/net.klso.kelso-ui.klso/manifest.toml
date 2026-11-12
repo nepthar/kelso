@@ -30,7 +30,6 @@ admin = { kind = "kelso.admin", desc = "kelsod's admin API, which this app is a 
 image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
 volumes = { ui = "/app", venv = "/venv", tls = "/tls", settings = "/settings" }
-connections = ["admin"]
 routes  = { main = { port = "8080", scheme = "https" } }
 # Accepting a TCP connection is enough: every page sits behind the sign-in and a
 # self-signed certificate.

@@ -228,8 +228,6 @@ class RunEntry(BaseModel):
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
   healthcheck: str | list[str] | None = Field(default=None, min_length=1)
-  # `[connections]` this unit is given; each mounts at /run/kelso/conn/<name>.
-  connections: list[Identifier] = Field(default_factory=list)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (ulimits, mem_limit, ...).
   compose: dict[str, Any] = Field(default_factory=dict)
@@ -482,12 +480,6 @@ def _validate_commands(manifest: Manifest) -> list[str]:
 
 def _validate_connections(manifest: Manifest) -> list[str]:
   errors: list[str] = []
-  for unit_name, run_entry in manifest.run.items():
-    for name in run_entry.connections:
-      if name not in manifest.connections:
-        errors.append(
-          f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
-        )
   for name in manifest.connections:
     if name in manifest.run:
       errors.append(
@@ -515,6 +507,17 @@ def _validate_cron(manifest: Manifest) -> list[str]:
   return errors
 
 
+def unit_connections(manifest: Manifest, run_entry: RunEntry) -> tuple[str, ...]:
+  """The connections a unit's env references: the ones it is given."""
+  found = {
+    ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
+    for value in run_entry.env.values()
+    for ref in EnvTemplate(value).get_identifiers()
+    if ref.startswith(CONN_KEY_PREFIX)
+  }
+  return tuple(name for name in manifest.connections if name in found)
+
+
 def _validate_env_refs(manifest: Manifest) -> list[str]:
   """Every `${…}` in [run.*.env] must name a key in the flat substitution map."""
   known = set(manifest.config) | set(manifest.adv_config) | set(APP_OPTIONS)
@@ -525,27 +528,22 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
   )
   known.update(f"{KLSO_KEY_PREFIX}{key}" for key in KLSO_KEYS)
 
+  known.update(
+    f"{CONN_KEY_PREFIX}{name}.{prop}"
+    for name, entry in manifest.connections.items()
+    for prop in CONNECTION_KINDS[entry.kind].property_names
+  )
+
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
-    attached = known | {
-      f"{CONN_KEY_PREFIX}{name}.{prop}"
-      for name in run_entry.connections
-      if name in manifest.connections
-      for prop in CONNECTION_KINDS[manifest.connections[name].kind].property_names
-    }
     for var, value in run_entry.env.items():
       for ref in sorted(EnvTemplate(value).get_identifiers()):
-        if ref in attached:
-          continue
-        if "." not in ref:
+        if ref in known or "." not in ref:
           continue  # Undeclared config-style; compose leaves it unsubstituted.
         where = f"[run.{unit_name}.env]: {var} references ${{{ref}}}"
         conn = ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
-        if ref.startswith(CONN_KEY_PREFIX) and conn not in run_entry.connections:
-          errors.append(
-            f"{where}, but connection {conn!r} is not attached to this unit; "
-            f"add it to [run.{unit_name}] connections"
-          )
+        if ref.startswith(CONN_KEY_PREFIX) and conn not in manifest.connections:
+          errors.append(f"{where}, but no connection {conn!r} is declared")
         else:
           errors.append(f"{where}, which is not a known substitution")
   return errors

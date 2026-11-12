@@ -50,7 +50,6 @@ script = { kind = "app", src = "probe.py" }
 image       = "python:3.12-alpine"
 cmd         = ["python", "/demo/probe.py", "serve"]
 volumes     = { script = "/demo/probe.py" }
-connections = ["lan"]
 env         = { LAN_URL = "${conn.lan.url}", LAN_ADDRESS = "${lan_address}", PYTHONUNBUFFERED = "1" }
 healthcheck = ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/', timeout=3)"]
 
