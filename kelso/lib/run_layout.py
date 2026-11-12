@@ -11,6 +11,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS, guest_path
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.manifest import HttpConnection, WebConnection
 from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
   PRIMARY_ROUTE_NAME,
@@ -236,8 +237,9 @@ class AppRunData:
 
   def config_env(self) -> dict[str, str]:
     env = {c.env_name(): c.env_val() for c in self.config_values.values()}
-    if self.kproxy_rules is not None:
-      env[kproxy.RULES_ENV] = kproxy.rules_digest(self.kproxy_rules)
+    if self.subnet is not None:
+      # Set even when the rules can't be built, so a stop doesn't warn of it.
+      env[kproxy.RULES_ENV] = kproxy.rules_digest(self.kproxy_rules or "")
     return env
 
 
@@ -760,15 +762,16 @@ def _load_restricted(
   forwards: dict[str, str] = {}
   refs: list[str] = []
   for name, entry in spec.manifest.connections.items():
-    hosts.extend(entry.hosts)
-    if entry.to is None:
+    if isinstance(entry, WebConnection):
+      hosts.extend(entry.hosts)
+    if not isinstance(entry, HttpConnection):
       continue
-    needs = EnvTemplate(entry.to).get_identifiers()
+    needs = EnvTemplate(entry.address).get_identifiers()
     refs.extend(needs)
     # A forward whose config isn't set yet is left out: that config is already
     # an issue, and the app can't start without it.
     if set(needs) <= config.keys():
-      forwards[name] = EnvTemplate(entry.to).safe_substitute(config)
+      forwards[name] = EnvTemplate(entry.address).safe_substitute(config)
   try:
     rules = kproxy.rules_text(hosts, forwards, _ingress(routes))
   except ValueError as e:

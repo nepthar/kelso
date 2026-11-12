@@ -45,6 +45,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["kelso"]
 
+# Restricted apps build kproxy from its source, in docker, on first use.
+[tool.hatch.build.targets.wheel.force-include]
+"kproxy" = "kelso/_kproxy"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

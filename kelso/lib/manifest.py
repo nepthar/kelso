@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
   BaseModel,
@@ -254,31 +254,37 @@ class CommandEntry(BaseModel):
   desc: str = ""
 
 
-class ConnectionEntry(BaseModel):
+class _Connection(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
-  kind: str
   desc: str = ""
-  # `web`: domains, each with its subdomains.
-  hosts: list[str] = Field(default_factory=list)
-  # `forward`: host:port, usually a `${config}` reference; resolved on every start.
-  to: str | None = None
 
-  @field_validator("kind")
-  @classmethod
-  def check_kind(cls, value: str) -> str:
-    if value not in CONNECTION_KINDS:
-      known = ", ".join(sorted(CONNECTION_KINDS))
-      raise ValueError(f"unknown connection kind {value!r}; kinds are: {known}")
-    return value
 
-  @model_validator(mode="after")
-  def check_fields(self) -> Self:
-    if bool(self.hosts) != (self.kind == "web"):
-      raise ValueError("hosts: a web connection lists its domains, and only it does")
-    if (self.to is not None) != (self.kind == "forward"):
-      raise ValueError("to: a forward connection names host:port, and only it does")
-    return self
+class KelsoAdminConnection(_Connection):
+  kind: Literal["kelso.admin"]
+
+
+class DockerAdminConnection(_Connection):
+  kind: Literal["docker.admin"]
+
+
+class WebConnection(_Connection):
+  kind: Literal["web"]
+  # Domains, each with its subdomains.
+  hosts: list[str] = Field(min_length=1)
+
+
+class HttpConnection(_Connection):
+  kind: Literal["http"]
+  # host:port, usually a `${config}` reference; resolved on every start.
+  address: str
+
+
+# One model per kind in CONNECTION_KINDS, chosen by `kind`.
+ConnectionEntry = Annotated[
+  KelsoAdminConnection | DockerAdminConnection | WebConnection | HttpConnection,
+  Field(discriminator="kind"),
+]
 
 
 class CronEntry(BaseModel):
@@ -377,14 +383,15 @@ def _validate_network(manifest: Manifest) -> list[str]:
   }
   for name, entry in network.items():
     where = f"[connections.{name}]"
-    if entry.kind == "forward":
-      errors.extend(f"{where}: {e}" for e in _forward_errors(name, entry, config_keys))
+    if isinstance(entry, HttpConnection):
+      errors.extend(f"{where}: {e}" for e in _http_errors(name, entry, config_keys))
       if mode != "restricted":
         errors.append(
-          f"{where}: a forward needs network_mode = 'restricted', since only "
-          "kproxy can send the app on to it"
+          f"{where}: an http connection needs network_mode = 'restricted', "
+          "since only kproxy answers its name"
         )
       continue
+    assert isinstance(entry, WebConnection)
     for host in entry.hosts:
       try:
         endpoint_name(host)
@@ -412,20 +419,18 @@ def _validate_network(manifest: Manifest) -> list[str]:
   return errors
 
 
-def _forward_errors(
-  name: str, entry: ConnectionEntry, config_keys: set[str]
-) -> list[str]:
+def _http_errors(name: str, entry: HttpConnection, config_keys: set[str]) -> list[str]:
   errors = []
   try:
     endpoint_name(name)
   except ValueError as e:
     errors.append(str(e))
-  target = entry.to or ""
+  target = entry.address
   refs = EnvTemplate(target).get_identifiers()
   unknown = sorted(set(refs) - config_keys)
   if unknown:
     errors.append(
-      f"to references {', '.join(f'${{{r}}}' for r in unknown)}, "
+      f"address references {', '.join(f'${{{r}}}' for r in unknown)}, "
       "which is not in [config] or [adv_config]"
     )
   elif not refs:
@@ -483,6 +488,12 @@ def _validate_connections(manifest: Manifest) -> list[str]:
         errors.append(
           f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
         )
+  for name in manifest.connections:
+    if name in manifest.run:
+      errors.append(
+        f"[connections.{name}]: a run unit is also called {name!r}, and docker "
+        "answers that name with the unit's container; rename one of them"
+      )
   return errors
 
 

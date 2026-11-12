@@ -39,6 +39,21 @@ RULES_HEADER = (
 _LABEL = re.compile(r"^[a-z0-9_-]+$")
 
 
+# Docker 27 added the gateway mode option that keeps a restricted app's network
+# from having an address on the host; an older docker ignores it silently.
+MIN_DOCKER = 27
+
+
+def docker_too_old(major: int | None) -> str | None:
+  """Why restricted apps can't run on this docker, or None if they can."""
+  if major is None or major >= MIN_DOCKER:
+    return None
+  return (
+    f"docker {major} is older than {MIN_DOCKER}, which restricted apps need to "
+    "keep their network apart from the host. Upgrade docker."
+  )
+
+
 def endpoint_name(value: str) -> str:
   """Normalize a domain name, which a rule matches with its subdomains.
 
@@ -56,13 +71,13 @@ def endpoint_name(value: str) -> str:
 
 
 def forward_target(value: str) -> str:
-  """Normalize a forward's target: host:port, the host a name or IPv4 address.
+  """Normalize an http connection's address: host:port, the host a name or IPv4 address.
 
   Raises ValueError for anything kproxy would refuse as a rule target.
   """
   host, sep, port = value.strip().rpartition(":")
   bad = ValueError(
-    f"forward {value!r} must be host:port with a numeric port, "
+    f"address {value!r} must be host:port with a numeric port, "
     "like 192.168.1.3:3000 or nas.lan:80"
   )
   if not sep or not port.isdigit() or not 1 <= int(port) <= 65535:
@@ -73,7 +88,7 @@ def forward_target(value: str) -> str:
     ip = None
   if ip is not None:
     if ip.version != 4:
-      raise ValueError(f"forward {value!r}: only IPv4 addresses are supported")
+      raise ValueError(f"address {value!r}: only IPv4 addresses are supported")
     return f"{ip}:{int(port)}"
   try:
     return f"{endpoint_name(host)}:{int(port)}"
@@ -102,8 +117,8 @@ def rules_text(
 ) -> str:
   """The rules file for an app: what it may reach, how routes get in, the rest denied.
 
-  Each of `hosts` is allowed with its subdomains over HTTP and HTTPS. A forward
-  is a name over HTTP sent to its host:port. `ingress` is as `compose_service`
+  Each of `hosts` is allowed with its subdomains over HTTP and HTTPS. Each of
+  `forwards` is a name over HTTP sent to its host:port. `ingress` is as `compose_service`
   takes it. Raises ValueError for a forward that isn't host:port, naming it.
   """
   http: dict[str, str] = {}
@@ -132,9 +147,12 @@ def rules_digest(rules: str) -> str:
 
 
 def source_dir() -> Path | None:
-  """The kproxy source next to this kelso, if this kelso runs from a checkout."""
-  path = Path(__file__).resolve().parents[2] / "kproxy"
-  return path if (path / "Dockerfile").is_file() else None
+  """kproxy's source: shipped inside an installed kelso, or beside a checkout."""
+  here = Path(__file__).resolve().parents[1]
+  for path in (here / "_kproxy", here.parent / "kproxy"):
+    if (path / "Dockerfile").is_file():
+      return path
+  return None
 
 
 def image_tag(source: Path) -> str:
@@ -179,6 +197,8 @@ def compose_service(
   service: dict[str, Any] = {
     "image": image_tag(source),
     "build": {"context": str(source)},
+    # The image exists nowhere but here: build it rather than try to pull it.
+    "pull_policy": "never",
     "command": command,
     "networks": {
       INTERNAL_NETWORK: {"ipv4_address": proxy_address(subnet)},

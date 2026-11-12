@@ -71,7 +71,7 @@ CONNECTION_KINDS = {
       (),
     ),
     ConnectionKind(
-      "forward",
+      "http",
       "one address on your own network, by this connection's name",
       None,
       lambda config, name: {"host": name, "url": f"http://{name}"},

@@ -12,9 +12,10 @@ from pathlib import Path
 from kelso.lib import git as git_lib
 from kelso.lib.apps import AppID
 from kelso.lib.backup import SCHEDULED, destination_problem, shares_kelso_disk
-from kelso.lib.docker import DOCKER, DockerError, docker_run_command
+from kelso.lib.docker import DOCKER, DockerError, docker_run_command, server_major
 from kelso.lib.git import git
 from kelso.lib.kelso import KelsoCtx, ambiguity_message
+from kelso.lib.kproxy import docker_too_old
 from kelso.lib.lifecycle.load import bound_entry
 from kelso.lib.observations import AppObservation
 from kelso.lib.recovery import read_keyfile
@@ -48,7 +49,7 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
     *_secret_problems(ctx),
     *_backup_problems(ctx),
   ]
-  warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx)]
+  warnings = [*_repo_warnings(ctx), *_backup_warnings(ctx), *_docker_warnings()]
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
@@ -217,6 +218,12 @@ def _backup_problems(ctx: KelsoCtx) -> list[Finding]:
       )
     )
   return findings
+
+
+def _docker_warnings() -> list[Finding]:
+  """A note, not a problem: only restricted apps need the newer docker."""
+  problem = docker_too_old(server_major())
+  return [Finding("the docker daemon", problem)] if problem else []
 
 
 def _backup_warnings(ctx: KelsoCtx) -> list[Finding]:

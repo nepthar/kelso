@@ -141,7 +141,7 @@ network_mode = "restricted"
 nas_address = { desc = "host:port" }
 
 [connections]
-nas = { kind = "forward", to = "${nas_address}" }
+nas = { kind = "http", address = "${nas_address}" }
 
 [run.main]
 image = "alpine"
@@ -153,7 +153,7 @@ env = { NAS_URL = "${conn.nas.url}" }
 def test_a_forward_takes_its_target_from_config(tmp_path):
   rules = kproxy.rules_text([], {"nas": "NAS.lan:080"})
   assert rules.splitlines()[1:] == ["default deny", "http nas nas.lan:80"]
-  with pytest.raises(ValueError, match="connection nas: forward 'nas.lan' must be"):
+  with pytest.raises(ValueError, match="connection nas: address 'nas.lan' must be"):
     kproxy.rules_text([], {"nas": "nas.lan"})
 
 
@@ -162,7 +162,7 @@ def test_a_forward_takes_its_target_from_config(tmp_path):
   [
     (("${nas_address}", "${nope}"), r"references \$\{nope\}, which is not in"),
     (("${nas_address}", "192.168.1.20"), "must be host:port"),
-    (('network_mode = "restricted"', ""), "a forward needs network_mode"),
+    (('network_mode = "restricted"', ""), "an http connection needs network_mode"),
   ],
 )
 def test_forward_mistakes_are_refused(tmp_path, change, message):
@@ -230,7 +230,7 @@ def _run_data(app: str):
 def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   _write(kelso_env, FORWARD)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
-  # Unset config leaves the forward out; the missing value blocks start already.
+  # Unset config leaves the connection out; the missing value blocks start already.
   assert "http nas" not in _run_data("restricted-demo").kproxy_rules
 
   set_ok = kelso_env.run(
@@ -253,7 +253,7 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
     == 0
   )
   blockers = [i.problem for i in _run_data("restricted-demo").start_blockers]
-  assert any(p.startswith("connection nas: forward 'nope'") for p in blockers)
+  assert any(p.startswith("connection nas: address 'nope'") for p in blockers)
 
 
 def test_the_receipt_says_what_a_restricted_app_may_reach(kelso_env):
@@ -266,3 +266,55 @@ def test_the_receipt_says_what_a_restricted_app_may_reach(kelso_env):
   _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
   shown = kelso_env.run("load", "restricted-demo")
   assert "open: reaches anything; these only apply when restricted" in shown.stdout
+
+
+def test_a_restricted_app_refuses_to_start_on_old_docker(kelso_env, monkeypatch):
+  monkeypatch.setattr("kelso.lib.lifecycle.run.server_major", lambda: 26)
+  _write(kelso_env, RESTRICTED)
+  refused = kelso_env.run("start", "restricted-demo")
+  assert refused.returncode == 1
+  assert (
+    "restricted-demo is restricted, and docker 26 is older than 27" in refused.stderr
+  )
+
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert kelso_env.run("start", "restricted-demo").returncode == 0
+
+
+def test_doctor_notes_a_docker_too_old_for_restricted_apps(kelso_env, monkeypatch):
+  monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 26)
+  shown = kelso_env.run("system", "doctor")
+  assert "docker 26 is older than 27" in shown.stdout
+  monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 29)
+  assert "older than 27" not in kelso_env.run("system", "doctor").stdout
+
+
+def test_a_connection_may_not_share_a_units_name(tmp_path):
+  clash = FORWARD.replace("nas = {", "main = {").replace(
+    "conn.nas.url", "conn.main.url"
+  )
+  clash = clash.replace('connections = ["nas"]', 'connections = ["main"]')
+  with pytest.raises(ConfigError, match="a run unit is also called 'main'"):
+    spec_of(tmp_path, clash)
+
+
+def test_the_first_start_says_kproxy_is_being_built(kelso_env, monkeypatch):
+  _write(kelso_env, RESTRICTED)
+  monkeypatch.setattr("kelso.lib.lifecycle.run.image_exists", lambda tag: False)
+  first = kelso_env.run("start", "restricted-demo")
+  assert first.returncode == 0, first.stderr
+  assert "Building kproxy" in first.stderr
+
+  assert kelso_env.run("stop", "restricted-demo").returncode == 0
+  monkeypatch.setattr("kelso.lib.lifecycle.run.image_exists", lambda tag: True)
+  assert "Building kproxy" not in kelso_env.run("start", "restricted-demo").stderr
+
+
+def test_an_installed_kelso_finds_kproxy_inside_itself(tmp_path, monkeypatch):
+  shipped = tmp_path / "site" / "kelso" / "_kproxy"
+  shipped.mkdir(parents=True)
+  (shipped / "Dockerfile").write_text("FROM scratch\n")
+  (tmp_path / "site" / "kelso" / "lib").mkdir()
+  monkeypatch.setattr(kproxy, "__file__", str(tmp_path / "site/kelso/lib/kproxy.py"))
+  assert kproxy.source_dir() == shipped.resolve()

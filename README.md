@@ -61,6 +61,7 @@ Manifests are small enough to be digested in a few seconds. For a full, function
 - **Backups.** Nightly, deduplicated and encrypted, into `backups/` or wherever you link it. Each app is backed up at a coherent point in time and restored the same way; only your recovery phrase can read them. See [volumes](docs/volumes.md) for what is included.
 - **Cron.** Scheduled commands inside an app, run by kelsod.
 - **Routes.** Expose an app's ports through Cloudflare Tunnel, Nginx Proxy Manager or Pangolin.
+- **Restricted apps.** An app marked `restricted` reaches only the internet domains and addresses on your network that its manifest lists, through a proxy kelso runs beside it. Needs docker 27 or newer.
 - **App repos.** A repo is a folder of bundles pushed to git. `kelso repo add` makes every app in it a `kelso start` away.
 
 The full list of what a manifest can say is in the [manifest](docs/manifest.md) docs.

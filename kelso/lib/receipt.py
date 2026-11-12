@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from kelso.lib.config import Config
 from kelso.lib.connections import CONNECTION_KINDS
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.manifest import HttpConnection, WebConnection
 from kelso.lib.run_layout import AppRunData, provider_route_urls, resolved_subdomain
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import EnvTemplate
@@ -106,11 +107,11 @@ def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
   }
   lines = [head]
   for name, entry in network.items():
-    if entry.to is None:
+    if isinstance(entry, WebConnection):
       lines.append(f"{name}: {', '.join(entry.hosts)}")
-    else:
+    elif isinstance(entry, HttpConnection):
       lines.append(
-        f"{name}: http://{name} -> {EnvTemplate(entry.to).safe_substitute(shown)}"
+        f"{name}: http://{name} -> {EnvTemplate(entry.address).safe_substitute(shown)}"
       )
   return lines
 

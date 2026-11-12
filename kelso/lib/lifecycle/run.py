@@ -3,15 +3,19 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from kelso.lib import kproxy
 from kelso.lib.activity import Detached
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.docker import (
   DockerError,
   DockerTimeout,
   docker_run_command,
+  image_exists,
+  server_major,
   sink_output,
 )
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.kproxy import docker_too_old
 from kelso.lib.lifecycle._common import container_recovery_message, logger
 from kelso.lib.lifecycle.load import (
   LoadResult,
@@ -75,6 +79,8 @@ def start(
   spec, run_data = result.spec, result.run_data
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
+  if spec.network_mode == "restricted" and (problem := docker_too_old(server_major())):
+    raise RuntimeError(f"{app} is restricted, and {problem}")
 
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
@@ -89,6 +95,13 @@ def start(
   # loading does not touch these -- takes effect now.
   link_host_volumes(spec, run_data)
   write_kproxy_rules(run_data)
+  if run_data.kproxy_source is not None and not image_exists(
+    kproxy.image_tag(run_data.kproxy_source)
+  ):
+    logger.info(
+      "Building kproxy, the proxy restricted apps reach the network through. "
+      "This happens once per kelso version and takes about a minute."
+    )
 
   try:
     docker_run_command(

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -285,3 +286,19 @@ def docker_run_command(
 
   data = _parse_json_output(result.stdout) if json_output else []
   return DockerReturn(returncode=result.returncode, data=data)
+
+
+def server_major() -> int | None:
+  """The docker daemon's major version, or None if it can't be read."""
+  try:
+    data = docker_run_command(["version"]).data
+  except (DockerError, OSError):
+    return None
+  server = data[0].get("Server") if data and isinstance(data[0], dict) else None
+  found = re.match(r"(\d+)\.", (server or {}).get("Version", ""))
+  return int(found[1]) if found else None
+
+
+def image_exists(tag: str) -> bool:
+  """Whether docker already has the image `tag`."""
+  return docker_run_command(["image", "inspect", tag], check=False).returncode == 0

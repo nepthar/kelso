@@ -71,7 +71,10 @@ def test_a_missing_host_path_blocks_load(kelso_env):
 @pytest.mark.parametrize(
   "kwargs, message",
   [
-    ({"connections": 'admin = { kind = "nope" }'}, "unknown connection kind 'nope'"),
+    (
+      {"connections": 'admin = { kind = "nope" }'},
+      "Input tag 'nope' found using 'kind' does not match",
+    ),
     ({"attached": '["other"]'}, "connection 'other' is not declared in [connections]"),
     ({"attached": "[]"}, "connection 'admin' is not attached to this unit"),
     (
