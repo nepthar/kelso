@@ -361,6 +361,7 @@ short.
 | `-default` | `deny` | default policy for a rules file that doesn't set one |
 | `-hold` | `60s` | how long the `ask` policy holds a connection |
 | `-max-conns` | `1024` | most client connections open at once |
+| `-idle` | `10m` | close a connection after this long with no bytes either way; `0` for never |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
 rules loaded.
@@ -400,7 +401,7 @@ Measured on arm64 Linux: about 8 MB idle, and about 22 KB and 6 file
 descriptors (2 sockets, 2 kernel pipes) per open connection, so roughly 30 MB
 at the default `-max-conns`. On Linux the bytes are spliced between sockets
 rather than copied through the program. Once one side of a connection has
-finished, the other gets 30 seconds before both are closed. The pending list
+finished sending, both are closed after 30 seconds with no bytes from the other. The pending list
 keeps at most 1,000 hosts; more are still held, just not listed. The stats
 keep at most 10,000 domains and count the rest under `other`. Setting
 `GOMEMLIMIT` makes Go give memory back sooner after a spike.

@@ -278,11 +278,11 @@ def _rebuild_kelso_dirs(spec: AppSpec, run_path: Path) -> None:
 
 def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
   """A restricted app keeps its subnet across loads; any other app has none."""
-  hdb = ctx.kelso_db
+  db = ctx.kelso_db
   if spec.network_mode != "restricted":
-    hdb.clear_subnet(spec.app)
-  elif hdb.get_subnet(spec.app) is None:
-    hdb.set_subnet(spec.app, hdb.next_free_subnet())
+    db.clear_subnet(spec.app)
+  elif db.get_subnet(spec.app) is None:
+    db.set_subnet(spec.app, db.next_free_subnet())
 
 
 def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
@@ -295,11 +295,11 @@ def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
 def write_kproxy_rules(run_data: AppRunData) -> None:
   """Write kproxy's rules from current config. Start does this too, since a
   forward's config may have changed since the load."""
-  if run_data.kproxy_rules is None:
+  if run_data.restricted is None:
     return
   root = run_data.run_path / kproxy.KPROXY_RUN_DIR
   root.mkdir(exist_ok=True)
-  (root / "rules.txt").write_text(run_data.kproxy_rules)
+  (root / "rules.txt").write_text(run_data.restricted.rules)
 
 
 @dataclass(frozen=True)

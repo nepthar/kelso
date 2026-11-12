@@ -307,3 +307,107 @@ func TestAskHTTPTimeoutClosesWithoutVerdict(t *testing.T) {
 		t.Fatalf("got %d, %d bytes", code, n)
 	}
 }
+
+// An idle connection is closed; one busy in a single direction is not, though
+// the other direction's deadline keeps passing.
+func TestIdleTimeout(t *testing.T) {
+	pair := func() (net.Conn, net.Conn) {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ln.Close()
+		a, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := ln.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, b
+	}
+	client, proxyClient := pair()
+	proxyUp, up := pair()
+	defer client.Close()
+	defer up.Close()
+
+	const idle = 200 * time.Millisecond
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		pipe(proxyClient, proxyUp, nil, &counters{}, idle)
+	}()
+
+	buf := make([]byte, 1)
+	for i := 0; i < 8; i++ {
+		time.Sleep(idle / 2)
+		if _, err := up.Write([]byte("x")); err != nil {
+			t.Fatalf("write %d on a busy connection: %v", i, err)
+		}
+		client.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := client.Read(buf); err != nil {
+			t.Fatalf("read %d on a busy connection: %v", i, err)
+		}
+	}
+	select {
+	case <-done:
+		t.Fatal("closed while busy")
+	default:
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("still open after sitting idle")
+	}
+}
+
+// After one side finishes sending, the other may go on for as long as it keeps
+// sending, and is closed once it goes quiet.
+func TestHalfCloseIsAnIdleLimit(t *testing.T) {
+	const halfIdle = 200 * time.Millisecond
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	pair := func() (net.Conn, net.Conn) {
+		a, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := ln.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, b
+	}
+	client, proxyClient := pair()
+	proxyUp, up := pair()
+	defer client.Close()
+	defer up.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		relay(proxyClient, proxyUp, nil, &counters{}, &link{halfIdle: halfIdle})
+	}()
+
+	client.(*net.TCPConn).CloseWrite()
+	buf := make([]byte, 1)
+	for i := 0; i < 8; i++ {
+		time.Sleep(halfIdle / 2)
+		if _, err := up.Write([]byte("x")); err != nil {
+			t.Fatalf("write %d after the client finished: %v", i, err)
+		}
+		client.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := client.Read(buf); err != nil {
+			t.Fatalf("read %d after the client finished: %v", i, err)
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("still open after the remaining side went quiet")
+	}
+}

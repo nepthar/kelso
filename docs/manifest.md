@@ -52,6 +52,7 @@ creates.
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
+| `connections` | list of strings | `[]` | [Connections](#connectionsname) to give this unit even though its `env` references none of their properties. |
 | `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
@@ -111,17 +112,21 @@ Something outside the app that it needs to reach, which kelso provides: the
 app names a kind, and kelso works out how to get it there on this machine.
 What the app needs to know about one is offered as
 `${conn.<name>.<property>}`, which `[run.<unit>.env]` maps to whatever names
-the app reads. A unit is given a connection by referencing it there: kelso
-mounts what it needs only into the units that do. A connection sets no
-environment variables itself.
+the app reads. A connection sets no environment variables itself.
+
+What referencing a connection does depends on its kind. A mounted kind is
+mounted only into the units that reference it, or that list it in
+`[run.<unit>] connections` when they need the mount but no property. A network
+kind is app-wide, not restricted to a single container: every unit can reach
+it, whether or not it references it.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `kind` | string | **required** | One of the kinds below, which decides what other keys it takes. |
 | `desc` | string | `""` | Shown to the operator. |
 
-A connection can't have the same name as a run unit: docker answers a unit's
-name with its container, so the connection would never be reached.
+An `http` connection can't have the same name as a run unit: docker answers a
+unit's name with its container, so the connection would never be reached.
 
 There are two families of kind. The first mounts something from the host at
 `/run/kelso/conn/<name>`, and hands the app control of it, so kelso calls each
@@ -149,8 +154,8 @@ work there takes kelsod's TCP address as an ordinary config value instead, as
 kelso-ui does with `api_address`.
 
 The second family is what an app may reach over the network. These are what
-[`network_mode = "restricted"`](#network-modes) lets through, and they apply to
-the whole app, whichever units reference them. Which kind to use depends on where
+[`network_mode = "restricted"`](#network-modes) lets through, and they are
+app-wide, not restricted to a single container. Which kind to use depends on where
 the thing lives: anything on the internet is `web`, and anything on your own
 network (the LAN, this machine, a VPN like Tailscale) is `http`, whose
 address you set.
@@ -196,6 +201,12 @@ says. The host is a name or an IPv4 address, and the port is required. Kelso
 fills `address` in on every start, so `kelso config --set` takes effect at the next
 start, and a value that isn't `host:port` stops the app from starting, naming
 the fix.
+
+An address you set is yours. One the bundle supplies, written out in `address`
+or as the config's `default`, lets the app pick what it reaches on your
+network, so kelso calls it out as a danger before you start it. An address
+can't reference a `secret` config value: it is shown in receipts and written
+to kproxy's rules file.
 
 - Only HTTP: kproxy finds the name in the `Host` header.
 - It needs `network_mode = "restricted"`: without kproxy, nothing answers

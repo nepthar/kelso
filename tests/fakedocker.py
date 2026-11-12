@@ -131,6 +131,8 @@ class FakeDocker:
         return 1, "", "conflict: image is being used by a container"
       kept = [i for i in images if i not in gone]
       self.images_path.write_text(json.dumps(kept))
+    elif args[0] == "version":
+      out.append(json.dumps({"Server": {"Version": "29.0.0"}}))
     elif args[0] == "stats":
       for c in containers:
         if c.get("state") != "running":

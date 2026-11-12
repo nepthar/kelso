@@ -13,8 +13,8 @@ from kelso.lib import kproxy
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.manifest import ConfigError
-from kelso.lib.receipt import network_lines
-from kelso.lib.run_layout import load_run_data, make_compose_dict
+from kelso.lib.receipt import danger_callouts, network_lines
+from kelso.lib.run_layout import Restricted, load_run_data, make_compose_dict
 from tests.conftest import spec_of
 from tests.test_compose import run_data
 
@@ -47,8 +47,7 @@ def test_restricted_compose_puts_units_behind_kproxy(tmp_path):
   spec = spec_of(tmp_path, RESTRICTED)
   data = dataclasses.replace(
     run_data(spec, host_ports={"main": 41000, "dns": 41001}),
-    subnet="10.250.3.0/24",
-    kproxy_source=kproxy.source_dir(),
+    restricted=Restricted("10.250.3.0/24", kproxy.source_dir(), "", {}),
   )
   compose = make_compose_dict(spec, data)
   main, db, proxy = (compose["services"][n] for n in ("main", "db", "kproxy"))
@@ -83,7 +82,7 @@ def test_rules_file_allows_every_connection_and_relays_every_route(kelso_env):
   _write(kelso_env, RESTRICTED)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   data = _run_data("restricted-demo")
-  rules = data.kproxy_rules.splitlines()[1:]
+  rules = data.restricted.rules.splitlines()
   assert rules[:7] == [
     "default deny",
     "http *.api.weather.com",
@@ -151,7 +150,7 @@ env = { NAS_URL = "${conn.nas.url}" }
 
 def test_a_forward_takes_its_target_from_config(tmp_path):
   rules = kproxy.rules_text([], {"nas": "NAS.lan:080"})
-  assert rules.splitlines()[1:] == ["default deny", "http nas nas.lan:80"]
+  assert rules.splitlines() == ["default deny", "http nas nas.lan:80"]
   with pytest.raises(ValueError, match="connection nas: address 'nas.lan' must be"):
     kproxy.rules_text([], {"nas": "nas.lan"})
 
@@ -192,7 +191,7 @@ def test_loading_allocates_a_subnet_that_reloading_keeps(kelso_env):
   _write(kelso_env, RESTRICTED)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   subnet = _subnet("restricted-demo")
-  assert subnet in {str(n) for n in kproxy.subnets()}
+  assert subnet in {str(n) for n in kproxy.subnets(kproxy.DEFAULT_SUBNET_POOL)}
 
   run_dir = kelso_env.run_root / "restricted-demo"
   compose = yaml.safe_load((run_dir / "compose.yml").read_text())
@@ -201,6 +200,19 @@ def test_loading_allocates_a_subnet_that_reloading_keeps(kelso_env):
 
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert _subnet("restricted-demo") == subnet
+
+
+def test_subnets_come_from_the_configured_pool(kelso_env):
+  config = kelso_env.root / "config.toml"
+  config.write_text('subnet_pool = "172.30.0.0/20"\n' + config.read_text())
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert _subnet("restricted-demo") == "172.30.0.0/24"
+
+  config.write_text(config.read_text().replace("172.30.0.0/20", "172.30.0.0/28"))
+  refused = kelso_env.run("load", "restricted-demo")
+  assert refused.returncode != 0
+  assert "subnet_pool" in refused.stderr
 
 
 def test_an_app_that_stops_being_restricted_gives_its_subnet_back(kelso_env):
@@ -230,14 +242,14 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   _write(kelso_env, FORWARD)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   # Unset config leaves the connection out; the missing value blocks start already.
-  assert "http nas" not in _run_data("restricted-demo").kproxy_rules
+  assert "http nas" not in _run_data("restricted-demo").restricted.rules
 
   set_ok = kelso_env.run(
     "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
   )
   assert set_ok.returncode == 0
   data = _run_data("restricted-demo")
-  assert "http nas 10.0.0.5:5000" in data.kproxy_rules
+  assert "http nas 10.0.0.5:5000" in data.restricted.rules
   assert network_lines(_spec("restricted-demo"), data) == [
     "restricted: reaches only these",
     "nas: http://nas -> 10.0.0.5:5000",
@@ -245,7 +257,9 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   main = make_compose_dict(_spec("restricted-demo"), data)["services"]["main"]
   assert main["environment"]["NAS_URL"] == "http://nas"
   assert "/run/kelso/conn" not in str(main.get("volumes"))
-  assert data.config_env()[kproxy.RULES_ENV] == kproxy.rules_digest(data.kproxy_rules)
+  assert data.config_env()[kproxy.RULES_ENV] == kproxy.rules_digest(
+    data.restricted.rules
+  )
 
   assert (
     kelso_env.run("config", "restricted-demo", "--set", "nas_address=nope").returncode
@@ -279,6 +293,38 @@ def test_a_restricted_app_refuses_to_start_on_old_docker(kelso_env, monkeypatch)
   _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert kelso_env.run("start", "restricted-demo").returncode == 0
+
+
+def test_a_restricted_app_refuses_to_start_when_dockers_version_is_unknown(
+  kelso_env, monkeypatch
+):
+  monkeypatch.setattr("kelso.lib.lifecycle.run.server_major", lambda: None)
+  _write(kelso_env, RESTRICTED)
+  refused = kelso_env.run("start", "restricted-demo")
+  assert refused.returncode == 1
+  assert "docker's version can't be read" in refused.stderr
+
+
+def test_an_address_the_operator_sets_is_no_danger_callout(tmp_path):
+  assert danger_callouts(spec_of(tmp_path, FORWARD)) == []
+
+
+@pytest.mark.parametrize(
+  "change",
+  [
+    ("${nas_address}", "172.17.0.1:22"),
+    ('desc = "host:port"', 'default = "172.17.0.1:22"'),
+  ],
+)
+def test_an_address_the_bundle_supplies_is_a_danger_callout(tmp_path, change):
+  assert danger_callouts(spec_of(tmp_path, FORWARD.replace(*change))) == [
+    "connection 'nas' to 172.17.0.1:22, an address the app chose"
+  ]
+
+
+def test_a_domain_name_may_not_end_a_label_with_a_newline():
+  with pytest.raises(ValueError, match="is not a domain name"):
+    kproxy.endpoint_name("evil\n.com")
 
 
 def test_doctor_notes_a_docker_too_old_for_restricted_apps(kelso_env, monkeypatch):

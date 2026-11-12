@@ -33,6 +33,7 @@ func main() {
 	defaultFlag := flag.String("default", "deny", "default policy (allow, deny or ask) for a rules file that doesn't set one")
 	hold := flag.Duration("hold", 60*time.Second, "how long the ask policy holds a connection no rule matches")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
+	idle := flag.Duration("idle", 10*time.Minute, "close a connection after this long with no bytes either way; 0 for never")
 	flag.Parse()
 
 	policy, err := parsePolicy(*defaultFlag)
@@ -62,6 +63,7 @@ func main() {
 		dial:       (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
 		dialPublic: (&net.Dialer{Timeout: 10 * time.Second, Control: publicOnly}).DialContext,
 		slots:      make(chan struct{}, *maxConns),
+		idle:       *idle,
 		bind:       *bind,
 		addrs:      map[portKey]string{{false, httpPort}: *httpAddr, {false, httpsPort}: *httpsAddr},
 		reserved:   reserved,

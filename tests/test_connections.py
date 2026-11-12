@@ -94,3 +94,21 @@ def test_connections_are_checked_against_the_manifest(kelso_env, kwargs, message
   refused = kelso_env.run("load", APP)
   assert refused.returncode == 1
   assert message in refused.stderr
+
+
+def test_a_unit_may_list_a_connection_it_references_no_property_of(kelso_env):
+  bundle = kelso_env.local_repo / f"{APP}.klso"
+  bundle.mkdir(exist_ok=True)
+  (bundle / "manifest.toml").write_text(
+    MANIFEST.format(connections='admin = { kind = "kelso.admin" }', env="")
+    + 'connections = ["admin"]\n'
+  )
+  assert kelso_env.run("load", APP).returncode == 0
+  assert "/run/kelso/conn/admin" in str(service(kelso_env, "worker")["volumes"])
+  assert "/run/kelso/conn" not in str(service(kelso_env).get("volumes"))
+
+  (bundle / "manifest.toml").write_text(
+    MANIFEST.format(connections="", env="") + 'connections = ["admin"]\n'
+  )
+  refused = kelso_env.run("load", APP)
+  assert "connection 'admin' is not declared in [connections]" in refused.stderr

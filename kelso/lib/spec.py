@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from kelso.lib.apps import AppID
+from kelso.lib.connections import Connection
 from kelso.lib.manifest import (
   ConfigError,
   Manifest,
   RunEntry,
+  connection_of,
   parse_manifest,
   unit_connections,
   unlisted_compose_options,
@@ -116,7 +118,8 @@ class AppRunUnit:
   shell: tuple[str, ...]
   # The argv a healthcheck runs, or None to leave the image's own.
   healthcheck: tuple[str, ...] | None
-  # Names in `[connections]` this unit's env references, which it is given.
+  # Names in `[connections]` this unit lists or its env references. A mounted kind is
+  # mounted only into these units; a network kind is app-wide regardless.
   connections: tuple[str, ...]
   compose_extra: Mapping[str, Any]
 
@@ -164,6 +167,7 @@ class AppSpec:
   config: Mapping[str, AppConfig]
   volumes: Mapping[str, AppVolume]
   commands: Mapping[str, AppCommand]
+  connections: Mapping[str, Connection]
 
   @classmethod
   def from_bytes(cls, data: bytes, app_id: AppID, source: Path) -> "AppSpec":
@@ -267,6 +271,9 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
     config=config,
     volumes=volumes,
     commands=commands,
+    connections={
+      name: connection_of(entry) for name, entry in manifest.connections.items()
+    },
   )
 
 

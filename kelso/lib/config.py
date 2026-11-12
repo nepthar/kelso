@@ -14,6 +14,7 @@ from pydantic import (
 
 from kelso.lib.apps import AppID
 from kelso.lib.cronexpr import CronSchedule
+from kelso.lib.kproxy import DEFAULT_SUBNET_POOL, subnets
 from kelso.lib.recovery import read_keyfile
 from kelso.lib.repo import LOCAL_REPO, Repo, parse_github_url
 from kelso.lib.util import validate_identifier
@@ -150,6 +151,7 @@ class ConfigFile(BaseModel):
 
   repos_root: str = DEFAULT_REPOS_ROOT
   port_base: int = 41000
+  subnet_pool: str = DEFAULT_SUBNET_POOL
   route_address: str = ""
   link_address: str = ""
   default_route_provider: str = NONE_ROUTE_PROVIDER_TAG
@@ -177,6 +179,7 @@ class Config:
   repos: dict[str, Repo]
   master_key: str
   port_base: int
+  subnet_pool: str
   route_address: str
   # Where people reach a route's host port: link_address, route_address, or localhost.
   link_address: str
@@ -199,6 +202,7 @@ class Config:
     extra_repos: dict[str, Repo] | None = None,
     host_volumes: dict[str, HostVolume] | None = None,
     backup: BackupEntry | None = None,
+    subnet_pool: str = DEFAULT_SUBNET_POOL,
   ) -> None:
     self.config_path = config_path
     self.kelso_root = kelso_root
@@ -209,6 +213,7 @@ class Config:
     }
     self.master_key = master_key
     self.port_base = port_base
+    self.subnet_pool = subnet_pool
     self.route_address = route_address
     self.link_address = link_address or route_address or "localhost"
     self.default_route_provider = default_route_provider
@@ -399,6 +404,7 @@ def load_config_file(config_file: str | Path) -> Config:
     repos_root=repos_root,
     master_key=master_key,
     port_base=parsed.port_base,
+    subnet_pool=parsed.subnet_pool,
     route_address=parsed.route_address,
     link_address=parsed.link_address,
     default_route_provider=parsed.default_route_provider,
@@ -429,6 +435,11 @@ def _validate_config(parsed: ConfigFile) -> list[str]:
       f"route_provider tag {NONE_ROUTE_PROVIDER_TAG!r} is reserved; "
       f"remove [route_provider.{NONE_ROUTE_PROVIDER_TAG}] from config.toml"
     )
+
+  try:
+    subnets(parsed.subnet_pool)
+  except ValueError as e:
+    errors.append(f"subnet_pool: {e}")
 
   if parsed.backup.schedule is not None:
     try:

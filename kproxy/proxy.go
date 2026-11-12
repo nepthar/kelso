@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ type Proxy struct {
 	// for, and refuses private addresses. nil means dial.
 	dialPublic func(ctx context.Context, network, addr string) (net.Conn, error)
 	slots      chan struct{} // one per open client connection, shared by all listeners
+	idle       time.Duration // close a connection quiet both ways this long; 0 for never
 
 	bind     string             // address listeners bind to; "" for every address
 	addrs    map[portKey]string // full listen addresses overriding bind, for 80 and 443
@@ -211,7 +213,7 @@ func (p *Proxy) handleTLS(c net.Conn, port int) {
 		return
 	}
 	defer up.Close()
-	pipe(c, up, head, ctr)
+	pipe(c, up, head, ctr, p.idle)
 }
 
 // readHost parses the HTTP request head on c and returns its host (without
@@ -249,7 +251,7 @@ func (p *Proxy) handleHTTP(c net.Conn, port int) {
 		return
 	}
 	defer up.Close()
-	pipe(c, up, head, ctr)
+	pipe(c, up, head, ctr, p.idle)
 }
 
 func writeHTTPError(c net.Conn, code int, msg string) {
@@ -271,7 +273,7 @@ func (p *Proxy) forwardTCP(c net.Conn, l *Listener) {
 		return
 	}
 	defer up.Close()
-	pipe(c, up, nil, ctr)
+	pipe(c, up, nil, ctr, p.idle)
 }
 
 // udpTarget gives a UDP listener's relay its destination for each new client,
@@ -335,8 +337,41 @@ func closeWrite(c net.Conn) {
 	c.Close()
 }
 
-// pipe replays head to up, then copies both directions until both finish.
-func pipe(client, up net.Conn, head []byte, ctr *counters) {
+// link is what the two directions of one piped connection share.
+// Times are unix nanoseconds.
+type link struct {
+	idle time.Duration
+	// When each direction first found a whole deadline pass with no bytes; 0
+	// while it is moving them. A direction only reports when its copy returns,
+	// so "bytes moved lately" can't be read from here, but "none since" can.
+	quiet    [2]atomic.Int64
+	halfIdle time.Duration // the limit once one side has finished sending
+	half     atomic.Bool   // one side has
+}
+
+// limit is how long the connection may stay quiet: idle, or halfIdle if that
+// is shorter and one side has finished sending. 0 is no limit.
+func (l *link) limit() time.Duration {
+	if l.half.Load() && (l.idle == 0 || l.halfIdle < l.idle) {
+		return l.halfIdle
+	}
+	return l.idle
+}
+
+// expired reports whether both directions have been quiet for the limit. A
+// direction that has finished sending counts as quiet.
+func (l *link) expired() bool {
+	a, b, limit := l.quiet[0].Load(), l.quiet[1].Load(), l.limit()
+	return limit > 0 && a != 0 && b != 0 && time.Now().UnixNano()-max(a, b) >= int64(limit)
+}
+
+// pipe replays head to up, then copies both directions until both finish or
+// neither has moved a byte for idle (0 for no limit).
+func pipe(client, up net.Conn, head []byte, ctr *counters, idle time.Duration) {
+	relay(client, up, head, ctr, &link{idle: idle, halfIdle: halfCloseTimeout})
+}
+
+func relay(client, up net.Conn, head []byte, ctr *counters, l *link) {
 	if len(head) > 0 {
 		if _, err := up.Write(head); err != nil {
 			return
@@ -346,31 +381,49 @@ func pipe(client, up net.Conn, head []byte, ctr *counters) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		copyCounting(client, up, &ctr.bytesIn)
+		copyCounting(client, up, &ctr.bytesIn, l, 0)
 	}()
-	copyCounting(up, client, &ctr.bytesOut)
+	copyCounting(up, client, &ctr.bytesOut, l, 1)
 	<-done
 }
 
 const (
 	copyChunk = 1 << 20
 
-	// halfCloseTimeout is how long the other direction may keep going once one
-	// side has finished sending, so a peer that never closes can't hold the
-	// connection forever. An idle connection has no timeout at all.
+	// halfCloseTimeout is how long a connection may stay quiet once one side
+	// has finished sending, so a peer that never closes can't hold it for the
+	// whole idle timeout, or forever without one.
 	halfCloseTimeout = 30 * time.Second
 )
 
 // copyCounting copies src to dst, adding to n after each chunk so counts stay
 // current on long-lived connections. dst and src must stay unwrapped
 // *net.TCPConns (an *io.LimitedReader is fine) for Linux to splice instead of
-// copying through a buffer. On EOF it half-closes dst and puts a deadline on
-// the other direction, which reads from dst; on error it closes both so the
-// other direction stops too.
-func copyCounting(dst, src net.Conn, n *atomic.Int64) {
+// copying through a buffer, which is why quiet is found by a read deadline
+// every half of the limit rather than by watching the bytes: a deadline that
+// passes while the other direction is busy just starts another. On EOF it
+// half-closes dst and wakes the other direction, which reads from dst, to
+// take up the shorter limit; on error it closes both so the other direction
+// stops too.
+func copyCounting(dst, src net.Conn, n *atomic.Int64, l *link, dir int) {
 	for {
+		if limit := l.limit(); limit > 0 {
+			src.SetReadDeadline(time.Now().Add(limit / 2))
+			if l.limit() != limit {
+				continue // the other side finished meanwhile, and its wake-up was overwritten
+			}
+		}
 		k, err := io.Copy(dst, io.LimitReader(src, copyChunk))
 		n.Add(k)
+		timedOut := errors.Is(err, os.ErrDeadlineExceeded)
+		if k > 0 {
+			l.quiet[dir].Store(0)
+		} else if timedOut {
+			l.quiet[dir].CompareAndSwap(0, time.Now().UnixNano())
+		}
+		if timedOut && !l.expired() {
+			continue
+		}
 		if err != nil {
 			dst.Close()
 			src.Close()
@@ -378,7 +431,9 @@ func copyCounting(dst, src net.Conn, n *atomic.Int64) {
 		}
 		if k < copyChunk {
 			closeWrite(dst)
-			dst.SetReadDeadline(time.Now().Add(halfCloseTimeout))
+			l.quiet[dir].Store(time.Now().UnixNano())
+			l.half.Store(true)
+			dst.SetReadDeadline(time.Now().Add(l.halfIdle / 2))
 			return
 		}
 	}

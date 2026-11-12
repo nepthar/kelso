@@ -19,7 +19,14 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
-from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS
+from kelso.lib.connections import (
+  CONN_KEY_PREFIX,
+  MOUNT_KINDS,
+  Connection,
+  HttpConnection,
+  MountConnection,
+  WebConnection,
+)
 from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.kproxy import KPROXY_SERVICE, endpoint_name, forward_target
 from kelso.lib.options import APP_OPTIONS
@@ -228,6 +235,8 @@ class RunEntry(BaseModel):
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
   healthcheck: str | list[str] | None = Field(default=None, min_length=1)
+  # `[connections]` to give this unit beyond the ones its env references.
+  connections: list[Identifier] = Field(default_factory=list)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (ulimits, mem_limit, ...).
   compose: dict[str, Any] = Field(default_factory=dict)
@@ -258,31 +267,33 @@ class _Connection(BaseModel):
   desc: str = ""
 
 
-class KelsoAdminConnection(_Connection):
-  kind: Literal["kelso.admin"]
+class MountEntry(_Connection):
+  # The names in MOUNT_KINDS.
+  kind: Literal["kelso.admin", "docker.admin"]
 
 
-class DockerAdminConnection(_Connection):
-  kind: Literal["docker.admin"]
-
-
-class WebConnection(_Connection):
+class WebEntry(_Connection):
   kind: Literal["web"]
-  # Domains, each with its subdomains.
   hosts: list[str] = Field(min_length=1)
 
 
-class HttpConnection(_Connection):
+class HttpEntry(_Connection):
   kind: Literal["http"]
-  # host:port, usually a `${config}` reference; resolved on every start.
   address: str
 
 
-# One model per kind in CONNECTION_KINDS, chosen by `kind`.
 ConnectionEntry = Annotated[
-  KelsoAdminConnection | DockerAdminConnection | WebConnection | HttpConnection,
+  MountEntry | WebEntry | HttpEntry,
   Field(discriminator="kind"),
 ]
+
+
+def connection_of(entry: MountEntry | WebEntry | HttpEntry) -> Connection:
+  if isinstance(entry, WebEntry):
+    return WebConnection(tuple(entry.hosts))
+  if isinstance(entry, HttpEntry):
+    return HttpConnection(entry.address)
+  return MountConnection(MOUNT_KINDS[entry.kind])
 
 
 class CronEntry(BaseModel):
@@ -361,8 +372,13 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_env_refs(manifest))
   errors.extend(_validate_commands(manifest))
   errors.extend(_validate_cron(manifest))
-  errors.extend(_validate_connections(manifest))
   errors.extend(_validate_network(manifest))
+  errors.extend(
+    f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
+    for unit_name, run_entry in manifest.run.items()
+    for name in run_entry.connections
+    if name not in manifest.connections
+  )
   return errors
 
 
@@ -373,23 +389,20 @@ _RESTRICTED_COMPOSE_KEYS = frozenset({"dns", "networks"})
 def _validate_network(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   mode = manifest.app.network_mode
-  config_keys = set(manifest.config) | set(manifest.adv_config)
-  network = {
-    name: entry
-    for name, entry in manifest.connections.items()
-    if CONNECTION_KINDS[entry.kind].network
-  }
-  for name, entry in network.items():
+  network = False
+  for name, entry in manifest.connections.items():
+    if isinstance(entry, MountEntry):
+      continue
+    network = True
     where = f"[connections.{name}]"
-    if isinstance(entry, HttpConnection):
-      errors.extend(f"{where}: {e}" for e in _http_errors(name, entry, config_keys))
+    if isinstance(entry, HttpEntry):
+      errors.extend(f"{where}: {e}" for e in _http_errors(name, entry, manifest))
       if mode != "restricted":
         errors.append(
           f"{where}: an http connection needs network_mode = 'restricted', "
           "since only kproxy answers its name"
         )
       continue
-    assert isinstance(entry, WebConnection)
     for host in entry.hosts:
       try:
         endpoint_name(host)
@@ -417,15 +430,27 @@ def _validate_network(manifest: Manifest) -> list[str]:
   return errors
 
 
-def _http_errors(name: str, entry: HttpConnection, config_keys: set[str]) -> list[str]:
+def _http_errors(name: str, entry: HttpEntry, manifest: Manifest) -> list[str]:
   errors = []
   try:
     endpoint_name(name)
   except ValueError as e:
     errors.append(str(e))
+  if name in manifest.run:
+    errors.append(
+      f"a run unit is also called {name!r}, and docker answers that name with "
+      "the unit's container; rename one of them"
+    )
+  config = {**manifest.config, **manifest.adv_config}
   target = entry.address
   refs = EnvTemplate(target).get_identifiers()
-  unknown = sorted(set(refs) - config_keys)
+  unknown = sorted(set(refs) - config.keys())
+  secret = sorted(ref for ref in refs if ref in config and config[ref].secret)
+  if secret:
+    errors.append(
+      f"address references {', '.join(f'${{{r}}}' for r in secret)}, which is "
+      "secret; an address is shown in receipts and written to kproxy's rules"
+    )
   if unknown:
     errors.append(
       f"address references {', '.join(f'${{{r}}}' for r in unknown)}, "
@@ -478,17 +503,6 @@ def _validate_commands(manifest: Manifest) -> list[str]:
   return errors
 
 
-def _validate_connections(manifest: Manifest) -> list[str]:
-  errors: list[str] = []
-  for name in manifest.connections:
-    if name in manifest.run:
-      errors.append(
-        f"[connections.{name}]: a run unit is also called {name!r}, and docker "
-        "answers that name with the unit's container; rename one of them"
-      )
-  return errors
-
-
 def _validate_cron(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   for name, entry in manifest.cron.items():
@@ -508,8 +522,9 @@ def _validate_cron(manifest: Manifest) -> list[str]:
 
 
 def unit_connections(manifest: Manifest, run_entry: RunEntry) -> tuple[str, ...]:
-  """The connections a unit's env references: the ones it is given."""
-  found = {
+  """The connections a unit lists or its env references. This decides only which
+  units a mounted kind is mounted into: a network kind is app-wide."""
+  found = set(run_entry.connections) | {
     ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
     for value in run_entry.env.values()
     for ref in EnvTemplate(value).get_identifiers()
@@ -531,7 +546,7 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
   known.update(
     f"{CONN_KEY_PREFIX}{name}.{prop}"
     for name, entry in manifest.connections.items()
-    for prop in CONNECTION_KINDS[entry.kind].property_names
+    for prop in connection_of(entry).property_names
   )
 
   errors: list[str] = []

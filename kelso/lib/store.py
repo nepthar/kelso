@@ -92,12 +92,19 @@ class KelsoStore:
   def from_config(cls, config: Config) -> "KelsoStore":
     json_store = JsonLogtabStore(config.kelsodb_path)
     crypto = crypto_from_config(config)
-    return cls(json_store, crypto, config.port_base)
+    return cls(json_store, crypto, config.port_base, config.subnet_pool)
 
-  def __init__(self, store: ConfigStore, crypto: CryptoEngine, port_base: int):
+  def __init__(
+    self,
+    store: ConfigStore,
+    crypto: CryptoEngine,
+    port_base: int,
+    subnet_pool: str = kproxy.DEFAULT_SUBNET_POOL,
+  ):
     self._store = store
     self._crypto = crypto
     self._port_base = port_base
+    self._subnet_pool = subnet_pool
 
   # Routes stay central: a host port is contended for between apps.
   def list_routes(self, app_id: str) -> dict[str, dict[str, Any]]:
@@ -134,12 +141,12 @@ class KelsoStore:
 
   def next_free_subnet(self) -> str:
     taken = set(self._store.scan("subnets/").values())
-    for net in kproxy.subnets():
+    for net in kproxy.subnets(self._subnet_pool):
       if str(net) not in taken:
         return str(net)
     raise ValueError(
-      f"No free subnets left in {kproxy.SUBNET_POOL} for restricted apps; "
-      "remove one with `kelso rm --purge`"
+      f"No free subnets left in {self._subnet_pool} for restricted apps; "
+      "remove one with `kelso rm --purge`, or widen subnet_pool in config.toml"
     )
 
   def kelso_id(self) -> str:
