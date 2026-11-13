@@ -104,6 +104,10 @@ does well (refuse, and name the fix) into something an agent can parse.
   the `ConfigRequest` it needs as JSON. The answer is a `ConfigResponse`, given
   with `kelso config <app> --set`, the same one the TUI and the web form fill.
   Plan, answer, plan again converges to ready.
+- **Nothing waits on a terminal that isn't there.** A command that would ask
+  `[y/N]` checks for a terminal first. Without one it refuses with exit 2,
+  naming the `--yes` that skips the question, instead of waiting for an answer
+  that never comes.
 - **Plan, then apply.** Anything that changes state can print what it will do
   without doing it (`--plan`), as text for a human and JSON for the agent. Most
   verbs already build a plan object first (`RemovalPlan`, `RestorePlan`,
@@ -423,10 +427,11 @@ the same code, so it is a `[backup]` setting for the repository address and
 its credentials as kelso secrets, and a choice of whether the bucket replaces
 the local repository or `restic copy` mirrors one into the other each night.
 
-### Restricted network mode
-A mode where a sidecar takes over DNS and proxies all outgoing HTTP and HTTPS,
-allowing only what the manifest declares as a `[connection]`. This matters more
-once agents write apps: it bounds what a generated app can reach.
+### Restricted network mode, finished
+`network_mode = "restricted"` runs an app behind kproxy, reaching only its `web`
+and `http` connections. What is left:
+
+- **A `tcp` connection kind.** kproxy already relays a TCP port to one address.
 
 ### Services
 Let a bundle say "give me a postgres database and a login" and be given one

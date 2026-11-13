@@ -1,10 +1,16 @@
 from collections.abc import Mapping, Sequence
 
 from kelso.lib.config import Config
-from kelso.lib.connections import CONNECTION_KINDS
+from kelso.lib.connections import (
+  HttpConnection,
+  MountConnection,
+  WebConnection,
+  network_connections,
+)
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.run_layout import AppRunData, provider_route_urls, resolved_subdomain
 from kelso.lib.spec import AppSpec
+from kelso.lib.util import EnvTemplate
 
 # Every label in these receipts pads to at least this, so the capability block
 # and the location block under it line up in one `kelso start`.
@@ -80,6 +86,28 @@ def route_receipt_lines(
   return [
     _labeled_line("Routes:" if i == 0 else "", line) for i, line in enumerate(reach)
   ]
+
+
+def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
+  """What a restricted app may reach, or that an open one's connections don't apply."""
+  network = network_connections(spec.connections)
+  if spec.network_mode == "restricted":
+    head = (
+      "restricted: reaches only these" if network else "restricted: reaches nothing"
+    )
+  elif network:
+    head = "open: reaches anything; these only apply when restricted"
+  else:
+    return []
+  restricted = None if run_data is None else run_data.restricted
+  forwards = {} if restricted is None else restricted.forwards
+  lines = [head]
+  for name, entry in network.items():
+    if isinstance(entry, WebConnection):
+      lines.append(f"{name}: {', '.join(entry.hosts)}")
+    elif isinstance(entry, HttpConnection):
+      lines.append(f"{name}: http://{name} -> {forwards.get(name, entry.address)}")
+  return lines
 
 
 def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
@@ -219,6 +247,9 @@ def capability_receipt(
     for extra in containers[1:]:
       lines.append(_labeled_line("", extra))
 
+  for i, line in enumerate(network_lines(spec, run_data)):
+    lines.append(_labeled_line("Network:" if i == 0 else "", line))
+
   if not compact:
     declared_ports: list[str] = []
     for unit_name, unit in spec.run_units.items():
@@ -278,9 +309,15 @@ def danger_callouts(spec: AppSpec) -> list[str]:
   for name, volume in spec.volumes.items():
     if volume.kind == "host" and not volume.readonly:
       callouts.append(f"writable host bind '{name}'")
-  for name, connection in spec.manifest.connections.items():
-    kind = CONNECTION_KINDS[connection.kind]
-    callouts.append(f"connection '{name}' to {kind.desc}")
+  for name, connection in spec.connections.items():
+    if isinstance(connection, MountConnection):
+      callouts.append(f"connection '{name}' to {connection.kind.desc}")
+    elif isinstance(connection, HttpConnection):
+      defaults = {n: c.default for n, c in spec.config.items() if c.has_default()}
+      address = EnvTemplate(connection.address)
+      if set(address.get_identifiers()) <= defaults.keys():
+        chosen = address.safe_substitute(defaults)
+        callouts.append(f"connection '{name}' to {chosen}, an address the app chose")
   # Unmodelled compose passthrough is the same kind of claim as a writable host
   # bind.
   for warning in spec.compose_warnings:

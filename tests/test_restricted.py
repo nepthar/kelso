@@ -1,0 +1,364 @@
+"""`network_mode = "restricted"`: the app behind kproxy, from manifest to compose.
+
+The kproxy program has its own tests in kproxy/; these cover what kelso
+generates to run it, and that loading allocates and releases a subnet.
+"""
+
+import dataclasses
+
+import pytest
+import yaml
+
+from kelso.lib import kproxy
+from kelso.lib.config import load_config
+from kelso.lib.kelso import KelsoCtx
+from kelso.lib.manifest import ConfigError
+from kelso.lib.receipt import danger_callouts, network_lines
+from kelso.lib.run_layout import Restricted, load_run_data, make_compose_dict
+from tests.conftest import spec_of
+from tests.test_compose import run_data
+
+RESTRICTED = """\
+[app]
+version = "1"
+network_mode = "restricted"
+
+[adv_config]
+subdomain = { default = "demo" }
+
+[connections]
+weather = { kind = "web", hosts = ["api.weather.com", "Weather.COM."] }
+fonts   = { kind = "web", hosts = ["fonts.gstatic.com"] }
+
+[run.main]
+image = "nginx:1.27"
+compose = { depends_on = ["db"] }
+
+[run.main.routes]
+main = { port = "8080" }
+dns  = { port = "53/udp" }
+
+[run.db]
+image = "postgres:16"
+"""
+
+
+def test_restricted_compose_puts_units_behind_kproxy(tmp_path):
+  spec = spec_of(tmp_path, RESTRICTED)
+  data = dataclasses.replace(
+    run_data(spec, host_ports={"main": 41000, "dns": 41001}),
+    restricted=Restricted("10.250.3.0/24", kproxy.source_dir(), "", {}),
+  )
+  compose = make_compose_dict(spec, data)
+  main, db, proxy = (compose["services"][n] for n in ("main", "db", "kproxy"))
+
+  for unit in (main, db):
+    assert unit["networks"] == ["internal"]
+    assert unit["dns"] == ["10.250.3.2"]
+    assert "ports" not in unit
+  assert main["depends_on"] == {
+    "db": {"condition": "service_started"},
+    "kproxy": {"condition": "service_healthy"},
+  }
+  assert db["depends_on"] == {"kproxy": {"condition": "service_healthy"}}
+
+  # Routes are published on kproxy, in route-name order, and relayed in.
+  assert proxy["ports"] == ["41001:20000/udp", "41000:20001"]
+  assert "-ingress" not in proxy["command"]
+  assert proxy["networks"] == {
+    "internal": {"ipv4_address": "10.250.3.2"},
+    "egress": {},
+  }
+  assert proxy["build"] == {"context": str(kproxy.source_dir())}
+  assert proxy["image"].startswith("kelso-kproxy:")
+  assert compose["networks"]["internal"] == {
+    "internal": True,
+    "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"},
+    "ipam": {"config": [{"subnet": "10.250.3.0/24", "ip_range": "10.250.3.128/25"}]},
+  }
+
+
+def test_rules_file_allows_every_connection_and_relays_every_route(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  data = _run_data("restricted-demo")
+  rules = data.restricted.rules.splitlines()
+  assert rules[:7] == [
+    "default deny",
+    "http *.api.weather.com",
+    "http *.fonts.gstatic.com",
+    "http *.weather.com",
+    "https *.api.weather.com",
+    "https *.fonts.gstatic.com",
+    "https *.weather.com",
+  ]
+  assert rules[7:] == [
+    "ingress udp :20000 dns main:53",
+    "ingress tcp :20001 main main:8080",
+  ]
+  # The ports kproxy publishes are the listeners those rules open.
+  spec = _spec("restricted-demo")
+  ports = make_compose_dict(spec, data)["services"]["kproxy"]["ports"]
+  assert [p.split(":")[1] for p in ports] == ["20000/udp", "20001"]
+
+
+@pytest.mark.parametrize(
+  ("change", "message"),
+  [
+    (("[run.db]", "[run.kproxy]"), "uses that name for its proxy"),
+    (
+      (
+        'image = "postgres:16"',
+        'image = "postgres:16"\ncompose = { dns = ["1.1.1.1"] }',
+      ),
+      "manages dns",
+    ),
+    (
+      ('hosts = ["fonts.gstatic.com"]', 'hosts = ["10.0.0.1"]'),
+      "is not a domain name",
+    ),
+    (
+      ('network_mode = "restricted"', 'network_mode = "host"'),
+      "can't limit outbound traffic",
+    ),
+  ],
+)
+def test_restricted_manifest_mistakes_are_refused(tmp_path, change, message):
+  manifest = RESTRICTED.replace(*change)
+  if "host" in change[1]:
+    manifest = manifest.replace(manifest[manifest.index("[run.main.routes]") :], "")
+  with pytest.raises(ConfigError, match=message):
+    spec_of(tmp_path, manifest)
+
+
+FORWARD = """\
+[app]
+version = "1"
+network_mode = "restricted"
+
+[config]
+nas_address = { desc = "host:port" }
+
+[connections]
+nas = { kind = "http", address = "${nas_address}" }
+
+[run.main]
+image = "alpine"
+env = { NAS_URL = "${conn.nas.url}" }
+"""
+
+
+def test_a_forward_takes_its_target_from_config(tmp_path):
+  rules = kproxy.rules_text([], {"nas": "NAS.lan:080"})
+  assert rules.splitlines() == ["default deny", "http nas nas.lan:80"]
+  with pytest.raises(ValueError, match="connection nas: address 'nas.lan' must be"):
+    kproxy.rules_text([], {"nas": "nas.lan"})
+
+
+@pytest.mark.parametrize(
+  ("change", "message"),
+  [
+    (("${nas_address}", "${nope}"), r"references \$\{nope\}, which is not in"),
+    (("${nas_address}", "192.168.1.20"), "must be host:port"),
+    (('network_mode = "restricted"', ""), "an http connection needs network_mode"),
+  ],
+)
+def test_forward_mistakes_are_refused(tmp_path, change, message):
+  with pytest.raises(ConfigError, match=message):
+    spec_of(tmp_path, FORWARD.replace(*change))
+
+
+def test_web_connections_are_allowed_but_unused_in_open_mode(tmp_path):
+  spec = spec_of(tmp_path, RESTRICTED.replace('network_mode = "restricted"', ""))
+  compose = make_compose_dict(spec, run_data(spec))
+  assert "kproxy" not in compose["services"]
+  assert "networks" not in compose
+
+
+def _write(kelso_env, manifest: str) -> None:
+  bundle = kelso_env.local_repo / "restricted-demo.klso"
+  bundle.mkdir(parents=True, exist_ok=True)
+  (bundle / "manifest.toml").write_text(manifest)
+
+
+def _subnet(app: str) -> str | None:
+  cfg = load_config()
+  assert cfg is not None
+  return KelsoCtx(cfg).kelso_db.get_subnet(app)
+
+
+def test_loading_allocates_a_subnet_that_reloading_keeps(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  subnet = _subnet("restricted-demo")
+  assert subnet in {str(n) for n in kproxy.subnets(kproxy.DEFAULT_SUBNET_POOL)}
+
+  run_dir = kelso_env.run_root / "restricted-demo"
+  compose = yaml.safe_load((run_dir / "compose.yml").read_text())
+  assert compose["services"]["main"]["dns"] == [kproxy.proxy_address(subnet)]
+  assert "https *.api.weather.com" in (run_dir / "kproxy" / "rules.txt").read_text()
+
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert _subnet("restricted-demo") == subnet
+
+
+def test_subnets_come_from_the_configured_pool(kelso_env):
+  config = kelso_env.root / "config.toml"
+  config.write_text('subnet_pool = "172.30.0.0/20"\n' + config.read_text())
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert _subnet("restricted-demo") == "172.30.0.0/24"
+
+  config.write_text(config.read_text().replace("172.30.0.0/20", "172.30.0.0/28"))
+  refused = kelso_env.run("load", "restricted-demo")
+  assert refused.returncode != 0
+  assert "subnet_pool" in refused.stderr
+
+
+def test_an_app_that_stops_being_restricted_gives_its_subnet_back(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+
+  assert _subnet("restricted-demo") is None
+  assert not (kelso_env.run_root / "restricted-demo" / "kproxy").exists()
+
+
+def _spec(app: str):
+  cfg = load_config()
+  assert cfg is not None
+  return KelsoCtx(cfg).require_loaded_spec(app)
+
+
+def _run_data(app: str):
+  cfg = load_config()
+  assert cfg is not None
+  ctx = KelsoCtx(cfg)
+  return load_run_data(ctx.require_loaded_spec(app), ctx)
+
+
+def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
+  _write(kelso_env, FORWARD)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  # Unset config leaves the connection out; the missing value blocks start already.
+  assert "http nas" not in _run_data("restricted-demo").restricted.rules
+
+  set_ok = kelso_env.run(
+    "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
+  )
+  assert set_ok.returncode == 0
+  data = _run_data("restricted-demo")
+  assert "http nas 10.0.0.5:5000" in data.restricted.rules
+  assert network_lines(_spec("restricted-demo"), data) == [
+    "restricted: reaches only these",
+    "nas: http://nas -> 10.0.0.5:5000",
+  ]
+  main = make_compose_dict(_spec("restricted-demo"), data)["services"]["main"]
+  assert main["environment"]["NAS_URL"] == "http://nas"
+  assert "/run/kelso/conn" not in str(main.get("volumes"))
+  assert data.config_env()[kproxy.RULES_ENV] == kproxy.rules_digest(
+    data.restricted.rules
+  )
+
+  assert (
+    kelso_env.run("config", "restricted-demo", "--set", "nas_address=nope").returncode
+    == 0
+  )
+  blockers = [i.problem for i in _run_data("restricted-demo").start_blockers]
+  assert any(p.startswith("connection nas: address 'nope'") for p in blockers)
+
+
+def test_the_receipt_says_what_a_restricted_app_may_reach(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  started = kelso_env.run("start", "restricted-demo")
+  assert started.returncode == 0, started.stderr
+  assert "Network:     restricted: reaches only these" in started.stdout
+  assert "weather: api.weather.com, Weather.COM." in started.stdout
+
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  shown = kelso_env.run("load", "restricted-demo")
+  assert "open: reaches anything; these only apply when restricted" in shown.stdout
+
+
+def test_a_restricted_app_refuses_to_start_on_old_docker(kelso_env, monkeypatch):
+  monkeypatch.setattr("kelso.lib.lifecycle.run.server_major", lambda: 26)
+  _write(kelso_env, RESTRICTED)
+  refused = kelso_env.run("start", "restricted-demo")
+  assert refused.returncode == 1
+  assert (
+    "restricted-demo is restricted, and docker 26 is older than 27" in refused.stderr
+  )
+
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert kelso_env.run("start", "restricted-demo").returncode == 0
+
+
+def test_a_restricted_app_refuses_to_start_when_dockers_version_is_unknown(
+  kelso_env, monkeypatch
+):
+  monkeypatch.setattr("kelso.lib.lifecycle.run.server_major", lambda: None)
+  _write(kelso_env, RESTRICTED)
+  refused = kelso_env.run("start", "restricted-demo")
+  assert refused.returncode == 1
+  assert "docker's version can't be read" in refused.stderr
+
+
+def test_an_address_the_operator_sets_is_no_danger_callout(tmp_path):
+  assert danger_callouts(spec_of(tmp_path, FORWARD)) == []
+
+
+@pytest.mark.parametrize(
+  "change",
+  [
+    ("${nas_address}", "172.17.0.1:22"),
+    ('desc = "host:port"', 'default = "172.17.0.1:22"'),
+  ],
+)
+def test_an_address_the_bundle_supplies_is_a_danger_callout(tmp_path, change):
+  assert danger_callouts(spec_of(tmp_path, FORWARD.replace(*change))) == [
+    "connection 'nas' to 172.17.0.1:22, an address the app chose"
+  ]
+
+
+def test_a_domain_name_may_not_end_a_label_with_a_newline():
+  with pytest.raises(ValueError, match="is not a domain name"):
+    kproxy.endpoint_name("evil\n.com")
+
+
+def test_doctor_notes_a_docker_too_old_for_restricted_apps(kelso_env, monkeypatch):
+  monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 26)
+  shown = kelso_env.run("system", "doctor")
+  assert "docker 26 is older than 27" in shown.stdout
+  monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 29)
+  assert "older than 27" not in kelso_env.run("system", "doctor").stdout
+
+
+def test_a_connection_may_not_share_a_units_name(tmp_path):
+  clash = FORWARD.replace("nas = {", "main = {").replace(
+    "conn.nas.url", "conn.main.url"
+  )
+  with pytest.raises(ConfigError, match="a run unit is also called 'main'"):
+    spec_of(tmp_path, clash)
+
+
+def test_the_first_start_says_kproxy_is_being_built(kelso_env, monkeypatch):
+  _write(kelso_env, RESTRICTED)
+  monkeypatch.setattr("kelso.lib.lifecycle.run.image_exists", lambda tag: False)
+  first = kelso_env.run("start", "restricted-demo")
+  assert first.returncode == 0, first.stderr
+  assert "Building kproxy" in first.stderr
+
+  assert kelso_env.run("stop", "restricted-demo").returncode == 0
+  monkeypatch.setattr("kelso.lib.lifecycle.run.image_exists", lambda tag: True)
+  assert "Building kproxy" not in kelso_env.run("start", "restricted-demo").stderr
+
+
+def test_an_installed_kelso_finds_kproxy_inside_itself(tmp_path, monkeypatch):
+  shipped = tmp_path / "site" / "kelso" / "_kproxy"
+  shipped.mkdir(parents=True)
+  (shipped / "Dockerfile").write_text("FROM scratch\n")
+  (tmp_path / "site" / "kelso" / "lib").mkdir()
+  monkeypatch.setattr(kproxy, "__file__", str(tmp_path / "site/kelso/lib/kproxy.py"))
+  assert kproxy.source_dir() == shipped.resolve()

@@ -10,6 +10,7 @@ from cryptography.fernet import InvalidToken
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, Config
 
+from . import kproxy
 from .crypto import CryptoEngine, crypto_from_config
 from .logtab import LogTab
 
@@ -91,12 +92,19 @@ class KelsoStore:
   def from_config(cls, config: Config) -> "KelsoStore":
     json_store = JsonLogtabStore(config.kelsodb_path)
     crypto = crypto_from_config(config)
-    return cls(json_store, crypto, config.port_base)
+    return cls(json_store, crypto, config.port_base, config.subnet_pool)
 
-  def __init__(self, store: ConfigStore, crypto: CryptoEngine, port_base: int):
+  def __init__(
+    self,
+    store: ConfigStore,
+    crypto: CryptoEngine,
+    port_base: int,
+    subnet_pool: str = kproxy.DEFAULT_SUBNET_POOL,
+  ):
     self._store = store
     self._crypto = crypto
     self._port_base = port_base
+    self._subnet_pool = subnet_pool
 
   # Routes stay central: a host port is contended for between apps.
   def list_routes(self, app_id: str) -> dict[str, dict[str, Any]]:
@@ -118,6 +126,28 @@ class KelsoStore:
     if port > max_port:
       raise ValueError(f"No free host ports remaining. Limit is {PORT_RANGE_SIZE}")
     return port
+
+  # A restricted app's subnet is central too: docker refuses two networks that
+  # overlap. Unlike routes it outlives a reload, so the network isn't recreated.
+  def get_subnet(self, app_id: str) -> str | None:
+    return self._store.read(f"subnets/{app_id}")
+
+  def set_subnet(self, app_id: str, subnet: str) -> None:
+    self._store.write(f"subnets/{app_id}", subnet)
+
+  def clear_subnet(self, app_id: str) -> None:
+    if self.get_subnet(app_id) is not None:
+      self._store.delete(f"subnets/{app_id}")
+
+  def next_free_subnet(self) -> str:
+    taken = set(self._store.scan("subnets/").values())
+    for net in kproxy.subnets(self._subnet_pool):
+      if str(net) not in taken:
+        return str(net)
+    raise ValueError(
+      f"No free subnets left in {self._subnet_pool} for restricted apps; "
+      "remove one with `kelso rm --purge`, or widen subnet_pool in config.toml"
+    )
 
   def kelso_id(self) -> str:
     """This kelso's id: 8 hex characters, made once, never changed by kelso.
@@ -218,12 +248,16 @@ class KelsoStore:
 
   # App Management
   def app_ids(self) -> list[str]:
-    """Every app kelsodb still holds *load* state for -- which means routes."""
-    return sorted({key.split("/")[0] for key in self._store.scan("routes/")})
+    """Every app kelsodb still holds *load* state for: routes or a subnet."""
+    routes = {key.split("/")[0] for key in self._store.scan("routes/")}
+    return sorted(routes | set(self._store.scan("subnets/")))
 
   def purge_app(self, app_id: str) -> bool:
-    had = bool(self._store.scan(f"routes/{app_id}/"))
+    had = bool(self._store.scan(f"routes/{app_id}/")) or (
+      self.get_subnet(app_id) is not None
+    )
     self.clear_routes(app_id)
+    self.clear_subnet(app_id)
     return had
 
 

@@ -28,7 +28,7 @@ The only required section. Keys kelso does not know are refused.
 | `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso inspect` and the web UI. |
 | `url` | string | `""` | Where to read more. Must start with `https://` or `http://`; the web UI links to it. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
-| `network_mode` | `normal` \| `host` | `normal` | `host` drops port isolation and is called out as dangerous. |
+| `network_mode` | `open` \| `restricted` \| `host` | `open` | What the app can reach. See [Network modes](#network-modes). |
 
 ```toml
 [app]
@@ -52,7 +52,7 @@ creates.
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
-| `connections` | list of names | `[]` | `[connections]` this unit is given. See [`[connections.<name>]`](#connectionsname). |
+| `connections` | list of strings | `[]` | [Connections](#connectionsname) to give this unit even though its `env` references none of their properties. |
 | `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
 
@@ -109,25 +109,33 @@ kelso config <app> --bind media=photos
 ## `[connections.<name>]`
 
 Something outside the app that it needs to reach, which kelso provides: the
-app names a kind, and kelso works out how to get it there on this machine. A
-run unit is given a connection by listing it in its `connections`; kelso then
-mounts what the kind needs at `/run/kelso/conn/<name>` and offers what the app
-needs to know as `${conn.<name>.<property>}`, which `[run.<unit>.env]` maps
-to whatever names the app reads. A connection sets no environment variables
-itself.
+app names a kind, and kelso works out how to get it there on this machine.
+What the app needs to know about one is offered as
+`${conn.<name>.<property>}`, which `[run.<unit>.env]` maps to whatever names
+the app reads. A connection sets no environment variables itself.
+
+What referencing a connection does depends on its kind. A mounted kind is
+mounted only into the units that reference it, or that list it in
+`[run.<unit>] connections` when they need the mount but no property. A network
+kind is app-wide, not restricted to a single container: every unit can reach
+it, whether or not it references it.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `kind` | string | **required** | One of the kinds below. |
+| `kind` | string | **required** | One of the kinds below, which decides what other keys it takes. |
 | `desc` | string | `""` | Shown to the operator. |
+
+An `http` connection can't have the same name as a run unit: docker answers a
+unit's name with its container, so the connection would never be reached.
+
+There are two families of kind. The first mounts something from the host at
+`/run/kelso/conn/<name>`, and hands the app control of it, so kelso calls each
+one out as a danger on load and on the app's page:
 
 | Kind | Gives the app | Properties |
 | --- | --- | --- |
 | `kelso.admin` | kelsod's admin API: full control of kelso. | `socket`: the admin socket's path in the container. |
 | `docker.admin` | The docker daemon: full control of the host. | `socket`: the docker socket's path in the container. `host`: the same as a `DOCKER_HOST` value. |
-
-Each one hands the app control of something outside it, so kelso calls every
-connection out as a danger on load and on the app's page.
 
 ```toml
 [connections]
@@ -135,16 +143,112 @@ admin = { kind = "kelso.admin" }
 
 [run.main]
 image       = "..."
-connections = ["admin"]
 
 [run.main.env]
 KELSO_SOCKET = "${conn.admin.socket}"
 ```
 
-A connection does not cross machines. Docker Desktop on macOS mounts the
-admin socket but cannot carry connections through it, so an app that must
+A mounted connection does not cross machines. Docker Desktop on macOS mounts
+the admin socket but cannot carry connections through it, so an app that must
 work there takes kelsod's TCP address as an ordinary config value instead, as
 kelso-ui does with `api_address`.
+
+The second family is what an app may reach over the network. These are what
+[`network_mode = "restricted"`](#network-modes) lets through, and they are
+app-wide, not restricted to a single container. Which kind to use depends on where
+the thing lives: anything on the internet is `web`, and anything on your own
+network (the LAN, this machine, a VPN like Tailscale) is `http`, whose
+address you set.
+
+| Kind | Keys | Gives the app | Properties |
+| --- | --- | --- | --- |
+| `web` | `hosts`: a list of domains | Each domain, and every subdomain of it, on the internet, over HTTP and HTTPS. | none |
+| `http` | `address`: `host:port`, usually a `${config}` reference | That address on your own network, reached over HTTP by the connection's name. | `host`: that name. `url`: `http://<name>`. |
+
+```toml
+[connections]
+weather = { kind = "web", hosts = ["api.weather.com"] }
+fonts   = { kind = "web", hosts = ["fonts.googleapis.com", "fonts.gstatic.com"] }
+```
+
+A `web` host is a domain name, not an IP address or a pattern: `*.weather.com`
+is refused, since `weather.com` already means that. A `web` connection never
+reaches your own network: when a listed domain resolves to a private address,
+the connection is refused, so whoever owns the domain can't later point it at
+your router or NAS. `web` connections are allowed in `open` mode, where they
+change nothing, and refused in `host` mode, which can't limit what the app
+reaches.
+
+An `http` connection is how a restricted app reaches something on your own
+network. The app connects to the connection's name, and kproxy sends that on
+to the `host:port` in `address`, usually from config, so it is yours to set:
+
+```toml
+[config]
+nas_address = { desc = "The NAS's address as host:port, like 192.168.1.20:5000" }
+
+[connections]
+nas = { kind = "http", address = "${nas_address}" }
+
+[run.main]
+
+[run.main.env]
+NAS_URL = "${conn.nas.url}"
+```
+
+The app calls `http://nas`, and kproxy connects it to whatever `nas_address`
+says. The host is a name or an IPv4 address, and the port is required. Kelso
+fills `address` in on every start, so `kelso config --set` takes effect at the next
+start, and a value that isn't `host:port` stops the app from starting, naming
+the fix.
+
+An address you set is yours. One the bundle supplies, written out in `address`
+or as the config's `default`, lets the app pick what it reaches on your
+network, so kelso calls it out as a danger before you start it. An address
+can't reference a `secret` config value: it is shown in receipts and written
+to kproxy's rules file.
+
+- Only HTTP: kproxy finds the name in the `Host` header.
+- It needs `network_mode = "restricted"`: without kproxy, nothing answers
+  the name.
+
+## Network modes
+
+`[app] network_mode` decides what an app's containers can reach. It is
+app-wide: every unit gets the same.
+
+| Mode | The app reaches | Routes |
+| --- | --- | --- |
+| `open` | Anything, as a plain docker compose app does. Its units share a private network. | Published as usual. |
+| `restricted` | Only its `web` and `http` [connections](#connectionsname), plus its own units. | Published on kproxy, which relays them in. |
+| `host` | Anything, on the host's own network, with no port isolation. Called out as dangerous. | Refused: the app binds the host's ports itself. |
+
+A restricted app's units sit on an internal network with no route out, so a
+connection to a raw IP address fails, and so does anything to a domain that
+isn't listed. One more container, `kproxy`, is on both that network and an
+ordinary one. It answers the units' DNS, lets their HTTP and HTTPS through to
+listed domains only, and relays each route, TCP or UDP, in to its unit. Kelso
+gives each restricted app its own subnet, kept across loads like a port.
+
+What that costs the app:
+
+- **Every client appears to come from kproxy.** The app sees kproxy's address
+  instead of each visitor's. An app that decides things by client IP, such as
+  local-only access, per-IP rate limits, or "trusted network" logins, will
+  treat every visitor alike. Jellyfin, for one, would treat internet viewers as
+  local. Such apps should stay `open`.
+- **Only HTTP and HTTPS go out,** to the listed domains on ports 80 and 443.
+- **A unit can't be named `kproxy`,** and its `compose` table can't set `dns`
+  or `networks`, which kelso sets.
+
+A restricted app needs docker 27 or newer: older versions ignore the option that
+keeps the app's network from having an address on the host, so the app could
+reach the host's own services. `kelso start` refuses on an older docker, and
+`kelso system doctor` notes it.
+
+kproxy's source ships inside kelso, and docker builds it the first time a
+restricted app starts, which takes about a minute; later starts reuse the image.
+See [kproxy's README](../kproxy/README.md) for how the proxy works.
 
 ## `[config]` and `[adv_config]`
 
@@ -378,7 +482,7 @@ Two rules apply.
 
 **Keys kelso generates are refused** — `image`, `volumes`, `ports`, `labels`,
 `environment`, `command`, `hostname`, `restart`, `network_mode`,
-`healthcheck`. Those have
+`healthcheck`, and in `restricted` mode `dns` and `networks` too. Those have
 manifest fields; setting them twice would mean one of them silently losing.
 
 **Keys kelso does not recognise are announced.** There is an allowlist of

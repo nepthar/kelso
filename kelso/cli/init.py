@@ -34,6 +34,10 @@ CONFIG_TEMPLATE = """\
 repos_root = "repos"
 port_base = 41000
 
+# Each restricted app's private network is a /24 from this pool. Move it if it
+# overlaps a network this machine is on.
+# subnet_pool = "10.250.0.0/16"
+
 # Where route providers send traffic: the address they reach this host at.
 # Required as soon as one is configured. On Docker Desktop, where they run in
 # containers, it is host.docker.internal. A top-level key, like link_address:

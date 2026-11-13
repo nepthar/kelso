@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
   BaseModel,
@@ -19,8 +19,16 @@ from pydantic import (
 )
 
 from kelso.lib.apps import AppID
-from kelso.lib.connections import CONN_KEY_PREFIX, CONNECTION_KINDS
+from kelso.lib.connections import (
+  CONN_KEY_PREFIX,
+  MOUNT_KINDS,
+  Connection,
+  HttpConnection,
+  MountConnection,
+  WebConnection,
+)
 from kelso.lib.cronexpr import CronSchedule
+from kelso.lib.kproxy import KPROXY_SERVICE, endpoint_name, forward_target
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
   KELSO_GUEST_DIR,
@@ -31,7 +39,7 @@ from kelso.lib.util import (
   Identifier,
 )
 
-NetworkMode = Literal["normal", "host"]
+NetworkMode = Literal["open", "restricted", "host"]
 VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
 
 
@@ -44,7 +52,7 @@ class AppSection(BaseModel):
 
   app_id: str | None = None
   version: str
-  network_mode: NetworkMode = "normal"
+  network_mode: NetworkMode = "open"
   display_name: str = ""
   description: str = ""
   author: str = ""
@@ -227,7 +235,7 @@ class RunEntry(BaseModel):
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.
   healthcheck: str | list[str] | None = Field(default=None, min_length=1)
-  # `[connections]` this unit is given; each mounts at /run/kelso/conn/<name>.
+  # `[connections]` to give this unit beyond the ones its env references.
   connections: list[Identifier] = Field(default_factory=list)
   # Escape hatch: copied verbatim into this unit's compose service for
   # anything kelso doesn't model (ulimits, mem_limit, ...).
@@ -253,19 +261,39 @@ class CommandEntry(BaseModel):
   desc: str = ""
 
 
-class ConnectionEntry(BaseModel):
+class _Connection(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
-  kind: str
   desc: str = ""
 
-  @field_validator("kind")
-  @classmethod
-  def check_kind(cls, value: str) -> str:
-    if value not in CONNECTION_KINDS:
-      known = ", ".join(sorted(CONNECTION_KINDS))
-      raise ValueError(f"unknown connection kind {value!r}; kinds are: {known}")
-    return value
+
+class MountEntry(_Connection):
+  # The names in MOUNT_KINDS.
+  kind: Literal["kelso.admin", "docker.admin"]
+
+
+class WebEntry(_Connection):
+  kind: Literal["web"]
+  hosts: list[str] = Field(min_length=1)
+
+
+class HttpEntry(_Connection):
+  kind: Literal["http"]
+  address: str
+
+
+ConnectionEntry = Annotated[
+  MountEntry | WebEntry | HttpEntry,
+  Field(discriminator="kind"),
+]
+
+
+def connection_of(entry: MountEntry | WebEntry | HttpEntry) -> Connection:
+  if isinstance(entry, WebEntry):
+    return WebConnection(tuple(entry.hosts))
+  if isinstance(entry, HttpEntry):
+    return HttpConnection(entry.address)
+  return MountConnection(MOUNT_KINDS[entry.kind])
 
 
 class CronEntry(BaseModel):
@@ -344,7 +372,95 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   errors.extend(_validate_env_refs(manifest))
   errors.extend(_validate_commands(manifest))
   errors.extend(_validate_cron(manifest))
-  errors.extend(_validate_connections(manifest))
+  errors.extend(_validate_network(manifest))
+  errors.extend(
+    f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
+    for unit_name, run_entry in manifest.run.items()
+    for name in run_entry.connections
+    if name not in manifest.connections
+  )
+  return errors
+
+
+# Compose keys that would let a restricted unit reach out around kproxy.
+_RESTRICTED_COMPOSE_KEYS = frozenset({"dns", "networks"})
+
+
+def _validate_network(manifest: Manifest) -> list[str]:
+  errors: list[str] = []
+  mode = manifest.app.network_mode
+  network = False
+  for name, entry in manifest.connections.items():
+    if isinstance(entry, MountEntry):
+      continue
+    network = True
+    where = f"[connections.{name}]"
+    if isinstance(entry, HttpEntry):
+      errors.extend(f"{where}: {e}" for e in _http_errors(name, entry, manifest))
+      if mode != "restricted":
+        errors.append(
+          f"{where}: an http connection needs network_mode = 'restricted', "
+          "since only kproxy answers its name"
+        )
+      continue
+    for host in entry.hosts:
+      try:
+        endpoint_name(host)
+      except ValueError as e:
+        errors.append(f"{where}: {e}")
+  if mode == "host" and network:
+    errors.append(
+      "[connections]: network_mode 'host' can't limit outbound traffic; "
+      "use network_mode = 'restricted'"
+    )
+  if mode != "restricted":
+    return errors
+  if KPROXY_SERVICE in manifest.run:
+    errors.append(
+      f"[run.{KPROXY_SERVICE}]: network_mode 'restricted' uses that name for "
+      "its proxy; rename the unit"
+    )
+  for unit_name, run_entry in manifest.run.items():
+    clashes = _RESTRICTED_COMPOSE_KEYS & run_entry.compose.keys()
+    if clashes:
+      errors.append(
+        f"[run.{unit_name}.compose]: network_mode 'restricted' manages "
+        f"{', '.join(sorted(clashes))}"
+      )
+  return errors
+
+
+def _http_errors(name: str, entry: HttpEntry, manifest: Manifest) -> list[str]:
+  errors = []
+  try:
+    endpoint_name(name)
+  except ValueError as e:
+    errors.append(str(e))
+  if name in manifest.run:
+    errors.append(
+      f"a run unit is also called {name!r}, and docker answers that name with "
+      "the unit's container; rename one of them"
+    )
+  config = {**manifest.config, **manifest.adv_config}
+  target = entry.address
+  refs = EnvTemplate(target).get_identifiers()
+  unknown = sorted(set(refs) - config.keys())
+  secret = sorted(ref for ref in refs if ref in config and config[ref].secret)
+  if secret:
+    errors.append(
+      f"address references {', '.join(f'${{{r}}}' for r in secret)}, which is "
+      "secret; an address is shown in receipts and written to kproxy's rules"
+    )
+  if unknown:
+    errors.append(
+      f"address references {', '.join(f'${{{r}}}' for r in unknown)}, "
+      "which is not in [config] or [adv_config]"
+    )
+  elif not refs:
+    try:
+      forward_target(target)
+    except ValueError as e:
+      errors.append(str(e))
   return errors
 
 
@@ -387,17 +503,6 @@ def _validate_commands(manifest: Manifest) -> list[str]:
   return errors
 
 
-def _validate_connections(manifest: Manifest) -> list[str]:
-  errors: list[str] = []
-  for unit_name, run_entry in manifest.run.items():
-    for name in run_entry.connections:
-      if name not in manifest.connections:
-        errors.append(
-          f"[run.{unit_name}]: connection {name!r} is not declared in [connections]"
-        )
-  return errors
-
-
 def _validate_cron(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   for name, entry in manifest.cron.items():
@@ -416,6 +521,18 @@ def _validate_cron(manifest: Manifest) -> list[str]:
   return errors
 
 
+def unit_connections(manifest: Manifest, run_entry: RunEntry) -> tuple[str, ...]:
+  """The connections a unit lists or its env references. This decides only which
+  units a mounted kind is mounted into: a network kind is app-wide."""
+  found = set(run_entry.connections) | {
+    ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
+    for value in run_entry.env.values()
+    for ref in EnvTemplate(value).get_identifiers()
+    if ref.startswith(CONN_KEY_PREFIX)
+  }
+  return tuple(name for name in manifest.connections if name in found)
+
+
 def _validate_env_refs(manifest: Manifest) -> list[str]:
   """Every `${…}` in [run.*.env] must name a key in the flat substitution map."""
   known = set(manifest.config) | set(manifest.adv_config) | set(APP_OPTIONS)
@@ -426,27 +543,22 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
   )
   known.update(f"{KLSO_KEY_PREFIX}{key}" for key in KLSO_KEYS)
 
+  known.update(
+    f"{CONN_KEY_PREFIX}{name}.{prop}"
+    for name, entry in manifest.connections.items()
+    for prop in connection_of(entry).property_names
+  )
+
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
-    attached = known | {
-      f"{CONN_KEY_PREFIX}{name}.{prop}"
-      for name in run_entry.connections
-      if name in manifest.connections
-      for prop in CONNECTION_KINDS[manifest.connections[name].kind].property_names
-    }
     for var, value in run_entry.env.items():
       for ref in sorted(EnvTemplate(value).get_identifiers()):
-        if ref in attached:
-          continue
-        if "." not in ref:
+        if ref in known or "." not in ref:
           continue  # Undeclared config-style; compose leaves it unsubstituted.
         where = f"[run.{unit_name}.env]: {var} references ${{{ref}}}"
         conn = ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
-        if ref.startswith(CONN_KEY_PREFIX) and conn not in run_entry.connections:
-          errors.append(
-            f"{where}, but connection {conn!r} is not attached to this unit; "
-            f"add it to [run.{unit_name}] connections"
-          )
+        if ref.startswith(CONN_KEY_PREFIX) and conn not in manifest.connections:
+          errors.append(f"{where}, but no connection {conn!r} is declared")
         else:
           errors.append(f"{where}, which is not a known substitution")
   return errors
