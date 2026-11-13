@@ -14,6 +14,7 @@ import pytest
 import kelso.lib.docker
 import kelso.lib.doctor
 import kelso.lib.lifecycle.rootfs
+import kelso.lib.restic
 from kelso.cli.main import run as cli_run
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import scan_bundles
@@ -227,12 +228,13 @@ sys.exit(
 def use_fake_docker(monkeypatch: pytest.MonkeyPatch, docker) -> None:
   """Route kelso's docker calls to `docker` in-process instead of a child.
 
-  These two modules are the only places kelso starts docker. The one test that
+  These three modules are the only places kelso starts docker. The one test that
   keeps a real process is `test_a_streamed_failure_hands_the_error_a_tail`.
   """
   fake = FakeSubprocess(docker)
   monkeypatch.setattr(kelso.lib.docker, "subprocess", fake)
   monkeypatch.setattr(kelso.lib.lifecycle.rootfs, "subprocess", fake)
+  monkeypatch.setattr(kelso.lib.restic, "subprocess", fake)
 
 
 @pytest.fixture(autouse=True)
