@@ -14,7 +14,7 @@ kelso logs demo-volumes
 
 ```toml klso_path="manifest.toml"
 [app]
-version      = "0.1.1"
+version      = "0.1.0"
 display_name = "Volume Showcase"
 description  = "Demonstrates volumes and binding of a host directory"
 
