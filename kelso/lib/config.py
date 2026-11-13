@@ -27,7 +27,7 @@ VAR_DIRS = ("run", "conn", "logs", "temp", "lock")
 CONF_DIR = "conf"
 MASTER_KEYFILE = "master.key"
 
-DEFAULT_REPOS_ROOT = "repos"
+REPOS_DIR = "repos"
 
 # Built-in noop provider tag. Always present; operators may not redefine it.
 NONE_ROUTE_PROVIDER_TAG = "none"
@@ -149,7 +149,6 @@ class ConfigFile(BaseModel):
 
   model_config = ConfigDict(extra="forbid")
 
-  repos_root: str = DEFAULT_REPOS_ROOT
   port_base: int = 41000
   subnet_pool: str = DEFAULT_SUBNET_POOL
   route_address: str = ""
@@ -175,7 +174,6 @@ class HostVolume:
 class Config:
   config_path: Path
   kelso_root: Path
-  repos_root: Path
   repos: dict[str, Repo]
   master_key: str
   port_base: int
@@ -192,7 +190,6 @@ class Config:
     self,
     config_path: Path,
     kelso_root: Path,
-    repos_root: Path,
     master_key: str,
     port_base: int,
     default_route_provider: str,
@@ -206,9 +203,8 @@ class Config:
   ) -> None:
     self.config_path = config_path
     self.kelso_root = kelso_root
-    self.repos_root = repos_root
     self.repos = {
-      LOCAL_REPO: Repo(LOCAL_REPO, repos_root / LOCAL_REPO, "local"),
+      LOCAL_REPO: Repo(LOCAL_REPO, self.repos_root / LOCAL_REPO, "local"),
       **(extra_repos or {}),
     }
     self.master_key = master_key
@@ -220,6 +216,10 @@ class Config:
     self.route_providers = route_providers
     self.host_volumes = host_volumes or {}
     self.backup = backup or BackupEntry()
+
+  @property
+  def repos_root(self) -> Path:
+    return self.kelso_root / REPOS_DIR
 
   @property
   def var_root(self) -> Path:
@@ -380,8 +380,7 @@ def load_config_file(config_file: str | Path) -> Config:
   if not master_key:
     logger.debug("No recovery phrase in %s", master_keyfile)
 
-  repos_root = ep(parsed.repos_root)
-  extra_repos = _resolve_repos(repo_raw, repos_root, ep)
+  extra_repos = _resolve_repos(repo_raw, kelso_root / REPOS_DIR, ep)
 
   route_providers: dict[str, RouteProviderEntry] = {
     NONE_ROUTE_PROVIDER_TAG: RouteProviderEntry(kind="noop", domain=PLACEHOLDER_DOMAIN),
@@ -401,7 +400,6 @@ def load_config_file(config_file: str | Path) -> Config:
   return Config(
     config_path=config_path,
     kelso_root=kelso_root,
-    repos_root=repos_root,
     master_key=master_key,
     port_base=parsed.port_base,
     subnet_pool=parsed.subnet_pool,

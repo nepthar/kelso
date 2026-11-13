@@ -53,7 +53,6 @@ pytest_plugins = ["pytester"]
 FIXTURES = Path(__file__).parent / "fixtures" / "apps"
 
 CONFIG = """\
-repos_root = "repos"
 port_base = 41000
 default_route_provider = "web"
 

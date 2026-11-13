@@ -526,7 +526,6 @@ def _config(tmp_path: Path, route_providers: dict) -> Config:
   return Config(
     config_path=tmp_path / "config.toml",
     kelso_root=tmp_path,
-    repos_root=tmp_path / "repos",
     master_key=master_key_from(TEST_SEED),
     port_base=41000,
     route_address="192.168.1.10",
