@@ -48,7 +48,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing deployed.")
     return
 
-  found = subprocess.run([*SSH, host, "kelso root"], capture_output=True, text=True)
+  found = subprocess.run(_remote(host, "kelso root"), capture_output=True, text=True)
   if found.returncode:
     raise ValueError(
       f"Could not run kelso on {host}: {found.stderr.strip()}\n"
@@ -58,7 +58,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   dest = f"{root}/{REPOS_DIR}/{LOCAL_REPO}/{source.name}"
 
   loaded = subprocess.run(
-    [*SSH, host, f"kelso app source {app}"], capture_output=True, text=True
+    _remote(host, f"kelso app source {app}"), capture_output=True, text=True
   )
   if loaded.returncode:
     raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
@@ -86,7 +86,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     copy = subprocess.run([*rsync, str(source), f"{host}:{dest}"])
   _check(copy)
 
-  _check(subprocess.run([*SSH, host, command]))
+  _check(subprocess.run(_remote(host, command)))
+
+
+def _remote(host: str, command: str) -> list[str]:
+  # sshd's shell runs no profile, so the PATH lacks ~/.local/bin, where kelso's
+  # own install (`uv tool install`) puts it.
+  return [*SSH, host, f"PATH=~/.local/bin:$PATH; {command}"]
 
 
 def _files(source: Path) -> list[str]:

@@ -17,6 +17,8 @@ def remote(kelso_env, monkeypatch):
   box = SimpleNamespace(calls=[], cwds=[], source="")
 
   def run(argv, **kwargs):
+    if argv[0] == "ssh":
+      argv = [*argv[:-1], argv[-1].removeprefix("PATH=~/.local/bin:$PATH; ")]
     box.calls.append(argv)
     box.cwds.append(kwargs.get("cwd"))
     code, out = 0, ""
