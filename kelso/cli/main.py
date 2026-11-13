@@ -12,6 +12,7 @@ from kelso.cli import (
   cmd,
   config,
   cron,
+  deploy,
   dev,
   init,
   inspect,
@@ -22,6 +23,7 @@ from kelso.cli import (
   repo,
   restart,
   restore,
+  root,
   routes,
   shell,
   start,
@@ -58,6 +60,8 @@ COMMANDS = [
   logs,
   shell,
   dev,
+  deploy,
+  root,
   backup,
   cron,
   repo,
@@ -85,9 +89,11 @@ Apps
   shell       Open a shell in one of an app's containers
 
   dev         Run an app bundle in this terminal
+  deploy      Copy an app bundle to another box and load or update it there
 
 This box
   status      Show the host, apps, routes, and storage at a glance
+  root        Print the kelso root path
   up          Start all apps in start_order groups
   down        Stop all apps in start_order groups
   cleanup     List what kelso no longer needs; --apply deletes it

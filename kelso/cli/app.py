@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.lifecycle import bound_to
 from kelso.lib.lifecycle.edit import ManifestMoved, edit_manifest, editable_manifest
 
 logger = logging.getLogger("kelso.cli")
@@ -28,6 +29,18 @@ def register(subparsers) -> None:
     "-m", "--message", default="", help="What changed, for the commit message"
   )
   edit.set_defaults(func=run_edit, activity="app-edit")
+
+  source = sub.add_parser(
+    "source",
+    help="Print what a loaded app was loaded from; nothing if it is not loaded",
+  )
+  source.add_argument("app", help="App ID, in full")
+  source.set_defaults(func=run_source)
+
+
+def run_source(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if ctx.is_loaded(args.app):
+    print(bound_to(args.app, ctx) or "")
 
 
 def run_edit(args: argparse.Namespace, ctx: KelsoCtx) -> None:

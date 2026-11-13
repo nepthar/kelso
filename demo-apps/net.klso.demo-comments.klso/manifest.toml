@@ -1,0 +1,17 @@
+[app]
+version      = "0.1.0"
+display_name = "Comments Demo"
+description  = "A page of comments kept in sqlite, to back up and restore"
+
+[volumes]
+app  = { kind = "app", desc = "The server, from the ./app folder" }
+data = { kind = "data", desc = "comments.db, the sqlite database" }
+
+[run.main]
+image       = "python:3.13-alpine"
+cmd         = ["python", "/app/server.py"]
+volumes     = { app = "/app", data = "/data" }
+healthcheck = "wget -q -O /dev/null http://localhost:8080/ || exit 1"
+
+[run.main.routes]
+main = { port = "8080" }

@@ -28,10 +28,9 @@ DEMO_REPO = "github://nepthar/kelso/main/demo-apps"
 CONFIG_TEMPLATE = """\
 # Kelso configuration — edit this file to change your setup.
 # Paths are relative to the directory containing this file unless absolute.
-# Loaded apps live in var/run/, and the master key, kelsodb and per-app
-# config in conf/; those two are fixed.
+# Loaded apps live in var/run/, repos in repos/, and the master key, kelsodb
+# and per-app config in conf/; those are fixed.
 
-repos_root = "repos"
 port_base = 41000
 
 # Each restricted app's private network is a /24 from this pool. Move it if it

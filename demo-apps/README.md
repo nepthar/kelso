@@ -1,9 +1,10 @@
 # Demo apps
 
-Small apps that each show off one kelso feature. Every one is a single
-`.klso.md` file, so the manifest, scripts and notes are all readable in one
-place; open any of them to see how a feature is declared before you use it in
-an app of your own.
+Small apps that each show off one kelso feature. Most are a single `.klso.md`
+file, so the manifest, scripts and notes are all readable in one place; open
+any of them to see how a feature is declared before you use it in an app of
+your own. `demo-comments` is a `.klso` folder instead, the form an app you
+develop and `kelso deploy` usually takes.
 
 ## Installing them
 
@@ -31,5 +32,6 @@ work on it. When you are done, `kelso unload <app>` removes a demo and
 | [demo-network](net.klso.demo-network.klso.md) | A restricted app: `web` and `http` connections, and what it is refused |
 | [demo-cron](net.klso.demo-cron.klso.md) | `[commands]` and `[cron]`: run by hand, on a schedule, or detached |
 | [demo-backup](net.klso.demo-backup.klso.md) | A volume that changes constantly, to back up and restore |
+| [demo-comments](net.klso.demo-comments.klso) | A web page of comments in sqlite: post some, back up, restore |
 | [demo-compose](net.klso.demo-compose.klso.md) | `[run.<unit>.compose]` for compose options kelso doesn't model |
 | [demo-danger](net.klso.demo-danger.klso.md) | Compose keys kelso warns about before loading |

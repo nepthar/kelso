@@ -134,7 +134,6 @@ main = {{ port = "{port}:80" }}
   config = root / "config.toml"
   config.write_text(
     """\
-repos_root = "repos"
 port_base = 41000
 """
   )
