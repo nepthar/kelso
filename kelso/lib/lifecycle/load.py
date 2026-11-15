@@ -1,7 +1,7 @@
 import os
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -213,12 +213,48 @@ def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...
       continue
     logger.debug("volume %s: %s -> %s", volume_name, link.destination, link.target)
     if link.mkdir:
-      link.source.mkdir(parents=True, exist_ok=True)
+      _make_shared_dirs(link.source.parent, link.source)
     if not link.source.exists():
       raise ValueError(f"volume {volume_name} source does not exist: {link.source}")
     _make_link(link.destination, link.target)
 
+  _make_nested_mountpoints(spec, run_data)
   return tuple(sorted(name for name in existing if name not in spec.volumes))
+
+
+# Sticky and writable by everyone, as /tmp is: a container running as any uid can
+# make its own folders in a new volume, and only remove what it made.
+SHARED_DIR_MODE = 0o1777
+
+
+def _make_shared_dirs(root: Path, path: Path) -> None:
+  """Create `path`; each directory created below `root` gets `SHARED_DIR_MODE`."""
+  root.mkdir(parents=True, exist_ok=True)
+  for part in reversed((path, *path.parents)[: len(path.relative_to(root).parts)]):
+    if not part.exists():
+      part.mkdir()
+      part.chmod(SHARED_DIR_MODE)
+
+
+def _make_nested_mountpoints(spec: AppSpec, run_data: AppRunData) -> None:
+  """Create each mount target that lies inside another of the unit's volumes.
+
+  Docker creates a missing one as root, which the app then cannot write beside.
+  """
+  for unit in spec.run_units.values():
+    mounts = sorted(
+      ((PurePosixPath(b.guest_path), name) for name, b in unit.volumes.items()),
+      key=lambda m: len(m[0].parts),
+    )
+    for i, (inner, _) in enumerate(mounts):
+      outers = [(p, n) for p, n in mounts[:i] if inner.is_relative_to(p)]
+      if not outers:
+        continue
+      outer_path, outer_name = outers[-1]
+      link = run_data.volume_links.get(outer_name)
+      if link is None or not link.mkdir or outer_path == inner:
+        continue
+      _make_shared_dirs(link.source, link.source / inner.relative_to(outer_path))
 
 
 def link_host_volumes(spec: AppSpec, run_data: AppRunData) -> None:

@@ -320,6 +320,32 @@ def test_an_added_volume_is_created_empty(kelso_env):
   assert list(added.iterdir()) == []
 
 
+def test_a_new_volume_is_writable_by_any_user(kelso_env):
+  app_id = "vol-mode"
+  _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "data" }'))
+  assert kelso_env.run("load", app_id).returncode == 0
+
+  made = kelso_env.volumes_root / "data" / app_id / "one"
+  assert made.stat().st_mode & 0o7777 == 0o1777
+
+
+def test_a_mount_inside_another_volume_is_created_by_kelso(kelso_env):
+  """Docker would create config/data as root, and a non-root app couldn't use it."""
+  app_id = "vol-nested"
+  manifest = _volumes_manifest(
+    'config = { kind = "data" }\ntrickplay = { kind = "temp" }'
+  ).replace(
+    "volumes = { }",
+    'volumes = { config = "/config", trickplay = "/config/data/trickplay" }',
+  )
+  _write_bundle(kelso_env, app_id, manifest)
+  assert kelso_env.run("load", app_id).returncode == 0
+
+  config = kelso_env.volumes_root / "data" / app_id / "config"
+  assert (config / "data" / "trickplay").is_dir()
+  assert (config / "data").stat().st_mode & 0o7777 == 0o1777
+
+
 def test_changing_a_volumes_kind_is_refused(kelso_env):
   """The bytes live under the old kind's root; moving them silently is worse."""
   app_id = "vol-churn"
