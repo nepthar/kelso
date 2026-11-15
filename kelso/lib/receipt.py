@@ -88,25 +88,38 @@ def route_receipt_lines(
   ]
 
 
+_NETWORK_HEADS = {
+  "restrict": "restrict: reaches only these",
+  "ask": "ask: reaches these, and holds anything else for you to decide",
+  "watch": "watch: reaches anything, logging each host; these are listed",
+}
+
+
 def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
-  """What a restricted app may reach, or that an open one's connections don't apply."""
+  """What an app behind kproxy may reach, or that an open one's connections don't."""
   network = network_connections(spec.connections)
-  if spec.network_mode == "restricted":
-    head = (
-      "restricted: reaches only these" if network else "restricted: reaches nothing"
-    )
+  mode = spec.network_mode if run_data is None else run_data.network_mode
+  if mode in _NETWORK_HEADS:
+    head = _NETWORK_HEADS[mode]
+    if mode == "restrict" and not network:
+      head = "restrict: reaches nothing"
   elif network:
-    head = "open: reaches anything; these only apply when restricted"
+    head = "open: reaches anything; web connections only apply behind kproxy"
   else:
     return []
+  if mode != spec.network_mode:
+    head += f" (set by you; the manifest says {spec.network_mode})"
   restricted = None if run_data is None else run_data.restricted
   forwards = {} if restricted is None else restricted.forwards
   lines = [head]
   for name, entry in network.items():
     if isinstance(entry, WebConnection):
       lines.append(f"{name}: {', '.join(entry.hosts)}")
-    elif isinstance(entry, HttpConnection):
+    elif isinstance(entry, HttpConnection) and restricted is not None:
       lines.append(f"{name}: http://{name} -> {forwards.get(name, entry.address)}")
+    elif isinstance(entry, HttpConnection):
+      conn = run_data.connections.get(name) if run_data else None
+      lines.append(f"{name}: {(conn and conn.properties.get('url')) or entry.address}")
   return lines
 
 

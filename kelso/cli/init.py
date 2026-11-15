@@ -33,7 +33,7 @@ CONFIG_TEMPLATE = """\
 
 port_base = 41000
 
-# Each restricted app's private network is a /24 from this pool. Move it if it
+# Each kproxy app's private network is a /24 from this pool. Move it if it
 # overlaps a network this machine is on.
 # subnet_pool = "10.250.0.0/16"
 

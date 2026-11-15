@@ -179,9 +179,10 @@ def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
 # A load or a start applies every change recorded before it.
 _APPLIED_AT = ("meta/loaded_at", "meta/started_at")
 # The records a start applies, by what it does with them: it reads config and
-# binds, and re-derives routes from the subdomain and route assignments.
+# binds, and re-derives routes (and the network, which carries them behind
+# kproxy) from the subdomain, route assignments and network mode.
 _CONFIG_KEYS = ("config/", "binds/")
-_ROUTE_KEYS = ("config/subdomain", "routes/")
+_ROUTE_KEYS = ("config/subdomain", "routes/", "network/")
 
 
 def _rekeyed(raw: str) -> bool:

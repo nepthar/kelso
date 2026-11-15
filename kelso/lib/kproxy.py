@@ -1,6 +1,6 @@
-"""What kelso needs to run a `network_mode = "restricted"` app behind kproxy.
+"""What kelso needs to run an app behind kproxy: `restrict`, `ask` and `watch`.
 
-A restricted app's units sit on an internal network with no route out. kproxy
+An app behind kproxy has its units sit on an internal network with no route out. kproxy
 is the one container on both that network and an ordinary one: it answers the
 units' DNS, lets them reach only what `[connections]` lists, and relays each
 of the app's routes in to its unit. The kproxy program itself lives in the
@@ -17,10 +17,12 @@ from typing import Any
 KPROXY_SERVICE = "kproxy"
 KPROXY_GUEST_DIR = "/run/kproxy"
 KPROXY_RUN_DIR = "kproxy"
+# What kproxy saw, written when it stops: `{"stats": ..., "pending": ...}`.
+STATS_FILE = "stats.json"
 INTERNAL_NETWORK = "internal"
 EGRESS_NETWORK = "egress"
 
-# config.toml's `subnet_pool` when it sets none. Each restricted app gets one
+# config.toml's `subnet_pool` when it sets none. Each app behind kproxy gets one
 # /24 from the pool, recorded in kelsodb like a port.
 DEFAULT_SUBNET_POOL = "10.250.0.0/16"
 
@@ -35,22 +37,22 @@ RULES_ENV = "KELSO_KPROXY_RULES"
 _LABEL = re.compile(r"[a-z0-9_-]+")
 
 
-# Docker 27 added the gateway mode option that keeps a restricted app's network
+# Docker 27 added the gateway mode option that keeps a kproxy app's network
 # from having an address on the host; an older docker ignores it silently.
 MIN_DOCKER = 27
 
 
 def docker_too_old(major: int | None) -> str | None:
-  """Why restricted apps can't run on this docker, or None if they can."""
+  """Why apps behind kproxy can't run on this docker, or None if they can."""
   if major is None:
     return (
-      f"docker's version can't be read, and restricted apps need docker {MIN_DOCKER} "
+      f"docker's version can't be read, and apps behind kproxy need docker {MIN_DOCKER} "
       "or newer to keep their network apart from the host. Run `docker version`."
     )
   if major >= MIN_DOCKER:
     return None
   return (
-    f"docker {major} is older than {MIN_DOCKER}, which restricted apps need to "
+    f"docker {major} is older than {MIN_DOCKER}, which apps behind kproxy need to "
     "keep their network apart from the host. Upgrade docker."
   )
 
@@ -119,32 +121,74 @@ def rules_text(
   hosts: Iterable[str],
   forwards: Mapping[str, str],
   ingress: Iterable[tuple[str, int, str, int, str]] = (),
+  *,
+  default: str = "deny",
+  denied: Iterable[str] = (),
 ) -> str:
-  """The rules file for an app: what it may reach, how routes get in, the rest denied.
+  """The rules file for an app: what it may reach, how routes get in, and the
+  `default` policy (deny, ask or allow) for everything else.
 
   Each of `hosts` is allowed with its subdomains over HTTP and HTTPS. Each of
   `forwards` is a name over HTTP sent to its host:port. `ingress` is (route, host
   port, unit, container port, proto) per route; the i-th gets `ingress_port(i)`.
+  Each of `denied` is refused with its subdomains, even if `hosts` lists it.
   Raises ValueError for a forward that isn't host:port, naming it.
   """
   http: dict[str, str] = {}
-  https: set[str] = set()
+  https: dict[str, str] = {}
+  refused = {endpoint_name(host) for host in denied}
   for host in hosts:
+    if endpoint_name(host) in refused:
+      continue
     pattern = "*." + endpoint_name(host)
     http.setdefault(pattern, "")
-    https.add(pattern)
+    https[pattern] = ""
+  for host in refused:
+    http["*." + host] = https["*." + host] = " deny"
   for name, target in forwards.items():
     try:
       http[endpoint_name(name)] = " " + forward_target(target)
     except ValueError as e:
       raise ValueError(f"connection {name}: {e}") from None
   lines = [f"http {name}{dest}" for name, dest in sorted(http.items())]
-  lines += [f"https {name}" for name in sorted(https)]
+  lines += [f"https {name}{verdict}" for name, verdict in sorted(https.items())]
   lines += [
     f"ingress {proto} :{ingress_port(i)} {name} {unit}:{container_port}"
     for i, (name, _, unit, container_port, proto) in enumerate(ingress)
   ]
-  return "\n".join(["default deny", *lines]) + "\n"
+  return "\n".join([f"default {default}", *lines]) + "\n"
+
+
+def rules_json(rules: str) -> dict[str, Any]:
+  """`rules_text`'s output in the long form kproxy's `PUT /rules` takes."""
+  out: dict[str, Any] = {"rules": []}
+  for line in rules.splitlines():
+    words = line.split()
+    match words:
+      case ["default", policy]:
+        out["default"] = policy
+      case ["http" | "https" as kind, name, *rest]:
+        rule = {
+          "kind": "http" if kind == "http" else "tls",
+          "port": 80 if kind == "http" else 443,
+          "name": name,
+          "verdict": "deny" if rest == ["deny"] else "allow",
+        }
+        if rest and rest != ["deny"]:
+          rule["dest"] = rest[0]
+        out["rules"].append(rule)
+      case ["ingress", proto, port, name, dest]:
+        out["rules"].append(
+          {
+            "kind": proto,
+            "port": int(port.removeprefix(":")),
+            "ingress": True,
+            "name": name,
+            "verdict": "allow",
+            "dest": dest,
+          }
+        )
+  return out
 
 
 def ingress_port(i: int) -> int:
@@ -195,6 +239,7 @@ def compose_service(*, source: Path, subnet: str, ports: list[str]) -> dict[str,
   `ingress_port` its rule listens on."""
   command = ["-admin", f"{KPROXY_GUEST_DIR}/admin.sock"]
   command += ["-rules-file", f"{KPROXY_GUEST_DIR}/rules.txt"]
+  command += ["-stats-file", f"{KPROXY_GUEST_DIR}/{STATS_FILE}"]
   service: dict[str, Any] = {
     "image": image_tag(source),
     "build": {"context": str(source)},

@@ -18,6 +18,7 @@ from kelso.cli import (
   inspect,
   load,
   logs,
+  net,
   ps,
   remove,
   repo,
@@ -61,6 +62,7 @@ COMMANDS = [
   shell,
   dev,
   deploy,
+  net,
   root,
   backup,
   cron,
@@ -90,6 +92,7 @@ Apps
 
   dev         Run an app bundle in this terminal
   deploy      Copy an app bundle to another box and load or update it there
+  net         Show what an app behind kproxy reaches; allow or deny domains
 
 This box
   status      Show the host, apps, routes, and storage at a glance

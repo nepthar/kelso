@@ -15,6 +15,7 @@ from kelso.lib import views
 from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import KELSO_DIRS, cpu_used_ratio
+from kelso.lib.net import waiting_note
 from kelso.lib.receipt import published_urls
 from kelso.lib.run_layout import load_run_data
 from kelso.lib.util import fmt_size
@@ -63,6 +64,10 @@ def _apps(ctx: KelsoCtx) -> str:
     config = app["configured"] or "-"
     if app["changes_pending"] and running:
       config += ", restart to apply"
+    spec = ctx.loaded_spec(app["app_id"])
+    note = waiting_note(spec, ctx) if spec is not None else ""
+    if note:
+      config += f", {note}"
     rows.append(
       (
         app["app_id"],

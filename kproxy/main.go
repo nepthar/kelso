@@ -8,19 +8,29 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		os.Exit(healthcheck(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "healthcheck":
+			os.Exit(healthcheck(os.Args[2:]))
+		case "admin":
+			os.Exit(adminCommand(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 
 	dnsAddr := flag.String("dns", ":53", "DNS listen address (UDP and TCP)")
@@ -34,6 +44,7 @@ func main() {
 	hold := flag.Duration("hold", 60*time.Second, "how long the ask policy holds a connection no rule matches")
 	maxConns := flag.Int("max-conns", 1024, "most client connections open at once; more wait to be accepted")
 	idle := flag.Duration("idle", 10*time.Minute, "close a connection after this long with no bytes either way; 0 for never")
+	statsFile := flag.String("stats-file", "", "on SIGTERM or SIGINT, write the stats and pending hosts to this file, then exit")
 	flag.Parse()
 
 	policy, err := parsePolicy(*defaultFlag)
@@ -93,10 +104,31 @@ func main() {
 		log.Printf("kproxy: admin UI at http://%s/", ln.Addr())
 	}
 
+	if *statsFile != "" {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGTERM, os.Interrupt)
+		go func() {
+			<-sig
+			if err := writeStatsFile(*statsFile, proxy.stats, engine); err != nil {
+				log.Printf("kproxy: stats file: %v", err)
+			}
+			os.Exit(0)
+		}()
+	}
+
 	go serveDNSUDP(pc, engine.Resolves)
 	go serveDNSTCP(dnsTCP, engine.Resolves)
 	log.Printf("kproxy: DNS on %s, rules loaded: %v", pc.LocalAddr(), engine.loaded())
 	log.Fatal(http.Serve(adminLn, admin))
+}
+
+// writeStatsFile writes {"stats": GET /stats, "pending": GET /pending}.
+func writeStatsFile(path string, s *Stats, e *Engine) error {
+	b, err := json.Marshal(map[string]any{"stats": s.Snapshot(), "pending": e.Pending()})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o644)
 }
 
 func listen(network, addr string) net.Listener {
@@ -107,18 +139,21 @@ func listen(network, addr string) net.Listener {
 	return ln
 }
 
+func adminClient(sock string) *http.Client {
+	return &http.Client{
+		Timeout: 3 * time.Second,
+		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", sock)
+		}},
+	}
+}
+
 // healthcheck exits 0 once the proxy on the admin socket has rules loaded.
 func healthcheck(args []string) int {
 	fs := flag.NewFlagSet("healthcheck", flag.ExitOnError)
 	sock := fs.String("admin", "/run/kproxy/admin.sock", "admin unix socket")
 	fs.Parse(args)
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", *sock)
-		}},
-	}
-	resp, err := client.Get("http://kproxy/healthz")
+	resp, err := adminClient(*sock).Get("http://kproxy/healthz")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -126,6 +161,51 @@ func healthcheck(args []string) int {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		fmt.Fprintln(os.Stderr, resp.Status)
+		return 1
+	}
+	return 0
+}
+
+// adminCommand is `kproxy admin [-admin SOCK] METHOD PATH [BODY]`: one admin API
+// request, for a client that can run kproxy but not reach its socket. The
+// response body goes to stdout; a status other than 2xx exits 1 with it on stderr.
+func adminCommand(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("admin", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	sock := fs.String("admin", "/run/kproxy/admin.sock", "admin unix socket")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	rest := fs.Args()
+	if len(rest) < 2 || len(rest) > 3 || !strings.HasPrefix(rest[1], "/") {
+		fmt.Fprintln(stderr, "usage: kproxy admin [-admin SOCK] METHOD /PATH [JSON-BODY]")
+		return 2
+	}
+	var body io.Reader
+	if len(rest) == 3 {
+		body = strings.NewReader(rest[2])
+	}
+	req, err := http.NewRequest(strings.ToUpper(rest[0]), "http://kproxy"+rest[1], body)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := adminClient(*sock).Do(req)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	defer resp.Body.Close()
+	out := stdout
+	if resp.StatusCode/100 != 2 {
+		out = stderr
+		fmt.Fprintln(stderr, resp.Status)
+	}
+	io.Copy(out, resp.Body)
+	if out == stderr {
 		return 1
 	}
 	return 0

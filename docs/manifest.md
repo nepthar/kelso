@@ -28,7 +28,7 @@ The only required section. Keys kelso does not know are refused.
 | `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso inspect` and the web UI. |
 | `url` | string | `""` | Where to read more. Must start with `https://` or `http://`; the web UI links to it. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
-| `network_mode` | `open` \| `restricted` \| `host` | `open` | What the app can reach. See [Network modes](#network-modes). |
+| `network_mode` | `open` \| `restrict` \| `ask` \| `watch` \| `host` | `open` | What the app can reach. See [Network modes](#network-modes). |
 
 ```toml
 [app]
@@ -154,7 +154,7 @@ work there takes kelsod's TCP address as an ordinary config value instead, as
 kelso-ui does with `api_address`.
 
 The second family is what an app may reach over the network. These are what
-[`network_mode = "restricted"`](#network-modes) lets through, and they are
+[`network_mode = "restrict"`](#network-modes) lets through, and they are
 app-wide, not restricted to a single container. Which kind to use depends on where
 the thing lives: anything on the internet is `web`, and anything on your own
 network (the LAN, this machine, a VPN like Tailscale) is `http`, whose
@@ -176,12 +176,13 @@ is refused, since `weather.com` already means that. A `web` connection never
 reaches your own network: when a listed domain resolves to a private address,
 the connection is refused, so whoever owns the domain can't later point it at
 your router or NAS. `web` connections are allowed in `open` mode, where they
-change nothing, and refused in `host` mode, which can't limit what the app
-reaches.
+change nothing until the app is run behind kproxy, and refused in `host` mode,
+which can't limit what the app reaches.
 
-An `http` connection is how a restricted app reaches something on your own
-network. The app connects to the connection's name, and kproxy sends that on
-to the `host:port` in `address`, usually from config, so it is yours to set:
+An `http` connection is how an app reaches something on your own network.
+Behind kproxy, the app connects to the connection's name, and kproxy sends
+that on to the `host:port` in `address`, usually from config, so it is yours to
+set:
 
 ```toml
 [config]
@@ -209,8 +210,9 @@ can't reference a `secret` config value: it is shown in receipts and written
 to kproxy's rules file.
 
 - Only HTTP: kproxy finds the name in the `Host` header.
-- It needs `network_mode = "restricted"`: without kproxy, nothing answers
-  the name.
+- In `open` mode nothing answers the name, so `${conn.nas.url}` is
+  `http://<address>` and `${conn.nas.host}` the address itself. Use the
+  properties rather than writing `http://nas`, and the app works in every mode.
 
 ## Network modes
 
@@ -220,34 +222,55 @@ app-wide: every unit gets the same.
 | Mode | The app reaches | Routes |
 | --- | --- | --- |
 | `open` | Anything, as a plain docker compose app does. Its units share a private network. | Published as usual. |
-| `restricted` | Only its `web` and `http` [connections](#connectionsname), plus its own units. | Published on kproxy, which relays them in. |
+| `restrict` | Only its `web` and `http` [connections](#connectionsname), plus its own units. | Published on kproxy, which relays them in. |
+| `ask` | As `restrict`, and holds a connection to anything else until you allow or deny it. | As `restrict`. |
+| `watch` | Any domain, over HTTP and HTTPS, counting each one. For finding out what an app needs. | As `restrict`. |
 | `host` | Anything, on the host's own network, with no port isolation. Called out as dangerous. | Refused: the app binds the host's ports itself. |
 
-A restricted app's units sit on an internal network with no route out, so a
-connection to a raw IP address fails, and so does anything to a domain that
-isn't listed. One more container, `kproxy`, is on both that network and an
-ordinary one. It answers the units' DNS, lets their HTTP and HTTPS through to
-listed domains only, and relays each route, TCP or UDP, in to its unit. Kelso
-gives each restricted app its own subnet, kept across loads like a port.
+The manifest's mode is the author's. You can run any app but a `host` one in
+another mode with `kelso config <app> --network <mode>`, and go back to the
+manifest's with `--network default`. It takes effect at the next start, and
+receipts say when the mode is yours rather than the manifest's.
 
-What that costs the app:
+`kelso net <app>` shows what an app behind kproxy is doing: the domains it is
+waiting on in `ask`, and its connections and bytes by domain since kproxy last
+started. `kelso net <app> allow <domain>`, `deny` and `forget` decide a domain
+and its subdomains, like a `web` host. Decisions are yours, kept with the app's
+config across loads and updates, and a running app gets them at once. A deny
+beats the manifest's own `web` host. `kelso ps` and `kelso status` say when an
+app in `ask` is waiting on you.
+
+To find out what an app needs, run it in `watch`, use it, and read
+`kelso net <app>`. `kelso dev` prints the same table when it stops, with a
+`[connections]` line for each domain it reached that the manifest doesn't list. A refused name in `restrict` fails at its DNS lookup, so it
+never shows up there.
+
+In `restrict`, `ask` and `watch`, the app's units sit on an internal network
+with no route out, so a connection to a raw IP address fails. One more
+container, `kproxy`, is on both that network and an ordinary one. It answers
+the units' DNS, lets their HTTP and HTTPS through to the domains the mode
+allows, and relays each route, TCP or UDP, in to its unit. Kelso gives each
+such app its own subnet, kept across loads like a port.
+
+What running behind kproxy costs the app:
 
 - **Every client appears to come from kproxy.** The app sees kproxy's address
   instead of each visitor's. An app that decides things by client IP, such as
   local-only access, per-IP rate limits, or "trusted network" logins, will
   treat every visitor alike. Jellyfin, for one, would treat internet viewers as
   local. Such apps should stay `open`.
-- **Only HTTP and HTTPS go out,** to the listed domains on ports 80 and 443.
+- **Only HTTP and HTTPS go out,** on ports 80 and 443, by name.
 - **A unit can't be named `kproxy`,** and its `compose` table can't set `dns`
-  or `networks`, which kelso sets.
+  or `networks`, which kelso sets. This holds in every mode but `host`, since
+  any such app can be put behind kproxy.
 
-A restricted app needs docker 27 or newer: older versions ignore the option that
-keeps the app's network from having an address on the host, so the app could
-reach the host's own services. `kelso start` refuses on an older docker, and
-`kelso system doctor` notes it.
+Behind kproxy, an app needs docker 27 or newer: older versions ignore the option
+that keeps the app's network from having an address on the host, so the app
+could reach the host's own services. `kelso start` refuses on an older docker,
+and `kelso system doctor` notes it.
 
-kproxy's source ships inside kelso, and docker builds it the first time a
-restricted app starts, which takes about a minute; later starts reuse the image.
+kproxy's source ships inside kelso, and docker builds it the first time an app
+starts behind it, which takes about a minute; later starts reuse the image.
 See [kproxy's README](../kproxy/README.md) for how the proxy works.
 
 ## `[config]` and `[adv_config]`
@@ -480,7 +503,7 @@ Two rules apply.
 
 **Keys kelso generates are refused** — `image`, `volumes`, `ports`, `labels`,
 `environment`, `command`, `hostname`, `restart`, `network_mode`,
-`healthcheck`, and in `restricted` mode `dns` and `networks` too. Those have
+`healthcheck`, and `dns` and `networks` too, which kproxy needs. Those have
 manifest fields; setting them twice would mean one of them silently losing.
 
 **Keys kelso does not recognise are announced.** There is an allowlist of

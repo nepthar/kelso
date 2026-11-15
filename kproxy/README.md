@@ -362,6 +362,7 @@ short.
 | `-hold` | `60s` | how long the `ask` policy holds a connection |
 | `-max-conns` | `1024` | most client connections open at once |
 | `-idle` | `10m` | close a connection after this long with no bytes either way; `0` for never |
+| `-stats-file` | | on SIGTERM or SIGINT, write `{"stats": …, "pending": …}` (what `GET /stats` and `GET /pending` return) here, then exit |
 
 `kproxy healthcheck [-admin PATH]` exits 0 once the proxy on that socket has
 rules loaded.
@@ -387,6 +388,16 @@ out.
 
 ```sh
 curl --unix-socket admin.sock http://k/pending
+```
+
+`kproxy admin [-admin PATH] METHOD /PATH [BODY]` makes one request from the
+kproxy binary itself, for a client that can run it but not reach the socket,
+such as `docker exec` into a container whose socket lives in Docker Desktop's
+VM. The response body goes to stdout; any status but 2xx exits 1, with the
+status and body on stderr. A body is sent as JSON.
+
+```sh
+docker exec <container> /kproxy admin GET /stats
 ```
 
 The web UI shows pending hosts as a tree under their root domain, with

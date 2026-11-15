@@ -459,7 +459,7 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
         if value not in (None, "", {})
       },
       "subdomain": resolved_subdomain(spec, ctx),
-      "network_mode": spec.network_mode,
+      "network_mode": run_data.network_mode,
       "run_path": str(ctx.loaded_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),
       "units": _units(spec, observation, run_data),

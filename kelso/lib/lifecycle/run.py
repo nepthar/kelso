@@ -78,10 +78,12 @@ def start(
   spec, run_data = result.spec, result.run_data
   if run_data.start_blockers:
     raise ValueError("\n".join(recovery_lines(app, run_data.start_blockers)))
-  if spec.network_mode == "restricted" and (
+  if run_data.restricted is not None and (
     problem := kproxy.docker_too_old(server_major())
   ):
-    raise RuntimeError(f"{app} is restricted, and {problem}")
+    raise RuntimeError(
+      f"{app} runs behind kproxy ({run_data.network_mode}), and {problem}"
+    )
 
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
@@ -100,7 +102,7 @@ def start(
     kproxy.image_tag(run_data.restricted.source)
   ):
     logger.info(
-      "Building kproxy, the proxy restricted apps reach the network through. "
+      "Building kproxy, the proxy apps behind kproxy reach the network through. "
       "This happens once per kelso version and takes about a minute."
     )
 

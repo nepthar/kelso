@@ -11,7 +11,8 @@ from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
+from kelso.lib.lifecycle import apply_config_sets, assign_route, bind, set_network
+from kelso.lib.manifest import NETWORK_MODES
 from kelso.lib.observations import observe
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
@@ -59,6 +60,14 @@ def register(subparsers) -> None:
     help="Bind an app volume to a host_volume tag from config.toml (repeatable)",
   )
   parser.add_argument(
+    "--network",
+    metavar="MODE",
+    help=(
+      f"Run the app {' | '.join(m for m in NETWORK_MODES if m != 'host')} "
+      "instead of what its manifest says; default goes back to the manifest's"
+    ),
+  )
+  parser.add_argument(
     "--backup",
     action="append",
     default=[],
@@ -86,7 +95,9 @@ def register(subparsers) -> None:
   parser.set_defaults(
     func=run,
     activity=lambda a: (
-      "config" if a.sets or a.routes or a.binds or a.backups or a.edit else None
+      "config"
+      if a.sets or a.routes or a.binds or a.backups or a.network or a.edit
+      else None
     ),
   )
 
@@ -98,9 +109,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     spec = _config_spec(app, ctx)
 
     if args.get_name is not None:
-      if args.sets or args.binds or args.routes or args.backups:
+      if args.sets or args.binds or args.routes or args.backups or args.network:
         raise ValueError(
-          "--get cannot be combined with --set, --route, --bind, or --backup"
+          "--get cannot be combined with --set, --route, --bind, --network, or --backup"
         )
       _get(spec, store, args.get_name, show_secret=args.show_secret)
       return
@@ -110,10 +121,15 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
     if args.backups:
       _apply_backups(spec, args.backups, ctx)
+    if args.network:
+      set_network(spec, None if args.network == "default" else args.network, ctx)
+      print(f"network: {_network_display(spec, store)}")
     if args.sets or args.binds or args.routes:
       _apply(app, spec, args.sets, args.binds, args.routes, ctx)
       return
-    if args.backups:
+    if args.backups or args.network:
+      if args.network:
+        _what_applies_it(app, ctx)
       return
 
     if args.edit:
@@ -241,9 +257,17 @@ def _apply_routes(
     print(f"route {route_name} -> {', '.join(tags) or NONE_ROUTE_PROVIDER_TAG}")
 
 
+def _network_display(spec: AppSpec, store: AppStore) -> str:
+  mode = store.get_network_mode()
+  if mode is None:
+    return spec.network_mode
+  return f"{mode} (set by you; the manifest says {spec.network_mode})"
+
+
 def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
   store = ctx.app_store(app)
   print(f"Configuration parameters for: {app}")
+  print(f"Network: {_network_display(spec, store)}")
   for title, fields in app_config_request(spec, ctx).groups():
     # Binds and route assignments have their own tables below.
     rows = [[f.name, f.display(), f.desc] for f in fields if "." not in f.name]

@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, get_args
 
 from pydantic import (
   BaseModel,
@@ -39,7 +39,10 @@ from kelso.lib.util import (
   Identifier,
 )
 
-NetworkMode = Literal["open", "restricted", "host"]
+NetworkMode = Literal["open", "restrict", "ask", "watch", "host"]
+NETWORK_MODES: tuple[str, ...] = get_args(NetworkMode)
+# The modes that run an app behind kproxy, and kproxy's policy for unlisted hosts.
+PROXIED_MODES = {"restrict": "deny", "ask": "ask", "watch": "allow"}
 VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
 
 
@@ -382,8 +385,9 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
   return errors
 
 
-# Compose keys that would let a restricted unit reach out around kproxy.
-_RESTRICTED_COMPOSE_KEYS = frozenset({"dns", "networks"})
+# Compose keys kelso sets for an app behind kproxy. Any app but a host one can be
+# put behind it with `kelso config --network`, so they are reserved for all of them.
+_PROXIED_COMPOSE_KEYS = frozenset({"dns", "networks"})
 
 
 def _validate_network(manifest: Manifest) -> list[str]:
@@ -397,35 +401,29 @@ def _validate_network(manifest: Manifest) -> list[str]:
     where = f"[connections.{name}]"
     if isinstance(entry, HttpEntry):
       errors.extend(f"{where}: {e}" for e in _http_errors(name, entry, manifest))
-      if mode != "restricted":
-        errors.append(
-          f"{where}: an http connection needs network_mode = 'restricted', "
-          "since only kproxy answers its name"
-        )
       continue
     for host in entry.hosts:
       try:
         endpoint_name(host)
       except ValueError as e:
         errors.append(f"{where}: {e}")
-  if mode == "host" and network:
-    errors.append(
-      "[connections]: network_mode 'host' can't limit outbound traffic; "
-      "use network_mode = 'restricted'"
-    )
-  if mode != "restricted":
+  if mode == "host":
+    if network:
+      errors.append(
+        "[connections]: network_mode 'host' can't limit outbound traffic; "
+        "use network_mode = 'restrict'"
+      )
     return errors
   if KPROXY_SERVICE in manifest.run:
     errors.append(
-      f"[run.{KPROXY_SERVICE}]: network_mode 'restricted' uses that name for "
-      "its proxy; rename the unit"
+      f"[run.{KPROXY_SERVICE}]: kelso uses that name for the proxy an app can "
+      "be run behind; rename the unit"
     )
   for unit_name, run_entry in manifest.run.items():
-    clashes = _RESTRICTED_COMPOSE_KEYS & run_entry.compose.keys()
+    clashes = _PROXIED_COMPOSE_KEYS & run_entry.compose.keys()
     if clashes:
       errors.append(
-        f"[run.{unit_name}.compose]: network_mode 'restricted' manages "
-        f"{', '.join(sorted(clashes))}"
+        f"[run.{unit_name}.compose]: kelso manages {', '.join(sorted(clashes))}"
       )
   return errors
 

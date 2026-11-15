@@ -4,6 +4,7 @@ from pathlib import Path
 
 from kelso.cli.configform import collect
 from kelso.cli.load import confirm_compose_warnings
+from kelso.cli.net import summary
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, is_pathlike
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
@@ -16,6 +17,8 @@ from kelso.lib.lifecycle import (
   load,
   refuse_other_origin,
 )
+from kelso.lib.manifest import PROXIED_MODES
+from kelso.lib.net import last_run
 from kelso.lib.receipt import LABEL_WIDTH, route_lines
 from kelso.lib.spec import AppSpec
 
@@ -67,7 +70,15 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     plan = dev_plan(app, source, ctx, publish_routes=args.routes)
     print(_receipt(plan, ctx))
 
-    code = dev(plan, ctx)
+    try:
+      code = dev(plan, ctx)
+    finally:
+      # ctrl-c reaches kelso too, as KeyboardInterrupt, after kproxy has stopped.
+      if plan.run_data.network_mode in PROXIED_MODES:
+        last = last_run(app, ctx)
+        if last is not None:
+          decided = ctx.app_store(app).list_hosts()
+          print(summary(plan.spec, last, decided, plan.run_data.network_mode))
     if code:
       raise SystemExit(code)
 
@@ -105,6 +116,12 @@ def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
 
   if not plan.published:
     rows.append(("", "routes are not published; publish them with --routes"))
+
+  mode = plan.run_data.network_mode
+  if mode in PROXIED_MODES:
+    rows.append(
+      ("Network:", f"{mode}: the domains it reaches are listed when it stops")
+    )
 
   width = max(LABEL_WIDTH, max(len(label) for label, _ in rows))
   lines = [f"Dev {plan.app_id} (ctrl-c to stop)"]

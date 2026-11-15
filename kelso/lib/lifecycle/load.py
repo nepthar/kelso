@@ -18,12 +18,14 @@ from kelso.lib.kelso import (
 )
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.lifecycle.routes import take_down_routes
+from kelso.lib.manifest import NETWORK_MODES, PROXIED_MODES
 from kelso.lib.options import validate_option
 from kelso.lib.run_layout import (
   AppRunData,
   AssignedRoute,
   load_run_data,
   make_compose_dict,
+  network_mode,
   resolved_subdomain,
 )
 from kelso.lib.secrets import SecretGenerationError, generate_secret
@@ -295,19 +297,18 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
 
 def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """A restricted app keeps its subnet across loads; any other app has none."""
+  """An app behind kproxy keeps its subnet across loads; any other app has none."""
   db = ctx.kelso_db
-  if spec.network_mode != "restricted":
+  if network_mode(spec, ctx) not in PROXIED_MODES:
     db.clear_subnet(spec.app)
   elif db.get_subnet(spec.app) is None:
     db.set_subnet(spec.app, db.next_free_subnet())
 
 
 def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
-  """`kproxy/`, kproxy's rules file and admin socket, for a restricted app."""
+  """`kproxy/`, kproxy's rules file and admin socket, for an app behind kproxy."""
   shutil.rmtree(run_data.run_path / kproxy.KPROXY_RUN_DIR, ignore_errors=True)
-  if spec.network_mode == "restricted":
-    write_kproxy_rules(run_data)
+  write_kproxy_rules(run_data)
 
 
 def write_kproxy_rules(run_data: AppRunData) -> None:
@@ -484,6 +485,22 @@ def assign_route(spec: AppSpec, route_name: str, raw: str, ctx: KelsoCtx) -> lis
         make_compose_dict(spec, load_run_data(spec, ctx)), f, sort_keys=False
       )
   return tags
+
+
+def set_network(spec: AppSpec, mode: str | None, ctx: KelsoCtx) -> None:
+  """Record the operator's network mode over the manifest's; None clears it.
+
+  Raises ValueError for an unknown mode, or for host mode on either side.
+  """
+  if mode is not None and mode not in NETWORK_MODES:
+    choices = ", ".join(m for m in NETWORK_MODES if m != "host")
+    raise ValueError(f"network mode {mode!r} is not one of {choices}, or default")
+  if "host" in (mode, spec.network_mode) and mode not in (None, spec.network_mode):
+    raise ValueError(
+      f"{spec.app}: host networking can't be switched to or from; "
+      f"it is the manifest's to choose"
+    )
+  ctx.app_store(spec.app).set_network_mode(None if mode == spec.network_mode else mode)
 
 
 def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:

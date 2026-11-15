@@ -221,7 +221,7 @@ def _backup_problems(ctx: KelsoCtx) -> list[Finding]:
 
 
 def _docker_warnings() -> list[Finding]:
-  """A note, not a problem: only restricted apps need the newer docker."""
+  """A note, not a problem: only apps behind kproxy need the newer docker."""
   major = server_major()
   problem = docker_too_old(major) if major is not None else None
   return [Finding("the docker daemon", problem)] if problem else []
