@@ -42,13 +42,8 @@ _LABEL = re.compile(r"[a-z0-9_-]+")
 MIN_DOCKER = 27
 
 
-def docker_too_old(major: int | None) -> str | None:
+def docker_too_old(major: int) -> str | None:
   """Why apps behind kproxy can't run on this docker, or None if they can."""
-  if major is None:
-    return (
-      f"docker's version can't be read, and apps behind kproxy need docker {MIN_DOCKER} "
-      "or newer to keep their network apart from the host. Run `docker version`."
-    )
   if major >= MIN_DOCKER:
     return None
   return (

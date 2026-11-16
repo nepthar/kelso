@@ -4,7 +4,7 @@ from typing import Any
 
 from tabulate import tabulate
 
-from kelso.lib.connections import WebConnection, network_connections
+from kelso.lib.connections import HttpConnection, WebConnection, network_connections
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.manifest import PROXIED_MODES
 from kelso.lib.net import (
@@ -159,6 +159,8 @@ def _rule(spec: AppSpec, domain: str, decided: Mapping[str, str]) -> str:
     if covers(name, domain):
       return f"{PAST[verdict]} by you"
   for name, entry in network_connections(spec.connections).items():
+    if isinstance(entry, HttpConnection) and domain == name:
+      return f"listed ({name})"
     if isinstance(entry, WebConnection) and any(
       covers(host.lower().rstrip("."), domain) or covers(domain, host.lower())
       for host in entry.hosts

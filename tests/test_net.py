@@ -155,6 +155,7 @@ LAST_RUN = {
   "stats": {
     "weather.com": {"https": {"conns": 2, "allowed": 2, "bytes_in": 10}},
     "example-site.org": {"https": {"conns": 1, "allowed": 1, "bytes_in": 5}},
+    "nas": {"http": {"conns": 1, "allowed": 1, "bytes_in": 7}},
     "main": {"ingress tcp :20000": {"conns": 4}},
   },
   "pending": [{"domain": "held.net", "hosts": {"held.net": {}}}],
@@ -162,7 +163,8 @@ LAST_RUN = {
 
 
 def test_dev_says_what_it_reached_when_it_stops(kelso_env):
-  _write(kelso_env, RESTRICTED)
+  nas = 'nas = { kind = "http", address = "10.0.0.5:80" }\n'
+  _write(kelso_env, RESTRICTED.replace("[run.main]", nas + "\n[run.main]", 1))
   assert kelso_env.run("load", APP).returncode == 0
   assert kelso_env.run("config", APP, "--network", "watch").returncode == 0
   _kproxy_answers(kelso_env, {"stats-file": LAST_RUN})
@@ -175,6 +177,7 @@ def test_dev_says_what_it_reached_when_it_stops(kelso_env):
   assert "Still waiting when it stopped: held.net" in out
   assert 'example_site = { kind = "web", hosts = ["example-site.org"] }' in out
   assert 'hosts = ["weather.com"]' not in out  # already listed
+  assert 'hosts = ["nas"]' not in out
 
   shown = kelso_env.run("net", APP)
   assert "Not running" in shown.stdout

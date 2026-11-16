@@ -347,6 +347,17 @@ type link struct {
 	quiet    [2]atomic.Int64
 	halfIdle time.Duration // the limit once one side has finished sending
 	half     atomic.Bool   // one side has
+	tally    time.Duration // how often a copy returns to count; 0 for only at the limit
+}
+
+// wait is how long one copy may block for the given limit: half of it, or
+// tally if that is sooner. 0 is no deadline.
+func (l *link) wait(limit time.Duration) time.Duration {
+	w := limit / 2
+	if l.tally > 0 && (w == 0 || l.tally < w) {
+		return l.tally
+	}
+	return w
 }
 
 // limit is how long the connection may stay quiet: idle, or halfIdle if that
@@ -368,7 +379,7 @@ func (l *link) expired() bool {
 // pipe replays head to up, then copies both directions until both finish or
 // neither has moved a byte for idle (0 for no limit).
 func pipe(client, up net.Conn, head []byte, ctr *counters, idle time.Duration) {
-	relay(client, up, head, ctr, &link{idle: idle, halfIdle: halfCloseTimeout})
+	relay(client, up, head, ctr, &link{idle: idle, halfIdle: halfCloseTimeout, tally: tallyEvery})
 }
 
 func relay(client, up net.Conn, head []byte, ctr *counters, l *link) {
@@ -394,21 +405,24 @@ const (
 	// has finished sending, so a peer that never closes can't hold it for the
 	// whole idle timeout, or forever without one.
 	halfCloseTimeout = 30 * time.Second
+
+	tallyEvery = time.Second
 )
 
-// copyCounting copies src to dst, adding to n after each chunk so counts stay
-// current on long-lived connections. dst and src must stay unwrapped
-// *net.TCPConns (an *io.LimitedReader is fine) for Linux to splice instead of
-// copying through a buffer, which is why quiet is found by a read deadline
-// every half of the limit rather than by watching the bytes: a deadline that
-// passes while the other direction is busy just starts another. On EOF it
+// copyCounting copies src to dst, adding to n each time a copy returns: after a
+// chunk, or at a read deadline at least every tally. dst and src must stay
+// unwrapped *net.TCPConns (an *io.LimitedReader is fine) for Linux to splice
+// instead of copying through a buffer, which is why counts and quiet are found
+// by read deadlines rather than by watching the bytes: a deadline that passes
+// while the other direction is busy just starts another. On EOF it
 // half-closes dst and wakes the other direction, which reads from dst, to
 // take up the shorter limit; on error it closes both so the other direction
 // stops too.
 func copyCounting(dst, src net.Conn, n *atomic.Int64, l *link, dir int) {
 	for {
-		if limit := l.limit(); limit > 0 {
-			src.SetReadDeadline(time.Now().Add(limit / 2))
+		limit := l.limit()
+		if wait := l.wait(limit); wait > 0 {
+			src.SetReadDeadline(time.Now().Add(wait))
 			if l.limit() != limit {
 				continue // the other side finished meanwhile, and its wake-up was overwritten
 			}

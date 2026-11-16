@@ -304,7 +304,7 @@ def test_a_restricted_app_refuses_to_start_when_dockers_version_is_unknown(
   _write(kelso_env, RESTRICTED)
   refused = kelso_env.run("start", "restricted-demo")
   assert refused.returncode == 1
-  assert "docker's version can't be read" in refused.stderr
+  assert "Unable to communicate with the docker daemon" in refused.stderr
 
 
 def test_an_address_the_operator_sets_is_no_danger_callout(tmp_path):
