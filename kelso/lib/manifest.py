@@ -1,6 +1,5 @@
 """Pydantic models for kelso TOML (bundle manifests and catalog service definitions)."""
 
-import posixpath
 import shlex
 import tomllib
 from collections.abc import Mapping
@@ -31,7 +30,6 @@ from kelso.lib.cronexpr import CronSchedule
 from kelso.lib.kproxy import KPROXY_SERVICE, endpoint_name, forward_target
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.util import (
-  KELSO_GUEST_DIR,
   KLSO_KEY_PREFIX,
   KLSO_KEYS,
   ROUTE_KEY_PREFIX,
@@ -583,17 +581,11 @@ def _validate_volumes(manifest: Manifest) -> list[str]:
 def _validate_run_volumes(manifest: Manifest) -> list[str]:
   errors: list[str] = []
   for unit_name, run_entry in manifest.run.items():
-    for volume_name, guest_path in run_entry.volumes.items():
+    for volume_name in run_entry.volumes:
       if volume_name not in manifest.volumes:
         errors.append(
           f"[run.{unit_name}.volumes]: volume {volume_name!r} is not declared "
           "in [volumes]"
-        )
-      target = posixpath.normpath(guest_path)
-      if target == KELSO_GUEST_DIR or target.startswith(f"{KELSO_GUEST_DIR}/"):
-        errors.append(
-          f"[run.{unit_name}.volumes]: {volume_name} is mounted at {guest_path}, "
-          f"but {KELSO_GUEST_DIR} is reserved for kelso; mount it somewhere else"
         )
   return errors
 

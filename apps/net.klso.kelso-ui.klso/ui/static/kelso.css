@@ -166,6 +166,11 @@ code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
 /* xterm.css paints this #000 (as `.xterm .xterm-viewport`, and loads later); the
    theme only reaches the element inside it. */
 .console .xterm .xterm-viewport { background: var(--term-bg); }
+.unit-commands { margin-top: 12px; }
+.unit-commands summary { cursor: pointer; }
+.unit-commands p { margin: 10px 0 0; }
+/* One click selects the whole command, ready to copy. */
+.unit-commands pre { margin-top: 4px; user-select: all; }
 
 .job-choices { display: flex; flex-direction: column; gap: 8px; }
 .job-choice { display: flex; gap: 10px; align-items: flex-start; padding: 4px 6px; cursor: pointer; }

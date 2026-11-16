@@ -3,8 +3,7 @@
 `console_command` resolves what to run and refuses what cannot be; `kelso
 shell` hands it the operator's own terminal and kelsod runs it on a PTY.
 `ConsoleRecord` puts each session in the activity log -- that it happened, not
-what was typed. A unit with commands opens with them listed, and with
-/kelso/bin on PATH so `kelso_cmd` runs them.
+what was typed.
 
 docker has no way to end an exec: killing the client leaves its shell running
 in the container. So a session kelsod abandons announces its shell's pid
@@ -24,7 +23,8 @@ from kelso.lib.activity import ERROR, OK, begin_run, finish_run
 from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
-from kelso.lib.run_layout import KELSO_BIN, unit_commands
+from kelso.lib.run_layout import unit_commands
+from kelso.lib.spec import AppCommand
 
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
@@ -37,6 +37,7 @@ class ConsoleCommand:
   docker_args: list[str]
   cwd: Path
   env: dict[str, str]
+  commands: tuple[AppCommand, ...]
 
 
 def console_command(
@@ -61,8 +62,6 @@ def console_command(
   spec = ctx.require_loaded_spec(app_id)
   unit_shell = spec.run_units[unit].shell
   script = f"exec {shlex.quote(unit_shell[0])} -i"
-  if unit_commands(spec, unit):
-    script = f'export PATH="$PATH:{KELSO_BIN}"; kelso_cmd; {script}'
   if announce_pid:
     script = "printf '\\033]697;kelso-pid=%s\\007' $$; " + script
   return ConsoleCommand(
@@ -72,6 +71,7 @@ def console_command(
     docker_args=["compose", "exec", unit, *unit_shell, script],
     cwd=state.run_path,
     env=compose_env(app_id, ctx),
+    commands=tuple(unit_commands(spec, unit)),
   )
 
 

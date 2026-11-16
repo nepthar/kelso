@@ -29,8 +29,14 @@ def console_page(page: PageDep, app_id: str, unit: str = ""):
   if unit not in running:
     unit = "main" if "main" in running else (running[0] if running else "")
   title = f"{app.get('display_name') or app_id} console"
+  commands = [c for c in app.get("commands", []) if c.get("unit") == unit]
   response = page.render(
-    "pages/app_console.html", title, app_id=app_id, unit=unit, running=running
+    "pages/app_console.html",
+    title,
+    app_id=app_id,
+    unit=unit,
+    running=running,
+    commands=commands,
   )
   response.headers["Content-Security-Policy"] = TERMINAL_CSP
   return response

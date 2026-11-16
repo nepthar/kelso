@@ -79,7 +79,7 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert "via" not in body
 
 
-def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
+def test_shell_prints_the_units_commands_before_opening(kelso_env):
   app = kelso_env.local_repo / "cmd-demo.klso"
   app.mkdir()
   (app / "manifest.toml").write_text(
@@ -87,10 +87,11 @@ def test_a_unit_with_commands_opens_with_them_on_path(kelso_env):
     '[commands.ping]\ncmd = "echo pong"\n'
   )
   assert kelso_env.run("start", "cmd-demo").returncode == 0
-  assert kelso_env.run("shell", "cmd-demo").returncode == 0
+  shell = kelso_env.run("shell", "cmd-demo")
+  assert shell.returncode == 0
+  assert shell.stdout == "Commands in main:\n  echo pong  # ping\n"
   log = kelso_env.docker_log.read_text().splitlines()
-  script = json.loads(log[-1])["args"][-1]
-  assert script == 'export PATH="$PATH:/kelso/bin"; kelso_cmd; exec /bin/sh -i'
+  assert json.loads(log[-1])["args"][-1] == "exec /bin/sh -i"
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):

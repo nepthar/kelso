@@ -24,21 +24,10 @@ from kelso.lib.run_layout import (
   _host_mounts,
   _route_urls,
   command_argv,
-  kelso_cmd,
   make_compose_dict,
 )
 from kelso.lib.spec import KELSO_SUBDOMAIN_LABEL, AppConfig, AppSpec
 from tests.conftest import spec_of
-
-
-def _kelso_mount(unit: str = "main") -> dict:
-  return {
-    "type": "bind",
-    "source": f"./kelso/{unit}",
-    "target": "/kelso",
-    "read_only": True,
-    "bind": {"create_host_path": False},
-  }
 
 
 def _localtime_mount() -> dict:
@@ -817,52 +806,3 @@ def test_a_command_runs_in_its_units_shell_with_arguments_as_typed(tmp_path):
   argv = command_argv(spec.run_units["main"], spec.commands["show"], TRICKY)
   out = subprocess.run(argv, capture_output=True, text=True, timeout=10).stdout
   assert out == "[it's show][it's][a b][$HOME][;][*]"
-
-
-def test_kelso_cmd_runs_a_command_with_arguments_as_typed(tmp_path):
-  spec = spec_of(tmp_path, COMMANDS_MANIFEST)
-  script = tmp_path / "kelso_cmd"
-  script.write_text(kelso_cmd(spec, "main"))
-  script.chmod(0o755)
-
-  def run(*args):
-    return subprocess.run([script, *args], capture_output=True, text=True, timeout=10)
-
-  # $0 is the script here, where Run makes it the command's name.
-  assert run("show", *TRICKY).stdout == f"[it's {script}][it's][a b][$HOME][;][*]"
-  assert run().stdout == (
-    "demo (main) commands, run as: kelso_cmd <name> [args]\n"
-    """  show  printf '[%s]' "it's $0"\n"""
-  )
-  # Another unit's command is not this one's to run.
-  refused = run("jobs")
-  assert refused.returncode == 127
-  assert "kelso_cmd: no command jobs in main" in refused.stderr
-
-
-def test_only_a_unit_with_commands_gets_kelso_mounted(tmp_path):
-  spec = spec_of(tmp_path, COMMANDS_MANIFEST)
-  services = make_compose_dict(spec, run_data(spec))["services"]
-  assert _kelso_mount("main") in services["main"]["volumes"]
-  assert _kelso_mount("worker") in services["worker"]["volumes"]
-  idle = services["idle"].get("volumes", [])
-  assert all(mount["target"] != "/kelso" for mount in idle)
-
-
-@pytest.mark.parametrize("target", ["/kelso", "/kelso/conn", "/kelso/../kelso/x"])
-def test_nothing_may_be_mounted_under_kelso(tmp_path, target):
-  with pytest.raises(ConfigError, match="/kelso is reserved for kelso"):
-    spec_of(
-      tmp_path,
-      f"""\
-[app]
-version = "1"
-
-[volumes]
-data = {{ kind = "data" }}
-
-[run.main]
-image = "alpine"
-volumes = {{ data = "{target}" }}
-""",
-    )

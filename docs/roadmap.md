@@ -523,9 +523,8 @@ the invoking user and cannot touch what the app's containers wrote.
 - **"What kelso does to your containers."** One section listing everything
   kelso adds beyond the manifest: the `/etc/localtime` mount, log rotation
   (10 MB x 3), `restart: on-failure` and kelsod resuming apps at boot, a private
-  network per app, the `kelso.*` labels, the `KLSO_*` variables, `/kelso/bin`
-  for apps with commands, and the host port range (`port_base` to
-  `port_base + 1000`) to open in a firewall.
+  network per app, the `kelso.*` labels, the `KLSO_*` variables, and the host
+  port range (`port_base` to `port_base + 1000`) to open in a firewall.
 - **Release hygiene.** A changelog or GitHub release notes for each tag; a
   platform statement in the README (Linux with systemd, amd64 and arm64, tested
   on Ubuntu Server 26.04 and Raspberry Pi OS); a GitHub description and topics
