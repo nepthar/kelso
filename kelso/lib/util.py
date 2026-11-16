@@ -67,7 +67,7 @@ ROUTE_KEY_PREFIX = "routes."
 KLSO_KEY_PREFIX = "klso."
 KLSO_KEYS = frozenset({"domain", "volumes", "cmd", "routes"})
 
-# Kelso's place in every container. Manifests may not mount anything there.
+# Reserved for kelso's future use: manifests may not mount anything there.
 KELSO_GUEST_DIR = "/kelso"
 
 # What a browser hits. `route.scheme` is the backend dial scheme (how a reverse

@@ -99,6 +99,4 @@ def network_connections(
 
 def guest_path(name: str) -> str:
   """Where a mounted connection's host path is in each unit given it."""
-  # Not under /kelso: a unit with commands has that mounted read-only, and
-  # docker cannot make a mount point inside it.
   return f"/run/kelso/conn/{name}"

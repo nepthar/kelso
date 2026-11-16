@@ -177,8 +177,13 @@ APP_DETAIL = {
     },
   ],
   "commands": [
-    {"name": "test", "desc": f"Run a test {EVIL}", "unit": "main"},
-    {"name": "bare", "desc": "", "unit": "main"},
+    {
+      "name": "test",
+      "desc": f"Run a test {EVIL}",
+      "unit": "main",
+      "cmd": f"run-tests {EVIL}",
+    },
+    {"name": "bare", "desc": "", "unit": "main", "cmd": "true"},
   ],
   "issues": [
     {

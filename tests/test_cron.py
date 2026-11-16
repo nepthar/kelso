@@ -220,7 +220,7 @@ def still_running(monkeypatch) -> list:
   return waited
 
 
-def test_kelso_cmd_detaches_after_five_minutes(kelso_env, monkeypatch):
+def test_a_command_detaches_after_five_minutes(kelso_env, monkeypatch):
   a_cron_app(kelso_env)
   assert kelso_env.run("start", APP).returncode == 0
   waited = still_running(monkeypatch)

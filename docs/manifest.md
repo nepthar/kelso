@@ -47,7 +47,7 @@ creates.
 | --- | --- | --- | --- |
 | `image` | string | **required** | Pin a tag. `latest` makes a bundle unreproducible. |
 | `cmd` | list of strings | image default | Overrides the image's command. Passed as written: a `$VAR` in it is the container's to expand, not kelso's or compose's. |
-| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which is kelso's. |
+| `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which kelso reserves for future use. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, in `start_order`. |
@@ -355,10 +355,8 @@ in the web UI. This is how a bundle ships its own maintenance: a backup, a
 reindex, a password reset.
 
 The Run button and `kelso cmd` run a command's string in its unit's `shell`,
-with the operator's arguments added to the end. For someone in a console, each
-unit with commands also gets `/kelso/bin/kelso_cmd`, which runs one the same
-way (`kelso_cmd backup --full`) or, with no arguments, lists them. kelso's
-consoles put `/kelso/bin` at the end of `PATH` and open with that list.
+with the operator's arguments added to the end. `kelso shell` prints a unit's
+commands before opening its shell, and the web UI's console lists them to copy.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |

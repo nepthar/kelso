@@ -116,6 +116,17 @@ def test_a_second_running_unit_gets_a_picker(client, fake, monkeypatch):
   assert 'data-src="/apps/kelso-ui/console/ws?unit=worker"' in text
 
 
+def test_the_console_lists_the_units_commands_to_copy(client, fake, monkeypatch):
+  text = client.get("/apps/kelso-ui/console").text
+  assert 'Commands in <span class="mono">main</span> (2)' in text
+  assert "<pre>true</pre>" in text
+  assert "<pre>run-tests &lt;" in text
+
+  units = [dict(u, state="running") for u in APP_DETAIL["units"]]
+  monkeypatch.setitem(APP_DETAIL, "units", units)
+  assert "Commands in" not in client.get("/apps/kelso-ui/console?unit=worker").text
+
+
 def test_nothing_running_draws_no_terminal(client, fake):
   text = client.get("/apps/mealie/console").text
   assert "Start it to open a console" in text

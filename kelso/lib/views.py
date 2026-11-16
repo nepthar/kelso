@@ -467,7 +467,12 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
       "commands": [
-        {"name": name, "desc": command.desc, "unit": command.run_unit}
+        {
+          "name": name,
+          "desc": command.desc,
+          "unit": command.run_unit,
+          "cmd": command.cmd,
+        }
         for name, command in spec.commands.items()
       ],
       "issues": [
