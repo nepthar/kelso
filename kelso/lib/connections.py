@@ -6,7 +6,7 @@ itself: the manifest maps properties to whatever names the app reads.
 
 A mounted connection is a host path at `/run/kelso/conn/<name>`, only in the
 units that list or reference it. It hands the app control of something outside
-it, so each is a danger callout. A network connection is what a restricted app
+it, so each is a danger callout. A network connection is what an app behind kproxy
 may reach through kproxy: it is app-wide, not restricted to a single container.
 """
 
@@ -79,8 +79,9 @@ class HttpConnection:
   property_names: ClassVar[tuple[str, ...]] = ("host", "url")
 
   @staticmethod
-  def properties(name: str) -> dict[str, str]:
-    return {"host": name, "url": f"http://{name}"}
+  def properties(host: str) -> dict[str, str]:
+    """`host` is the connection's name behind kproxy, else its address."""
+    return {"host": host, "url": f"http://{host}"}
 
 
 NetworkConnection = WebConnection | HttpConnection

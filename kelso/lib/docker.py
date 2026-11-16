@@ -288,6 +288,30 @@ def docker_run_command(
   return DockerReturn(returncode=result.returncode, data=data)
 
 
+def docker_output(
+  cmd: list[str],
+  *,
+  cwd: Path | None = None,
+  env: dict[str, str] | None = None,
+  timeout: float | None = None,
+) -> str:
+  """Run `docker <cmd>` and return its stdout as is. Raises DockerError if it fails."""
+  try:
+    result = subprocess.run(
+      [DOCKER, *cmd],
+      cwd=cwd,
+      capture_output=True,
+      text=True,
+      env={**os.environ, **env} if env else None,
+      timeout=timeout,
+    )
+  except subprocess.TimeoutExpired:
+    raise _timed_out(cmd, timeout) from None
+  if result.returncode != 0:
+    raise DockerError(cmd, result.returncode, result.stderr)
+  return result.stdout
+
+
 def server_major() -> int | None:
   """The docker daemon's major version, or None if it can't be read."""
   try:

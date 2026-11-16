@@ -1,4 +1,4 @@
-"""`network_mode = "restricted"`: the app behind kproxy, from manifest to compose.
+"""`network_mode = "restrict"`, `ask` and `watch`: the app behind kproxy, from manifest to compose.
 
 The kproxy program has its own tests in kproxy/; these cover what kelso
 generates to run it, and that loading allocates and releases a subnet.
@@ -21,7 +21,7 @@ from tests.test_compose import run_data
 RESTRICTED = """\
 [app]
 version = "1"
-network_mode = "restricted"
+network_mode = "restrict"
 
 [adv_config]
 subdomain = { default = "demo" }
@@ -105,7 +105,7 @@ def test_rules_file_allows_every_connection_and_relays_every_route(kelso_env):
 @pytest.mark.parametrize(
   ("change", "message"),
   [
-    (("[run.db]", "[run.kproxy]"), "uses that name for its proxy"),
+    (("[run.db]", "[run.kproxy]"), "uses that name for the proxy"),
     (
       (
         'image = "postgres:16"',
@@ -118,7 +118,7 @@ def test_rules_file_allows_every_connection_and_relays_every_route(kelso_env):
       "is not a domain name",
     ),
     (
-      ('network_mode = "restricted"', 'network_mode = "host"'),
+      ('network_mode = "restrict"', 'network_mode = "host"'),
       "can't limit outbound traffic",
     ),
   ],
@@ -134,7 +134,7 @@ def test_restricted_manifest_mistakes_are_refused(tmp_path, change, message):
 FORWARD = """\
 [app]
 version = "1"
-network_mode = "restricted"
+network_mode = "restrict"
 
 [config]
 nas_address = { desc = "host:port" }
@@ -160,7 +160,6 @@ def test_a_forward_takes_its_target_from_config(tmp_path):
   [
     (("${nas_address}", "${nope}"), r"references \$\{nope\}, which is not in"),
     (("${nas_address}", "192.168.1.20"), "must be host:port"),
-    (('network_mode = "restricted"', ""), "an http connection needs network_mode"),
   ],
 )
 def test_forward_mistakes_are_refused(tmp_path, change, message):
@@ -169,7 +168,7 @@ def test_forward_mistakes_are_refused(tmp_path, change, message):
 
 
 def test_web_connections_are_allowed_but_unused_in_open_mode(tmp_path):
-  spec = spec_of(tmp_path, RESTRICTED.replace('network_mode = "restricted"', ""))
+  spec = spec_of(tmp_path, RESTRICTED.replace('network_mode = "restrict"', ""))
   compose = make_compose_dict(spec, run_data(spec))
   assert "kproxy" not in compose["services"]
   assert "networks" not in compose
@@ -218,7 +217,7 @@ def test_subnets_come_from_the_configured_pool(kelso_env):
 def test_an_app_that_stops_being_restricted_gives_its_subnet_back(kelso_env):
   _write(kelso_env, RESTRICTED)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
-  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restrict"', ""))
   assert kelso_env.run("load", "restricted-demo").returncode == 0
 
   assert _subnet("restricted-demo") is None
@@ -251,7 +250,7 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   data = _run_data("restricted-demo")
   assert "http nas 10.0.0.5:5000" in data.restricted.rules
   assert network_lines(_spec("restricted-demo"), data) == [
-    "restricted: reaches only these",
+    "restrict: reaches only these",
     "nas: http://nas -> 10.0.0.5:5000",
   ]
   main = make_compose_dict(_spec("restricted-demo"), data)["services"]["main"]
@@ -273,12 +272,14 @@ def test_the_receipt_says_what_a_restricted_app_may_reach(kelso_env):
   _write(kelso_env, RESTRICTED)
   started = kelso_env.run("start", "restricted-demo")
   assert started.returncode == 0, started.stderr
-  assert "Network:     restricted: reaches only these" in started.stdout
+  assert "Network:     restrict: reaches only these" in started.stdout
   assert "weather: api.weather.com, Weather.COM." in started.stdout
 
-  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restrict"', ""))
   shown = kelso_env.run("load", "restricted-demo")
-  assert "open: reaches anything; these only apply when restricted" in shown.stdout
+  assert (
+    "open: reaches anything; web connections only apply behind kproxy" in shown.stdout
+  )
 
 
 def test_a_restricted_app_refuses_to_start_on_old_docker(kelso_env, monkeypatch):
@@ -287,10 +288,11 @@ def test_a_restricted_app_refuses_to_start_on_old_docker(kelso_env, monkeypatch)
   refused = kelso_env.run("start", "restricted-demo")
   assert refused.returncode == 1
   assert (
-    "restricted-demo is restricted, and docker 26 is older than 27" in refused.stderr
+    "restricted-demo runs behind kproxy (restrict), and docker 26 is older than 27"
+    in refused.stderr
   )
 
-  _write(kelso_env, RESTRICTED.replace('network_mode = "restricted"', ""))
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restrict"', ""))
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert kelso_env.run("start", "restricted-demo").returncode == 0
 
@@ -302,7 +304,7 @@ def test_a_restricted_app_refuses_to_start_when_dockers_version_is_unknown(
   _write(kelso_env, RESTRICTED)
   refused = kelso_env.run("start", "restricted-demo")
   assert refused.returncode == 1
-  assert "docker's version can't be read" in refused.stderr
+  assert "Unable to communicate with the docker daemon" in refused.stderr
 
 
 def test_an_address_the_operator_sets_is_no_danger_callout(tmp_path):
@@ -362,3 +364,65 @@ def test_an_installed_kelso_finds_kproxy_inside_itself(tmp_path, monkeypatch):
   (tmp_path / "site" / "kelso" / "lib").mkdir()
   monkeypatch.setattr(kproxy, "__file__", str(tmp_path / "site/kelso/lib/kproxy.py"))
   assert kproxy.source_dir() == shipped.resolve()
+
+
+def test_an_open_app_reaches_an_http_connection_at_its_address(kelso_env):
+  _write(kelso_env, FORWARD.replace('network_mode = "restrict"', ""))
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert (
+    kelso_env.run(
+      "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
+    ).returncode
+    == 0
+  )
+  data = _run_data("restricted-demo")
+  assert data.restricted is None
+  main = make_compose_dict(_spec("restricted-demo"), data)["services"]["main"]
+  assert main["environment"]["NAS_URL"] == "http://10.0.0.5:5000"
+  assert network_lines(_spec("restricted-demo"), data) == [
+    "open: reaches anything; web connections only apply behind kproxy",
+    "nas: http://10.0.0.5:5000",
+  ]
+
+
+@pytest.mark.parametrize(("mode", "policy"), [("ask", "ask"), ("watch", "allow")])
+def test_the_operator_can_put_an_open_app_behind_kproxy(kelso_env, mode, policy):
+  _write(kelso_env, RESTRICTED.replace('network_mode = "restrict"', ""))
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert _subnet("restricted-demo") is None
+
+  set_mode = kelso_env.run("config", "restricted-demo", "--network", mode)
+  assert set_mode.returncode == 0, set_mode.stderr
+  assert f"network: {mode} (set by you; the manifest says open)" in set_mode.stdout
+
+  started = kelso_env.run("start", "restricted-demo")
+  assert started.returncode == 0, started.stderr
+  assert "(set by you; the manifest says open)" in started.stdout
+  assert _subnet("restricted-demo") is not None
+  rules = (kelso_env.run_root / "restricted-demo" / "kproxy" / "rules.txt").read_text()
+  assert rules.startswith(f"default {policy}\n")
+
+  assert (
+    kelso_env.run("config", "restricted-demo", "--network", "default").returncode == 0
+  )
+  assert kelso_env.run("restart", "restricted-demo").returncode == 0
+  assert _subnet("restricted-demo") is None
+
+
+def test_the_operator_can_open_a_restrict_app(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", "restricted-demo").returncode == 0
+  assert kelso_env.run("config", "restricted-demo", "--network", "open").returncode == 0
+  assert kelso_env.run("start", "restricted-demo").returncode == 0
+  compose = yaml.safe_load(
+    (kelso_env.run_root / "restricted-demo" / "compose.yml").read_text()
+  )
+  assert "kproxy" not in compose["services"]
+
+
+@pytest.mark.parametrize("mode", ["host", "nope"])
+def test_host_and_unknown_modes_are_refused(kelso_env, mode):
+  _write(kelso_env, RESTRICTED)
+  refused = kelso_env.run("config", "restricted-demo", "--network", mode)
+  assert refused.returncode != 0
+  assert ("host networking" if mode == "host" else "is not one of") in refused.stderr

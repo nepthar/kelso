@@ -1,6 +1,6 @@
 # Network Demo
 
-A restricted app: it reaches only what its `[connections]` list, through
+An app in `restrict` mode: it reaches only what its `[connections]` list, through
 kproxy, and everything else is refused. `kelso cmd demo-network probe` tries
 one destination of each kind from inside the app and says what happened. It
 exits non-zero if anything was reached that should have been refused, or the
@@ -24,17 +24,17 @@ kelso cmd demo-network probe
 kelso cmd demo-network fetch https://example.org/
 ```
 
-The `main` route serves a page; kproxy relays it in, since a restricted app's
+The `main` route serves a page; kproxy relays it in, since a `restrict` app's
 own network has no way in or out.
 
 ```toml klso_path="manifest.toml"
 [app]
 version      = "0.1.0"
 display_name = "Network Demo"
-description  = "A restricted app: what it may reach, and what it is refused"
+description  = "A restrict-mode app: what it may reach, and what it is refused"
 author       = "Kelso Server"
 url          = "https://github.com/nepthar/kelso"
-network_mode = "restricted"
+network_mode = "restrict"
 
 [config]
 lan_address = { desc = "Something on your own network that answers HTTP, as host:port" }

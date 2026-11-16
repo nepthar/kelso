@@ -17,6 +17,7 @@ from kelso.lib.connections import (
   network_connections,
 )
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.manifest import PROXIED_MODES
 from kelso.lib.spec import (
   KELSO_SUBDOMAIN_LABEL,
   PRIMARY_ROUTE_NAME,
@@ -168,7 +169,7 @@ class AssignedRoute:
 
 @dataclass(frozen=True)
 class Restricted:
-  """What a restricted app runs behind kproxy with."""
+  """What an app runs behind kproxy with."""
 
   subnet: str
   # What kproxy's image is built from.
@@ -193,7 +194,9 @@ class AppRunData:
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
   connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
-  # None for an app that isn't restricted, or one that can't be yet: see `issues`.
+  # The manifest's network_mode, or the operator's `--network` over it.
+  network_mode: str = "open"
+  # None for an app that isn't behind kproxy, or one that can't be yet: see `issues`.
   restricted: "Restricted | None" = None
 
   @property
@@ -245,12 +248,20 @@ def _load_config_values(
 
 
 def _load_connections(
-  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
+  spec: AppSpec,
+  mode: str,
+  addresses: Mapping[str, str],
+  issues: list[ConfigIssue],
+  ctx: KelsoCtx,
 ) -> dict[str, ResolvedConnection]:
   resolved = {}
   for name, conn in spec.connections.items():
     if not isinstance(conn, MountConnection):
-      properties = conn.properties(name) if isinstance(conn, HttpConnection) else {}
+      properties = {}
+      if isinstance(conn, HttpConnection):
+        # Without kproxy nothing answers the name, so the app gets the address.
+        reached = name if mode in PROXIED_MODES else addresses.get(name, "")
+        properties = conn.properties(reached)
       resolved[name] = ResolvedConnection(None, "", properties)
       continue
     kind = conn.kind
@@ -560,8 +571,10 @@ def _depends_on_kproxy(depends_on: Any) -> dict[str, Any]:
 
 def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
   restricted = data.restricted
-  if spec.network_mode == "restricted" and restricted is None:
-    raise ValueError(f"App {spec.app} is restricted but has no subnet or kproxy source")
+  if data.network_mode in PROXIED_MODES and restricted is None:
+    raise ValueError(
+      f"App {spec.app} runs behind kproxy but has no subnet or kproxy source"
+    )
   services: dict[str, Any] = {}
   for run_name, run_unit in spec.run_units.items():
     # The validator has already checked every dotted `${...}`, so the only way one
@@ -667,7 +680,9 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
-  restricted = _load_restricted(spec, issues, ctx, config_values, routes)
+  mode = network_mode(spec, ctx)
+  addresses = _http_addresses(spec, issues, config_values)
+  restricted = _load_restricted(spec, mode, issues, ctx, addresses, routes)
   return AppRunData(
     app=spec.app,
     run_path=run_path,
@@ -677,10 +692,16 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     routes=routes,
     route_urls=_route_urls(routes, ctx.config),
     host_mounts=_host_mounts(),
-    connections=_load_connections(spec, issues, ctx),
+    connections=_load_connections(spec, mode, addresses, issues, ctx),
     issues=tuple(issues),
+    network_mode=mode,
     restricted=restricted,
   )
+
+
+def network_mode(spec: AppSpec, ctx: KelsoCtx) -> str:
+  """The operator's `--network` for the app if set, else the manifest's."""
+  return ctx.app_store(spec.app).get_network_mode() or spec.network_mode
 
 
 def _ingress(
@@ -693,14 +714,46 @@ def _ingress(
   ]
 
 
-def _load_restricted(
+def _http_addresses(
   spec: AppSpec,
   issues: list[ConfigIssue],
-  ctx: KelsoCtx,
   config_values: Mapping[str, ConfigValue],
+) -> dict[str, str]:
+  """Each http connection's host:port, as config fills it in."""
+  config = {name: cv.value for name, cv in config_values.items() if cv.value}
+  addresses: dict[str, str] = {}
+  for name, entry in network_connections(spec.connections).items():
+    if not isinstance(entry, HttpConnection):
+      continue
+    needs = EnvTemplate(entry.address).get_identifiers()
+    # A connection whose config isn't set yet is left out: that config is already
+    # an issue, and the app can't start without it.
+    if not set(needs) <= config.keys():
+      continue
+    try:
+      addresses[name] = kproxy.forward_target(
+        EnvTemplate(entry.address).safe_substitute(config)
+      )
+    except ValueError as e:
+      fix = " ".join(f"{ref}=<host:port>" for ref in needs)
+      issues.append(
+        ConfigIssue(
+          f"connection {name}: {e}",
+          f"Run `kelso config {spec.app} --set {fix}`",
+        )
+      )
+  return addresses
+
+
+def _load_restricted(
+  spec: AppSpec,
+  mode: str,
+  issues: list[ConfigIssue],
+  ctx: KelsoCtx,
+  forwards: Mapping[str, str],
   routes: Mapping[str, AssignedRoute],
 ) -> Restricted | None:
-  if spec.network_mode != "restricted":
+  if mode not in PROXIED_MODES:
     return None
   subnet = ctx.kelso_db.get_subnet(spec.app)
   if subnet is None:
@@ -715,40 +768,29 @@ def _load_restricted(
   if source is None:
     issues.append(
       ConfigIssue(
-        "network_mode 'restricted': kproxy's source is missing from this kelso",
+        f"network mode {mode!r}: kproxy's source is missing from this kelso",
         "Reinstall kelso",
         load_blocking=True,
       )
     )
   if subnet is None or source is None:
     return None
-  config = {name: cv.value for name, cv in config_values.items() if cv.value}
-  hosts: list[str] = []
-  forwards: dict[str, str] = {}
-  for name, entry in network_connections(spec.connections).items():
-    if isinstance(entry, WebConnection):
-      hosts.extend(entry.hosts)
-    if not isinstance(entry, HttpConnection):
-      continue
-    needs = EnvTemplate(entry.address).get_identifiers()
-    # A forward whose config isn't set yet is left out: that config is already
-    # an issue, and the app can't start without it.
-    if not set(needs) <= config.keys():
-      continue
-    try:
-      forwards[name] = kproxy.forward_target(
-        EnvTemplate(entry.address).safe_substitute(config)
-      )
-    except ValueError as e:
-      fix = " ".join(f"{ref}=<host:port>" for ref in needs)
-      issues.append(
-        ConfigIssue(
-          f"connection {name}: {e}",
-          f"Run `kelso config {spec.app} --set {fix}`",
-        )
-      )
-  rules = kproxy.rules_text(hosts, forwards, _ingress(routes))
-  return Restricted(subnet, source, rules, forwards)
+  hosts = [
+    host
+    for entry in network_connections(spec.connections).values()
+    if isinstance(entry, WebConnection)
+    for host in entry.hosts
+  ]
+  decided = ctx.app_store(spec.app).list_hosts()
+  hosts += [name for name, verdict in decided.items() if verdict == "allow"]
+  rules = kproxy.rules_text(
+    hosts,
+    forwards,
+    _ingress(routes),
+    default=PROXIED_MODES[mode],
+    denied=[name for name, verdict in decided.items() if verdict == "deny"],
+  )
+  return Restricted(subnet, source, rules, dict(forwards))
 
 
 def _volume_paths(

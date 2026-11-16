@@ -411,3 +411,39 @@ func TestHalfCloseIsAnIdleLimit(t *testing.T) {
 		t.Fatal("still open after the remaining side went quiet")
 	}
 }
+
+// Bytes count while the connection is still open, not only when it closes.
+func TestCountsWhileOpen(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	pair := func() (net.Conn, net.Conn) {
+		a, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := ln.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, b
+	}
+	client, proxyClient := pair()
+	proxyUp, up := pair()
+	defer client.Close()
+	defer up.Close()
+
+	ctr := &counters{}
+	go relay(proxyClient, proxyUp, nil, ctr, &link{tally: 20 * time.Millisecond})
+	client.Write([]byte("hello"))
+	up.Write([]byte("hi"))
+	deadline := time.Now().Add(2 * time.Second)
+	for ctr.bytesOut.Load() != 5 || ctr.bytesIn.Load() != 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("out %d, in %d", ctr.bytesOut.Load(), ctr.bytesIn.Load())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

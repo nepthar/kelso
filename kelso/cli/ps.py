@@ -4,6 +4,7 @@ import logging
 from tabulate import tabulate
 
 from kelso.lib.kelso import KelsoCtx
+from kelso.lib.net import waiting_note
 from kelso.lib.observations import FINISHED, OK, STOPPED, UNLOADED, AppObservation
 from kelso.lib.run_layout import load_run_data
 from kelso.lib.spec import AppSpec
@@ -41,10 +42,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       except ValueError as e:
         logger.warning("%s", e)
         spec, config = None, "broken manifest"
+      status = _status(observation, spec)
+      if spec is not None and observation.loaded:
+        status = ", ".join(filter(None, (status, waiting_note(spec, ctx))))
       rows.append(
         (
           observation.app_id,
-          _status(observation, spec),
+          status,
           config,
           _volumes(observation, spec),
           observation.last_action or EMPTY,

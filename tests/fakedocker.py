@@ -43,6 +43,10 @@ class FakeDocker:
     return json.loads(self.state.read_text()) if self.state.exists() else []
 
   @property
+  def kproxy_path(self) -> Path:
+    return self.state.with_name("fake-kproxy.json")
+
+  @property
   def images_path(self) -> Path:
     return self.state.with_name("docker-images")
 
@@ -85,6 +89,14 @@ class FakeDocker:
       self.state.write_text(json.dumps(containers))
     elif args[:2] == ["compose", "down"]:
       app_id = cwd.name
+      # kproxy writes what it saw as it stops; canned under "stats-file".
+      canned = (
+        json.loads(self.kproxy_path.read_text()) if self.kproxy_path.exists() else {}
+      )
+      if "stats-file" in canned.get(app_id, {}) and (cwd / "kproxy").is_dir():
+        (cwd / "kproxy" / "stats.json").write_text(
+          json.dumps(canned[app_id]["stats-file"])
+        )
       containers = [c for c in containers if c["app_id"] != app_id]
       if containers:
         self.state.write_text(json.dumps(containers))
@@ -131,6 +143,17 @@ class FakeDocker:
         return 1, "", "conflict: image is being used by a container"
       kept = [i for i in images if i not in gone]
       self.images_path.write_text(json.dumps(kept))
+    elif args[:4] == ["compose", "exec", "-T", "kproxy"]:
+      # `/kproxy admin -admin SOCK METHOD PATH [BODY]`. Answers come from
+      # `fake-kproxy.json` beside the state: {app_id: {"GET /stats": {...}}}.
+      if not any(c["app_id"] == cwd.name for c in containers):
+        return 1, "", 'service "kproxy" is not running'
+      method, path = args[8], args[9]
+      answers = self.kproxy_path
+      canned = json.loads(answers.read_text()) if answers.exists() else {}
+      answer = canned.get(cwd.name, {}).get(f"{method} {path}")
+      if answer is not None:
+        out.append(json.dumps(answer))
     elif args[0] == "version":
       out.append(json.dumps({"Server": {"Version": "29.0.0"}}))
     elif args[0] == "stats":

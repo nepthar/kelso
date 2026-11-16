@@ -22,6 +22,7 @@ from kelso.lib.lifecycle.load import (
   load_source,
   load_target,
   materialize,
+  set_network,
   unlink_host_volumes,
 )
 from kelso.lib.lifecycle.restore import (
@@ -80,6 +81,7 @@ __all__ = [
   "logs",
   "logs_text",
   "materialize",
+  "set_network",
   "assigned_routes",
   "preflight_app_routes",
   "recovery_lines",

@@ -127,7 +127,7 @@ class KelsoStore:
       raise ValueError(f"No free host ports remaining. Limit is {PORT_RANGE_SIZE}")
     return port
 
-  # A restricted app's subnet is central too: docker refuses two networks that
+  # An app behind kproxy has its subnet is central too: docker refuses two networks that
   # overlap. Unlike routes it outlives a reload, so the network isn't recreated.
   def get_subnet(self, app_id: str) -> str | None:
     return self._store.read(f"subnets/{app_id}")
@@ -145,7 +145,7 @@ class KelsoStore:
       if str(net) not in taken:
         return str(net)
     raise ValueError(
-      f"No free subnets left in {self._subnet_pool} for restricted apps; "
+      f"No free subnets left in {self._subnet_pool} for apps behind kproxy; "
       "remove one with `kelso rm --purge`, or widen subnet_pool in config.toml"
     )
 
@@ -328,6 +328,31 @@ class AppStore:
     """app volume name -> host_volume tag."""
     raw = self._store.scan("binds/")
     return {name: tag for name, tag in raw.items() if isinstance(tag, str)}
+
+  def set_network_mode(self, mode: str | None) -> None:
+    """The operator's network mode over the manifest's; None clears it."""
+    if self.get_network_mode() == mode:
+      return
+    # Cleared as a write, not a delete: only writes count as a pending change.
+    self._store.write("network/mode", mode)
+
+  def get_network_mode(self) -> str | None:
+    mode = self._store.read("network/mode")
+    return mode if isinstance(mode, str) else None
+
+  def set_host(self, name: str, verdict: str | None) -> None:
+    """Allow or deny domain `name` and its subdomains behind kproxy; None forgets."""
+    if verdict is None:
+      if self._store.read(f"hosts/{name}") is not None:
+        self._store.delete(f"hosts/{name}")
+      return
+    if self._store.read(f"hosts/{name}") != verdict:
+      self._store.write(f"hosts/{name}", verdict)
+
+  def list_hosts(self) -> dict[str, str]:
+    """domain -> allow or deny, as the operator decided."""
+    raw = self._store.scan("hosts/")
+    return {name: v for name, v in raw.items() if v in ("allow", "deny")}
 
   def set_route_assignment(self, route_name: str, provider_tags: Sequence[str]) -> None:
     """Record which route-provider tags publish ``route_name``, primary first.
