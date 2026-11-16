@@ -806,3 +806,22 @@ def test_a_command_runs_in_its_units_shell_with_arguments_as_typed(tmp_path):
   argv = command_argv(spec.run_units["main"], spec.commands["show"], TRICKY)
   out = subprocess.run(argv, capture_output=True, text=True, timeout=10).stdout
   assert out == "[it's show][it's][a b][$HOME][;][*]"
+
+
+@pytest.mark.parametrize("target", ["/kelso", "/kelso/conn", "/kelso/../kelso/x"])
+def test_nothing_may_be_mounted_under_kelso(tmp_path, target):
+  with pytest.raises(ConfigError, match="/kelso is reserved for kelso"):
+    spec_of(
+      tmp_path,
+      f"""\
+[app]
+version = "1"
+
+[volumes]
+data = {{ kind = "data" }}
+
+[run.main]
+image = "alpine"
+volumes = {{ data = "{target}" }}
+""",
+    )
