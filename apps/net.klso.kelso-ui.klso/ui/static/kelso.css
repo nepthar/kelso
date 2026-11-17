@@ -219,24 +219,6 @@ code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
   margin: 0; font: 12px/1.5 var(--mono); white-space: pre;
 }
 .app-card-manifest code { padding: 0; background: none; font: inherit; color: inherit; }
-/* Editing a card's manifest in place: the editor, then the diff it made,
-   each taking the manifest's spot. The card's own actions step aside so Save
-   is the one default button. */
-.app-card.editing > .app-card-manifest,
-.app-card.editing .app-card-head > .actions { display: none; }
-.app-card-edit, .app-card-saved {
-  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px;
-}
-.app-card-edit textarea {
-  flex: 1 1 auto; min-height: 16rem; resize: none; tab-size: 2;
-  padding: 8px 10px; white-space: pre; overflow: auto; font: 12px/1.5 var(--mono);
-}
-.app-card-edit .error { margin: 0; }
-.app-card-edit .error p { white-space: pre-wrap; }
-.app-card-edit .row, .app-card-saved .row { gap: 8px; justify-content: flex-end; }
-.app-card-saved .saved-note { margin-right: auto; }
-.hljs-addition { color: var(--ok); }
-.hljs-deletion { color: var(--bad); }
 .hljs-comment { color: var(--muted); font-style: italic; }
 .hljs-section { color: var(--coral); font-weight: 600; }
 .hljs-attr { color: var(--fg); }

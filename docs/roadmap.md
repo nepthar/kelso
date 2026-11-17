@@ -505,6 +505,14 @@ Both break the same assumption: `lib/lifecycle/rootfs.py` reads and deletes
 volume files as the container's root, which under a user namespace maps back to
 the invoking user and cannot touch what the app's containers wrote.
 
+### Someday maybe
+
+- **Editing a manifest in place.** `kelso app edit` and an Edit button on the
+  web UI's catalog cards opened a bundle's manifest, checked it, and committed
+  it to its repo. Removed unused: a bundle qualified only if its repo had a
+  `.git` of its own and the file was committed, which nothing on the one real
+  install met.
+
 ---
 
 ## Todo

@@ -27,7 +27,7 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app, prefer_loaded=True)
   if not args.yes and not confirm_compose_warnings(app, update_source(app, ctx)):
     print("Nothing updated.")
     return

@@ -179,9 +179,6 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "manifest": "not toml",
     "text": "not toml",
     "markdown": False,
-    # repos/local has no git repository of its own here.
-    "editable": False,
-    "base": None,
     "manifest_stale": False,
     # A bundle that does not parse has no spec, so nothing to warn about.
     "warnings": [],
@@ -401,7 +398,7 @@ def test_load_unknown_app_is_refused(kelso_env, client):
     "/jobs", json={"verb": "load", "args": {"app": "nope"}, "started_by": BY}
   )
   assert response.status_code == 400
-  assert "No app found" in response.json()["error"]
+  assert "No app matching" in response.json()["error"]
 
 
 def test_failed_job_carries_the_error(kelso_env, client, jobs):
@@ -466,7 +463,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
     required_args = ("app",)
 
     def init(self, ctx, kwargs):
-      self.app = str(ctx.resolve_app(kwargs["app"]))
+      self.app = str(ctx.resolve_app_id(kwargs["app"]))
 
     def run(self, ctx) -> None:
       logging.getLogger("kelso").info("live line")
@@ -708,7 +705,7 @@ def test_verbs_take_ids_of_loaded_apps_and_nothing_else(kelso_env, client, app):
     "/jobs", json={"verb": "load", "args": {"app": app}, "started_by": BY}
   )
   assert response.status_code == 400
-  assert "No app found" in response.json()["error"]
+  assert "No app matching" in response.json()["error"]
 
 
 def test_verbs_reject_arguments_they_do_not_declare(kelso_env, client):

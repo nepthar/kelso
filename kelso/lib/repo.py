@@ -20,6 +20,7 @@ from kelso.lib.bundle import scan_bundles
 from kelso.lib.util import (
   fmt_size,
   now_ts,
+  same_path,
   validate_github_segment,
   validate_identifier,
 )
@@ -273,14 +274,15 @@ def get(ctx, name: str) -> Repo:
 
 
 def bound_apps(ctx, name: str) -> tuple[str, ...]:
-  """Every loaded app recorded as coming from this repo."""
-  from kelso.lib.lifecycle import bound_to
-
+  """Every app whose kept config was made for a bundle in this repo."""
+  repo = ctx.config.repos.get(name)
+  if repo is None:
+    return ()
   return tuple(
     sorted(
       app_id
-      for app_id in ctx.config.app_config_ids()
-      if bound_to(app_id, ctx) == f"repo {name}"
+      for app_id, origin in ctx.inventory.origins.items()
+      if origin is not None and same_path(origin.parent, repo.path)
     )
   )
 
@@ -290,5 +292,5 @@ def contested_lines(ctx) -> list[str]:
   return [
     f"{app_id} is in {len(repos)} repos ({', '.join(sorted(repos))}); "
     f"load it as {app_id}@<repo>."
-    for app_id, repos in sorted(ctx.contested_app_ids().items())
+    for app_id, repos in sorted(ctx.inventory.contested().items())
   ]

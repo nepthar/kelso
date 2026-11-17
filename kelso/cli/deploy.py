@@ -58,14 +58,14 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   dest = f"{root}/{REPOS_DIR}/{LOCAL_REPO}/{source.name}"
 
   loaded = subprocess.run(
-    _remote(host, f"kelso app source {app}"), capture_output=True, text=True
+    _remote(host, f"kelso app which --loaded {app}"), capture_output=True, text=True
   )
-  if loaded.returncode:
+  if loaded.returncode not in (0, 1):
     raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
-  was = loaded.stdout.strip()
+  was = loaded.stdout.strip().partition(" ")[2]
   if not was:
     command = f"kelso load {app}@{LOCAL_REPO} --yes && kelso start {app}"
-  elif was == f"repo {LOCAL_REPO}":
+  elif was == dest:
     command = f"kelso update {app} --yes"
     if args.no_backup:
       command += " --no-backup"

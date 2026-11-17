@@ -30,15 +30,10 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       print(capability_receipt(spec, None, ctx, compact=False))
     return
 
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app)
   with ctx.locked(f"inspect {app}", app):
     loaded = ctx.loaded_spec(app)
     spec = loaded or ctx.bundle_spec(app)
-    if spec is None:
-      raise ValueError(
-        f"No manifest for {app}: it is neither loaded nor in a catalog. "
-        f"Pass a path to a .klso to inspect one directly."
-      )
 
     notes: tuple[str, ...] = ()
     if loaded is None:

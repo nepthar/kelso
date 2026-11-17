@@ -3,6 +3,7 @@ import logging
 
 from tabulate import tabulate
 
+from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.net import waiting_note
 from kelso.lib.observations import FINISHED, OK, STOPPED, UNLOADED, AppObservation
@@ -34,7 +35,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
         continue
       try:
         spec = (
-          ctx.bundle_spec(observation.app_id)
+          _bundle_spec(observation.app_id, ctx)
           if observation.state == UNLOADED
           else ctx.loaded_spec(observation.app_id)
         )
@@ -63,6 +64,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
         disable_numparse=True,
       )
     )
+
+
+def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec | None:
+  try:
+    return ctx.bundle_spec(app)
+  except ValueError:
+    return None
 
 
 def _status(observation: AppObservation, spec: AppSpec | None) -> str:

@@ -133,7 +133,9 @@ def test_down_records_its_own_action_so_up_does_not_skip(kelso_env):
   assert kelso_env.run("down").returncode == 0
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  assert read_last_app_action(ctx.resolve_app("ports-demo"), ctx) == updown.DOWN_ACTION
+  assert (
+    read_last_app_action(ctx.resolve_app_id("ports-demo"), ctx) == updown.DOWN_ACTION
+  )
 
 
 @pytest.mark.parametrize(

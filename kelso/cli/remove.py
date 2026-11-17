@@ -64,8 +64,7 @@ def _add_yes(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  state = ctx.run_state(args.app_id)
-  plan = removal_plan(state.app_id, ctx, mode=args.mode)
+  plan = removal_plan(ctx.resolve_app_id(args.app_id), ctx, mode=args.mode)
 
   if not args.yes and not _confirmed(plan):
     print("Nothing removed.")

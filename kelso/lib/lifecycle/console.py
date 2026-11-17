@@ -48,7 +48,7 @@ def console_command(
   announce_pid: bool = False,
 ) -> ConsoleCommand:
   """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
-  app_id = ctx.resolve_app(app)
+  app_id = ctx.resolve_app_id(app, prefer_loaded=True)
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")

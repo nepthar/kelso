@@ -13,14 +13,14 @@ import psutil
 
 from kelso.lib import activity
 from kelso.lib import backup as backup_lib
+from kelso.lib.app_inventory import CatalogEntry
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
 from kelso.lib.docker import KelsoRunUnitStatus
-from kelso.lib.kelso import CatalogEntry, KelsoCtx
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
-from kelso.lib.lifecycle.edit import RepoGit, editable_entry, repo_git
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
@@ -65,35 +65,20 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo, with the bundles currently in it."""
-  catalogs: dict[str, list[dict[str, Any]]] = {name: [] for name in ctx.config.repos}
-  gits: dict[str, RepoGit | None] = {}
-  for name, repo in ctx.config.repos.items():
-    try:
-      gits[name] = repo_git(repo)
-    except (ValueError, RuntimeError):
-      gits[name] = None
-  catalog = ctx.app_catalog()
-  for app_id in sorted(catalog):
-    for entry in catalog[app_id]:
-      catalogs.setdefault(entry.source, []).append(
-        _catalog_app(entry, ctx, gits.get(entry.source))
-      )
-  return [{"name": name, "apps": apps} for name, apps in catalogs.items()]
+  catalog = ctx.inventory.catalog
+  return [
+    {"name": name, "apps": [_catalog_app(e, ctx) for e in catalog if e.repo == name]}
+    for name in ctx.config.repos
+  ]
 
 
-def _catalog_app(
-  entry: CatalogEntry, ctx: KelsoCtx, repo_git: RepoGit | None
-) -> dict[str, Any]:
+def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
   spec, error = _catalog_spec(entry)
   # The logtab is what makes an id more than a catalog listing, and AppStore
   # creates it on contact -- so this is a file check, never a store lookup.
   has_config = ctx.config.app_config_path(entry.app_id).is_file()
   store = ctx.app_store(spec.app) if spec is not None and has_config else None
   manifest = manifest_text(entry.path)
-  try:
-    editable = editable_entry(entry, repo_git) if repo_git else None
-  except (ValueError, OSError):
-    editable = None
   return {
     "app_id": entry.app_id,
     "display_name": spec.display_name if spec else "",
@@ -102,15 +87,13 @@ def _catalog_app(
     "description": spec.description if spec else "",
     "author": spec.author if spec else "",
     "url": spec.url if spec else "",
-    "repo": entry.source,
+    "repo": entry.repo,
     "state": ctx.app_state(entry.app_id),
     "configured": config_status(spec, store) if spec else None,
     "manifest": manifest,
-    # What the card shows and an edit replaces: a .klso.md is shown whole.
+    # What the card shows: a .klso.md is shown whole.
     "text": bundle_text(entry.path),
     "markdown": entry.path.name.endswith(KLSO_MD_SUFFIX),
-    "editable": editable is not None,
-    "base": editable.base if editable else None,
     "manifest_stale": _catalog_manifest_stale(entry, manifest, ctx),
     "warnings": compose_warnings_view(spec) if spec else [],
   }
@@ -163,7 +146,7 @@ def config_status(spec: AppSpec, store: AppStore | None) -> str:
 
 def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo: what it is, and what it last mirrored."""
-  catalog = ctx.app_catalog()
+  catalog = ctx.inventory.catalog
   out = []
   for name, repo in ctx.config.repos.items():
     state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
@@ -176,9 +159,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         "path": str(repo.path),
         "exists": repo.path.is_dir(),
         "removable": name != LOCAL_REPO,
-        "apps": sum(
-          1 for entries in catalog.values() for e in entries if e.source == name
-        ),
+        "apps": sum(e.repo == name for e in catalog),
         "bound_apps": list(bound_apps(ctx, name)),
         "sha": state["sha"] if state else None,
         "updated_at": state["at"] if state else None,
@@ -189,7 +170,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 def contested_view(ctx: KelsoCtx) -> dict[str, list[str]]:
   """App ids more than one repo carries, and which repos those are."""
-  return {app_id: sorted(repos) for app_id, repos in ctx.contested_app_ids().items()}
+  return {app_id: sorted(repos) for app_id, repos in ctx.inventory.contested().items()}
 
 
 def _catalog_spec(entry: CatalogEntry) -> tuple[AppSpec | None, str | None]:

@@ -40,12 +40,12 @@ def register(subparsers) -> None:
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
-  bundle = target.bundle or ctx.bundle_path(app)
+  bundle = target.require_bundle()
   if not args.yes and not confirm_compose_warnings(app, bundle):
     print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
-    result = reload_app(app, bundle, ctx, bound=target.bound_to)
+    result = reload_app(app, bundle, ctx)
   load = result.load
   for name in load.dropped_volumes:
     logger.warning(

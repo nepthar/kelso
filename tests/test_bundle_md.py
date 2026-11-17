@@ -160,11 +160,11 @@ def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
 
   by_id = kelso_env.run("load", "ports-demo")
   assert by_id.returncode == 1
-  assert "More than one repo carries" in by_id.stderr
+  assert "Multiple bundles found" in by_id.stderr
 
   (problem,) = diagnose(KelsoCtx(load_config_file(kelso_env.config))).problems
   assert problem.subject == ""
-  assert "More than one repo carries" in problem.message
+  assert "Multiple bundles found" in problem.message
 
 
 def test_a_full_path_picks_the_flavor_to_load(kelso_env):

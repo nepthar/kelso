@@ -273,11 +273,10 @@ def test_a_second_pass_keeps_answers_it_was_not_given_again(kelso_env):
 
 # ── apps: binds and routes ─────────────────────────────────────────────────
 def _app_request(kelso_env, app: str) -> tuple:
-  from kelso.lib.bundle import load_bundle
   from kelso.lib.configflow.app import app_config_request
 
   ctx = ctx_for(kelso_env)
-  spec = load_bundle(ctx.bundle_path(ctx.resolve_app(app))).app_spec()
+  spec = ctx.bundle_spec(ctx.resolve_app_id(app))
   return spec, ctx, app_config_request(spec, ctx)
 
 

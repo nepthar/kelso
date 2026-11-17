@@ -78,15 +78,6 @@ def _identity(cwd: Path) -> list[str]:
   return ["-c", "user.name=kelso", "-c", f"user.email=kelso@{socket.gethostname()}"]
 
 
-def commit(checkout: Path, path: Path, message: str) -> str:
-  """Commit `path` alone, whatever else is staged or dirty. Returns the sha."""
-  git("add", "--", str(path), cwd=checkout)
-  git(
-    *_identity(checkout), "commit", "-q", "-m", message, "--", str(path), cwd=checkout
-  )
-  return git("rev-parse", "HEAD", cwd=checkout)
-
-
 def adopt(path: Path) -> bool:
   """`git init` a directory that is in no work tree, committing what is in it.
 
@@ -98,35 +89,6 @@ def adopt(path: Path) -> bool:
   git("add", "-A", cwd=path)
   if git("status", "--porcelain", cwd=path):
     git(*_identity(path), "commit", "-q", "-m", "Added as a kelso repo", cwd=path)
-  return True
-
-
-# What `git status` would say is in progress, by the file in the git dir that
-# marks it.
-_OPERATIONS = {
-  "MERGE_HEAD": "merge",
-  "rebase-merge": "rebase",
-  "rebase-apply": "rebase",
-  "CHERRY_PICK_HEAD": "cherry-pick",
-  "REVERT_HEAD": "revert",
-  "BISECT_LOG": "bisect",
-}
-
-
-def operation(checkout: Path) -> str | None:
-  """The merge, rebase or the like `checkout` is in the middle of, if any."""
-  git_dir = Path(git("rev-parse", "--absolute-git-dir", cwd=checkout))
-  for marker, name in _OPERATIONS.items():
-    if (git_dir / marker).exists():
-      return name
-  return None
-
-
-def on_branch(checkout: Path) -> bool:
-  try:
-    git("symbolic-ref", "-q", "HEAD", cwd=checkout)
-  except RuntimeError:
-    return False
   return True
 
 

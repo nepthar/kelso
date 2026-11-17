@@ -15,7 +15,7 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  app = ctx.resolve_app(args.app_id)
+  app = ctx.resolve_app_id(args.app_id, prefer_loaded=True)
   with ctx.locked(f"restart {app}", app):
     result = restart(app, ctx)
   print(f"Restarted {app}")

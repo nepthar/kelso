@@ -251,8 +251,6 @@ CATALOG = {
           "manifest": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
           "text": f'[app]\nversion = "0.6.0"\n# {EVIL}\n',
           "markdown": False,
-          "editable": True,
-          "base": f"hash {EVIL}",
           "manifest_stale": True,
           "warnings": [
             {
@@ -286,8 +284,6 @@ CATALOG = {
           "manifest": None,
           "text": f"\nnot toml {EVIL}",
           "markdown": True,
-          "editable": True,
-          "base": "b",
           "manifest_stale": False,
           "warnings": [],
         },

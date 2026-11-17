@@ -40,7 +40,7 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app)
   if (args.action is None) != (args.domain is None):
     raise ValueError(
       f"Give both an action and a domain: kelso net {app} allow tmdb.org"

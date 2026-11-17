@@ -37,7 +37,7 @@ def app_target(ctx: KelsoCtx, raw: str, *, force: bool = False) -> LoadTarget:
   refusal happens here.
   """
   if is_pathlike(raw):
-    raise ValueError(f'No app found for "{raw}": verbs name apps, not paths')
+    raise ValueError(f'No app matching "{raw}" found: verbs name apps, not paths')
   return load_target(ctx, raw, force=force)
 
 

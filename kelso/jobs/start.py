@@ -23,9 +23,9 @@ class StartJob(Job):
       bundle = (
         ctx.config.app_run_path(app)
         if ctx.is_loaded(app)
-        else (self.target.bundle or ctx.bundle_path(app))
+        else self.target.require_bundle()
       )
-      result = start(app, bundle, ctx, bound=self.target.bound_to)
+      result = start(app, bundle, ctx)
       lines = [f"Started {app}"]
       lines += [f"  {url}" for url in published_urls(result.spec, result.run_data, ctx)]
       logger.info("\n".join(lines))

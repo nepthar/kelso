@@ -299,7 +299,7 @@ def test_a_mirrored_bundle_is_in_the_catalog(github, ctx, kelso_env):
   )
   fresh = KelsoCtx(load_config_file(kelso_env.config))
   mirror(fresh.config.repos["up"], fresh)
-  assert fresh.app_catalog()["hello-world"][0].source == "up"
+  assert fresh.inventory.bundle("hello-world").repo == "up"
 
 
 def test_a_local_repo_cannot_be_updated(ctx):
@@ -338,7 +338,7 @@ def test_add_writes_the_repo_and_mirrors_it(github, ctx, kelso_env):
   assert "[repo.kelso]" in kelso_env.config.read_text()
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
-  assert fresh.app_catalog()["hello-world"][0].source == "kelso"
+  assert fresh.inventory.bundle("hello-world").repo == "kelso"
 
 
 def test_add_takes_a_name_of_its_own(github, ctx, kelso_env):
@@ -416,7 +416,7 @@ def test_repo_add_job_mirrors_the_folder(github, ctx, kelso_env):
   RepoAddJob.call({"url": URL}, ctx, started_by="test")
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
-  assert "hello-world" in fresh.app_catalog()
+  assert fresh.inventory.bundle("hello-world")
 
 
 @pytest.mark.parametrize(
@@ -445,7 +445,7 @@ def test_repo_update_job_brings_the_mirror_forward(github, ctx, kelso_env):
   RepoUpdateJob.call({"name": "kelso"}, fresh, started_by="test")
 
   fresh = KelsoCtx(load_config_file(kelso_env.config))
-  assert set(fresh.app_catalog()) >= {"hello-world", "second"}
+  assert fresh.inventory.bundle("hello-world") and fresh.inventory.bundle("second")
   assert fresh.kelso_db.get_repo_state("kelso")["sha"] == sha
 
 

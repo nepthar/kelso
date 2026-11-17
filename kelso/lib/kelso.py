@@ -11,8 +11,9 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 
+from kelso.lib.app_inventory import Inventory, build_inventory, no_bundle_message
 from kelso.lib.apps import AppID
-from kelso.lib.bundle import load_bundle, scan_bundles
+from kelso.lib.bundle import load_bundle
 from kelso.lib.config import Config
 from kelso.lib.crypto import crypto_from_config
 from kelso.lib.docker import load_kelso_run_unit_status
@@ -37,7 +38,6 @@ METRICS_LOG_MAX_BYTES = 10 * 1024 * 1024
 METRICS_LOG_HISTORY = 50_000  # records: days of readings
 
 # Lives in the app's config store, so `--purge` clears it and nothing else does.
-BOUND_TO_META = "bound_to"
 
 LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2
 
@@ -71,31 +71,6 @@ def lock_holder_hint(path: Path) -> str:
   return (
     f"Held by `kelso {record.get('by', '?')}` "
     f"(pid {record.get('pid', '?')}, since {record.get('at', '?')}).\n"
-  )
-
-
-def _resolve_app_query(candidates: list[AppID], query: str) -> list[AppID]:
-  """Resolve a user-supplied app id, ignoring an ``@<repo>`` suffix."""
-  query = query.partition("@")[0]
-  found = [app for app in candidates if app == query]
-  if found:
-    return found
-
-  return [app for app in candidates if app.stem == query]
-
-
-@dataclass(frozen=True)
-class CatalogEntry:
-  app_id: str
-  path: Path
-  source: str
-
-
-def ambiguity_message(app: AppID | str, entries: tuple[CatalogEntry, ...]) -> str:
-  locations = "\n".join(f"  {entry.source}: {entry.path}" for entry in entries)
-  return (
-    f'More than one repo carries "{app}":\n{locations}\n'
-    f"Name the one you mean as {app}@<repo>, or pass its full path."
   )
 
 
@@ -202,36 +177,18 @@ class KelsoCtx:
     app_id = AppID(app)
     return LoadedAppPaths(app_id, self.config.app_run_path(app_id))
 
-  def bundle_path(self, app: AppID | str) -> Path:
-    """The catalog entry `load` copies from. Exactly one, or an error."""
-    entries = self.app_catalog().get(str(app), ())
-    if len(entries) == 1:
-      return entries[0].path
-    elif not entries:
-      raise ValueError(self._no_bundle_message(app))
-    else:
-      raise ValueError(ambiguity_message(app, entries))
+  @cached_property
+  def inventory(self) -> Inventory:
+    """Loaded apps, apps with kept config, and repo bundles, read on first use.
 
-  def _no_bundle_message(self, app: AppID | str) -> str:
-    """Why no repo offers `app`, naming the source a loaded copy came from."""
-    bound = None
-    if self.config.app_config_path(app).is_file():
-      bound = self.app_store(app).get_meta(BOUND_TO_META)
-    if not bound:
-      return f'No app found for "{app}"'
-    if not bound.startswith("repo "):
-      return f"{app} was loaded from {bound}, not a repo; run `kelso load {bound}`."
-    name = bound.removeprefix("repo ")
-    repo = self.config.repos.get(name)
-    if repo is None:
-      problem = "is not in config.toml; add it back with `kelso repo add`"
-    elif not repo.path.is_dir() and repo.mirrored:
-      problem = f"is not mirrored; run `kelso repo update {name}`"
-    elif not repo.path.is_dir():
-      problem = f"is missing: {repo.path} is not a directory"
-    else:
-      problem = "no longer carries it"
-    return f"{app} came from repo {name}, which {problem}."
+    A snapshot: a command that loads or removes an app and then looks again
+    needs a new KelsoCtx.
+    """
+    return build_inventory(self)
+
+  def resolve_app_id(self, name: str, *, prefer_loaded: bool = False) -> AppID:
+    """The app `<id>` or `<stem>` names; a loaded one first, if `prefer_loaded`."""
+    return self.inventory.app_id(name, prefer_loaded=prefer_loaded)
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
@@ -282,32 +239,21 @@ class KelsoCtx:
       ),
     )
 
-  def bundle_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The catalog bundle's spec, or None when there is no single bundle."""
-    try:
-      bundle = self.bundle_path(app)
-    except ValueError:
-      return None
-    try:
-      return load_bundle(bundle).app_spec()
-    except ValueError:
-      return None
+  def bundle_spec(self, app: AppID) -> "AppSpec":
+    """The spec of the bundle `app` loads from.
+
+    Raises ValueError if it has none, several, or one that does not parse.
+    """
+    entry = self.inventory.bundle(app)
+    if entry is None:
+      raise ValueError(no_bundle_message(app))
+    return load_bundle(entry.path).app_spec()
 
   def app_store(self, app: AppID | str) -> AppStore:
     """The app's own config store at ``conf/apps/<app_id>.logtab``."""
     return AppStore.from_path(
       self.config.app_config_path(app), crypto_from_config(self.config)
     )
-
-  def app_catalog(self) -> dict[str, tuple[CatalogEntry, ...]]:
-    """Every bundle in every app source, keyed by app id, in source order."""
-    found: dict[str, list[CatalogEntry]] = {}
-    for name, repo in self.config.repos.items():
-      for app_id, rel_path in scan_bundles(repo.path):
-        found.setdefault(app_id, []).append(
-          CatalogEntry(app_id, repo.path / rel_path, name)
-        )
-    return {app_id: tuple(entries) for app_id, entries in found.items()}
 
   def loaded_origin(self, app: AppID | str) -> Path | None:
     """The bundle a loaded app was loaded from, as `load` recorded it."""
@@ -327,85 +273,9 @@ class KelsoCtx:
       return False
     return source.read_bytes() != paths.manifest_path.read_bytes()
 
-  def resolved_bundles(self) -> dict[str, Path]:
-    """Map app_id -> its bundle, for ids exactly one repo carries.
-
-    Contested ids are absent rather than resolved to an arbitrary repo.
-    """
-    return {
-      app_id: entries[0].path
-      for app_id, entries in self.app_catalog().items()
-      if len(entries) == 1
-    }
-
-  def contested_app_ids(self) -> dict[str, tuple[str, ...]]:
-    """Ids more than one repo carries, and which repos those are."""
-    return {
-      app_id: tuple(entry.source for entry in entries)
-      for app_id, entries in self.app_catalog().items()
-      if len(entries) > 1
-    }
-
-  def loaded_app_ids(self) -> set[str]:
-    """Every app id with a loaded copy under var/run/."""
-    run_root = self.config.run_root
-    if not run_root.is_dir():
-      return set()
-    found: set[str] = set()
-    for entry in run_root.iterdir():
-      try:
-        paths = LoadedAppPaths(AppID(entry.name), entry)
-      except ValueError:
-        continue
-      if paths.exists():
-        found.add(entry.name)
-    return found
-
-  def known_apps(self) -> list[AppID]:
-    # Loaded apps stay resolvable by id even with no catalog entry, so an app
-    # whose `apps/` folder was deleted can still be stopped and removed.
-    ids = dict.fromkeys(self.app_catalog())
-    ids.update(dict.fromkeys(sorted(self.loaded_app_ids())))
-    return [AppID(app_id) for app_id in ids]
-
-  def resolve_app(self, query_app_id: str) -> AppID:
-    candidates = self.known_apps()
-    found = _resolve_app_query(candidates, query_app_id)
-
-    if len(found) > 1:
-      raise ValueError(f'Multiple apps matched app_id "{query_app_id}"')
-
-    elif len(found) == 0:
-      raise ValueError(f'No app found for "{query_app_id}"')
-
-    return found[0]
-
-  def _observed_app_ids(self) -> set[str]:
-    """Every app_id that has left a trace anywhere."""
-    ids = set(self.app_catalog())
-    if self.config.run_root.is_dir():
-      ids |= {path.name for path in self.config.run_root.iterdir() if path.is_dir()}
-    ids |= set(load_kelso_run_unit_status())
-    ids |= set(self.kelso_db.app_ids())
-    ids |= self.config.app_config_ids()
-    return ids
-
-  def _resolve_state_id(self, app_id: str) -> str:
-    """Like `resolve_app`, but over every id with run state."""
-    query = app_id.partition("@")[0]
-    ids = self._observed_app_ids()
-    if query in ids:
-      return query
-    matches = sorted(i for i in ids if i.split(".")[-1] == query)
-    if len(matches) > 1:
-      raise ValueError(f'Multiple apps matched app_id "{app_id}"')
-    if not matches:
-      raise ValueError(f'No app state found for "{app_id}"')
-    return matches[0]
-
   def run_state(self, app_id: AppID | str) -> RunState:
     """ "Light" run-state of an app"""
-    resolved = AppID(self._resolve_state_id(str(app_id)))
+    resolved = AppID(app_id)
     paths = self.loaded_paths(resolved)
     return RunState(
       app_id=resolved,

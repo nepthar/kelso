@@ -24,8 +24,6 @@
       button.addEventListener("click", closeCard);
     });
     shade.addEventListener("click", function (event) {
-      // An open editor holds unsaved text; Cancel is the way out of it.
-      if (shade.querySelector(".app-card.editing")) return;
       if (event.target === shade) closeCard();
     });
   }

@@ -6,7 +6,6 @@ from tabulate import tabulate
 from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
-from kelso.lib.bundle import load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
@@ -103,7 +102,7 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app)
   with ctx.locked(f"config {app}", app):
     store = ctx.app_store(app)
     spec = _config_spec(app, ctx)
@@ -162,7 +161,7 @@ def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   if paths.exists():
     return ctx.require_loaded_spec(app)
   # Refuses an id carried by two sources, and a bundle with no manifest.
-  return load_bundle(ctx.bundle_path(app)).app_spec()
+  return ctx.bundle_spec(app)
 
 
 def _get(

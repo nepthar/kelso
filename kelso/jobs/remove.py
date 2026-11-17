@@ -9,7 +9,7 @@ class _RemovalJob(Job):
   required_args = ("app",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    app = ctx.resolve_app(kwargs["app"])
+    app = ctx.resolve_app_id(kwargs["app"])
     self.app = str(app)
     self.app_id = app
     self.mode = self.mode_for(kwargs)

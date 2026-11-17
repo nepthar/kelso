@@ -21,7 +21,6 @@ from kelso.daemon import console
 from kelso.jobs import JobRunner
 from kelso.lib import views
 from kelso.lib.apps import AppID
-from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
 from kelso.lib.config_edit import (
   add_host_volume,
@@ -38,10 +37,8 @@ from kelso.lib.configflow.route_provider import (
 )
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
-from kelso.lib.lifecycle.edit import ManifestMoved, edit_manifest
 from kelso.lib.lifecycle.routes import remove_published_route
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
-from kelso.lib.spec import AppSpec
 from kelso.lib.util import Identifier, validate_identifier
 
 # Bumped when a response shape changes in a way a client would notice: the web
@@ -78,16 +75,6 @@ class ConfigValues(BaseModel):
   values: dict[str, str] = Field(default_factory=dict)
 
 
-class ManifestEdit(BaseModel):
-  """A bundle's new text, and the hash of the text the edit started from."""
-
-  model_config = ConfigDict(extra="forbid")
-
-  text: str
-  base: str
-  message: str = ""
-
-
 class JobSubmission(BaseModel):
   """What `POST /jobs` accepts. Shape only; `JobRunner.submit` validates."""
 
@@ -121,11 +108,6 @@ def _started_by_refusal(started_by: str) -> str | None:
   except ValueError as e:
     return f"started_by: {e}"
   return None
-
-
-def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
-  """The schema for an app that is not loaded yet."""
-  return load_bundle(ctx.bundle_path(app)).app_spec()
 
 
 def _ctx_again(ctx: KelsoCtx) -> KelsoCtx:
@@ -197,7 +179,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     if not 1 <= tail <= MAX_TAIL:
       raise HTTPException(400, f"tail must be between 1 and {MAX_TAIL}")
     try:
-      return views.app_logs_view(ctx.resolve_app(app_id), ctx, tail=tail)
+      return views.app_logs_view(ctx.resolve_app_id(app_id), ctx, tail=tail)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
 
@@ -234,8 +216,8 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:
     """The app's `[config]`, with what is on file now."""
     try:
-      resolved = ctx.resolve_app(app_id)
-      spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
+      resolved = ctx.resolve_app_id(app_id)
+      spec = ctx.loaded_spec(resolved) or ctx.bundle_spec(resolved)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
     return views.config_request_view(app_config_request(spec, ctx))
@@ -244,28 +226,13 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def apply_app_config_response(app_id: str, body: ConfigValues, ctx: Ctx) -> dict:
     """Write the values collected for the app; unchanged ones are skipped."""
     try:
-      resolved = ctx.resolve_app(app_id)
+      resolved = ctx.resolve_app_id(app_id)
       with ctx.locked(f"config {resolved}", resolved):
-        spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
+        spec = ctx.loaded_spec(resolved) or ctx.bundle_spec(resolved)
         apply_app_config(spec, ConfigResponse(values=body.values), ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
     return views.config_request_view(app_config_request(spec, _ctx_again(ctx)))
-
-  @app.post("/manifests/{target}", tags=["catalog"])
-  def post_manifest(target: str, body: ManifestEdit, ctx: Ctx) -> dict:
-    """Replace a bundle's manifest in its repo, and commit it if kelso may.
-
-    `target` is `<app>` or `<app>@<repo>`; `base` is the catalog's hash of the
-    text being replaced. `diff` is empty when nothing changed.
-    """
-    try:
-      result = edit_manifest(ctx, target, body.text, body.base, body.message)
-    except ManifestMoved as e:
-      raise HTTPException(409, str(e)) from e
-    except (ValueError, RuntimeError) as e:
-      raise HTTPException(400, str(e)) from e
-    return {"diff": result.diff, "commit": result.commit}
 
   @app.get("/route-providers", tags=["config"])
   def list_route_providers(ctx: Ctx) -> dict:

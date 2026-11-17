@@ -6,16 +6,11 @@ from pathlib import Path, PurePosixPath
 import yaml
 
 from kelso.lib import kproxy
+from kelso.lib.app_inventory import no_bundle_message
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
-from kelso.lib.kelso import (
-  BOUND_TO_META,
-  CatalogEntry,
-  KelsoCtx,
-  LoadedAppPaths,
-  ambiguity_message,
-)
+from kelso.lib.kelso import KelsoCtx, LoadedAppPaths
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.lifecycle.routes import take_down_routes
 from kelso.lib.manifest import NETWORK_MODES, PROXIED_MODES
@@ -327,17 +322,16 @@ class LoadTarget:
   """What a `load`/`start` argument named, and where it came from."""
 
   app_id: AppID
-  # None when the argument was a bare id; `ctx.bundle_path` answers that.
+  # None when no bundle is on disk; a loaded app then starts from its run copy.
   bundle: Path | None
-  # None for a bundle named by path, which belongs to no repo.
+  # The repo the bundle is in, to say so; None for one named by path.
   repo: str | None
 
-  @property
-  def bound_to(self) -> str | None:
-    """The source to record, or None to leave the recorded one alone."""
-    if self.repo:
-      return f"repo {self.repo}"
-    return str(self.bundle) if self.bundle else None
+  def require_bundle(self) -> Path:
+    """The bundle to load from. Raises ValueError if there is none."""
+    if self.bundle is None:
+      raise ValueError(no_bundle_message(self.app_id))
+    return self.bundle
 
 
 def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
@@ -354,13 +348,6 @@ def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
   return f"{where}: {bundle}"
 
 
-def bound_to(app: AppID | str, ctx: KelsoCtx) -> str | None:
-  """What an app is recorded as loaded from, or None if nothing is."""
-  if not ctx.config.app_config_path(app).is_file():
-    return None
-  return ctx.app_store(app).get_meta(BOUND_TO_META)
-
-
 def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarget:
   """Resolve a load/start argument -- a path, `<id>@<repo>`, or a bare id.
 
@@ -372,68 +359,21 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
     resolved = LoadTarget(app_id_from_path(bundle), bundle, None)
   else:
     name, _, repo = target.partition("@")
-    resolved = catalog_target(ctx, name, repo or None)
+    app = ctx.inventory.app_id(name, repo=repo)
+    entry = ctx.inventory.bundle(app, repo)
+    resolved = LoadTarget(
+      app, entry.path if entry else None, entry.repo if entry else None
+    )
 
   _check_binding(ctx, resolved, force=force)
   return resolved
 
 
-def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
-  """The catalog entry a bare id or `<id>@<repo>` names."""
-  app = ctx.resolve_app(name)
-  entries = ctx.app_catalog().get(str(app), ())
-
-  if repo is not None:
-    for entry in entries:
-      if entry.source == repo:
-        return LoadTarget(app, entry.path, repo)
-    carried = ", ".join(sorted(entry.source for entry in entries))
-    raise ValueError(
-      f"Repo {repo!r} does not carry {app}."
-      + (f" It is in: {carried}." if carried else " No repo carries it.")
-    )
-
-  if not entries:
-    if ctx.is_loaded(app):
-      # Loaded from a path: that path is its source, as a repo is for the
-      # rest. Without one, `start` runs the loaded copy as-is.
-      was = bound_to(app, ctx)
-      source = ctx.loaded_origin(app) if was and not was.startswith("repo ") else None
-      return LoadTarget(app, source if source and source.exists() else None, None)
-    raise ValueError(f'No app found for "{app}"')
-  if len(entries) > 1:
-    entry = bound_entry(ctx, app, entries)
-    if entry is None:
-      raise ValueError(ambiguity_message(app, entries))
-    return LoadTarget(app, entry.path, entry.source)
-  return LoadTarget(app, entries[0].path, entries[0].source)
-
-
-def bound_entry(
-  ctx: KelsoCtx, app: AppID, entries: tuple[CatalogEntry, ...]
-) -> CatalogEntry | None:
-  """The one of `entries` from the repo `app` is bound to, if any."""
-  was = bound_to(app, ctx)
-  for entry in entries:
-    if was == f"repo {entry.source}":
-      return entry
-  return None
-
-
-def _same_source(was: str, now: str) -> bool:
-  """Whether two recorded sources name the same repo or the same bundle path."""
-  if was == now:
-    return True
-  if Path(was).is_absolute() and Path(now).is_absolute():
-    return same_path(Path(was), Path(now))
-  return False
-
-
 def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
-  """Refuse an id whose surviving config and secrets were made for another source."""
-  was = bound_to(target.app_id, ctx)
-  now = target.bound_to
-  if force or not was or not now or _same_source(was, now):
+  """Refuse an id whose surviving config and secrets were made for another bundle."""
+  was = ctx.loaded_origin(target.app_id)
+  now = target.bundle
+  if force or was is None or now is None or same_path(was, now):
     return
   raise ValueError(
     f"{target.app_id} was previously loaded from {was}, and this would "
@@ -579,21 +519,17 @@ def load(
   *,
   sets: list[tuple[str, str]] | None = None,
   binds: list[tuple[str, str]] | None = None,
-  bound: str | None = None,
   version_change: bool = False,
 ) -> LoadResult:
-  """Load `bundle` into `var/run/<id>/` without starting it.
+  """Load `bundle` into `var/run/<id>/` without starting it, binding the app to it.
 
-  `bound` is the source to record; None leaves the recorded one alone. Raises
-  ValueError if the app is loaded at another version, unless `version_change`.
+  Raises ValueError if the app is loaded at another version, unless
+  `version_change`.
   """
   paths = ctx.loaded_paths(app)
   was_loaded = paths.exists()
 
-  try:
-    running_count = ctx.run_state(app).running_count
-  except ValueError:
-    running_count = 0
+  running_count = ctx.run_state(app).running_count
   if running_count:
     raise ValueError(
       f"App {app} has {running_count} running Kelso-labeled container(s); "
@@ -628,8 +564,6 @@ def load(
 
   store = ctx.app_store(app)
   store.set_meta("origin", str(bundle))
-  if bound is not None:
-    store.set_meta(BOUND_TO_META, bound)
 
   if sets:
     apply_config_sets(spec, sets, ctx)

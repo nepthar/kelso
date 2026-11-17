@@ -35,7 +35,7 @@ def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[Ap
   """Loaded apps in the groups `which`, by `start_order`, lowest first."""
   which = set(which)
   groups: dict[int, list[AppID]] = {}
-  for app_id in sorted(ctx.loaded_app_ids()):
+  for app_id in sorted(ctx.inventory.loaded):
     app = AppID(app_id)
     order = _start_order(app, ctx)
     if order in which:
