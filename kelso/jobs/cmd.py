@@ -16,7 +16,7 @@ class CmdJob(Job):
 
     A caller holding an argv list must build `args` with `shlex.join`.
     """
-    app = ctx.resolve_app(kwargs["app"])
+    app = ctx.resolve_app_id(kwargs["app"])
     extra = []
     raw = kwargs.get("args", "")
     if raw.strip():

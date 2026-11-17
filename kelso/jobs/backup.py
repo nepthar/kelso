@@ -14,11 +14,11 @@ class BackupJob(Job):
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
     if kwargs.get("app"):
-      app = ctx.resolve_app(kwargs["app"])
+      app = ctx.resolve_app_id(kwargs["app"])
       self.app = str(app)
 
   def run(self, ctx: KelsoCtx) -> None:
-    apps = [ctx.resolve_app(self.app)] if self.app else None
+    apps = [ctx.resolve_app_id(self.app)] if self.app else None
     result = run_backups(ctx, reason=self.reason, apps=apps)
     lines = [f"Backup {result.run}"]
     lines += [f"  backed up {app}" for app in result.backed_up]

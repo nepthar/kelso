@@ -164,9 +164,9 @@ def test_load_refuses_while_containers_are_running(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  app = ctx.resolve_app(app_id)
+  app = ctx.resolve_app_id(app_id)
   with pytest.raises(ValueError, match=f"kelso stop {app_id}"):
-    load(app, ctx.bundle_path(app), ctx)
+    load(app, ctx.catalog_bundle(app), ctx)
 
 
 def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
@@ -179,7 +179,7 @@ def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
   (kelso_env.volumes_root / "data" / BASIC / "config" / "db").write_text("rows")
   kelso_env.app_logtab(BASIC).unlink()
 
-  refused = kelso_env.run("load", BASIC)
+  refused = kelso_env.run("load", f"{BASIC}@local")
   assert refused.returncode == 1
   assert "volume data but no config" in refused.stderr
   assert f"kelso rm --purge {BASIC}" in refused.stderr
@@ -511,7 +511,7 @@ def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
   """The links are borrowed for the run; an exception is not a way to keep them."""
   source = _configured_for_dev(kelso_env).resolve()
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  plan = dev_plan(ctx.resolve_app(BASIC), source, ctx)
+  plan = dev_plan(ctx.resolve_app_id(BASIC), source, ctx)
   link = kelso_env.run_root / BASIC / "volumes" / "app" / "bin"
 
   with pytest.raises(RuntimeError):

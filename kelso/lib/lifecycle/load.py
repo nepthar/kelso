@@ -326,7 +326,7 @@ class LoadTarget:
   """What a `load`/`start` argument named, and where it came from."""
 
   app_id: AppID
-  # None when the argument was a bare id; `ctx.bundle_path` answers that.
+  # None when no bundle is on disk; a loaded app then starts from its run copy.
   bundle: Path | None
   # None for a bundle named by path, which belongs to no repo.
   repo: str | None
@@ -337,6 +337,12 @@ class LoadTarget:
     if self.repo:
       return f"repo {self.repo}"
     return str(self.bundle) if self.bundle else None
+
+  def require_bundle(self, ctx: KelsoCtx) -> Path:
+    """The bundle to load from. Raises ValueError saying why there is none."""
+    if self.bundle is None:
+      raise ValueError(ctx.no_bundle_message(self.app_id))
+    return self.bundle
 
 
 def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
@@ -378,11 +384,10 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
 
 
 def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
-  """What a bare id or `<id>@<repo>` names, by `KelsoCtx.which`."""
-  hit = ctx.which(f"{name}@{repo}" if repo else name).require()
+  """What a bare id or `<id>@<repo>` names, by `KelsoCtx.resolve_app`."""
+  hit = ctx.resolve_app(f"{name}@{repo}" if repo else name).require()
   path = hit.path if hit.path and hit.path.exists() else None
-  # With no bundle on disk, `start` runs the loaded copy as-is.
-  return LoadTarget(hit.app_id, path, None if hit.by_path or not path else hit.repo)
+  return LoadTarget(hit.app_id, path, hit.repo if path else None)
 
 
 def bound_entry(

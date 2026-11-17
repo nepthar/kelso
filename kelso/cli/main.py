@@ -192,7 +192,7 @@ def _app_named(args: argparse.Namespace, ctx: KelsoCtx) -> str | None:
       return None
   name = raw.partition("@")[0]
   try:
-    return ctx.resolve_app(name)
+    return ctx.resolve_app_id(name)
   except (ValueError, RuntimeError):
     return name
 

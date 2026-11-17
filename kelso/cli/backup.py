@@ -82,7 +82,7 @@ def run_status(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def run_run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  apps = [ctx.resolve_app(name) for name in args.apps] or None
+  apps = [ctx.resolve_app_id(name) for name in args.apps] or None
   result = backups_lib.run_backups(ctx, reason=MANUAL, apps=apps)
   for app in result.backed_up:
     print(f"Backed up {app}")

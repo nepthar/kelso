@@ -23,7 +23,7 @@ class StartJob(Job):
       bundle = (
         ctx.config.app_run_path(app)
         if ctx.is_loaded(app)
-        else (self.target.bundle or ctx.bundle_path(app))
+        else self.target.require_bundle(ctx)
       )
       result = start(app, bundle, ctx, bound=self.target.bound_to)
       lines = [f"Started {app}"]

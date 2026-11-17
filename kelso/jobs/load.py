@@ -16,7 +16,7 @@ class LoadJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    bundle = self.target.bundle or ctx.bundle_path(app)
+    bundle = self.target.require_bundle(ctx)
     with ctx.locked(f"load {app}", app):
       result = reload_app(app, bundle, ctx, bound=self.target.bound_to)
     lines = [

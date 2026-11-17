@@ -38,7 +38,7 @@ def _resolve(query: str | None, ctx: KelsoCtx) -> str | None:
   if not query or query == activity.KELSO_DIR:
     return query
   try:
-    return str(ctx.resolve_app(query))
+    return str(ctx.resolve_app_id(query))
   except (ValueError, RuntimeError):
     return query
 

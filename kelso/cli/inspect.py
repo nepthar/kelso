@@ -30,7 +30,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       print(capability_receipt(spec, None, ctx, compact=False))
     return
 
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app)
   with ctx.locked(f"inspect {app}", app):
     loaded = ctx.loaded_spec(app)
     spec = loaded or ctx.bundle_spec(app)

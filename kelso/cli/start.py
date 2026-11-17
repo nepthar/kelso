@@ -56,10 +56,8 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   sets = [parse_kv(item, "--set") for item in args.sets]
   binds = [parse_kv(item, "--bind") for item in args.binds]
   loading = bool(sets or binds) or not ctx.is_loaded(app)
-  if target.bundle is not None:
-    bundle = target.bundle
-  elif loading:
-    bundle = ctx.bundle_path(app)
+  if loading:
+    bundle = target.require_bundle(ctx)
   else:
     # Catalog may be gone; start will use the run copy as-is.
     bundle = ctx.config.app_run_path(app)

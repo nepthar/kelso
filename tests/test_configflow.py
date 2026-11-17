@@ -277,7 +277,7 @@ def _app_request(kelso_env, app: str) -> tuple:
   from kelso.lib.configflow.app import app_config_request
 
   ctx = ctx_for(kelso_env)
-  spec = load_bundle(ctx.bundle_path(ctx.resolve_app(app))).app_spec()
+  spec = load_bundle(ctx.catalog_bundle(ctx.resolve_app_id(app))).app_spec()
   return spec, ctx, app_config_request(spec, ctx)
 
 

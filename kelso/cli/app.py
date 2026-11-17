@@ -33,7 +33,7 @@ def register(subparsers) -> None:
 
 
 def run_which(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  found = ctx.which(args.app)
+  found = ctx.resolve_app(args.app)
   resolved = found.resolved
   if args.loaded and resolved is not None and not resolved.loaded:
     resolved = None

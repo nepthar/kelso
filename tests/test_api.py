@@ -463,7 +463,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
     required_args = ("app",)
 
     def init(self, ctx, kwargs):
-      self.app = str(ctx.resolve_app(kwargs["app"]))
+      self.app = str(ctx.resolve_app_id(kwargs["app"]))
 
     def run(self, ctx) -> None:
       logging.getLogger("kelso").info("live line")

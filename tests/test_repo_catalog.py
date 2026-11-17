@@ -392,12 +392,11 @@ def test_a_bound_app_answers_to_its_bare_id(kelso_env):
   assert "From dev" not in loaded.read_text()
 
 
-def test_naming_a_repo_that_does_not_carry_the_app_says_which_do(kelso_env):
+def test_naming_a_repo_that_does_not_carry_the_app_refuses(kelso_env):
   result = kelso_env.run("load", "ports-demo@nowhere")
 
   assert result.returncode == 1
   assert "does not carry" in result.stderr
-  assert "local" in result.stderr
 
 
 def test_a_binding_outlives_an_unload(kelso_env):

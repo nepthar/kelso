@@ -1668,12 +1668,12 @@ def test_duplicate_fqdn_is_rejected_before_compose_up(
   )
   ctx = KelsoCtx(load_config_file(kelso_env.config))
 
-  app = ctx.resolve_app("routes-demo")
-  lifecycle.load(app, ctx.bundle_path(app), ctx)
+  app = ctx.resolve_app_id("routes-demo")
+  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
 
   start_ctx = KelsoCtx(load_config_file(kelso_env.config))
   with pytest.raises(ValueError, match="already owned"):
-    lifecycle.start(app, start_ctx.bundle_path(app), start_ctx)
+    lifecycle.start(app, start_ctx.catalog_bundle(app), start_ctx)
   assert provider.registered == []
   assert ["compose", "up", "-d"] not in docker_calls
 
@@ -1685,10 +1685,10 @@ def _started_routes_demo(monkeypatch, kelso_env, stub_provider, owners=None):
     lambda args, **kwargs: "",
   )
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  app = ctx.resolve_app("routes-demo")
-  lifecycle.load(app, ctx.bundle_path(app), ctx)
+  app = ctx.resolve_app_id("routes-demo")
+  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, ctx.bundle_path(app), ctx)
+  lifecycle.start(app, ctx.catalog_bundle(app), ctx)
   return provider, app
 
 
@@ -1711,7 +1711,7 @@ def test_reload_takes_routes_down_then_publishes_them_again(
   provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
   provider.registered.clear()
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.reload_app(app, ctx.bundle_path(app), ctx)
+  lifecycle.reload_app(app, ctx.catalog_bundle(app), ctx)
   assert provider.unregistered == ROUTES_DEMO_PUBLISHED
   assert provider.registered == []  # Stopped, so back on its next start.
 
@@ -1749,14 +1749,14 @@ def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
   )
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  app = ctx.resolve_app("routes-demo")
-  lifecycle.load(app, ctx.bundle_path(app), ctx)
+  app = ctx.resolve_app_id("routes-demo")
+  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
   lifecycle.start(app, ctx.config.app_run_path(app), ctx)
   assert [r[2] for r in providers["web"].registered] == ["photos", "api-photos"]
 
   spec = ctx.loaded_spec(app)
   lifecycle.assign_route(spec, "main", "other", ctx)
-  lifecycle.reload_app(app, ctx.bundle_path(app), ctx)
+  lifecycle.reload_app(app, ctx.catalog_bundle(app), ctx)
   assert ("photos", "kelso.localhost") in providers["web"].unregistered
   assert providers["other"].unregistered == []
 
@@ -2088,8 +2088,10 @@ def test_every_shipped_bundle_loads(kelso_env):
     else:
       shutil.copy2(source, dest)
     fresh = KelsoCtx(load_config_file(kelso_env.config))
-    app = fresh.resolve_app(app_id)
-    lifecycle.load(app, fresh.bundle_path(app), fresh, sets=[("subdomain", app.stem)])
+    app = fresh.resolve_app_id(app_id)
+    lifecycle.load(
+      app, fresh.catalog_bundle(app), fresh, sets=[("subdomain", app.stem)]
+    )
     assert (kelso_env.run_root / app_id / "compose.yml").is_file(), source.name
 
 

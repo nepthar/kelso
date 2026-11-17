@@ -114,7 +114,7 @@ def _started_by_refusal(started_by: str) -> str | None:
 
 def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   """The schema for an app that is not loaded yet."""
-  return load_bundle(ctx.bundle_path(app)).app_spec()
+  return load_bundle(ctx.catalog_bundle(app)).app_spec()
 
 
 def _ctx_again(ctx: KelsoCtx) -> KelsoCtx:
@@ -186,7 +186,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     if not 1 <= tail <= MAX_TAIL:
       raise HTTPException(400, f"tail must be between 1 and {MAX_TAIL}")
     try:
-      return views.app_logs_view(ctx.resolve_app(app_id), ctx, tail=tail)
+      return views.app_logs_view(ctx.resolve_app_id(app_id), ctx, tail=tail)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
 
@@ -223,7 +223,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:
     """The app's `[config]`, with what is on file now."""
     try:
-      resolved = ctx.resolve_app(app_id)
+      resolved = ctx.resolve_app_id(app_id)
       spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
@@ -233,7 +233,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def apply_app_config_response(app_id: str, body: ConfigValues, ctx: Ctx) -> dict:
     """Write the values collected for the app; unchanged ones are skipped."""
     try:
-      resolved = ctx.resolve_app(app_id)
+      resolved = ctx.resolve_app_id(app_id)
       with ctx.locked(f"config {resolved}", resolved):
         spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
         apply_app_config(spec, ConfigResponse(values=body.values), ctx)

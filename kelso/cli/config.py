@@ -103,7 +103,7 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  app = ctx.resolve_app(args.app)
+  app = ctx.resolve_app_id(args.app)
   with ctx.locked(f"config {app}", app):
     store = ctx.app_store(app)
     spec = _config_spec(app, ctx)
@@ -162,7 +162,7 @@ def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   if paths.exists():
     return ctx.require_loaded_spec(app)
   # Refuses an id carried by two sources, and a bundle with no manifest.
-  return load_bundle(ctx.bundle_path(app)).app_spec()
+  return load_bundle(ctx.catalog_bundle(app)).app_spec()
 
 
 def _get(
