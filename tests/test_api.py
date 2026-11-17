@@ -179,9 +179,6 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
     "manifest": "not toml",
     "text": "not toml",
     "markdown": False,
-    # repos/local has no git repository of its own here.
-    "editable": False,
-    "base": None,
     "manifest_stale": False,
     # A bundle that does not parse has no spec, so nothing to warn about.
     "warnings": [],

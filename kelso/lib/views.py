@@ -20,7 +20,6 @@ from kelso.lib.configflow import ConfigRequest
 from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
-from kelso.lib.lifecycle.edit import RepoGit, editable_entry, repo_git
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
@@ -66,34 +65,20 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo, with the bundles currently in it."""
   catalogs: dict[str, list[dict[str, Any]]] = {name: [] for name in ctx.config.repos}
-  gits: dict[str, RepoGit | None] = {}
-  for name, repo in ctx.config.repos.items():
-    try:
-      gits[name] = repo_git(repo)
-    except (ValueError, RuntimeError):
-      gits[name] = None
   catalog = ctx.app_catalog()
   for app_id in sorted(catalog):
     for entry in catalog[app_id]:
-      catalogs.setdefault(entry.source, []).append(
-        _catalog_app(entry, ctx, gits.get(entry.source))
-      )
+      catalogs.setdefault(entry.source, []).append(_catalog_app(entry, ctx))
   return [{"name": name, "apps": apps} for name, apps in catalogs.items()]
 
 
-def _catalog_app(
-  entry: CatalogEntry, ctx: KelsoCtx, repo_git: RepoGit | None
-) -> dict[str, Any]:
+def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
   spec, error = _catalog_spec(entry)
   # The logtab is what makes an id more than a catalog listing, and AppStore
   # creates it on contact -- so this is a file check, never a store lookup.
   has_config = ctx.config.app_config_path(entry.app_id).is_file()
   store = ctx.app_store(spec.app) if spec is not None and has_config else None
   manifest = manifest_text(entry.path)
-  try:
-    editable = editable_entry(entry, repo_git) if repo_git else None
-  except (ValueError, OSError):
-    editable = None
   return {
     "app_id": entry.app_id,
     "display_name": spec.display_name if spec else "",
@@ -106,11 +91,9 @@ def _catalog_app(
     "state": ctx.app_state(entry.app_id),
     "configured": config_status(spec, store) if spec else None,
     "manifest": manifest,
-    # What the card shows and an edit replaces: a .klso.md is shown whole.
+    # What the card shows: a .klso.md is shown whole.
     "text": bundle_text(entry.path),
     "markdown": entry.path.name.endswith(KLSO_MD_SUFFIX),
-    "editable": editable is not None,
-    "base": editable.base if editable else None,
     "manifest_stale": _catalog_manifest_stale(entry, manifest, ctx),
     "warnings": compose_warnings_view(spec) if spec else [],
   }
