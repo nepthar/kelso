@@ -274,14 +274,9 @@ def get(ctx, name: str) -> Repo:
 
 def bound_apps(ctx, name: str) -> tuple[str, ...]:
   """Every loaded app recorded as coming from this repo."""
-  from kelso.lib.lifecycle import bound_to
-
+  configured = ctx.inventory.configured
   return tuple(
-    sorted(
-      app_id
-      for app_id in ctx.config.app_config_ids()
-      if bound_to(app_id, ctx) == f"repo {name}"
-    )
+    sorted(i for i, kept in configured.items() if kept.bound_to == f"repo {name}")
   )
 
 
@@ -290,5 +285,5 @@ def contested_lines(ctx) -> list[str]:
   return [
     f"{app_id} is in {len(repos)} repos ({', '.join(sorted(repos))}); "
     f"load it as {app_id}@<repo>."
-    for app_id, repos in sorted(ctx.contested_app_ids().items())
+    for app_id, repos in sorted(ctx.inventory.contested().items())
   ]

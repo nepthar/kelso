@@ -10,13 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kelso.lib import git as git_lib
-from kelso.lib.apps import AppID
 from kelso.lib.backup import SCHEDULED, destination_problem, shares_kelso_disk
 from kelso.lib.docker import DOCKER, DockerError, docker_run_command, server_major
 from kelso.lib.git import git
-from kelso.lib.kelso import KelsoCtx, ambiguity_message
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.kproxy import docker_too_old
-from kelso.lib.lifecycle.load import bound_entry
 from kelso.lib.observations import AppObservation
 from kelso.lib.recovery import read_keyfile
 from kelso.lib.spec import AppSpec
@@ -271,11 +269,17 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
         Finding(f"repo {name}", f"{repo.path} is not a directory. {hint}")
       )
 
-  catalog = ctx.app_catalog()
-  for app_id in sorted(catalog):
-    entries = catalog[app_id]
-    if len(entries) > 1 and bound_entry(ctx, AppID(app_id), entries) is None:
-      findings.append(Finding("", ambiguity_message(app_id, entries)))
+  for app_id in sorted(ctx.inventory.contested()):
+    bundles = ctx.inventory.bundles(app_id)
+    if not any(b.bound for b in bundles):
+      locations = "\n".join(f"  {b.repo}: {b.path}" for b in bundles)
+      findings.append(
+        Finding(
+          "",
+          f'More than one repo carries "{app_id}":\n{locations}\n'
+          f"Name the one you mean as {app_id}@<repo>, or pass its full path.",
+        )
+      )
   return findings
 
 

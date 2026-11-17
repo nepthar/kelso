@@ -230,7 +230,7 @@ def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
   """Every app kelso knows of, or just `only`, from one pass over each source."""
-  bundles = ctx.resolved_bundles()
+  bundles = ctx.inventory.sole_bundles()
   run_ids = (
     {path.name for path in ctx.config.run_root.iterdir() if path.is_dir()}
     if ctx.config.run_root.is_dir()
@@ -238,7 +238,7 @@ def collect_observations(
   )
   docker = load_kelso_run_unit_status()
   db_ids = set(ctx.kelso_db.app_ids())
-  config_ids = ctx.config.app_config_ids()
+  config_ids = set(ctx.inventory.configured)
   app_ids = set(bundles) | run_ids | set(docker) | db_ids | config_ids
   if only is not None:
     app_ids &= {str(only)}

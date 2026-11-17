@@ -612,7 +612,7 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
 def test_load_says_where_the_bundle_came_from(kelso_env):
   app_id = "ports-demo"
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  (entry,) = ctx.app_catalog()[app_id]
+  (entry,) = ctx.inventory.catalog[app_id]
 
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr

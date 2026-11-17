@@ -252,7 +252,7 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   link = kelso_env.root / "repos" / "local" / "dev-app.klso"
   link.symlink_to(bundle)
 
-  entries = ctx_for(kelso_env).app_catalog()["dev-app"]
+  entries = ctx_for(kelso_env).inventory.catalog["dev-app"]
   assert [entry.source for entry in entries] == ["local", "hrbr-dev"]
 
   by_id = kelso_env.run("load", "dev-app")
@@ -319,7 +319,7 @@ def test_a_full_path_picks_which_source_to_load(kelso_env):
   loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "From dev" in loaded.read_text()
   # Picking one did not add a third entry for the id.
-  assert len(ctx_for(kelso_env).app_catalog()["ports-demo"]) == 2
+  assert len(ctx_for(kelso_env).inventory.catalog["ports-demo"]) == 2
 
 
 def test_only_one_app_is_loaded_per_id(kelso_env):

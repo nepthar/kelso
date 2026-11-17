@@ -11,7 +11,8 @@ from kelso.lib import repo as repo_lib
 from kelso.lib.apps import read_app_actions
 from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
-from kelso.lib.kelso import CatalogEntry, KelsoCtx
+from kelso.lib.inventory import CatalogEntry
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.repo import USAGE
 from kelso.lib.util import fmt_size
 
@@ -82,8 +83,8 @@ def _remove(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("repo list"):
-    catalog = ctx.app_catalog()
-    loaded = ctx.loaded_app_ids()
+    catalog = ctx.inventory.catalog
+    loaded = ctx.inventory.loaded
     # One read of the activity log for every app, rather than one per row.
     actions = read_app_actions(ctx)
     origins = {app_id: ctx.loaded_origin(app_id) for app_id in loaded}

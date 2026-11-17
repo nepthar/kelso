@@ -11,7 +11,6 @@ from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
 from kelso.lib.kelso import (
   BOUND_TO_META,
-  CatalogEntry,
   KelsoCtx,
   LoadedAppPaths,
 )
@@ -388,17 +387,6 @@ def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
   hit = ctx.resolve_app(f"{name}@{repo}" if repo else name).require()
   path = hit.path if hit.path and hit.path.exists() else None
   return LoadTarget(hit.app_id, path, hit.repo if path else None)
-
-
-def bound_entry(
-  ctx: KelsoCtx, app: AppID, entries: tuple[CatalogEntry, ...]
-) -> CatalogEntry | None:
-  """The one of `entries` from the repo `app` is bound to, if any."""
-  was = bound_to(app, ctx)
-  for entry in entries:
-    if was == f"repo {entry.source}":
-      return entry
-  return None
 
 
 def _same_source(was: str, now: str) -> bool:

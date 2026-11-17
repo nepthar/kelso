@@ -18,7 +18,8 @@ from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
 from kelso.lib.docker import KelsoRunUnitStatus
-from kelso.lib.kelso import CatalogEntry, KelsoCtx
+from kelso.lib.inventory import CatalogEntry
+from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.volumes import volumes_on_disk
@@ -65,7 +66,7 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo, with the bundles currently in it."""
   catalogs: dict[str, list[dict[str, Any]]] = {name: [] for name in ctx.config.repos}
-  catalog = ctx.app_catalog()
+  catalog = ctx.inventory.catalog
   for app_id in sorted(catalog):
     for entry in catalog[app_id]:
       catalogs.setdefault(entry.source, []).append(_catalog_app(entry, ctx))
@@ -146,7 +147,7 @@ def config_status(spec: AppSpec, store: AppStore | None) -> str:
 
 def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo: what it is, and what it last mirrored."""
-  catalog = ctx.app_catalog()
+  catalog = ctx.inventory.catalog
   out = []
   for name, repo in ctx.config.repos.items():
     state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
@@ -172,7 +173,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 def contested_view(ctx: KelsoCtx) -> dict[str, list[str]]:
   """App ids more than one repo carries, and which repos those are."""
-  return {app_id: sorted(repos) for app_id, repos in ctx.contested_app_ids().items()}
+  return {app_id: sorted(repos) for app_id, repos in ctx.inventory.contested().items()}
 
 
 def _catalog_spec(entry: CatalogEntry) -> tuple[AppSpec | None, str | None]:
