@@ -398,7 +398,7 @@ def test_load_unknown_app_is_refused(kelso_env, client):
     "/jobs", json={"verb": "load", "args": {"app": "nope"}, "started_by": BY}
   )
   assert response.status_code == 400
-  assert "No app found" in response.json()["error"]
+  assert "No app matching" in response.json()["error"]
 
 
 def test_failed_job_carries_the_error(kelso_env, client, jobs):
@@ -705,7 +705,7 @@ def test_verbs_take_ids_of_loaded_apps_and_nothing_else(kelso_env, client, app):
     "/jobs", json={"verb": "load", "args": {"app": app}, "started_by": BY}
   )
   assert response.status_code == 400
-  assert "No app found" in response.json()["error"]
+  assert "No app matching" in response.json()["error"]
 
 
 def test_verbs_reject_arguments_they_do_not_declare(kelso_env, client):

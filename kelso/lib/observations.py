@@ -226,11 +226,20 @@ def changes_since_start(path: Path) -> PendingChanges:
   return PendingChanges(config=config, routes=routes)
 
 
+def _sole_bundles(ctx: KelsoCtx) -> dict[str, Path]:
+  """Each id exactly one repo carries, and its bundle."""
+  found: dict[str, list[Path]] = {}
+  for entries in ctx.inventory.catalog.values():
+    for e in entries:
+      found.setdefault(e.app_id, []).append(e.path)
+  return {app_id: paths[0] for app_id, paths in found.items() if len(paths) == 1}
+
+
 def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
   """Every app kelso knows of, or just `only`, from one pass over each source."""
-  bundles = ctx.inventory.sole_bundles()
+  bundles = _sole_bundles(ctx)
   run_ids = (
     {path.name for path in ctx.config.run_root.iterdir() if path.is_dir()}
     if ctx.config.run_root.is_dir()

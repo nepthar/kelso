@@ -13,12 +13,12 @@ import psutil
 
 from kelso.lib import activity
 from kelso.lib import backup as backup_lib
+from kelso.lib.app_inventory import CatalogEntry
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
 from kelso.lib.docker import KelsoRunUnitStatus
-from kelso.lib.inventory import CatalogEntry
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
 from kelso.lib.lifecycle.run import logs_text
@@ -65,12 +65,10 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo, with the bundles currently in it."""
-  catalogs: dict[str, list[dict[str, Any]]] = {name: [] for name in ctx.config.repos}
-  catalog = ctx.inventory.catalog
-  for app_id in sorted(catalog):
-    for entry in catalog[app_id]:
-      catalogs.setdefault(entry.source, []).append(_catalog_app(entry, ctx))
-  return [{"name": name, "apps": apps} for name, apps in catalogs.items()]
+  return [
+    {"name": name, "apps": [_catalog_app(e, ctx) for e in entries]}
+    for name, entries in ctx.inventory.catalog.items()
+  ]
 
 
 def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
@@ -160,9 +158,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         "path": str(repo.path),
         "exists": repo.path.is_dir(),
         "removable": name != LOCAL_REPO,
-        "apps": sum(
-          1 for entries in catalog.values() for e in entries if e.source == name
-        ),
+        "apps": len(catalog.get(name, [])),
         "bound_apps": list(bound_apps(ctx, name)),
         "sha": state["sha"] if state else None,
         "updated_at": state["at"] if state else None,

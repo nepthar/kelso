@@ -14,7 +14,6 @@ import pytest
 from kelso.lib.config import load_config_file
 from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import bound_to
 
 MANIFEST = """\
 [app]
@@ -43,6 +42,10 @@ def a_bundle(parent: Path, app_id: str, display: str = "Extra") -> Path:
 
 def ctx_for(kelso_env) -> KelsoCtx:
   return KelsoCtx(load_config_file(kelso_env.config))
+
+
+def bound_to(kelso_env, app_id: str) -> Path | None:
+  return ctx_for(kelso_env).loaded_origin(app_id)
 
 
 def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
@@ -252,12 +255,12 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   link = kelso_env.root / "repos" / "local" / "dev-app.klso"
   link.symlink_to(bundle)
 
-  entries = ctx_for(kelso_env).inventory.catalog["dev-app"]
+  entries = ctx_for(kelso_env).inventory.entries("dev-app")
   assert [entry.source for entry in entries] == ["local", "hrbr-dev"]
 
   by_id = kelso_env.run("load", "dev-app")
   assert by_id.returncode == 1
-  assert "More than one app matches" in by_id.stderr
+  assert "Multiple apps matching" in by_id.stderr
 
   assert kelso_env.run("load", str(link)).returncode == 0
   # Naming the link and naming its target are the same binding, so neither
@@ -289,12 +292,12 @@ def test_an_id_in_two_sources_cannot_be_loaded_or_started_by_id(kelso_env):
 
   loaded = kelso_env.run("load", "ports-demo")
   assert loaded.returncode == 1
-  assert "More than one app matches" in loaded.stderr
+  assert "Multiple apps matching" in loaded.stderr
   assert str(dev) in loaded.stderr
 
   started = kelso_env.run("start", "ports-demo")
   assert started.returncode == 1
-  assert "More than one app matches" in started.stderr
+  assert "Multiple apps matching" in started.stderr
 
 
 def test_doctor_reports_an_ambiguous_id(kelso_env):
@@ -319,7 +322,7 @@ def test_a_full_path_picks_which_source_to_load(kelso_env):
   loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "From dev" in loaded.read_text()
   # Picking one did not add a third entry for the id.
-  assert len(ctx_for(kelso_env).inventory.catalog["ports-demo"]) == 2
+  assert len(ctx_for(kelso_env).inventory.entries("ports-demo")) == 2
 
 
 def test_only_one_app_is_loaded_per_id(kelso_env):
@@ -355,24 +358,24 @@ def test_an_ambiguous_id_still_stops_and_removes(kelso_env):
 
 def test_loading_records_the_repo_it_came_from(kelso_env):
   dev = kelso_env.root / "dev-apps"
-  a_bundle(dev, "dev-app")
+  bundle = a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
   assert kelso_env.run("load", "dev-app").returncode == 0
 
-  assert bound_to("dev-app", ctx_for(kelso_env)) == "repo hrbr-dev"
+  assert bound_to(kelso_env, "dev-app") == bundle.resolve()
 
 
 def test_a_repo_can_be_named_to_settle_an_ambiguous_id(kelso_env):
   dev = kelso_env.root / "dev-apps"
-  a_bundle(dev, "ports-demo", display="From dev")
+  bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
 
   assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
 
   loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "From dev" in loaded.read_text()
-  assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo hrbr-dev"
+  assert bound_to(kelso_env, "ports-demo") == bundle.resolve()
 
 
 def test_a_bound_app_answers_to_its_bare_id(kelso_env):
@@ -396,7 +399,7 @@ def test_naming_a_repo_that_does_not_carry_the_app_refuses(kelso_env):
   result = kelso_env.run("load", "ports-demo@nowhere")
 
   assert result.returncode == 1
-  assert "does not carry" in result.stderr
+  assert "No app matching" in result.stderr
 
 
 def test_a_binding_outlives_an_unload(kelso_env):
@@ -409,7 +412,7 @@ def test_a_binding_outlives_an_unload(kelso_env):
 
   refused = kelso_env.run("load", "ports-demo@local")
   assert refused.returncode == 1
-  assert "previously loaded from repo hrbr-dev" in refused.stderr
+  assert f"previously loaded from {dev / 'ports-demo.klso'}" in refused.stderr
   assert "--force" in refused.stderr
   assert "rm --purge ports-demo" in refused.stderr
 
@@ -423,7 +426,7 @@ def test_a_purge_clears_the_binding(kelso_env):
   assert kelso_env.run("rm", "--purge", "ports-demo", "-y").returncode == 0
 
   assert kelso_env.run("load", "ports-demo@local").returncode == 0
-  assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo local"
+  assert bound_to(kelso_env, "ports-demo") == kelso_env.local_repo / "ports-demo.klso"
 
 
 def test_force_loads_over_a_different_source(kelso_env):
@@ -433,7 +436,7 @@ def test_force_loads_over_a_different_source(kelso_env):
   assert kelso_env.run("load", "ports-demo@hrbr-dev").returncode == 0
 
   assert kelso_env.run("load", "ports-demo@local", "--force").returncode == 0
-  assert bound_to("ports-demo", ctx_for(kelso_env)) == "repo local"
+  assert bound_to(kelso_env, "ports-demo") == kelso_env.local_repo / "ports-demo.klso"
 
 
 def test_reloading_from_the_same_repo_is_not_a_rebinding(kelso_env):

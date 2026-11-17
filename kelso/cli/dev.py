@@ -11,7 +11,6 @@ from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   DevPlan,
-  bound_to,
   dev,
   dev_plan,
   load,
@@ -58,8 +57,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       print("Nothing started.")
       return
 
-    bound = None if bound_to(app, ctx) else str(source)
-    result = load(app, source, ctx, bound=bound, version_change=True)
+    result = load(app, source, ctx, version_change=True)
     for name in result.dropped_volumes:
       logger.warning(
         f"volume {name} is no longer declared in the manifest; "

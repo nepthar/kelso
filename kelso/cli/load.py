@@ -45,7 +45,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
-    result = reload_app(app, bundle, ctx, bound=target.bound_to)
+    result = reload_app(app, bundle, ctx)
   load = result.load
   for name in load.dropped_volumes:
     logger.warning(

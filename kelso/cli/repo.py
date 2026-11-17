@@ -8,10 +8,10 @@ from pathlib import Path
 from tabulate import tabulate
 
 from kelso.lib import repo as repo_lib
+from kelso.lib.app_inventory import CatalogEntry
 from kelso.lib.apps import read_app_actions
 from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
-from kelso.lib.inventory import CatalogEntry
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.repo import USAGE
 from kelso.lib.util import fmt_size
@@ -91,12 +91,7 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
     blocks = []
     for name, repo in ctx.config.repos.items():
-      entries = [
-        entry
-        for app_id in sorted(catalog)
-        for entry in catalog[app_id]
-        if entry.source == name
-      ]
+      entries = catalog.get(name, [])
       state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
       at = f" {state['sha'][:8]}" if state else ""
       header = f"Repo: {name} {len(entries)} apps {repo.describe()}{at}"

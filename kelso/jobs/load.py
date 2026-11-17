@@ -18,7 +18,7 @@ class LoadJob(Job):
     app = self.app_id
     bundle = self.target.require_bundle(ctx)
     with ctx.locked(f"load {app}", app):
-      result = reload_app(app, bundle, ctx, bound=self.target.bound_to)
+      result = reload_app(app, bundle, ctx)
     lines = [
       f"Loaded {app} at {ctx.run_path(app)}",
       f"  from {load_source(self.target, bundle, ctx)}",

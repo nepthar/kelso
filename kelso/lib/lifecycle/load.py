@@ -9,11 +9,7 @@ from kelso.lib import kproxy
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
-from kelso.lib.kelso import (
-  BOUND_TO_META,
-  KelsoCtx,
-  LoadedAppPaths,
-)
+from kelso.lib.kelso import KelsoCtx, LoadedAppPaths
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.lifecycle.routes import take_down_routes
 from kelso.lib.manifest import NETWORK_MODES, PROXIED_MODES
@@ -327,15 +323,8 @@ class LoadTarget:
   app_id: AppID
   # None when no bundle is on disk; a loaded app then starts from its run copy.
   bundle: Path | None
-  # None for a bundle named by path, which belongs to no repo.
+  # The repo the bundle is in, to say so; None for one named by path.
   repo: str | None
-
-  @property
-  def bound_to(self) -> str | None:
-    """The source to record, or None to leave the recorded one alone."""
-    if self.repo:
-      return f"repo {self.repo}"
-    return str(self.bundle) if self.bundle else None
 
   def require_bundle(self, ctx: KelsoCtx) -> Path:
     """The bundle to load from. Raises ValueError saying why there is none."""
@@ -358,13 +347,6 @@ def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
   return f"{where}: {bundle}"
 
 
-def bound_to(app: AppID | str, ctx: KelsoCtx) -> str | None:
-  """What an app is recorded as loaded from, or None if nothing is."""
-  if not ctx.config.app_config_path(app).is_file():
-    return None
-  return ctx.app_store(app).get_meta(BOUND_TO_META)
-
-
 def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarget:
   """Resolve a load/start argument -- a path, `<id>@<repo>`, or a bare id.
 
@@ -384,25 +366,16 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
 
 def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
   """What a bare id or `<id>@<repo>` names, by `KelsoCtx.resolve_app`."""
-  hit = ctx.resolve_app(f"{name}@{repo}" if repo else name).require()
+  hit = ctx.resolve_app(f"{name}@{repo}" if repo else name)
   path = hit.path if hit.path and hit.path.exists() else None
   return LoadTarget(hit.app_id, path, hit.repo if path else None)
 
 
-def _same_source(was: str, now: str) -> bool:
-  """Whether two recorded sources name the same repo or the same bundle path."""
-  if was == now:
-    return True
-  if Path(was).is_absolute() and Path(now).is_absolute():
-    return same_path(Path(was), Path(now))
-  return False
-
-
 def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
-  """Refuse an id whose surviving config and secrets were made for another source."""
-  was = bound_to(target.app_id, ctx)
-  now = target.bound_to
-  if force or not was or not now or _same_source(was, now):
+  """Refuse an id whose surviving config and secrets were made for another bundle."""
+  was = ctx.loaded_origin(target.app_id)
+  now = target.bundle
+  if force or was is None or now is None or same_path(was, now):
     return
   raise ValueError(
     f"{target.app_id} was previously loaded from {was}, and this would "
@@ -548,13 +521,12 @@ def load(
   *,
   sets: list[tuple[str, str]] | None = None,
   binds: list[tuple[str, str]] | None = None,
-  bound: str | None = None,
   version_change: bool = False,
 ) -> LoadResult:
-  """Load `bundle` into `var/run/<id>/` without starting it.
+  """Load `bundle` into `var/run/<id>/` without starting it, binding the app to it.
 
-  `bound` is the source to record; None leaves the recorded one alone. Raises
-  ValueError if the app is loaded at another version, unless `version_change`.
+  Raises ValueError if the app is loaded at another version, unless
+  `version_change`.
   """
   paths = ctx.loaded_paths(app)
   was_loaded = paths.exists()
@@ -597,8 +569,6 @@ def load(
 
   store = ctx.app_store(app)
   store.set_meta("origin", str(bundle))
-  if bound is not None:
-    store.set_meta(BOUND_TO_META, bound)
 
   if sets:
     apply_config_sets(spec, sets, ctx)

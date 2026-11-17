@@ -427,7 +427,7 @@ volumes = { missing = "/data" }
 def test_start_unknown_id_errors(kelso_env):
   result = kelso_env.run("start", "nope")
   assert result.returncode == 1
-  assert "No app found" in result.stderr
+  assert "No app matching" in result.stderr
 
 
 def test_start_invalid_path_arg_errors(kelso_env):
@@ -612,7 +612,7 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
 def test_load_says_where_the_bundle_came_from(kelso_env):
   app_id = "ports-demo"
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  (entry,) = ctx.inventory.catalog[app_id]
+  (entry,) = ctx.inventory.entries(app_id)
 
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr
@@ -733,7 +733,7 @@ def test_config_of_a_loaded_app_reads_the_run_copy(kelso_env):
 def test_config_refuses_an_app_it_has_no_manifest_for(kelso_env):
   gone = kelso_env.run("config", "no-such-app")
   assert gone.returncode == 1
-  assert "No app found" in gone.stderr
+  assert "No app matching" in gone.stderr
 
 
 def test_assigning_a_route_before_load_is_recorded(kelso_env):

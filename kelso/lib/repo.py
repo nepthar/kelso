@@ -20,6 +20,7 @@ from kelso.lib.bundle import scan_bundles
 from kelso.lib.util import (
   fmt_size,
   now_ts,
+  same_path,
   validate_github_segment,
   validate_identifier,
 )
@@ -273,10 +274,16 @@ def get(ctx, name: str) -> Repo:
 
 
 def bound_apps(ctx, name: str) -> tuple[str, ...]:
-  """Every loaded app recorded as coming from this repo."""
-  configured = ctx.inventory.configured
+  """Every app whose kept config was made for a bundle in this repo."""
+  repo = ctx.config.repos.get(name)
+  if repo is None:
+    return ()
   return tuple(
-    sorted(i for i, kept in configured.items() if kept.bound_to == f"repo {name}")
+    sorted(
+      app_id
+      for app_id, origin in ctx.inventory.configured.items()
+      if origin is not None and same_path(origin.parent, repo.path)
+    )
   )
 
 

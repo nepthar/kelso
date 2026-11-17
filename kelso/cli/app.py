@@ -33,13 +33,15 @@ def register(subparsers) -> None:
 
 
 def run_which(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  found = ctx.resolve_app(args.app)
-  resolved = found.resolved
+  try:
+    resolved = ctx.resolve_app(args.app)
+  except ValueError:
+    resolved = None
   if args.loaded and resolved is not None and not resolved.loaded:
     resolved = None
-  for match in found.matches:
-    if match != resolved:
-      logger.info("%s%s", match.line(), " (loaded)" if match.loaded else "")
+  for candidate in ctx.inventory.candidates(args.app):
+    if candidate != resolved:
+      logger.info("%s%s", candidate.line(), " (loaded)" if candidate.loaded else "")
   if resolved is None:
     raise SystemExit(1)
   print(resolved.line())

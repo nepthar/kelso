@@ -66,9 +66,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     return
 
   with ctx.locked(f"start {app}", app):
-    result = start(
-      target.app_id, bundle, ctx, sets=sets, binds=binds, bound=target.bound_to
-    )
+    result = start(target.app_id, bundle, ctx, sets=sets, binds=binds)
 
     compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
     if compact.strip():
