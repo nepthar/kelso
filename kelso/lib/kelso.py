@@ -11,7 +11,7 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 
-from kelso.lib.app_inventory import Inventory, ResolvedApp, build_inventory
+from kelso.lib.app_inventory import Inventory, build_inventory, no_bundle_message
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.config import Config
@@ -27,7 +27,6 @@ from kelso.lib.observations import (
 from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore, KelsoStore
-from kelso.lib.util import same_path
 
 logger = logging.getLogger("kelso")
 
@@ -72,27 +71,6 @@ def lock_holder_hint(path: Path) -> str:
   return (
     f"Held by `kelso {record.get('by', '?')}` "
     f"(pid {record.get('pid', '?')}, since {record.get('at', '?')}).\n"
-  )
-
-
-def _pick(query: str, candidates: list[ResolvedApp]) -> ResolvedApp:
-  """The one candidate a loaded app, or else a bound bundle, or else being
-  alone makes it. Raises ValueError if there is none, or no such one."""
-  if not candidates:
-    raise ValueError(f'No app matching "{query}" found')
-  for group in (
-    [c for c in candidates if c.loaded],
-    [c for c in candidates if c.bound],
-    candidates,
-  ):
-    if len(group) == 1:
-      return group[0]
-    if group:
-      break
-  lines = "\n".join(f"  {c.line()}" for c in candidates)
-  raise ValueError(
-    f'Multiple apps matching "{query}" found:\n{lines}\n'
-    f"Name the one you mean in full, as <app>@<repo>, or by its path."
   )
 
 
@@ -208,55 +186,9 @@ class KelsoCtx:
     """
     return build_inventory(self)
 
-  def resolve_app(self, query: str) -> ResolvedApp:
-    """The app `<id>`, `<stem>` or `<id>@<repo>` names.
-
-    A loaded app wins, then the bundle its kept config was made for. Raises
-    ValueError if nothing matches, or several apps do.
-    """
-    return _pick(query, self.inventory.candidates(query))
-
-  def resolve_app_id(self, query: str) -> AppID:
-    """The app id `query` names, even when several bundles carry that one id."""
-    candidates = self.inventory.candidates(query)
-    ids = {c.app_id for c in candidates}
-    return ids.pop() if len(ids) == 1 else _pick(query, candidates).app_id
-
-  def catalog_bundle(self, app: AppID) -> Path:
-    """The repo bundle `app` loads from: the one its kept config was made for,
-    or its only one. Raises ValueError if it has none, or several and none is
-    the one its config was made for."""
-    bundles = self.inventory.bundles(app)
-    if not bundles:
-      raise ValueError(self.no_bundle_message(app))
-    path = _pick(app, bundles).path
-    assert path is not None
-    return path
-
-  def no_bundle_message(self, app: AppID) -> str:
-    """Why no bundle is on hand for `app`, from the one its config was made for."""
-    origin = self.inventory.bound_to(app)
-    if origin is None and self.is_loaded(app):
-      return (
-        f"{app} is loaded, but its config no longer says where from; load it "
-        f"as {app}@<repo> or by its path."
-      )
-    if origin is None:
-      return f'No app matching "{app}" found'
-    name = next(
-      (n for n, r in self.config.repos.items() if same_path(origin.parent, r.path)),
-      None,
-    )
-    if name is None:
-      return f"{app} was loaded from {origin}, which is gone; run `kelso load` on it where it lives now."
-    repo = self.config.repos[name]
-    if not repo.path.is_dir() and repo.mirrored:
-      problem = f"is not mirrored; run `kelso repo update {name}`"
-    elif not repo.path.is_dir():
-      problem = f"is missing: {repo.path} is not a directory"
-    else:
-      problem = "no longer carries it"
-    return f"{app} came from repo {name}, which {problem}."
+  def resolve_app_id(self, name: str, *, prefer_loaded: bool = False) -> AppID:
+    """The app `<id>` or `<stem>` names; a loaded one first, if `prefer_loaded`."""
+    return self.inventory.app_id(name, prefer_loaded=prefer_loaded)
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
@@ -307,16 +239,15 @@ class KelsoCtx:
       ),
     )
 
-  def bundle_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The catalog bundle's spec, or None when there is no single bundle."""
-    try:
-      bundle = self.catalog_bundle(AppID(app))
-    except ValueError:
-      return None
-    try:
-      return load_bundle(bundle).app_spec()
-    except ValueError:
-      return None
+  def bundle_spec(self, app: AppID) -> "AppSpec":
+    """The spec of the bundle `app` loads from.
+
+    Raises ValueError if it has none, several, or one that does not parse.
+    """
+    entry = self.inventory.bundle(app)
+    if entry is None:
+      raise ValueError(no_bundle_message(app))
+    return load_bundle(entry.path).app_spec()
 
   def app_store(self, app: AppID | str) -> AppStore:
     """The app's own config store at ``conf/apps/<app_id>.logtab``."""
@@ -344,7 +275,7 @@ class KelsoCtx:
 
   def run_state(self, app_id: AppID | str) -> RunState:
     """ "Light" run-state of an app"""
-    resolved = self.resolve_app_id(str(app_id))
+    resolved = AppID(app_id)
     paths = self.loaded_paths(resolved)
     return RunState(
       app_id=resolved,

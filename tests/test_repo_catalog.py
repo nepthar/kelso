@@ -255,12 +255,12 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
   link = kelso_env.root / "repos" / "local" / "dev-app.klso"
   link.symlink_to(bundle)
 
-  entries = ctx_for(kelso_env).inventory.entries("dev-app")
-  assert [entry.source for entry in entries] == ["local", "hrbr-dev"]
+  catalog = ctx_for(kelso_env).inventory.catalog
+  assert [e.repo for e in catalog if e.app_id == "dev-app"] == ["local", "hrbr-dev"]
 
   by_id = kelso_env.run("load", "dev-app")
   assert by_id.returncode == 1
-  assert "Multiple apps matching" in by_id.stderr
+  assert "Multiple bundles found" in by_id.stderr
 
   assert kelso_env.run("load", str(link)).returncode == 0
   # Naming the link and naming its target are the same binding, so neither
@@ -292,12 +292,12 @@ def test_an_id_in_two_sources_cannot_be_loaded_or_started_by_id(kelso_env):
 
   loaded = kelso_env.run("load", "ports-demo")
   assert loaded.returncode == 1
-  assert "Multiple apps matching" in loaded.stderr
+  assert "Multiple bundles found" in loaded.stderr
   assert str(dev) in loaded.stderr
 
   started = kelso_env.run("start", "ports-demo")
   assert started.returncode == 1
-  assert "Multiple apps matching" in started.stderr
+  assert "Multiple bundles found" in started.stderr
 
 
 def test_doctor_reports_an_ambiguous_id(kelso_env):
@@ -307,7 +307,7 @@ def test_doctor_reports_an_ambiguous_id(kelso_env):
 
   (problem,) = diagnose(KelsoCtx(load_config_file(kelso_env.config))).problems
   assert problem.subject == ""
-  assert "More than one repo carries" in problem.message
+  assert "Multiple bundles found" in problem.message
   assert "hrbr-dev" in problem.message
 
 
@@ -322,7 +322,7 @@ def test_a_full_path_picks_which_source_to_load(kelso_env):
   loaded = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "From dev" in loaded.read_text()
   # Picking one did not add a third entry for the id.
-  assert len(ctx_for(kelso_env).inventory.entries("ports-demo")) == 2
+  assert len(ctx_for(kelso_env).inventory.contested()["ports-demo"]) == 2
 
 
 def test_only_one_app_is_loaded_per_id(kelso_env):

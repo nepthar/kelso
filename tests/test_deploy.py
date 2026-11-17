@@ -83,7 +83,7 @@ def test_deploy_refuses_an_app_loaded_from_elsewhere(kelso_env, remote):
   assert len(remote.calls) == 2
 
 
-def test_app_which_resolves_a_loaded_app_and_lists_the_rest(kelso_env):
+def test_app_which_resolves_an_app_and_its_bundle(kelso_env):
   assert kelso_env.run("app", "which", "upd-app").returncode == 1
   local = kelso_env.local_repo / "net.local.upd-app.klso"
   other = kelso_env.root / "more" / "net.more.upd-app.klso"
@@ -94,13 +94,14 @@ def test_app_which_resolves_a_loaded_app_and_lists_the_rest(kelso_env):
     )
   assert kelso_env.run("load", str(other)).returncode == 0
 
-  # Two bundles share the stem; loading one settles it.
-  found = kelso_env.run("app", "which", "upd-app")
+  # Two apps share the stem; only among loaded apps does it name one.
+  shared = kelso_env.run("app", "which", "upd-app")
+  assert shared.returncode == 1
+  assert "net.local.upd-app, net.more.upd-app" in shared.stderr
+
+  found = kelso_env.run("app", "which", "--loaded", "upd-app")
   assert found.returncode == 0, found.stderr
   assert found.stdout == f"net.more.upd-app {other.resolve()}\n"
-  assert f"net.local.upd-app {local}" in found.stderr
-
-  assert kelso_env.run("app", "which", "--loaded", "upd-app").returncode == 0
   by_id = kelso_env.run("app", "which", "upd-app@local")
   assert by_id.stdout == f"net.local.upd-app {local}\n"
   assert kelso_env.run("app", "which", "--loaded", "upd-app@local").returncode == 1

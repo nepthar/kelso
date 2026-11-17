@@ -166,7 +166,7 @@ def test_load_refuses_while_containers_are_running(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   app = ctx.resolve_app_id(app_id)
   with pytest.raises(ValueError, match=f"kelso stop {app_id}"):
-    load(app, ctx.catalog_bundle(app), ctx)
+    load(app, ctx.inventory.bundle(app).path, ctx)
 
 
 def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):

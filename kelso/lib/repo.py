@@ -281,7 +281,7 @@ def bound_apps(ctx, name: str) -> tuple[str, ...]:
   return tuple(
     sorted(
       app_id
-      for app_id, origin in ctx.inventory.configured.items()
+      for app_id, origin in ctx.inventory.origins.items()
       if origin is not None and same_path(origin.parent, repo.path)
     )
   )

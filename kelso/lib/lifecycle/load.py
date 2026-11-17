@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 
 from kelso.lib import kproxy
+from kelso.lib.app_inventory import no_bundle_message
 from kelso.lib.apps import AppID, record_app_action
 from kelso.lib.bundle import app_id_from_path, is_pathlike, load_bundle
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
@@ -326,10 +327,10 @@ class LoadTarget:
   # The repo the bundle is in, to say so; None for one named by path.
   repo: str | None
 
-  def require_bundle(self, ctx: KelsoCtx) -> Path:
-    """The bundle to load from. Raises ValueError saying why there is none."""
+  def require_bundle(self) -> Path:
+    """The bundle to load from. Raises ValueError if there is none."""
     if self.bundle is None:
-      raise ValueError(ctx.no_bundle_message(self.app_id))
+      raise ValueError(no_bundle_message(self.app_id))
     return self.bundle
 
 
@@ -358,17 +359,14 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
     resolved = LoadTarget(app_id_from_path(bundle), bundle, None)
   else:
     name, _, repo = target.partition("@")
-    resolved = catalog_target(ctx, name, repo or None)
+    app = ctx.inventory.app_id(name, repo=repo)
+    entry = ctx.inventory.bundle(app, repo)
+    resolved = LoadTarget(
+      app, entry.path if entry else None, entry.repo if entry else None
+    )
 
   _check_binding(ctx, resolved, force=force)
   return resolved
-
-
-def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
-  """What a bare id or `<id>@<repo>` names, by `KelsoCtx.resolve_app`."""
-  hit = ctx.resolve_app(f"{name}@{repo}" if repo else name)
-  path = hit.path if hit.path and hit.path.exists() else None
-  return LoadTarget(hit.app_id, path, hit.repo if path else None)
 
 
 def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
@@ -531,10 +529,7 @@ def load(
   paths = ctx.loaded_paths(app)
   was_loaded = paths.exists()
 
-  try:
-    running_count = ctx.run_state(app).running_count
-  except ValueError:
-    running_count = 0
+  running_count = ctx.run_state(app).running_count
   if running_count:
     raise ValueError(
       f"App {app} has {running_count} running Kelso-labeled container(s); "

@@ -40,7 +40,7 @@ def register(subparsers) -> None:
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
-  bundle = target.require_bundle(ctx)
+  bundle = target.require_bundle()
   if not args.yes and not confirm_compose_warnings(app, bundle):
     print("Nothing loaded.")
     return

@@ -87,11 +87,11 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     loaded = ctx.inventory.loaded
     # One read of the activity log for every app, rather than one per row.
     actions = read_app_actions(ctx)
-    origins = {app_id: ctx.loaded_origin(app_id) for app_id in loaded}
+    origins = ctx.inventory.origins
 
     blocks = []
     for name, repo in ctx.config.repos.items():
-      entries = catalog.get(name, [])
+      entries = [e for e in catalog if e.repo == name]
       state = ctx.kelso_db.get_repo_state(name) if repo.mirrored else None
       at = f" {state['sha'][:8]}" if state else ""
       header = f"Repo: {name} {len(entries)} apps {repo.describe()}{at}"

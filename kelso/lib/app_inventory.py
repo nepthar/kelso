@@ -1,10 +1,10 @@
-"""Every app kelso knows of, read once, and the apps a name could mean.
+"""Every app kelso knows of, read once, and what a name means among them.
 
 An Inventory is a snapshot: the apps loaded under var/run/, the apps with kept
-config under conf/apps/, and the bundles in each repo. It lists candidates for
-a name; choosing among them is `KelsoCtx.resolve_app`. It does not see docker
-or the kelso db, so an app that left only containers or volumes behind is not
-found by name.
+config under conf/apps/, and the bundles in each repo. Resolving a name is two
+steps: `app_id` picks the app, `bundle` picks what it loads from. It does not
+see docker or the kelso db, so an app that left only containers or volumes
+behind is not found by name.
 """
 
 from dataclasses import dataclass
@@ -23,104 +23,80 @@ if TYPE_CHECKING:
 class CatalogEntry:
   app_id: AppID
   path: Path
-  source: str
-
-
-@dataclass(frozen=True)
-class ResolvedApp:
-  """One app a name could mean: a loaded app, a bundle in a repo, or kept config."""
-
-  app_id: AppID
-  # The bundle: where a loaded app was loaded from, or the repo entry.
-  path: Path | None
-  # The repo the bundle is in, if any.
+  # None for a bundle outside every repo.
   repo: str | None
-  loaded: bool
-  # A repo bundle the app's kept config was made for.
-  bound: bool = False
-
-  def line(self) -> str:
-    return f"{self.app_id} {self.path or '-'}"
-
-
-def _match(ids: set[AppID], name: str) -> list[AppID]:
-  """The ids `name` names in full, or else those it is the last part of."""
-  ordered = sorted(ids)
-  return [i for i in ordered if i == name] or [i for i in ordered if i.stem == name]
 
 
 @dataclass(frozen=True)
 class Inventory:
   loaded: frozenset[AppID]
-  # Every app with kept config -> the bundle that config was made for, if known.
-  configured: dict[AppID, Path | None]
-  # Repo name -> its bundles, sorted by app id; repos in config.toml order.
-  catalog: dict[str, list[CatalogEntry]]
+  # Every app with kept config -> the bundle it was last loaded from, if known.
+  origins: dict[AppID, Path | None]
+  # Every repo's bundles: repos in config.toml order, then by app id.
+  catalog: tuple[CatalogEntry, ...]
 
-  def bound_to(self, app_id: AppID) -> Path | None:
-    """The bundle `app_id`'s kept config, secrets and data were made for: the
-    one it was last loaded from. Loading it from any other bundle is refused,
-    and among several bundles carrying the id this one is chosen."""
-    return self.configured.get(app_id)
+  def app_id(self, name: str, *, prefer_loaded: bool = False, repo: str = "") -> AppID:
+    """The app an id, or the last part of one, names.
 
-  def entries(self, app_id: AppID) -> list[CatalogEntry]:
-    """`app_id`'s bundles across every repo, in repo order."""
-    return [
-      e for entries in self.catalog.values() for e in entries if e.app_id == app_id
-    ]
+    Looks only at `repo`'s apps if given. With `prefer_loaded`, a name that
+    matches a loaded app means that one. Raises ValueError if nothing matches,
+    or several apps do.
+    """
+    known = self.loaded | set(self.origins) | {e.app_id for e in self.catalog}
+    if repo:
+      known = {e.app_id for e in self.catalog if e.repo == repo}
+    found: list[AppID] = []
+    for ids in (self.loaded, known) if prefer_loaded else (known,):
+      found = [i for i in ids if i == name] or sorted(i for i in ids if i.stem == name)
+      if found:
+        break
+    if len(found) == 1:
+      return found[0]
+    where = f" in repo {repo}" if repo else ""
+    if not found:
+      raise ValueError(f'No app matching "{name}" found{where}')
+    raise ValueError(
+      f'Multiple apps matching "{name}" found{where}: {", ".join(found)}. '
+      f"Name the one you mean in full."
+    )
+
+  def bundle(self, app_id: AppID, repo: str = "") -> CatalogEntry | None:
+    """The bundle `app_id` loads from, or None if there is none.
+
+    `repo`'s if given; else the one it was last loaded from, if that is still
+    there; else its only one. Raises ValueError if several are left to choose
+    from, or `repo` does not carry it.
+    """
+    entries = [e for e in self.catalog if e.app_id == app_id]
+    if repo:
+      entries = [e for e in entries if e.repo == repo]
+      if not entries:
+        raise ValueError(f"Repo {repo} does not carry {app_id}")
+    else:
+      origin = self.origins.get(app_id)
+      if origin is not None and origin.exists():
+        return next(
+          (e for e in entries if same_path(e.path, origin)),
+          CatalogEntry(app_id, origin, None),
+        )
+    if len(entries) > 1:
+      lines = "\n".join(f"  {e.repo}: {e.path}" for e in entries)
+      raise ValueError(
+        f'Multiple bundles found for "{app_id}":\n{lines}\n'
+        f"Name the one you mean as {app_id}@<repo>, or by its path."
+      )
+    return entries[0] if entries else None
 
   def contested(self) -> dict[AppID, list[str]]:
-    """Ids more than one repo carries, and which repos those are."""
+    """Ids more than one bundle carries, and which repos those are in."""
     repos: dict[AppID, list[str]] = {}
-    for entries in self.catalog.values():
-      for e in entries:
-        repos.setdefault(e.app_id, []).append(e.source)
+    for e in self.catalog:
+      repos.setdefault(e.app_id, []).append(e.repo)
     return {app_id: names for app_id, names in repos.items() if len(names) > 1}
 
-  def bundles(self, app_id: AppID, repo: str = "") -> list[ResolvedApp]:
-    """`app_id`'s bundles in repos, or in `repo` alone."""
-    bound = self.bound_to(app_id)
-    return [
-      ResolvedApp(
-        app_id, e.path, e.source, False, bound is not None and same_path(bound, e.path)
-      )
-      for e in self.entries(app_id)
-      if not repo or e.source == repo
-    ]
 
-  def _loaded_app(self, app_id: AppID) -> ResolvedApp:
-    origin = self.bound_to(app_id)
-    repo = next(
-      (e.source for e in self.entries(app_id) if origin and same_path(e.path, origin)),
-      None,
-    )
-    return ResolvedApp(app_id, origin, repo, True)
-
-  def candidates(self, query: str) -> list[ResolvedApp]:
-    """Every app `<id>`, `<stem>` or `<id>@<repo>` could mean.
-
-    A full id beats a stem. With a repo named, only that repo's bundles; else
-    loaded apps, then bundles (less a loaded app's own), then ids with only
-    kept config.
-    """
-    name, _, repo = query.partition("@")
-    catalog_ids = {e.app_id for entries in self.catalog.values() for e in entries}
-    if repo:
-      return [b for i in _match(catalog_ids, name) for b in self.bundles(i, repo)]
-    matched = _match(catalog_ids | self.loaded | set(self.configured), name)
-    loaded = [self._loaded_app(i) for i in matched if i in self.loaded]
-    bundles = [
-      b
-      for i in matched
-      for b in self.bundles(i)
-      if not any(m.path and same_path(m.path, b.path) for m in loaded)
-    ]
-    kept = [
-      ResolvedApp(i, None, None, False)
-      for i in matched
-      if i not in self.loaded and i not in catalog_ids
-    ]
-    return [*loaded, *bundles, *kept]
+def no_bundle_message(app_id: AppID) -> str:
+  return f"No bundle found for {app_id}; run `kelso load <path>` on its bundle"
 
 
 def _ids(names) -> list[AppID]:
@@ -140,13 +116,15 @@ def build_inventory(ctx: "KelsoCtx") -> Inventory:
   names = [p.name for p in run_root.iterdir()] if run_root.is_dir() else []
   loaded = frozenset(i for i in _ids(names) if ctx.loaded_paths(i).exists())
 
-  configured = {i: ctx.loaded_origin(i) for i in _ids(ctx.config.app_config_ids())}
+  origins = {i: ctx.loaded_origin(i) for i in _ids(ctx.config.app_config_ids())}
 
-  catalog = {}
+  catalog = []
   for name, repo in ctx.config.repos.items():
     entries = []
     for raw_id, rel_path in scan_bundles(repo.path):
-      for app_id in _ids([raw_id]):
-        entries.append(CatalogEntry(app_id, repo.path / rel_path, name))
-    catalog[name] = sorted(entries, key=lambda e: e.app_id)
-  return Inventory(loaded, configured, catalog)
+      try:
+        entries.append(CatalogEntry(AppID(raw_id), repo.path / rel_path, name))
+      except ValueError:
+        continue
+    catalog += sorted(entries, key=lambda e: e.app_id)
+  return Inventory(loaded, origins, tuple(catalog))

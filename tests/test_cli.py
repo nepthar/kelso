@@ -512,11 +512,20 @@ def test_an_app_loaded_from_a_path_reloads_from_it_by_id(kelso_env):
   copy = kelso_env.run_root / "ports-demo" / "app_bundle" / "manifest.toml"
   assert "# edited at the source" in copy.read_text()
 
-  # With the path gone there is no source: the error names where it was.
   shutil.rmtree(elsewhere)
   gone = kelso_env.run("load", "ports-demo")
   assert gone.returncode != 0
-  assert str(elsewhere.resolve()) in gone.stderr
+  assert "No bundle found for ports-demo" in gone.stderr
+
+
+def test_an_app_loaded_from_a_path_starts_by_id_after_rm(kelso_env):
+  elsewhere = kelso_env.root / "elsewhere" / "ports-demo.klso"
+  shutil.move(kelso_env.local_repo / "ports-demo.klso", elsewhere)
+  assert kelso_env.run("load", str(elsewhere)).returncode == 0
+  assert kelso_env.run("rm", "--yes", "ports-demo").returncode == 0
+
+  started = kelso_env.run("start", "ports-demo")
+  assert started.returncode == 0, started.stderr
 
 
 def test_a_repo_bundle_loaded_by_its_path_starts_by_id(kelso_env):
@@ -561,7 +570,7 @@ def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
 
   reloaded = kelso_env.run("load", app_id)
   assert reloaded.returncode == 1
-  assert "came from repo local, which no longer carries it" in reloaded.stderr
+  assert f"No bundle found for {app_id}" in reloaded.stderr
 
 
 def test_load_of_a_running_app_picks_up_a_changed_manifest_and_restarts(
@@ -612,7 +621,7 @@ def test_load_of_a_stopped_app_does_not_start_it(kelso_env):
 def test_load_says_where_the_bundle_came_from(kelso_env):
   app_id = "ports-demo"
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  (entry,) = ctx.inventory.entries(app_id)
+  entry = ctx.inventory.bundle(AppID(app_id))
 
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr
@@ -1669,11 +1678,11 @@ def test_duplicate_fqdn_is_rejected_before_compose_up(
   ctx = KelsoCtx(load_config_file(kelso_env.config))
 
   app = ctx.resolve_app_id("routes-demo")
-  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
 
   start_ctx = KelsoCtx(load_config_file(kelso_env.config))
   with pytest.raises(ValueError, match="already owned"):
-    lifecycle.start(app, start_ctx.catalog_bundle(app), start_ctx)
+    lifecycle.start(app, start_ctx.inventory.bundle(app).path, start_ctx)
   assert provider.registered == []
   assert ["compose", "up", "-d"] not in docker_calls
 
@@ -1686,9 +1695,9 @@ def _started_routes_demo(monkeypatch, kelso_env, stub_provider, owners=None):
   )
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   app = ctx.resolve_app_id("routes-demo")
-  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
   return provider, app
 
 
@@ -1711,7 +1720,7 @@ def test_reload_takes_routes_down_then_publishes_them_again(
   provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
   provider.registered.clear()
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.reload_app(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.reload_app(app, ctx.inventory.bundle(app).path, ctx)
   assert provider.unregistered == ROUTES_DEMO_PUBLISHED
   assert provider.registered == []  # Stopped, so back on its next start.
 
@@ -1750,13 +1759,13 @@ def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   app = ctx.resolve_app_id("routes-demo")
-  lifecycle.load(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
   lifecycle.start(app, ctx.config.app_run_path(app), ctx)
   assert [r[2] for r in providers["web"].registered] == ["photos", "api-photos"]
 
   spec = ctx.loaded_spec(app)
   lifecycle.assign_route(spec, "main", "other", ctx)
-  lifecycle.reload_app(app, ctx.catalog_bundle(app), ctx)
+  lifecycle.reload_app(app, ctx.inventory.bundle(app).path, ctx)
   assert ("photos", "kelso.localhost") in providers["web"].unregistered
   assert providers["other"].unregistered == []
 
@@ -2090,7 +2099,7 @@ def test_every_shipped_bundle_loads(kelso_env):
     fresh = KelsoCtx(load_config_file(kelso_env.config))
     app = fresh.resolve_app_id(app_id)
     lifecycle.load(
-      app, fresh.catalog_bundle(app), fresh, sets=[("subdomain", app.stem)]
+      app, fresh.inventory.bundle(app).path, fresh, sets=[("subdomain", app.stem)]
     )
     assert (kelso_env.run_root / app_id / "compose.yml").is_file(), source.name
 

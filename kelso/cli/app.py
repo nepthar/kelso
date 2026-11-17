@@ -19,29 +19,20 @@ def register(subparsers) -> None:
     help="Print the app an id resolves to, and its bundle",
     description=(
       "Prints `<app id> <bundle path>` for the app that APP names, and exits 1 "
-      "if it names none or several. A loaded app wins over bundles that are "
-      "not loaded. Other matches are listed on stderr."
+      "if it names none or several."
     ),
   )
   which.add_argument(
     "app", metavar="APP", help="App ID, its last part, or <app>@<repo>"
   )
-  which.add_argument(
-    "--loaded", action="store_true", help="Resolve only to a loaded app"
-  )
+  which.add_argument("--loaded", action="store_true", help="Look only at loaded apps")
   which.set_defaults(func=run_which)
 
 
 def run_which(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  try:
-    resolved = ctx.resolve_app(args.app)
-  except ValueError:
-    resolved = None
-  if args.loaded and resolved is not None and not resolved.loaded:
-    resolved = None
-  for candidate in ctx.inventory.candidates(args.app):
-    if candidate != resolved:
-      logger.info("%s%s", candidate.line(), " (loaded)" if candidate.loaded else "")
-  if resolved is None:
-    raise SystemExit(1)
-  print(resolved.line())
+  name, _, repo = args.app.partition("@")
+  app = ctx.inventory.app_id(name, prefer_loaded=args.loaded, repo=repo)
+  if args.loaded and app not in ctx.inventory.loaded:
+    raise ValueError(f"{app} is not loaded")
+  entry = ctx.inventory.bundle(app, repo)
+  print(app, entry.path if entry else "-")

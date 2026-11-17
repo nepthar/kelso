@@ -65,9 +65,10 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
   """Every configured repo, with the bundles currently in it."""
+  catalog = ctx.inventory.catalog
   return [
-    {"name": name, "apps": [_catalog_app(e, ctx) for e in entries]}
-    for name, entries in ctx.inventory.catalog.items()
+    {"name": name, "apps": [_catalog_app(e, ctx) for e in catalog if e.repo == name]}
+    for name in ctx.config.repos
   ]
 
 
@@ -86,7 +87,7 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
     "description": spec.description if spec else "",
     "author": spec.author if spec else "",
     "url": spec.url if spec else "",
-    "repo": entry.source,
+    "repo": entry.repo,
     "state": ctx.app_state(entry.app_id),
     "configured": config_status(spec, store) if spec else None,
     "manifest": manifest,
@@ -158,7 +159,7 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
         "path": str(repo.path),
         "exists": repo.path.is_dir(),
         "removable": name != LOCAL_REPO,
-        "apps": len(catalog.get(name, [])),
+        "apps": sum(e.repo == name for e in catalog),
         "bound_apps": list(bound_apps(ctx, name)),
         "sha": state["sha"] if state else None,
         "updated_at": state["at"] if state else None,

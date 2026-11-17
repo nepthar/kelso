@@ -270,16 +270,10 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
       )
 
   for app_id in sorted(ctx.inventory.contested()):
-    bundles = ctx.inventory.bundles(app_id)
-    if not any(b.bound for b in bundles):
-      locations = "\n".join(f"  {b.repo}: {b.path}" for b in bundles)
-      findings.append(
-        Finding(
-          "",
-          f'More than one repo carries "{app_id}":\n{locations}\n'
-          f"Name the one you mean as {app_id}@<repo>, or pass its full path.",
-        )
-      )
+    try:
+      ctx.inventory.bundle(app_id)
+    except ValueError as e:
+      findings.append(Finding("", str(e)))
   return findings
 
 

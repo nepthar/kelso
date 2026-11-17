@@ -37,8 +37,8 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if passthrough and passthrough[0] == "--":
     passthrough = passthrough[1:]
   extra.extend(passthrough)
-  state = ctx.run_state(args.app_id)
+  app = ctx.resolve_app_id(args.app_id, prefer_loaded=True)
   try:
-    logs(state.app_id, extra, ctx)
+    logs(app, extra, ctx)
   except KeyboardInterrupt:
     raise SystemExit(130) from None

@@ -21,7 +21,6 @@ from kelso.daemon import console
 from kelso.jobs import JobRunner
 from kelso.lib import views
 from kelso.lib.apps import AppID
-from kelso.lib.bundle import load_bundle
 from kelso.lib.config import load_config_file
 from kelso.lib.config_edit import (
   add_host_volume,
@@ -40,7 +39,6 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
 from kelso.lib.lifecycle.routes import remove_published_route
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
-from kelso.lib.spec import AppSpec
 from kelso.lib.util import Identifier, validate_identifier
 
 # Bumped when a response shape changes in a way a client would notice: the web
@@ -110,11 +108,6 @@ def _started_by_refusal(started_by: str) -> str | None:
   except ValueError as e:
     return f"started_by: {e}"
   return None
-
-
-def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
-  """The schema for an app that is not loaded yet."""
-  return load_bundle(ctx.catalog_bundle(app)).app_spec()
 
 
 def _ctx_again(ctx: KelsoCtx) -> KelsoCtx:
@@ -224,7 +217,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     """The app's `[config]`, with what is on file now."""
     try:
       resolved = ctx.resolve_app_id(app_id)
-      spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
+      spec = ctx.loaded_spec(resolved) or ctx.bundle_spec(resolved)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
     return views.config_request_view(app_config_request(spec, ctx))
@@ -235,7 +228,7 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     try:
       resolved = ctx.resolve_app_id(app_id)
       with ctx.locked(f"config {resolved}", resolved):
-        spec = ctx.loaded_spec(resolved) or _bundle_spec(resolved, ctx)
+        spec = ctx.loaded_spec(resolved) or ctx.bundle_spec(resolved)
         apply_app_config(spec, ConfigResponse(values=body.values), ctx)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e

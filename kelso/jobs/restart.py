@@ -10,7 +10,7 @@ class RestartJob(Job):
   required_args = ("app",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    app = ctx.resolve_app_id(kwargs["app"])
+    app = ctx.resolve_app_id(kwargs["app"], prefer_loaded=True)
     self.app = str(app)
     self.app_id = app
 
