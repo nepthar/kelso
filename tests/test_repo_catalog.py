@@ -257,7 +257,7 @@ def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
 
   by_id = kelso_env.run("load", "dev-app")
   assert by_id.returncode == 1
-  assert "More than one repo carries" in by_id.stderr
+  assert "More than one app matches" in by_id.stderr
 
   assert kelso_env.run("load", str(link)).returncode == 0
   # Naming the link and naming its target are the same binding, so neither
@@ -289,12 +289,12 @@ def test_an_id_in_two_sources_cannot_be_loaded_or_started_by_id(kelso_env):
 
   loaded = kelso_env.run("load", "ports-demo")
   assert loaded.returncode == 1
-  assert "More than one repo carries" in loaded.stderr
+  assert "More than one app matches" in loaded.stderr
   assert str(dev) in loaded.stderr
 
   started = kelso_env.run("start", "ports-demo")
   assert started.returncode == 1
-  assert "More than one repo carries" in started.stderr
+  assert "More than one app matches" in started.stderr
 
 
 def test_doctor_reports_an_ambiguous_id(kelso_env):

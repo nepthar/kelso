@@ -519,6 +519,13 @@ def test_an_app_loaded_from_a_path_reloads_from_it_by_id(kelso_env):
   assert str(elsewhere.resolve()) in gone.stderr
 
 
+def test_a_repo_bundle_loaded_by_its_path_starts_by_id(kelso_env):
+  bundle = kelso_env.local_repo / "ports-demo.klso"
+  assert kelso_env.run("load", str(bundle)).returncode == 0
+  started = kelso_env.run("start", "ports-demo")
+  assert started.returncode == 0, started.stderr
+
+
 def test_doctor_accepts_an_app_loaded_from_outside_every_repo(kelso_env, tmp_path):
   bundle = tmp_path / "elsewhere" / "ports-demo.klso"
   shutil.copytree(kelso_env.local_repo / "ports-demo.klso", bundle)

@@ -14,7 +14,6 @@ from kelso.lib.kelso import (
   CatalogEntry,
   KelsoCtx,
   LoadedAppPaths,
-  ambiguity_message,
 )
 from kelso.lib.lifecycle._common import logger, managed_volume_dirs
 from kelso.lib.lifecycle.routes import take_down_routes
@@ -379,34 +378,11 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
 
 
 def catalog_target(ctx: KelsoCtx, name: str, repo: str | None) -> LoadTarget:
-  """The catalog entry a bare id or `<id>@<repo>` names."""
-  app = ctx.resolve_app(name)
-  entries = ctx.app_catalog().get(str(app), ())
-
-  if repo is not None:
-    for entry in entries:
-      if entry.source == repo:
-        return LoadTarget(app, entry.path, repo)
-    carried = ", ".join(sorted(entry.source for entry in entries))
-    raise ValueError(
-      f"Repo {repo!r} does not carry {app}."
-      + (f" It is in: {carried}." if carried else " No repo carries it.")
-    )
-
-  if not entries:
-    if ctx.is_loaded(app):
-      # Loaded from a path: that path is its source, as a repo is for the
-      # rest. Without one, `start` runs the loaded copy as-is.
-      was = bound_to(app, ctx)
-      source = ctx.loaded_origin(app) if was and not was.startswith("repo ") else None
-      return LoadTarget(app, source if source and source.exists() else None, None)
-    raise ValueError(f'No app found for "{app}"')
-  if len(entries) > 1:
-    entry = bound_entry(ctx, app, entries)
-    if entry is None:
-      raise ValueError(ambiguity_message(app, entries))
-    return LoadTarget(app, entry.path, entry.source)
-  return LoadTarget(app, entries[0].path, entries[0].source)
+  """What a bare id or `<id>@<repo>` names, by `KelsoCtx.which`."""
+  hit = ctx.which(f"{name}@{repo}" if repo else name).require()
+  path = hit.path if hit.path and hit.path.exists() else None
+  # With no bundle on disk, `start` runs the loaded copy as-is.
+  return LoadTarget(hit.app_id, path, None if hit.by_path or not path else hit.repo)
 
 
 def bound_entry(

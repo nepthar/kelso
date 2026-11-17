@@ -17,7 +17,6 @@ from kelso.lib import git
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import KLSO_MD_SUFFIX, BundleMdFile, md_bundle_files
 from kelso.lib.kelso import CatalogEntry, KelsoCtx
-from kelso.lib.lifecycle.load import catalog_target
 from kelso.lib.repo import Repo
 from kelso.lib.spec import AppSpec
 
@@ -87,11 +86,10 @@ def repo_git(repo: Repo) -> RepoGit:
 
 def editable_manifest(ctx: KelsoCtx, target: str) -> EditableManifest:
   """What `<app>` or `<app>@<repo>` edits. Raises ValueError if it is not editable."""
-  name, _, repo = target.partition("@")
-  found = catalog_target(ctx, name, repo or None)
-  if found.bundle is None or found.repo is None:
+  found = ctx.which(target).require()
+  if found.path is None or found.repo is None:
     raise ValueError(f"No repo carries {found.app_id}, so there is nothing to edit")
-  entry = CatalogEntry(found.app_id, found.bundle, found.repo)
+  entry = CatalogEntry(found.app_id, found.path, found.repo)
   return editable_entry(entry, repo_git(ctx.config.repos[entry.source]))
 
 

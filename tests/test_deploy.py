@@ -13,7 +13,7 @@ ROOT = "/srv/kelso"
 
 @pytest.fixture
 def remote(kelso_env, monkeypatch):
-  """Records each command; `source` is what the box says the app is loaded from."""
+  """Records each command; `source` is the bundle the box has the app loaded from."""
   box = SimpleNamespace(calls=[], cwds=[], source="")
 
   def run(argv, **kwargs):
@@ -24,8 +24,8 @@ def remote(kelso_env, monkeypatch):
     code, out = 0, ""
     if argv[-1] == "kelso root":
       out = f"{ROOT}\n"
-    elif argv[-1].startswith("kelso app source"):
-      out = f"{box.source}\n"
+    elif argv[-1].startswith("kelso app which"):
+      code, out = (0, f"{APP} {box.source}\n") if box.source else (1, "")
     return subprocess.CompletedProcess(argv, code, out, "")
 
   monkeypatch.setattr(kelso.cli.deploy, "subprocess", SimpleNamespace(run=run))
@@ -56,12 +56,12 @@ def test_first_deploy_copies_then_loads_and_starts(kelso_env, remote):
     f"box:{ROOT}/repos/local/{APP}.klso/",
   ]
   assert remote.cwds[2] == remote.bundle
-  assert remote.calls[1][-1] == f"kelso app source {APP}"
+  assert remote.calls[1][-1] == f"kelso app which --loaded {APP}"
   assert remote.calls[3][-1] == (f"kelso load {APP}@local --yes && kelso start {APP}")
 
 
 def test_deploy_to_a_loaded_app_updates_it(kelso_env, remote):
-  remote.source = "repo local"
+  remote.source = f"{ROOT}/repos/local/{APP}.klso"
   done = kelso_env.run("deploy", str(remote.bundle), "box", "--no-backup")
   assert done.returncode == 0, done.stderr
   assert remote.calls[-1][-1] == f"kelso update {APP} --yes --no-backup"
@@ -76,19 +76,31 @@ def test_deploy_refuses_a_volume_whose_files_are_missing(kelso_env, remote):
 
 
 def test_deploy_refuses_an_app_loaded_from_elsewhere(kelso_env, remote):
-  remote.source = "repo demos"
+  remote.source = f"{ROOT}/repos/demos/{APP}.klso"
   done = kelso_env.run("deploy", str(remote.bundle), "box")
   assert done.returncode == 1
-  assert f"box already has {APP} loaded from repo demos" in done.stderr
+  assert f"box already has {APP} loaded from {remote.source}" in done.stderr
   assert len(remote.calls) == 2
 
 
-def test_app_source_prints_the_repo_of_a_loaded_app_only(kelso_env):
-  assert kelso_env.run("app", "source", "upd-app").stdout == ""
-  bundle = kelso_env.local_repo / "upd-app.klso"
-  bundle.mkdir()
-  (bundle / "manifest.toml").write_text(
-    '[app]\nversion = "1.0"\n\n[run.main]\nimage = "alpine"\n'
-  )
-  assert kelso_env.run("load", "upd-app").returncode == 0
-  assert kelso_env.run("app", "source", "upd-app").stdout == "repo local\n"
+def test_app_which_resolves_a_loaded_app_and_lists_the_rest(kelso_env):
+  assert kelso_env.run("app", "which", "upd-app").returncode == 1
+  local = kelso_env.local_repo / "net.local.upd-app.klso"
+  other = kelso_env.root / "more" / "net.more.upd-app.klso"
+  for bundle in (local, other):
+    bundle.mkdir(parents=True)
+    (bundle / "manifest.toml").write_text(
+      '[app]\nversion = "1.0"\n\n[run.main]\nimage = "alpine"\n'
+    )
+  assert kelso_env.run("load", str(other)).returncode == 0
+
+  # Two bundles share the stem; loading one settles it.
+  found = kelso_env.run("app", "which", "upd-app")
+  assert found.returncode == 0, found.stderr
+  assert found.stdout == f"net.more.upd-app {other.resolve()}\n"
+  assert f"net.local.upd-app {local}" in found.stderr
+
+  assert kelso_env.run("app", "which", "--loaded", "upd-app").returncode == 0
+  by_id = kelso_env.run("app", "which", "upd-app@local")
+  assert by_id.stdout == f"net.local.upd-app {local}\n"
+  assert kelso_env.run("app", "which", "--loaded", "upd-app@local").returncode == 1
