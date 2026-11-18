@@ -7,10 +7,12 @@ proxy, and reset whenever it restarts.
 
 import json
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from kelso.lib import kproxy
 from kelso.lib.apps import AppID
+from kelso.lib.connections import HttpConnection, WebConnection, network_connections
 from kelso.lib.docker import DockerError, docker_output
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.run import compose_env
@@ -56,13 +58,121 @@ def is_proxied_and_running(spec: AppSpec, ctx: KelsoCtx) -> bool:
 def decide(spec: AppSpec, host: str, verdict: str | None, ctx: KelsoCtx) -> str:
   """Record allow, deny, or (None) forget for `host` and its subdomains, and
   apply it to a running kproxy at once. Returns the domain as stored."""
-  name = kproxy.endpoint_name(host)
-  ctx.app_store(spec.app).set_host(name, verdict)
-  if is_proxied_and_running(spec, ctx):
+  return decide_many(spec, {host: verdict}, ctx)[0]
+
+
+def decide_many(
+  spec: AppSpec, decisions: Mapping[str, str | None], ctx: KelsoCtx
+) -> list[str]:
+  """`decide` for each domain, with one push to a running kproxy.
+
+  Raises ValueError, before anything is written, for a bad domain or verdict.
+  """
+  named = {}
+  for host, verdict in decisions.items():
+    if verdict not in ("allow", "deny", None):
+      raise ValueError(f"{host}: decide allow, deny, or null to forget")
+    named[kproxy.endpoint_name(host)] = verdict
+  store = ctx.app_store(spec.app)
+  for name, verdict in named.items():
+    store.set_host(name, verdict)
+  if named and is_proxied_and_running(spec, ctx):
     restricted = load_run_data(spec, ctx).restricted
     assert restricted is not None
     kproxy_admin(spec.app, ctx, "PUT", "/rules", kproxy.rules_json(restricted.rules))
-  return name
+  return list(named)
+
+
+def domain_rows(
+  spec: AppSpec,
+  stats: Mapping[str, Any],
+  pending: Iterable[Mapping[str, Any]],
+  decided: Mapping[str, str],
+) -> list[dict[str, Any]]:
+  """One row per domain counted on 80 and 443, waiting, decided, or listed as a
+  web host, sorted by domain."""
+  waiting = {p["domain"]: sorted(p.get("hosts") or ()) for p in pending}
+  listed = {
+    host.lower().rstrip(".")
+    for entry in network_connections(spec.connections).values()
+    if isinstance(entry, WebConnection)
+    for host in entry.hosts
+  }
+  counted = {
+    domain
+    for domain, listeners in stats.items()
+    if any(listener in ("http", "https") for listener in listeners)
+  }
+  rows = []
+  for domain in sorted(counted | waiting.keys() | decided.keys() | listed):
+    total = {
+      "conns": 0,
+      "allowed": 0,
+      "refused": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "last_seen": "",
+    }
+    for listener, count in (stats.get(domain) or {}).items():
+      if listener not in ("http", "https"):
+        continue
+      for key in ("conns", "allowed", "bytes_in", "bytes_out"):
+        total[key] += count.get(key, 0)
+      total["refused"] += count.get("denied", 0)
+      total["last_seen"] = max(total["last_seen"], count.get("last_seen", ""))
+    decided_as = next((n for n in decided if covers(n, domain)), None)
+    rows.append(
+      {
+        "domain": domain,
+        "verdict": decided[decided_as] if decided_as else None,
+        "decided_as": decided_as,
+        "listed": listed_as(spec, domain),
+        "waiting": domain in waiting,
+        "hosts": waiting.get(domain, []),
+        **total,
+      }
+    )
+  return rows
+
+
+def listed_as(spec: AppSpec, domain: str) -> str | None:
+  """The `[connections]` entry that lets `domain` through, if any."""
+  for name, entry in network_connections(spec.connections).items():
+    if isinstance(entry, HttpConnection) and domain == name:
+      return name
+    if isinstance(entry, WebConnection) and any(
+      covers(host.lower().rstrip("."), domain) or covers(domain, host.lower())
+      for host in entry.hosts
+    ):
+      return name
+  return None
+
+
+def net_view(spec: AppSpec, ctx: KelsoCtx) -> dict[str, Any]:
+  """The app's network mode and its domains: live from a running kproxy, else
+  from its last run, else only what is decided or listed.
+
+  Raises RuntimeError naming the fix when a running app's kproxy can't be reached.
+  """
+  mode = network_mode(spec, ctx)
+  decided = ctx.app_store(spec.app).list_hosts()
+  stats: Mapping[str, Any] = {}
+  pending: list[Any] = []
+  source = None
+  if is_proxied_and_running(spec, ctx):
+    pending = kproxy_admin(spec.app, ctx, "GET", "/pending") or []
+    stats = kproxy_admin(spec.app, ctx, "GET", "/stats") or {}
+    source = "live"
+  elif mode in PROXIED_MODES and (last := last_run(spec.app, ctx)) is not None:
+    stats = last.get("stats") or {}
+    source = "last_run"
+  return {
+    "network_mode": mode,
+    "manifest_mode": spec.network_mode,
+    "proxied": mode in PROXIED_MODES,
+    "source": source,
+    "rows": domain_rows(spec, stats, pending, decided),
+  }
 
 
 def waiting_note(spec: AppSpec, ctx: KelsoCtx) -> str:

@@ -39,6 +39,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.console import console_command
 from kelso.lib.lifecycle.routes import remove_published_route
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
+from kelso.lib.net import decide_many, net_view
 from kelso.lib.util import Identifier, validate_identifier
 
 # Bumped when a response shape changes in a way a client would notice: the web
@@ -73,6 +74,14 @@ class ConfigValues(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
   values: dict[str, str] = Field(default_factory=dict)
+
+
+class NetDecisions(BaseModel):
+  """Domain -> allow, deny, or null to forget, for an app behind kproxy."""
+
+  model_config = ConfigDict(extra="forbid")
+
+  decisions: dict[str, str | None]
 
 
 class JobSubmission(BaseModel):
@@ -182,6 +191,31 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
       return views.app_logs_view(ctx.resolve_app_id(app_id), ctx, tail=tail)
     except (ValueError, RuntimeError) as e:
       raise HTTPException(404, str(e)) from e
+
+  @app.get("/apps/{app_id}/net", tags=["apps"])
+  def get_app_net(app_id: str, ctx: Ctx) -> dict:
+    """The app's network mode, and each domain it reaches, waits on, or has a
+    decision or listing for. No lock: this is a read, and the UI polls it."""
+    try:
+      spec = ctx.require_loaded_spec(ctx.resolve_app_id(app_id))
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(404, str(e)) from e
+    try:
+      return net_view(spec, ctx)
+    except RuntimeError as e:
+      raise HTTPException(502, str(e)) from e
+
+  @app.post("/apps/{app_id}/net", tags=["apps"])
+  def post_app_net(app_id: str, body: NetDecisions, ctx: Ctx) -> dict:
+    """Allow, deny or forget domains, applied to a running kproxy at once."""
+    try:
+      resolved = ctx.resolve_app_id(app_id)
+      with ctx.locked(f"net {resolved}", resolved):
+        spec = ctx.require_loaded_spec(resolved)
+        decide_many(spec, body.decisions, ctx)
+        return net_view(spec, ctx)
+    except (ValueError, RuntimeError) as e:
+      raise HTTPException(400, str(e)) from e
 
   @app.websocket("/apps/{app_id}/console")
   async def app_console(
