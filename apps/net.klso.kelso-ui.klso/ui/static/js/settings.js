@@ -1,6 +1,6 @@
 // The Settings window. Picking a theme previews it here; the background
-// preview shows the id's colours or the two picked, as the radios say, and
-// custom colours are only editable when chosen.
+// preview shows the id's colors or the two picked, as the radios say, and
+// custom colors are only editable when chosen.
 (function () {
   var theme = document.getElementById("theme");
   theme.addEventListener("change", function () {

@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------------
-   How pages are laid out. Colours come from the tokens in theme.css; nothing
-   in this file is a colour literal. 98.css draws the controls and classic.css
+   How pages are laid out. colors come from the tokens in theme.css; nothing
+   in this file is a color literal. 98.css draws the controls and classic.css
    paints them and the desktop; a property set there is not set here.
    --------------------------------------------------------------------------- */
 :root {
@@ -8,7 +8,7 @@
   --warn: var(--gold);
 
   /* The terminal draws in the well, with the one accent as its cursor. Its
-     sixteen colours are the theme's. */
+     sixteen colors are the theme's. */
   --term-bg: var(--void);
   --term-fg: var(--void-fg);
   --term-cursor: var(--coral);
@@ -78,7 +78,7 @@ td.muted.wrap { color: var(--muted); }
 .dot.running { background: var(--ok); }
 .dot.exited { background: var(--warn); }
 .dot.bad { background: var(--bad); }
-/* A name labelling what it sits beside, never coloured. */
+/* A name labelling what it sits beside, never colored. */
 .tag {
   display: inline-block; padding: 0 6px; border: 1px solid var(--line);
   color: var(--dim); line-height: 18px; vertical-align: 1px;

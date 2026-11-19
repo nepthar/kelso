@@ -17,7 +17,7 @@ one. Right-click an app for its logs and shell.
 | A job | A dialog inside the window that started it |
 | Sign out | The start menu's foot |
 | kelsod reachable | The tray's dot |
-| Which machine this is | The desktop's colours: drawn from the install's id, or picked in Settings |
+| Which machine this is | The desktop's colors: drawn from the install's id, or picked in Settings |
 
 Some apps refuse to be framed (`X-Frame-Options`), which a page cannot detect,
 so a route window always offers Open in new tab. A browser will not show http
@@ -40,10 +40,10 @@ matches.
 | `pages/` | One router per feature: its pages, form posts and JSON |
 | `templates/` | All markup. `desktop.html` is the desktop, `frame.html` what a window shows, `macros.html` the components |
 | `static/js/desktop.js` | Windows, icons, the taskbar and start menu |
-| `static/kelso.css` | How pages are laid out; no colours of its own |
+| `static/kelso.css` | How pages are laid out; no colors of its own |
 | `static/classic.css` | The desktop, the type, and kelso's components as classic controls |
 | `static/icons/` | Original artwork, drawn for this app |
-| `static/theme.css` | The colour tokens, and nothing else |
+| `static/theme.css` | The color tokens, and nothing else |
 | `settings.py` | The desktop's own settings (its background), kept in the `settings` volume |
 | `static/js/` | One script per behaviour, loaded by the pages that need it |
 | `static/vendor/` | Third-party browser code, pinned and served from here |

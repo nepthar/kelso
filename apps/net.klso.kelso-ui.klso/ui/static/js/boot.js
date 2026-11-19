@@ -1,8 +1,8 @@
-// Loaded in <head>, before first paint, so the desktop's colours never flash
+// Loaded in <head>, before first paint, so the desktop's colors never flash
 // the default first. Everything else waits for shell.js.
 (function () {
   var root = document.documentElement;
-  // Also what desktop.js calls when the colours change.
+  // Also what desktop.js calls when the colors change.
   function paintDesktop(colors) {
     root.style.setProperty("--desk-top", colors[0]);
     root.style.setProperty("--desk-bottom", colors[1]);

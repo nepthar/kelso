@@ -57,7 +57,7 @@ turns them into Windows 2000 (the gradient title bar) set in IBM Plex Sans, and 
 the desktop. Reach for 98.css's classes and elements first: a page's sections
 are `fieldset.group` with a `legend`. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for anything bold; IBM Plex Mono, also Text, at 12px.
 `static/kelso.css` lays pages out from the theme's tokens and
-holds no colour of its own; a property classic.css sets is not set there too,
+holds no color of its own; a property classic.css sets is not set there too,
 and 98.css's bevels are classic.css's `--raised`, `--pressed`, `--sunken`,
 `--frame` and `--etched`. A surface's one committing button is 98.css's
 `default`. No per-page `<style>`, no inline `style=`: scripts set only
@@ -66,11 +66,11 @@ positions, sizes and custom properties, through the CSSOM.
 **Color carries meaning.** `--coral` is the accent, highlight navy in win9x.
 `--gold` wants attention, `--rosewood` destroys, `--ok` is healthy.
 
-**A theme is colours only.** Each is one `:root` rule in `static/themes/<id>.css`
+**A theme is colors only.** Each is one `:root` rule in `static/themes/<id>.css`
 setting the same tokens, listed in `settings.THEMES`; `tests/test_themes.py` holds
 every one to the token list and a contrast floor. classic.css restates 98.css's
 literal greys and glyphs in tokens, so a 98.css control used for the first time
-needs its colours restated there too. The desktop is painted per install and is
+needs its colors restated there too. The desktop is painted per install and is
 not themed.
 
 **Artwork is ours.** Icons are drawn for this app. No Microsoft

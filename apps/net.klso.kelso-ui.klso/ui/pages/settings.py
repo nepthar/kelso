@@ -38,7 +38,7 @@ async def post_settings(request: Request):
   if theme not in settings.THEMES:
     return see("/settings", err="Pick a theme from the list.")
   if mode == "custom" and not (settings.HEX.match(top) and settings.HEX.match(bottom)):
-    return see("/settings", err="Pick both colours, as #rrggbb.")
+    return see("/settings", err="Pick both colors, as #rrggbb.")
   try:
     settings.save(
       {"theme": theme, "background": {"mode": mode, "top": top, "bottom": bottom}}

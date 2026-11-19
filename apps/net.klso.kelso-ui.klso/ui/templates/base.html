@@ -5,7 +5,7 @@
 <title>{{ title }} · kelso</title>
 <link rel="icon" type="image/svg+xml" href="{{ FAVICON }}">
 <link rel="stylesheet" id="kelso-theme" href="{{ theme_url() }}">
-{#- The desktop's two colours (settings.py), painted by boot.js before first paint. -#}
+{#- The desktop's two colors (settings.py), painted by boot.js before first paint. -#}
 <script type="application/json" id="kelso-desktop">{{ desktop_colors()|list|tojson }}</script>
 <script src="{{ asset('js/boot.js') }}"></script>
 <link rel="stylesheet" href="{{ asset('vendor/98.css-0.1.21/98.css') }}">

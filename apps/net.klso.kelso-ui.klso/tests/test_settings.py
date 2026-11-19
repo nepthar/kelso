@@ -1,4 +1,4 @@
-"""The Settings window and the desktop colours it sets."""
+"""The Settings window and the desktop colors it sets."""
 
 import json
 import re
@@ -22,13 +22,13 @@ def test_an_id_draws_its_own_calm_gradient():
     assert settings.HEX.match(color)
 
 
-def test_every_page_carries_the_colours(client, fake, monkeypatch):
+def test_every_page_carries_the_colors(client, fake, monkeypatch):
   monkeypatch.setattr(settings, "id_colors", lambda _: ("#111111", "#222222"))
   assert _colors(client.get("/volumes").text) == ["#111111", "#222222"]
   assert _colors(client.get("/login").text) == ["#111111", "#222222"]
 
 
-def test_custom_colours_are_saved_and_painted(client, fake):
+def test_custom_colors_are_saved_and_painted(client, fake):
   form = {"mode": "custom", "top": "#AA0000", "bottom": "#00aa00"}
   response = client.post("/settings", data=form)
   assert response.headers["location"] == "/settings?ok=Saved"
@@ -56,7 +56,7 @@ def test_a_theme_that_does_not_exist_is_refused(client, fake):
   assert not SETTINGS.exists()
 
 
-def test_a_colour_that_is_not_hex_is_refused(client, fake):
+def test_a_color_that_is_not_hex_is_refused(client, fake):
   form = {"mode": "custom", "top": "red;}</style>", "bottom": "#00aa00"}
   response = client.post("/settings", data=form)
   assert "err=" in response.headers["location"]

@@ -1,4 +1,4 @@
-"""The colour tokens: every theme is one complete, legible set.
+"""The color tokens: every theme is one complete, legible set.
 
 The contrast floors are WCAG's: 4.5:1 for text, 3:1 for accents that mark
 rather than carry reading.
@@ -48,7 +48,7 @@ TOKENS = (
   "--idle-a",
   "--idle-b",
   "--idle-fg",
-  # the terminal's sixteen colours: black red green yellow blue magenta cyan
+  # the terminal's sixteen colors: black red green yellow blue magenta cyan
   # white, then the bright eight. Drawn on --void.
   *(f"--ansi-{i}" for i in range(16)),
 )
@@ -69,12 +69,12 @@ def _theme(name):
   return decls
 
 
-def _luminance(hex_colour):
+def _luminance(hex_color):
   def channel(v):
     v /= 255
     return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
 
-  r, g, b = (int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+  r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 
 
@@ -129,7 +129,7 @@ def test_a_theme_is_legible(name):
 
 @each_theme
 def test_a_themes_terminal_is_legible(name):
-  """The six colours are text, and their bright halves emphasis. Black and
+  """The six colors are text, and their bright halves emphasis. Black and
   white are text against the well's other end, and exempt at its own."""
   t = _theme(name)
   own = {7, 15} if _luminance(t["--void"]) > 0.5 else {0}
@@ -142,7 +142,7 @@ def test_a_themes_terminal_is_legible(name):
   assert not low, f"on --void: {low}"
 
 
-def test_the_layout_stylesheet_has_no_colours_of_its_own():
+def test_the_layout_stylesheet_has_no_colors_of_its_own():
   """kelso.css is layout over the tokens; the palette is a theme's."""
   css = re.sub(r"/\*.*?\*/", "", (STATIC / "kelso.css").read_text(), flags=re.S)
   assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", css)

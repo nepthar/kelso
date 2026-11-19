@@ -77,9 +77,9 @@ def id_colors(instance_id):
 
 
 def background(instance_id):
-  """The desktop's (top, bottom) colours: the saved custom pair, or the id's.
+  """The desktop's (top, bottom) colors: the saved custom pair, or the id's.
 
-  A bad settings file paints the id's colours; the Settings window says why.
+  A bad settings file paints the id's colors; the Settings window says why.
   """
   try:
     chosen = load().get("background") or {}

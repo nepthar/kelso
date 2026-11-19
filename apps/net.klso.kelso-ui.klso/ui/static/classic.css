@@ -2,7 +2,7 @@
    Everything 98.css does not draw, and what it draws as 98 rather than 2000:
    the desktop around the windows, the type, the title bar, and kelso's own
    components as classic controls. Loaded after kelso.css, which holds layout
-   only. Colours are the theme's tokens (static/themes/); the literals left
+   only. colors are the theme's tokens (static/themes/); the literals left
    here are on the desktop, which is painted per install and not themed.
    --------------------------------------------------------------------------- */
 /* Plex's Text weight (450) is its regular for screens: a step heavier than 400. */
