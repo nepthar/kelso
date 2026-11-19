@@ -14,7 +14,7 @@ from kelso.lib.lifecycle.routes import (
   register_app_routes,
   take_down_routes,
 )
-from kelso.lib.lifecycle.run import down_env, recovery_lines
+from kelso.lib.lifecycle.run import blank_env, recovery_lines
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import AppRunData, load_run_data, provider_route_urls
 from kelso.lib.spec import AppSpec
@@ -126,7 +126,7 @@ def _compose_down(plan: DevPlan) -> None:
       cwd=plan.run_path,
       json_output=False,
       check=True,
-      env=down_env(plan.run_path),
+      env=blank_env(plan.run_path),
     )
   except DockerError as e:
     logger.error("dev: leaving containers behind, `compose down` failed: %s", e)
@@ -156,7 +156,7 @@ def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
           cwd=plan.run_path,
           json_output=False,
           check=False,
-          env=plan.run_data.config_env(),
+          env={**blank_env(plan.run_path), **plan.run_data.config_env()},
         )
       finally:
         if plan.published:

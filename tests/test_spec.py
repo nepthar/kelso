@@ -34,7 +34,7 @@ image = "alpine:latest"
   assert spec.routes == {}
   assert {name: (c.default, c.section) for name, c in spec.config.items()} == {
     "subdomain": ("demo", "option"),
-    "start_order": ("6", "option"),
+    "start_group": ("6", "option"),
   }
   assert spec.volumes == {}
   assert spec.commands == {}
@@ -155,7 +155,7 @@ subdomain = { desc = "Pick one" }
 
 [run.main]
 image = "alpine"
-env = { ORDER = "${start_order}" }
+env = { ORDER = "${start_group}" }
 """,
   )
 
@@ -165,8 +165,8 @@ env = { ORDER = "${start_order}" }
     None,
     "Pick one",
   )
-  assert spec.config["start_order"].section == "option"
-  assert spec.run_units["main"].environment["ORDER"] == "${start_order}"
+  assert spec.config["start_group"].section == "option"
+  assert spec.run_units["main"].environment["ORDER"] == "${start_group}"
 
 
 def test_a_shadowed_app_option_keeps_its_description_unless_given_one(tmp_path):
@@ -178,7 +178,7 @@ version = "1"
 
 [adv_config]
 subdomain   = { default = "x" }
-start_order = { default = "3", desc = "Ours" }
+start_group = { default = "3", desc = "Ours" }
 
 [run.main]
 image = "alpine"
@@ -186,13 +186,13 @@ image = "alpine"
   )
 
   assert spec.config["subdomain"].desc == APP_OPTIONS["subdomain"].desc
-  assert spec.config["start_order"].desc == "Ours"
+  assert spec.config["start_group"].desc == "Ours"
 
 
 @pytest.mark.parametrize(
   ("entry", "error"),
   [
-    ('start_order = { default = "10" }', "from 0 to 9"),
+    ('start_group = { default = "10" }', "from 0 to 9"),
     ('subdomain = { default = "a.b" }', "no periods"),
     ("subdomain = { secret = true }", "cannot be secret"),
   ],

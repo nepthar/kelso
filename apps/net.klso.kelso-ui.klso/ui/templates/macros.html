@@ -26,8 +26,8 @@
 <div id="console" class="console" data-src="{{ src }}"></div>
 {%- endmacro %}
 
-{% macro empty(text) -%}
-<p class="empty">{{ text }}</p>
+{% macro empty(text, short=false) -%}
+<p class="empty{{ ' short' if short }}">{{ text }}</p>
 {%- endmacro %}
 
 {#- A square status marker and its word. `dot`: running, exited, bad or none. -#}

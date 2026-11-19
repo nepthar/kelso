@@ -1,4 +1,4 @@
-"""Bringing the whole box up or down, one `start_order` group at a time.
+"""Bringing the whole box up or down, one `start_group` at a time.
 
 `up` starts a group, then waits for it to be ready before starting the next:
 healthy where a container's image has a healthcheck, and otherwise still
@@ -32,21 +32,21 @@ DOWN_ACTION = "down"
 
 
 def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[AppID]]]:
-  """Loaded apps in the groups `which`, by `start_order`, lowest first."""
+  """Loaded apps in the groups `which`, by `start_group`, lowest first."""
   which = set(which)
   groups: dict[int, list[AppID]] = {}
   for app_id in sorted(ctx.inventory.loaded):
     app = AppID(app_id)
-    order = _start_order(app, ctx)
+    order = _start_group(app, ctx)
     if order in which:
       groups.setdefault(order, []).append(app)
   return sorted(groups.items())
 
 
-def _start_order(app: AppID, ctx: KelsoCtx) -> int:
-  # A bundle may make start_order required; unset, it waits with the default
+def _start_group(app: AppID, ctx: KelsoCtx) -> int:
+  # A bundle may make start_group required; unset, it waits with the default
   # group, and `start` is what says it needs setting.
-  return int(ctx.app_option(app, "start_order"))
+  return int(ctx.app_option(app, "start_group"))
 
 
 def up(ctx: KelsoCtx, *, wait: float = DEFAULT_WAIT, resume: bool = False) -> list[str]:

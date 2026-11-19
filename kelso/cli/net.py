@@ -4,15 +4,15 @@ from typing import Any
 
 from tabulate import tabulate
 
-from kelso.lib.connections import HttpConnection, WebConnection, network_connections
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.manifest import PROXIED_MODES
 from kelso.lib.net import (
-  covers,
   decide,
+  domain_rows,
   is_proxied_and_running,
   kproxy_admin,
   last_run,
+  listed_as,
 )
 from kelso.lib.receipt import network_lines
 from kelso.lib.run_layout import load_run_data
@@ -103,7 +103,7 @@ def summary(
     if any(
       lst in ("http", "https") and c.get("allowed") for lst, c in listeners.items()
     )
-    and _rule(spec, domain, decided) in ("-", "allowed by you")
+    and listed_as(spec, domain) is None
   )
   if unlisted:
     lines.append("Reached but not in the manifest; to list them, add to [connections]:")
@@ -120,30 +120,18 @@ def summary(
 
 
 def _table(spec: AppSpec, stats: Mapping[str, Any], decided: Mapping[str, str]) -> str:
-  """One row per domain kproxy counted on 80 and 443, or that has a decision."""
-  totals: dict[str, dict[str, Any]] = {}
-  for domain, listeners in stats.items():
-    for listener, count in listeners.items():
-      if listener not in ("http", "https"):
-        continue
-      total = totals.setdefault(domain, {"last_seen": ""})
-      for key in ("conns", "allowed", "denied", "bytes_in", "bytes_out"):
-        total[key] = total.get(key, 0) + count.get(key, 0)
-      total["last_seen"] = max(total["last_seen"], count.get("last_seen", ""))
-  rows = []
-  for domain in sorted(totals.keys() | decided.keys()):
-    total = totals.get(domain, {})
-    rows.append(
-      (
-        domain,
-        _rule(spec, domain, decided),
-        total.get("conns", 0),
-        total.get("denied", 0),
-        fmt_size(total.get("bytes_in", 0)),
-        fmt_size(total.get("bytes_out", 0)),
-        total.get("last_seen", "")[:19].replace("T", " ") or "-",
-      )
+  rows = [
+    (
+      row["domain"],
+      _rule(row),
+      row["conns"],
+      row["refused"],
+      fmt_size(row["bytes_in"]),
+      fmt_size(row["bytes_out"]),
+      row["last_seen"][:19].replace("T", " ") or "-",
     )
+    for row in domain_rows(spec, stats, (), decided)
+  ]
   if not rows:
     return "(nothing yet)"
   return tabulate(
@@ -154,16 +142,7 @@ def _table(spec: AppSpec, stats: Mapping[str, Any], decided: Mapping[str, str]) 
   )
 
 
-def _rule(spec: AppSpec, domain: str, decided: Mapping[str, str]) -> str:
-  for name, verdict in decided.items():
-    if covers(name, domain):
-      return f"{PAST[verdict]} by you"
-  for name, entry in network_connections(spec.connections).items():
-    if isinstance(entry, HttpConnection) and domain == name:
-      return f"listed ({name})"
-    if isinstance(entry, WebConnection) and any(
-      covers(host.lower().rstrip("."), domain) or covers(domain, host.lower())
-      for host in entry.hosts
-    ):
-      return f"listed ({name})"
-  return "-"
+def _rule(row: Mapping[str, Any]) -> str:
+  if row["verdict"]:
+    return f"{PAST[row['verdict']]} by you"
+  return f"listed ({row['listed']})" if row["listed"] else "-"

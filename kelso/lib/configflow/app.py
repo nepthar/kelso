@@ -1,9 +1,9 @@
 """Everything an operator sets on one app, as a ConfigRequest.
 
 That is its `[config]` values, a host volume for each `kind = "host"` volume,
-the providers for each route, and whether each bulk volume is backed up. Those are
-named `volume.<name>`, `route.<name>` and `backup.<name>`, so they cannot
-collide with a config name, which has no dots.
+the providers for each route, whether each bulk volume is backed up, and its
+network mode. Those are named `volume.<name>`, `route.<name>`, `backup.<name>`
+and `network.mode`, so they cannot collide with a config name, which has no dots.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, format_route_providers
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
+from kelso.lib.manifest import NETWORK_MODES
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import PRIMARY_ROUTE_NAME, AppSpec
 
 if TYPE_CHECKING:
@@ -21,6 +23,7 @@ VOLUME_PREFIX = "volume."
 ROUTE_PREFIX = "route."
 BACKUP_PREFIX = "backup."
 BACKUP_CHOICES = ("on", "off")
+NETWORK_FIELD = "network.mode"
 
 
 def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
@@ -28,6 +31,7 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   fields = []
   for name, config in spec.config.items():
     secret, value = store.get_config(name)
+    option = APP_OPTIONS.get(name)
     fields.append(
       ConfigField(
         name=name,
@@ -40,6 +44,8 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
         # A secret's default is a generator kelso runs at load, so nobody
         # has to supply it.
         required=not (config.secret and config.default is not None),
+        choices=option.choices if option else None,
+        labels=option.labels if option else (),
       )
     )
   return fields
@@ -107,6 +113,20 @@ def _backup_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   ]
 
 
+def _network_field(spec: AppSpec, ctx: KelsoCtx) -> ConfigField:
+  """Host networking is the manifest's to choose, so it is the only choice there."""
+  host = spec.network_mode == "host"
+  return ConfigField(
+    name=NETWORK_FIELD,
+    value=ctx.app_store(spec.app).get_network_mode() or spec.network_mode,
+    default=spec.network_mode,
+    desc=f"Override the app's defualt network mode of ${spec.network_mode}",
+    section="option",
+    required=False,
+    choices=("host",) if host else tuple(m for m in NETWORK_MODES if m != "host"),
+  )
+
+
 def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
   """What `spec` needs from the operator, with what is on file now."""
   return ConfigRequest(
@@ -116,6 +136,7 @@ def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
       *_bind_fields(spec, ctx),
       *_route_fields(spec, ctx),
       *_backup_fields(spec, ctx),
+      _network_field(spec, ctx),
     ),
     note=spec.description,
     config_title="App config",
@@ -130,17 +151,20 @@ def apply_app_config(
   A value equal to what is already on file is skipped, so a front end may send
   back every field it showed.
   """
-  from kelso.lib.lifecycle import apply_config_sets, assign_route, bind
+  from kelso.lib.lifecycle import apply_config_sets, assign_route, bind, set_network
 
   request = app_config_request(spec, ctx)
   errors = request.validate(response.values)
   if errors:
     raise ValueError("; ".join(errors))
 
+  # An unset field sent back as its default stays unset, so it keeps following
+  # the manifest.
   changed = [
     (name, value)
     for name, value in response.values.items()
-    if value != request.field(name).value
+    if (field := request.field(name)).value != value
+    and not (field.value is None and value == field.default)
   ]
   sets = [(n, v) for n, v in changed if "." not in n]
   if sets:
@@ -153,4 +177,6 @@ def apply_app_config(
     elif name.startswith(BACKUP_PREFIX):
       volume = name.removeprefix(BACKUP_PREFIX)
       ctx.app_store(spec.app).set_backup_bulk(volume, value == "on")
+    elif name == NETWORK_FIELD:
+      set_network(spec, value, ctx)
   return [name for name, _ in changed]

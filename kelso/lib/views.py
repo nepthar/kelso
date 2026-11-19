@@ -18,6 +18,7 @@ from kelso.lib.apps import AppID
 from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_text
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
+from kelso.lib.connections import MountConnection
 from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
@@ -434,15 +435,12 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "description": spec.description,
       "author": spec.author,
       "url": spec.url,
-      "metadata": {
-        key: value
-        for key, value in spec.manifest.app.model_dump().items()
-        if value not in (None, "", {})
-      },
+      "security": security_notes(spec, run_data, ctx),
       "subdomain": resolved_subdomain(spec, ctx),
       "network_mode": run_data.network_mode,
       "run_path": str(ctx.loaded_paths(app_id).run_path),
       "manifest_stale": ctx.manifest_stale(app_id),
+      "manifest_text": ctx.loaded_paths(app_id).manifest_path.read_text(),
       "units": _units(spec, observation, run_data),
       "routes": _routes(spec, run_data, ctx),
       "volumes": volumes,
@@ -574,6 +572,51 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
       }
     )
   return routes
+
+
+def security_notes(
+  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
+) -> list[dict[str, str]]:
+  """What the app can reach or change beyond itself, worst first: each a `level`
+  (danger, caution or ok) and a sentence."""
+  danger, caution, ok = [], [], []
+  for name, conn in spec.connections.items():
+    if isinstance(conn, MountConnection):
+      danger.append(f"Its {name} connection gives it {conn.kind.desc}.")
+  for warning in spec.compose_warnings:
+    keys = ", ".join(warning.options)
+    danger.append(
+      f"{warning.run_unit} sets docker options kelso doesn't check: {keys}."
+    )
+  binds = ctx.app_store(spec.app).list_binds()
+  host_volumes = {n: v for n, v in spec.volumes.items() if v.kind == "host"}
+  for name, volume in host_volumes.items():
+    where = f"host volume {binds[name]}" if name in binds else "a host volume"
+    if volume.readonly:
+      ok.append(f"It can read, but not change, files in {where} ({name}).")
+    else:
+      caution.append(f"It can change files on this machine in {where} ({name}).")
+  mode = run_data.network_mode
+  if mode == "host":
+    danger.append(
+      "It shares the host's network: it reaches whatever the host can, and can "
+      "listen on any of its ports."
+    )
+  elif mode == "open":
+    caution.append("It can reach anything on the internet, and nothing is counted.")
+  elif mode == "watch":
+    caution.append("It can reach anything on the internet; kelso counts what it does.")
+  elif mode == "ask":
+    ok.append("It asks you before reaching a domain its manifest doesn't list.")
+  else:
+    ok.append("It reaches only the domains its manifest lists and those you allow.")
+  if not (danger or caution or host_volumes):
+    ok.append("It has no access to this machine beyond its own volumes.")
+  return [
+    {"level": level, "text": text}
+    for level, texts in (("danger", danger), ("caution", caution), ("ok", ok))
+    for text in texts
+  ]
 
 
 def _volumes(

@@ -83,3 +83,15 @@ def test_job_submit_rejects_malformed(client, fake):
   assert client.post("/jobs", json={"verb": "stop"}).status_code == 400
   assert client.post("/jobs", content=b"nope").status_code == 400
   assert fake.posts == []
+
+
+def test_network_decisions_pass_through_as_json(client, fake):
+  decisions = {"tmdb.org": "allow", "weather.com": None}
+  response = client.post("/apps/kelso-ui/net.json", json={"decisions": decisions})
+  assert response.status_code == 200
+  assert fake.posts == [("POST", "/apps/kelso-ui/net", {"decisions": decisions})]
+  assert client.post("/apps/kelso-ui/net.json", json=["x"]).status_code == 400
+  fake.fail = "tmdb.org: decide allow, deny, or null to forget"
+  refused = client.post("/apps/kelso-ui/net.json", json={"decisions": {}})
+  assert refused.status_code == 400
+  assert "decide allow" in refused.json()["error"]

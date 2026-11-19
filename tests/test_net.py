@@ -191,3 +191,109 @@ def test_a_restrict_dev_run_says_unlisted_names_are_not_counted(kelso_env):
   ran = kelso_env.run("dev", str(kelso_env.local_repo / f"{APP}.klso"))
   assert "fails at its DNS lookup" in ran.stdout
   assert f"kelso config {APP} --network watch" in ran.stdout
+
+
+def _client():
+  from fastapi.testclient import TestClient
+
+  from kelso.daemon.api import create_app
+  from kelso.jobs import JobRunner
+  from tests.test_api import ctx
+
+  return TestClient(create_app(ctx, JobRunner(ctx)))
+
+
+def test_the_api_lists_domains_and_decides_several_at_once(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("config", APP, "--network", "ask").returncode == 0
+  assert kelso_env.run("start", APP).returncode == 0
+  assert kelso_env.run("net", APP, "deny", "weather.com").returncode == 0
+  _kproxy_answers(
+    kelso_env,
+    {
+      "GET /pending": [{"domain": "tmdb.org", "hosts": {"image.tmdb.org": {}}}],
+      "GET /stats": {"api.weather.com": {"https": {"conns": 2, "denied": 2}}},
+    },
+  )
+  client = _client()
+
+  view = client.get(f"/apps/{APP}/net").json()
+  assert (view["network_mode"], view["manifest_mode"]) == ("ask", "restrict")
+  assert view["source"] == "live"
+  rows = {r["domain"]: r for r in view["rows"]}
+  assert set(rows) == {
+    "api.weather.com",
+    "weather.com",
+    "fonts.gstatic.com",
+    "tmdb.org",
+  }
+  # Your deny of weather.com overrides the manifest's listing of its subdomain.
+  assert rows["api.weather.com"]["verdict"] == "deny"
+  assert rows["api.weather.com"]["decided_as"] == "weather.com"
+  assert rows["api.weather.com"]["listed"] == "weather"
+  assert rows["api.weather.com"]["refused"] == 2
+  assert rows["tmdb.org"]["waiting"] and rows["tmdb.org"]["hosts"] == ["image.tmdb.org"]
+  assert rows["fonts.gstatic.com"]["verdict"] is None
+
+  before = len(_admin_calls(kelso_env))
+  decided = client.post(
+    f"/apps/{APP}/net", json={"decisions": {"tmdb.org": "allow", "weather.com": None}}
+  )
+  assert decided.status_code == 200, decided.text
+  puts = [c for c in _admin_calls(kelso_env)[before:] if c[:2] == ["PUT", "/rules"]]
+  assert len(puts) == 1
+  rows = {r["domain"]: r for r in decided.json()["rows"]}
+  assert rows["tmdb.org"]["verdict"] == "allow"
+  assert rows["api.weather.com"]["verdict"] is None
+
+  refused = client.post(f"/apps/{APP}/net", json={"decisions": {"a.com": "maybe"}})
+  assert refused.status_code == 400
+  assert kelso_env.run("net", APP).stdout.count("allowed by you") == 1
+
+
+def test_a_stopped_app_shows_its_last_run(kelso_env):
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", APP).returncode == 0
+  path = kelso_env.run_root / APP / "kproxy" / kproxy.STATS_FILE
+  path.write_text(json.dumps(LAST_RUN))
+  view = _client().get(f"/apps/{APP}/net").json()
+  assert view["source"] == "last_run"
+  rows = {r["domain"]: r for r in view["rows"]}
+  assert rows["example-site.org"]["conns"] == 1
+  assert "held.net" not in rows  # held then, not now
+  assert "main" not in rows
+
+
+def test_the_network_mode_is_an_app_option(kelso_env):
+  from kelso.lib.configflow import ConfigResponse
+  from kelso.lib.configflow.app import app_config_request, apply_app_config
+  from kelso.lib.kelso import KelsoCtx
+  from tests.test_api import ctx
+
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", APP).returncode == 0
+  c: KelsoCtx = ctx()
+  spec = c.require_loaded_spec(c.resolve_app_id(APP))
+  field = app_config_request(spec, c).field("network.mode")
+  assert field is not None and field.section == "option"
+  assert (field.value, field.choices) == (
+    "restrict",
+    ("open", "restrict", "ask", "watch"),
+  )
+
+  apply_app_config(spec, ConfigResponse(values={"network.mode": "watch"}), c)
+  assert c.app_store(spec.app).get_network_mode() == "watch"
+  apply_app_config(spec, ConfigResponse(values={"network.mode": "restrict"}), c)
+  assert c.app_store(spec.app).get_network_mode() is None
+
+
+def test_every_compose_placeholder_is_set_after_the_mode_changes(kelso_env):
+  from kelso.lib.lifecycle.run import compose_env
+  from tests.test_api import ctx
+
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", APP).returncode == 0
+  assert kelso_env.run("config", APP, "--network", "open").returncode == 0
+  c = ctx()
+  env = compose_env(c.resolve_app_id(APP), c)
+  assert env[kproxy.RULES_ENV] == ""

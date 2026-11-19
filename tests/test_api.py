@@ -237,6 +237,7 @@ def test_app_detail(kelso_env, client):
 
   body = response.json()
   assert body["description"] == "Config and volumes fixture"
+  assert "[app]" in body["manifest_text"]
   assert [unit["name"] for unit in body["units"]] == ["main"]
   assert body["units"][0]["image"] == "alpine:latest"
   assert body["units"][0]["state"] is None
@@ -888,7 +889,12 @@ def test_app_view_carries_what_a_detail_page_needs(kelso_env, client):
   # AppRunData.config_env and carries secret values; it must never appear.
   assert unit["environment"]["ADMIN_PASS"] == "${admin_pass}"
 
-  assert body["metadata"]["display_name"] == "Basic Features"
+  assert body["security"] == [
+    {
+      "level": "caution",
+      "text": "It can reach anything on the internet, and nothing is counted.",
+    }
+  ]
 
 
 def test_app_view_never_leaks_a_secret_through_the_environment(kelso_env, client):

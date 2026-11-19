@@ -28,6 +28,9 @@ class ConfigField:
   # None for free text. Otherwise the value must be one of these; an empty tuple
   # means "pick one" with nothing defined to pick from yet.
   choices: tuple[str, ...] | None = None
+  # With choices: what a front end shows for each, in the same order. Empty
+  # shows the choices themselves.
+  labels: tuple[str, ...] = ()
   # With choices: the value is one or more of them, comma-separated, in order.
   multi: bool = False
   # With multi: the value that means none of them were picked. It is not one of

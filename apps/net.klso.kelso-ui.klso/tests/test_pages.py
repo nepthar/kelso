@@ -15,6 +15,7 @@ PAGES = [
   "/apps/kelso-ui",
   "/apps/mealie",
   "/apps/kelso-ui/logs",
+  "/apps/kelso-ui/manifest",
   "/apps/kelso-ui/console",
   "/apps/mealie/console",
   "/host/console",
@@ -207,8 +208,9 @@ def _job_buttons(text):
 def test_job_buttons_carry_parseable_json(client, fake):
   buttons = _job_buttons(client.get("/apps/kelso-ui").text)
   remove = next(b for b in buttons if b["title"].startswith("Remove"))
-  assert [c["verb"] for c in remove["choices"]] == ["unload", "rm", "rm", "rm", "rm"]
-  assert remove["choices"][4]["args"] == {"app": "kelso-ui", "tier": "purge"}
+  assert [c["verb"] for c in remove["choices"]] == ["rm", "rm", "rm"]
+  assert remove["choices"][0]["args"] == {"app": "kelso-ui"}
+  assert remove["choices"][2]["args"] == {"app": "kelso-ui", "tier": "purge"}
   stop = next(b for b in buttons if b["verb"] == "stop")
   assert stop["args"] == {"app": "kelso-ui"}
   assert not any(b["verb"] == "start" for b in buttons)
@@ -298,7 +300,7 @@ def test_config_form(client, fake):
   assert 'name="set.tuning"' in basic
   assert 'name="set.debug"' in advanced
   assert 'placeholder="0 (default)"' in advanced
-  assert 'name="set.start_order"' in options
+  assert 'name="set.start_group"' in options
   assert 'name="set.subdomain"' in options
   assert '<input type="password" name="set.token" placeholder="••••••••"' in form
   assert '<input type="password" name="set.admin_pass" placeholder=""' in basic
@@ -417,10 +419,11 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
     for h in re.findall(r"<legend>([^<]+)</legend>", text)
     if h != "Not ready to start"
   ]
-  assert headings[:6] == [
+  assert headings[:7] == [
     "Info",
-    "Manifest",
+    "Security",
     "Configuration",
+    "Network",
     "Commands",
     "Volumes",
     "Run units",
@@ -583,3 +586,52 @@ def test_app_volumes_say_their_access_in_a_column(client, fake):
 
 def test_a_page_links_back_to_the_desktop(client):
   assert '<a class="to-desktop" href="/">' in client.get("/apps/kelso-ui").text
+
+
+def test_network_group_says_the_mode_and_carries_its_rows(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  assert "overridden." in text
+  assert 'data-net-src="/apps/kelso-ui/net.json"' in text
+  assert 'id="net-data"' in text and "js/net.js" in text
+  assert client.get("/apps/kelso-ui/net.json").json()["rows"][1]["waiting"] is True
+
+
+def test_an_open_app_has_no_table(client, fake, monkeypatch):
+  fields = [
+    {**f, "value": "open"} if f["name"] == "network.mode" else f
+    for f in fakekelsod.APP_CONFIG["fields"]
+  ]
+  monkeypatch.setitem(
+    fakekelsod.GET,
+    "/apps/kelso-ui/config-request",
+    {**fakekelsod.APP_CONFIG, "fields": fields},
+  )
+  text = client.get("/apps/kelso-ui").text
+  assert "Silently allowing access to the internet" in text
+  assert "data-net-src" not in text and "js/net.js" not in text
+
+
+def test_a_labelled_choice_shows_its_label_and_picks_the_default_when_unset(
+  client, fake
+):
+  text = client.get("/apps/kelso-ui").text
+  assert '<option value="2">2: support services</option>' in text
+  assert '<option value="6" selected>6: apps</option>' in text
+
+
+def test_remove_offers_nothing_while_the_app_runs(client, fake):
+  buttons = _job_buttons(client.get("/apps/kelso-ui").text)
+  remove = next(b for b in buttons if b["title"].startswith("Remove"))
+  choices = {c["label"]: c for c in remove["choices"]}
+  assert list(choices) == ["Clear temp and logs", "Reset data", "Delete everything"]
+  assert all(c["disabled"] for c in choices.values())
+
+
+def test_the_manifest_dialog_shows_the_loaded_text(client, fake):
+  text = client.get("/apps/kelso-ui/manifest").text
+  assert 'class="language-toml"' in text and "version = &#34;0.6.0&#34;" in text
+  assert "$kelso/var/run/kelso-ui/app_bundle/manifest.toml" in text
+  assert (
+    'href="/apps/kelso-ui/manifest" data-dialog="Manifest"'
+    in client.get("/apps/kelso-ui").text
+  )

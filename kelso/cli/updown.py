@@ -7,7 +7,7 @@ from kelso.lib.lifecycle.updown import DEFAULT_WAIT, down, up
 def register(subparsers) -> None:
   up_parser = subparsers.add_parser(
     "up",
-    help="Start every loaded app in start_order groups 1 to 9",
+    help="Start every loaded app by start_group, 1 to 9",
   )
   up_parser.add_argument(
     "--timeout",
@@ -20,7 +20,7 @@ def register(subparsers) -> None:
 
   down_parser = subparsers.add_parser(
     "down",
-    help="Stop every running app in start_order groups 9 down to 1",
+    help="Stop every running app by start_group, 9 down to 1",
   )
   down_parser.set_defaults(func=run_down, activity="down")
 

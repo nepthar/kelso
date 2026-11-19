@@ -96,6 +96,14 @@ td.muted.wrap { color: var(--muted); }
    hidden list in the order picked. */
 .tag-picks { display: flex; flex-wrap: wrap; gap: 4px; max-width: 16em; }
 .head-actions .actions { gap: 8px; }
+/* The Network group: clicks held until Save are marked on their row. */
+.net-stamp { margin: 0 0 6px; }
+.net-actions:not([hidden]) { display: flex; justify-content: flex-end; gap: 6px; padding: 8px 0 0; }
+tr.net-held td { background: var(--hair); }
+fieldset.group:has(.net) .lede { max-width: none; }
+.net td.act button.icon { min-height: 0; padding: 1px; }
+.net td.act button.icon svg { width: 14px; height: 14px; }
+.net td.act button + button { margin-left: 2px; }
 
 /* --- rows and wells ------------------------------------------------------ */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -119,8 +127,16 @@ pre {
 }
 code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
 .empty { padding: 20px 0; color: var(--muted); text-align: center; }
+.empty.short { padding: 4px 0; }
 
 /* --- notices ------------------------------------------------------------- */
+/* An app's security notes, worst first; the marker carries the level. */
+ul.security { margin: 0; padding: 0; list-style: none; }
+ul.security li { display: flex; gap: 8px; margin: 0 0 6px; }
+ul.security li::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 5px; background: var(--ok); }
+ul.security li.caution::before { background: var(--warn); }
+ul.security li.danger::before { background: var(--bad); }
+ul.security li.danger { font-weight: 600; }
 .notice, .error { padding: 6px 8px; margin-bottom: 10px; }
 .notice.contested ul { margin: 6px 0 0; padding-left: 18px; }
 .notice.contested li { margin-bottom: 3px; color: var(--dim); }
@@ -218,6 +234,10 @@ code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
   flex: 1 1 auto; min-width: 0; min-height: 16rem; overflow: auto;
   margin: 0; font: 12px/1.5 var(--mono); white-space: pre;
 }
+/* The manifest dialog. Its window is sized to fit this page, so a cap in vh
+   would shrink with the window it sizes. */
+.app-manifest { max-height: 30rem; }
+main:has(.app-manifest) { padding-bottom: 10px; }
 .app-card-manifest code { padding: 0; background: none; font: inherit; color: inherit; }
 .hljs-comment { color: var(--muted); font-style: italic; }
 .hljs-section { color: var(--coral); font-weight: 600; }

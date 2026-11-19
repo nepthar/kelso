@@ -301,7 +301,7 @@ def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
-  """`kproxy/`, kproxy's rules file and admin socket, for an app behind kproxy."""
+  """`kproxy/` and kproxy's rules file, for an app behind kproxy."""
   if run_data.restricted is None:
     shutil.rmtree(run_data.run_path / kproxy.KPROXY_RUN_DIR, ignore_errors=True)
   write_kproxy_rules(run_data)

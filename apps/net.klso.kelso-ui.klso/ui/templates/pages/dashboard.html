@@ -16,9 +16,9 @@
 
 {% block commands %}
 {{ job_button('Start all', 'up', icon='play', bar=true, tone='go', title='Start all apps',
-    desc='Starts every loaded app, in start_order groups 1 to 9, waiting for each group to be ready before the next.') }}
+    desc='Starts every loaded app by start_group, 1 to 9, waiting for each group to be ready before the next.') }}
 {{ job_button('Stop all', 'down', icon='stop', bar=true, tone='stop', title='Stop all apps',
-    desc='Stops every running app, including this web interface, in start_order groups 9 down to 1. Data, configuration and published routes are untouched. To bring them back, run kelso up on the host.') }}
+    desc='Stops every running app, including this web interface, by start_group, 9 down to 1. Data, configuration and published routes are untouched. To bring them back, run kelso up on the host.') }}
 {% endblock %}
 
 {% block content %}

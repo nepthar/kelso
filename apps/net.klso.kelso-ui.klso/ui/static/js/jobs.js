@@ -143,7 +143,7 @@
         radio.type = "radio";
         radio.name = "job-choice";
         radio.value = String(i);
-        if (i === 0) radio.checked = true;
+        radio.disabled = !!c.disabled;
         var text = document.createElement("span");
         var strong = document.createElement("b");
         strong.textContent = c.label;
@@ -156,6 +156,9 @@
         label.appendChild(text);
         choicesEl.appendChild(label);
       });
+      var first = choicesEl.querySelector("input:not(:disabled)");
+      if (first) first.checked = true;
+      var blocked = choices.length > 0 && !first;
       choicesEl.hidden = choices.length === 0;
       outEl.textContent = "";
       outEl.classList.remove("ok", "bad");
@@ -163,7 +166,7 @@
       modal.removeAttribute("style");
       bar.hidden = false;
       go.hidden = false;
-      go.disabled = false;
+      go.disabled = blocked;
       dismiss.hidden = true;
       shade.hidden = false;
       if (log) {
