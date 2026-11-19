@@ -7,10 +7,10 @@
   --bad: var(--rosewood);
   --warn: var(--gold);
 
-  /* The terminal draws on the darkest surface, in light grey, with the one
-     accent as its cursor. Its sixteen colours are the theme's. */
+  /* The terminal draws in the well, with the one accent as its cursor. Its
+     sixteen colours are the theme's. */
   --term-bg: var(--void);
-  --term-fg: var(--ansi-7);
+  --term-fg: var(--void-fg);
   --term-cursor: var(--coral);
   --term-selection: color-mix(in srgb, var(--coral) 30%, transparent);
 
@@ -123,7 +123,7 @@ table.kv td.key { white-space: nowrap; width: 1%; padding-right: 28px; }
 table.kv td.field { width: 1%; white-space: nowrap; }
 pre {
   margin: 10px 0 0; padding: 12px 14px; overflow-x: auto; white-space: pre-wrap;
-  background: var(--void); color: var(--ansi-7); font: 12px var(--mono);
+  background: var(--void); color: var(--void-fg); font: 12px var(--mono);
 }
 code { padding: 0 3px; font-family: var(--mono); font-size: 12px; }
 .empty { padding: 20px 0; color: var(--muted); text-align: center; }

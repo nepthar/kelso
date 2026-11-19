@@ -19,6 +19,8 @@ def settings_page(page: PageDep):
   return page.render(
     "pages/settings.html",
     "Settings",
+    themes=settings.THEMES,
+    theme=settings.theme(),
     custom=chosen.get("mode") == "custom",
     generated=generated,
     top=top,
@@ -32,10 +34,15 @@ async def post_settings(request: Request):
   form = await request.form()
   mode = "custom" if field(form, "mode") == "custom" else "id"
   top, bottom = field(form, "top").lower(), field(form, "bottom").lower()
+  theme = field(form, "theme") or settings.theme()
+  if theme not in settings.THEMES:
+    return see("/settings", err="Pick a theme from the list.")
   if mode == "custom" and not (settings.HEX.match(top) and settings.HEX.match(bottom)):
     return see("/settings", err="Pick both colours, as #rrggbb.")
   try:
-    settings.save({"background": {"mode": mode, "top": top, "bottom": bottom}})
+    settings.save(
+      {"theme": theme, "background": {"mode": mode, "top": top, "bottom": bottom}}
+    )
   except OSError as e:
     return see("/settings", err=str(e))
   return see("/settings", ok="Saved")

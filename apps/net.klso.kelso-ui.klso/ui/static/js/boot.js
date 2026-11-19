@@ -7,7 +7,11 @@
     root.style.setProperty("--desk-top", colors[0]);
     root.style.setProperty("--desk-bottom", colors[1]);
   }
-  window.kelso = { paintDesktop: paintDesktop };
+  function setTheme(href) {
+    var link = document.getElementById("kelso-theme");
+    if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+  }
+  window.kelso = { paintDesktop: paintDesktop, setTheme: setTheme };
   paintDesktop(JSON.parse(document.getElementById("kelso-desktop").textContent));
   // A page outside a desktop window has no title bar to name it.
   if (window.top === window) root.classList.add("standalone");

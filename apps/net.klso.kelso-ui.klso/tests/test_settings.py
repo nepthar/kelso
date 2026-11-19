@@ -40,6 +40,22 @@ def test_custom_colours_are_saved_and_painted(client, fake):
   )
 
 
+def test_a_theme_is_saved_and_linked_everywhere(client, fake):
+  assert "/static/themes/win9x.css?v=" in client.get("/volumes").text
+  form = {"theme": "rally", "mode": "id", "top": "", "bottom": ""}
+  assert client.post("/settings", data=form).headers["location"] == "/settings?ok=Saved"
+  assert "/static/themes/rally.css?v=" in client.get("/volumes").text
+  assert 'class="desk-theme">"/static/themes/rally.css?v=' in (
+    client.get("/desktop/icons").text
+  )
+
+
+def test_a_theme_that_does_not_exist_is_refused(client, fake):
+  form = {"theme": "../kelso", "mode": "id", "top": "", "bottom": ""}
+  assert "err=" in client.post("/settings", data=form).headers["location"]
+  assert not SETTINGS.exists()
+
+
 def test_a_colour_that_is_not_hex_is_refused(client, fake):
   form = {"mode": "custom", "top": "red;}</style>", "bottom": "#00aa00"}
   response = client.post("/settings", data=form)

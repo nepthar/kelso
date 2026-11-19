@@ -1,0 +1,29 @@
+/* Asphalt, rally blue and gold. */
+:root {
+  color-scheme: dark;
+
+  /* wells (logs, terminals, meters) and text in them; a window's ground; lists and fields; faint rows */
+  --void: #0c0d0f;  --void-fg: #c0c0c0;  --bg: #2a2d33;  --panel: #1c1e22;  --hair: #33373e;
+  /* bevels, lightest to darkest */
+  --hi: #5a5f69;  --light: #3c4048;  --line: #15171a;  --dark: #050607;
+  /* text: content, secondary, metadata, disabled */
+  --fg: #cfd4db;  --dim: #b4bac3;  --muted: #969da7;  --off: #6f7680;
+  /* the one accent, and type on it */
+  --coral: #4f8dff;  --ink: #06122b;
+  /* destroys, wants attention, healthy */
+  --rosewood: #ff5c5c;  --gold: #ffd23f;  --ok: #5fd38a;
+  --link: #7fb0ff;  --note: #3d3520;
+  /* the active title bar, left to right, and its text */
+  --title-a: #233768;  --title-b: #334f91;  --title-fg: #f0cc55;
+  /* an inactive one */
+  --idle-a: #3a3e46;  --idle-b: #4a4f59;  --idle-fg: #b9c0ca;
+
+  --ansi-0: #000000;  --ansi-8: #808080;
+  --ansi-1: #e0564c;  --ansi-9: #ff6b6b;
+  --ansi-2: #3fc23f;  --ansi-10: #55ff55;
+  --ansi-3: #d8c23a;  --ansi-11: #ffff55;
+  --ansi-4: #6b9cf0;  --ansi-12: #8fb3ff;
+  --ansi-5: #c77fd0;  --ansi-13: #ff77ff;
+  --ansi-6: #3fbcc2;  --ansi-14: #55ffff;
+  --ansi-7: #c0c0c0;  --ansi-15: #ffffff;
+}

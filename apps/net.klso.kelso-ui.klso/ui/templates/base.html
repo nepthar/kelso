@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} · kelso</title>
 <link rel="icon" type="image/svg+xml" href="{{ FAVICON }}">
-<link rel="stylesheet" href="{{ asset('theme.css') }}">
+<link rel="stylesheet" id="kelso-theme" href="{{ theme_url() }}">
 {#- The desktop's two colours (settings.py), painted by boot.js before first paint. -#}
 <script type="application/json" id="kelso-desktop">{{ desktop_colors()|list|tojson }}</script>
 <script src="{{ asset('js/boot.js') }}"></script>

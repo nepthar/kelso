@@ -1,4 +1,4 @@
-"""The colour tokens: one complete, legible set.
+"""The colour tokens: every theme is one complete, legible set.
 
 The contrast floors are WCAG's: 4.5:1 for text, 3:1 for accents that mark
 rather than carry reading.
@@ -7,47 +7,65 @@ rather than carry reading.
 import re
 from pathlib import Path
 
+import pytest
+import settings
+
 STATIC = Path(__file__).parent.parent / "ui" / "static"
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+each_theme = pytest.mark.parametrize("name", settings.THEMES)
 
-# What theme.css must set, each with one job. kelso.css derives the rest
+# What a theme must set, each with one job. kelso.css derives the rest
 # (--bad, --warn, the terminal's foreground and cursor).
 TOKENS = (
-  # surfaces, back to front
+  # surfaces, back to front, and text in the well
   "--void",
+  "--void-fg",
   "--bg",
   "--panel",
-  "--line",
   "--hair",
-  # text: content, secondary, metadata
+  # a bevel's four edges, lightest to darkest
+  "--hi",
+  "--light",
+  "--line",
+  "--dark",
+  # text: content, secondary, metadata, disabled
   "--fg",
   "--dim",
   "--muted",
-  # meanings: destructive, the accent, attention, healthy
-  "--rosewood",
+  "--off",
+  # the accent and type on it; then destructive, attention, healthy
   "--coral",
+  "--ink",
+  "--rosewood",
   "--gold",
   "--ok",
-  # type on a coral fill, and the marker for "nothing"
-  "--ink",
-  "--off",
+  "--link",
+  "--note",
+  # a title bar's two ends and its text, active and not
+  "--title-a",
+  "--title-b",
+  "--title-fg",
+  "--idle-a",
+  "--idle-b",
+  "--idle-fg",
   # the terminal's sixteen colours: black red green yellow blue magenta cyan
   # white, then the bright eight. Drawn on --void.
   *(f"--ansi-{i}" for i in range(16)),
 )
 
 
-def _theme():
-  """theme.css's one rule as {property: value}."""
-  text = re.sub(r"/\*.*?\*/", "", (STATIC / "theme.css").read_text(), flags=re.S)
+def _theme(name):
+  """A theme file's one rule as {property: value}."""
+  text = (STATIC / "themes" / f"{name}.css").read_text()
+  text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
   rules = re.findall(r"([^{}]+)\{([^{}]*)\}", text)
-  assert len(rules) == 1, f"theme.css should be one rule, found {len(rules)}"
+  assert len(rules) == 1, f"{name}.css should be one rule, found {len(rules)}"
   selector, body = rules[0]
   assert selector.strip() == ":root"
   decls = {}
   for decl in filter(None, (d.strip() for d in body.split(";"))):
-    name, _, value = decl.partition(":")
-    decls[name.strip()] = value.strip()
+    prop, _, value = decl.partition(":")
+    decls[prop.strip()] = value.strip()
   return decls
 
 
@@ -65,35 +83,59 @@ def contrast(a, b):
   return (hi + 0.05) / (lo + 0.05)
 
 
-def test_the_theme_sets_every_token_and_nothing_else():
-  decls = _theme()
+def test_every_theme_has_a_file_and_every_file_is_a_theme():
+  assert {p.stem for p in (STATIC / "themes").glob("*.css")} == set(settings.THEMES)
+
+
+@each_theme
+def test_a_theme_sets_every_token_and_nothing_else(name):
+  decls = _theme(name)
   assert decls.get("color-scheme") in ("dark", "light")
   assert set(decls) - {"color-scheme"} == set(TOKENS)
-  for name in TOKENS:
+  for token in TOKENS:
     # Hex so this file can check contrast.
-    assert HEX.match(decls[name]), f"{name}: {decls[name]}"
+    assert HEX.match(decls[token]), f"{token}: {decls[token]}"
 
 
-def test_the_theme_is_legible():
-  t = _theme()
-  floors = {"--fg": 7.0, "--dim": 4.5, "--muted": 4.5}
-  floors |= dict.fromkeys(("--coral", "--rosewood", "--gold", "--ok"), 3.0)
-  low = {
-    name: round(contrast(t[name], t["--bg"]), 2)
-    for name, floor in floors.items()
-    if contrast(t[name], t["--bg"]) < floor
+@each_theme
+def test_a_theme_is_legible(name):
+  t = _theme(name)
+  floors = {
+    ("--fg", "--bg"): 7.0,
+    ("--fg", "--panel"): 7.0,
+    ("--fg", "--note"): 7.0,
+    ("--void-fg", "--void"): 7.0,
+    ("--dim", "--bg"): 4.5,
+    ("--muted", "--bg"): 4.5,
+    ("--muted", "--panel"): 4.5,
+    ("--link", "--bg"): 4.5,
+    ("--link", "--panel"): 4.5,
+    ("--ink", "--coral"): 4.5,
+    # A title reads at either end of its bar; an inactive one only has to be found.
+    ("--title-fg", "--title-a"): 4.5,
+    ("--title-fg", "--title-b"): 4.5,
+    ("--idle-fg", "--idle-a"): 3.0,
+    ("--idle-fg", "--idle-b"): 3.0,
   }
-  assert not low, f"on --bg: {low}"
-  assert contrast(t["--ink"], t["--coral"]) >= 4.5, "--ink on a --coral fill"
+  for accent in ("--coral", "--rosewood", "--gold", "--ok"):
+    floors[accent, "--bg"] = 3.0
+  low = {
+    f"{a} on {b}": round(contrast(t[a], t[b]), 2)
+    for (a, b), floor in floors.items()
+    if contrast(t[a], t[b]) < floor
+  }
+  assert not low, low
 
 
-def test_the_terminal_is_legible():
-  """Colours 1-7 and 9-15 are text; bright black (8) is dim text; black (0)
-  is the terminal's own dark and exempt."""
-  t = _theme()
+@each_theme
+def test_a_themes_terminal_is_legible(name):
+  """The six colours are text, and their bright halves emphasis. Black and
+  white are text against the well's other end, and exempt at its own."""
+  t = _theme(name)
+  own = {7, 15} if _luminance(t["--void"]) > 0.5 else {0}
   low = {}
-  for i in range(1, 16):
-    floor = 3.0 if i == 8 else 4.5
+  for i in set(range(16)) - own:
+    floor = 3.0 if i >= 8 else 4.5
     ratio = contrast(t[f"--ansi-{i}"], t["--void"])
     if ratio < floor:
       low[f"--ansi-{i}"] = round(ratio, 2)
@@ -101,7 +143,7 @@ def test_the_terminal_is_legible():
 
 
 def test_the_layout_stylesheet_has_no_colours_of_its_own():
-  """kelso.css is layout over the tokens; the palette is theme.css and classic.css."""
+  """kelso.css is layout over the tokens; the palette is a theme's."""
   css = re.sub(r"/\*.*?\*/", "", (STATIC / "kelso.css").read_text(), flags=re.S)
   assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", css)
 
@@ -109,4 +151,4 @@ def test_the_layout_stylesheet_has_no_colours_of_its_own():
 def test_every_page_links_the_theme(client, anon, fake):
   for page in (client.get("/volumes"), anon.get("/login")):
     head = page.text.split("</head>")[0]
-    assert "/static/theme.css?v=" in head
+    assert "/static/themes/win9x.css?v=" in head
