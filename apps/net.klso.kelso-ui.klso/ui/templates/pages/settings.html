@@ -1,7 +1,13 @@
 {% extends "frame.html" %}
 
 {% block content %}
-<form method="post" action="/settings" class="settings-form">
+<form method="post" action="/settings" class="settings-form" data-fit>
+<fieldset class="group">
+  <legend>Theme</legend>
+  <p class="lede">The colors of windows and controls. Picking one previews it in this window; Save applies it everywhere.</p>
+  <div class="field-row"><label for="theme">Theme</label>
+    <select id="theme" name="theme">{% for id, label in themes.items() %}<option value="{{ id }}" data-href="{{ theme_url(id) }}"{% if id == theme %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+</fieldset>
 <fieldset class="group">
   <legend>Background</legend>
   <p class="lede">The desktop and sign-in are painted in this, so you can tell machines running kelso apart.</p>

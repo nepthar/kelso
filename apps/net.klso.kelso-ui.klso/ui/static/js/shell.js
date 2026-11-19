@@ -1,4 +1,4 @@
-// What every window's page shares: dialogs, the colour helper for what is
+// What every window's page shares: dialogs, the color helper for what is
 // drawn outside CSS, and timestamps in the viewer's own zone.
 (function () {
   var root = document.documentElement;
@@ -21,7 +21,7 @@
     }
   });
 
-  // A token's colour as rgba(), for what is drawn outside CSS (the terminal).
+  // A token's color as rgba(), for what is drawn outside CSS (the terminal).
   // Drawn to a pixel because computed style reports color-mix() as
   // color(srgb ...), which xterm does not read.
   var pixel = null;

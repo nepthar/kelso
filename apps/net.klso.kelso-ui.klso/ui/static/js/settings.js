@@ -1,8 +1,13 @@
-// The Settings window's background preview: the id's colours or the two
-// picked, as the radios say. Custom colours are only editable when chosen.
+// The Settings window. Picking a theme previews it here; the background
+// preview shows the id's colors or the two picked, as the radios say, and
+// custom colors are only editable when chosen.
 (function () {
+  var theme = document.getElementById("theme");
+  theme.addEventListener("change", function () {
+    window.kelso.setTheme(theme.selectedOptions[0].getAttribute("data-href"));
+  });
+
   var preview = document.getElementById("bg-preview");
-  if (!preview) return;
   var form = preview.closest("form");
   var generated = preview.getAttribute("data-generated").split(",");
   var pickers = form.querySelectorAll("input[type=color]");

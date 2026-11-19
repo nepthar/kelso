@@ -36,7 +36,7 @@
 {%- endmacro %}
 
 {#- A name that labels the thing beside it, e.g. the route provider a URL
-  goes through. A label, not a control: hairline and dim, never coloured. -#}
+  goes through. A label, not a control: hairline and dim, never colored. -#}
 {% macro tag(text, title="") -%}
 <span class="tag"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>
 {%- endmacro %}
@@ -119,7 +119,7 @@
 
 {#- An entry on a window's command bar (frame.html's `commands`): an icon over
   its label. `dialog` opens `href` as a dialog window over this one, via
-  shell.js. `tone`: go or stop, for a verb whose colour means something.
+  shell.js. `tone`: go or stop, for a verb whose color means something.
   `job_button(..., bar=true)` is the same entry for a verb that runs a job. -#}
 {% macro command(label, icon, href, dialog=false, tone="") -%}
 <a class="cmd{{ ' cmd-' ~ tone if tone }}" href="{{ href }}"{% if dialog %} data-dialog="{{ label }}"{% endif %}>{{ mdi(icon) }}<span>{{ label }}</span></a>

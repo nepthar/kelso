@@ -1,8 +1,9 @@
 /* ---------------------------------------------------------------------------
    Everything 98.css does not draw, and what it draws as 98 rather than 2000:
-   the desktop around the windows, the type, the title bar's gradient, and
-   kelso's own components as classic controls. Loaded after kelso.css, which
-   holds layout only; the system palette lives here.
+   the desktop around the windows, the type, the title bar, and kelso's own
+   components as classic controls. Loaded after kelso.css, which holds layout
+   only. colors are the theme's tokens (static/themes/); the literals left
+   here are on the desktop, which is painted per install and not themed.
    --------------------------------------------------------------------------- */
 /* Plex's Text weight (450) is its regular for screens: a step heavier than 400. */
 @font-face {
@@ -19,13 +20,97 @@
 }
 :root {
   /* 98.css's bevels, named once. */
-  --raised: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
-  --pressed: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
-  --sunken: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-  --frame: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
-  --etched: inset 1px 1px grey, inset -1px -1px #fff;
+  --raised: inset -1px -1px var(--dark), inset 1px 1px var(--hi), inset -2px -2px var(--line), inset 2px 2px var(--light);
+  --pressed: inset -1px -1px var(--hi), inset 1px 1px var(--dark), inset -2px -2px var(--light), inset 2px 2px var(--line);
+  --sunken: inset -1px -1px var(--hi), inset 1px 1px var(--line), inset -2px -2px var(--light), inset 2px 2px var(--dark);
+  --frame: inset -1px -1px var(--dark), inset 1px 1px var(--light), inset -2px -2px var(--line), inset 2px 2px var(--hi);
+  --etched: inset 1px 1px var(--line), inset -1px -1px var(--hi);
 }
 [hidden] { display: none !important; }
+
+/* --- 98.css, repainted from the theme -------------------------------------
+   98.css ships its greys and glyphs as literals. Every rule of its that this
+   app reaches is restated here in tokens; glyphs are drawn as 1px rows, or as
+   masks, so they take the theme's ink. */
+:root { accent-color: var(--coral); }
+button.default { box-shadow: inset -2px -2px var(--dark), inset 1px 1px var(--dark), inset 2px 2px var(--hi), inset -3px -3px var(--line), inset 3px 3px var(--light); }
+button, table > thead > tr > *, ::-webkit-scrollbar-thumb { box-shadow: var(--raised); }
+button:not(:disabled):active { box-shadow: var(--pressed); }
+@media (not(hover)) { button:not(:disabled):hover { box-shadow: var(--pressed); } }
+button.default:not(:disabled):active { box-shadow: inset 2px 2px var(--dark), inset -1px -1px var(--dark), inset -2px -2px var(--hi), inset 3px 3px var(--line), inset -3px -3px var(--light); }
+:disabled, :disabled + label, input[readonly], input[readonly] + label { color: var(--off); }
+.window { box-shadow: var(--frame); }
+.status-bar-field { box-shadow: inset -1px -1px var(--light), inset 1px 1px var(--line); }
+fieldset { border: 1px solid var(--line); border-image: none; box-shadow: inset 1px 1px var(--hi), 1px 1px var(--hi); }
+input, select, textarea { color: var(--fg); }
+input[type=email], input[type=number], input[type=password], input[type=search], input[type=tel],
+input[type=text], input[type=url], select, textarea { background-color: var(--panel); box-shadow: var(--sunken); }
+input:disabled, input:read-only, textarea:disabled { background-color: var(--bg); }
+input[type=radio], input[type=checkbox], input[type=color] { background-color: transparent; }
+pre { box-shadow: var(--sunken); }
+table { background-color: var(--panel); }
+select:focus { background-color: var(--coral); color: var(--ink); }
+select:focus option { background-color: var(--panel); color: var(--fg); }
+a:focus, summary:focus { outline-color: currentColor; }
+menu[role=tablist] > li { box-shadow: inset -1px 0 var(--dark), inset 1px 1px var(--light), inset -2px 0 var(--line), inset 2px 2px var(--hi); }
+progress { accent-color: var(--coral); }
+
+/* A down arrow, 7px wide, as four rows; --ax/--ay place its top left. */
+select, select:active {
+  --ax: calc(100% - 6px); --ay: 8px;
+  background-image:
+    linear-gradient(var(--fg) 0 0), linear-gradient(var(--fg) 0 0),
+    linear-gradient(var(--fg) 0 0), linear-gradient(var(--fg) 0 0),
+    linear-gradient(var(--hi) 0 0), linear-gradient(var(--hi) 0 0),
+    linear-gradient(var(--line) 0 0), linear-gradient(var(--line) 0 0),
+    linear-gradient(var(--bg) 0 0);
+  background-repeat: no-repeat;
+  background-size: 7px 1px, 5px 1px, 3px 1px, 1px 1px, 15px 1px, 1px 16px, 16px 1px, 1px 17px, 16px 17px;
+  background-position:
+    var(--ax) var(--ay), calc(var(--ax) - 1px) calc(var(--ay) + 1px),
+    calc(var(--ax) - 2px) calc(var(--ay) + 2px), calc(var(--ax) - 3px) calc(var(--ay) + 3px),
+    top 2px right 3px, top 2px right 17px, top 18px right 2px, top 2px right 2px, top 2px right 2px;
+}
+
+::-webkit-scrollbar-corner { background: var(--bg); }
+::-webkit-scrollbar-track {
+  background: repeating-conic-gradient(var(--hi) 0 25%, var(--bg) 0 50%) 0 0 / 2px 2px;
+}
+::-webkit-scrollbar-thumb { background-color: var(--bg); }
+::-webkit-scrollbar-button {
+  background-color: var(--bg); box-shadow: var(--raised); background-repeat: no-repeat;
+  background-image: linear-gradient(var(--fg) 0 0), linear-gradient(var(--fg) 0 0),
+    linear-gradient(var(--fg) 0 0), linear-gradient(var(--fg) 0 0);
+}
+::-webkit-scrollbar-button:vertical { background-size: 7px 1px, 5px 1px, 3px 1px, 1px 1px; }
+::-webkit-scrollbar-button:horizontal { background-size: 1px 7px, 1px 5px, 1px 3px, 1px 1px; }
+::-webkit-scrollbar-button:vertical:start { background-position: 4px 9px, 5px 8px, 6px 7px, 7px 6px; }
+::-webkit-scrollbar-button:vertical:end { background-position: 4px 6px, 5px 7px, 6px 8px, 7px 9px; }
+::-webkit-scrollbar-button:horizontal:start { background-position: 9px 5px, 8px 6px, 7px 7px, 6px 8px; }
+::-webkit-scrollbar-button:horizontal:end { background-position: 6px 5px, 7px 6px, 8px 7px, 9px 8px; }
+
+/* The title bar's glyphs are 98.css's own, as masks over the button's ink. */
+.title-bar-controls button[aria-label] { position: relative; background-image: none; }
+.title-bar-controls button[aria-label]::before {
+  content: ""; position: absolute; inset: 0; background: var(--fg);
+  -webkit-mask: var(--glyph) no-repeat var(--at); mask: var(--glyph) no-repeat var(--at);
+}
+.title-bar-controls button[aria-label=Minimize] {
+  --at: left 4px bottom 3px;
+  --glyph: url("data:image/svg+xml;charset=utf-8,%3Csvg width='6' height='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h6v2H0z'/%3E%3C/svg%3E");
+}
+.title-bar-controls button[aria-label=Maximize] {
+  --at: left 3px top 2px;
+  --glyph: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' d='M9 0H0v9h9V0zM8 2H1v6h7V2z'/%3E%3C/svg%3E");
+}
+.title-bar-controls button[aria-label=Restore] {
+  --at: left 3px top 2px;
+  --glyph: url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 0h6v2H2zM7 2h1v4H7zM2 2h1v1H2zM6 5h1v1H6zM0 3h6v2H0zM5 5h1v4H5zM0 5h1v4H0zM1 8h4v1H1z'/%3E%3C/svg%3E");
+}
+.title-bar-controls button[aria-label=Close] {
+  --at: left 4px top 3px;
+  --glyph: url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='7' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0V0z'/%3E%3C/svg%3E");
+}
 
 body, .title-bar, .window, button, input, label, legend, li[role=tab], option, select, table, textarea,
 .status-bar-field {
@@ -33,20 +118,21 @@ body, .title-bar, .window, button, input, label, legend, li[role=tab], option, s
 }
 b, strong, th, legend { font-weight: 600; }
 .window { color: var(--fg); background: var(--bg); }
-a, a:visited { color: #0000ee; }
+a, a:visited { color: var(--link); }
 
 /* 98.css paints button text as a shadow on transparent; icons are currentColor. */
 button { color: var(--fg); text-shadow: none; background: var(--bg); }
 button:not(:disabled):active { text-shadow: none; }
-button:disabled { color: var(--off); text-shadow: 1px 1px 0 #fff; }
-button:focus-visible, a:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
+/* The etch is a highlight under engraved text; on a dark face it reads as a blur. */
+button:disabled { color: var(--off); text-shadow: 1px 1px 0 light-dark(var(--hi), transparent); }
+button:focus-visible, a:focus-visible { outline: 1px dotted var(--fg); outline-offset: -4px; }
 a:focus-visible { outline-offset: 0; }
 /* 98.css draws these from a sibling <label>; ours sit inside theirs. */
 input[type=radio], input[type=checkbox] {
   appearance: auto; -webkit-appearance: auto; position: static; opacity: 1; margin: 0 4px 0 0;
 }
 input:not([type]) {
-  height: 21px; padding: 3px 4px; border: 0; background: #fff; box-shadow: var(--sunken);
+  height: 21px; padding: 3px 4px; border: 0; background: var(--panel); box-shadow: var(--sunken);
 }
 input:focus, select:focus { outline: none; }
 input::placeholder { color: var(--off); }
@@ -56,11 +142,11 @@ button.icon { min-width: 0; padding: 0 4px; line-height: 0; }
 button.icon svg, a.btn.icon svg { width: 16px; height: 16px; fill: currentColor; display: block; }
 button.tag { min-width: 0; min-height: 23px; padding: 0 6px; background: var(--bg); }
 button.tag[aria-pressed="true"], button.toggle[aria-pressed="true"] {
-  background: #e4e2dc; box-shadow: var(--pressed);
+  background: var(--hair); box-shadow: var(--pressed);
 }
 button.tag[aria-pressed="true"][data-primary] { font-weight: 600; }
 button.link, .update button.icon {
-  min-width: 0; min-height: 0; padding: 0; background: none; box-shadow: none; color: #0000ee;
+  min-width: 0; min-height: 0; padding: 0; background: none; box-shadow: none; color: var(--link);
 }
 button.link { text-decoration: underline; }
 a.btn {
@@ -78,34 +164,34 @@ fieldset.group > legend { padding: 0 3px; background: var(--bg); color: var(--fg
 .app-top + .notice, .app-top + .error, .app-top + fieldset.group { margin-top: 10px; }
 
 /* Data is a list view: sunken white, with raised column headers. */
-.card { background: #fff; box-shadow: var(--sunken); padding: 2px; }
+.card { background: var(--panel); box-shadow: var(--sunken); padding: 2px; }
 /* Inside a group box a form sits on the window, as a property sheet's does. */
 fieldset.group .cfg-form table, fieldset.group > .scroll > table.kv { background: none; }
 /* 98.css's header is 98's silver; 2000's face is the window's. */
 table > thead > tr > th { background: var(--bg); }
-tbody tr:hover td { background: #e8eef8; }
+tbody tr:hover td { background: color-mix(in srgb, var(--coral) 9%, var(--panel)); }
 .catalog-row:hover td, .catalog-row:focus-within td { background: var(--coral); color: var(--ink); }
-td.name a { color: #0000ee; }
+td.name a { color: var(--link); }
 td.field input[type=checkbox] { vertical-align: middle; margin: 0; }
 .dot { box-shadow: inset -1px -1px rgba(0, 0, 0, .35); }
-code, .tag { background: #c4c0b7; }
-.notice, .error { background: #ffffe1; border: 1px solid #000; }
+code, .tag { background: color-mix(in srgb, var(--fg) 8%, var(--bg)); }
+.notice, .error { background: var(--note); border: 1px solid var(--dark); }
 
 /* Dialogs inside a window. */
 .job-modal .title-bar { flex: none; }
 .job-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; overflow: auto; }
 #job-progress { width: 100%; flex: none; height: 14px; }
-.job-choice { background: #fff; box-shadow: var(--etched); }
+.job-choice { background: var(--panel); box-shadow: var(--etched); }
 .job-choice:has(input:checked) { background: var(--coral); color: var(--ink); }
 .job-choice:has(input:checked) .sub { color: var(--ink); }
 .job-choice:has(input:disabled) { color: var(--muted); cursor: default; }
 .app-card { box-shadow: var(--frame); }
-.app-card-manifest { padding: 6px 8px; background: #f4f3ef; color: var(--fg); }
+.app-card-manifest { padding: 6px 8px; background: color-mix(in srgb, var(--bg) 25%, var(--panel)); color: var(--fg); }
 
-/* --- window chrome: Windows 2000's title bar ----------------------------- */
-.title-bar { background: linear-gradient(90deg, #0a246a, #a6caf0); padding: 2px 2px 2px 3px; }
+/* --- window chrome -------------------------------------------------------- */
+.title-bar { background: linear-gradient(90deg, var(--title-a), var(--title-b)); padding: 2px 2px 2px 3px; }
 .title-bar-text {
-  display: flex; align-items: center; gap: 3px; min-width: 0; margin-right: 6px;
+  color: var(--title-fg); display: flex; align-items: center; gap: 3px; min-width: 0; margin-right: 6px;
   font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 .title-bar-text span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -161,15 +247,17 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   max-width: 84px; padding: 0 2px; line-height: 16px; text-align: center; color: #fff;
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
-.desk-icon.selected .desk-label { background: #0a246a; outline: 1px dotted #fff; }
+.desk-icon.selected .desk-label { background: var(--coral); color: var(--ink); outline: 1px dotted #fff; }
 .desk-icon.selected .desk-glyph img { filter: brightness(.55) sepia(1) hue-rotate(190deg) saturate(4); }
 
 .desk-windows { position: absolute; inset: 0; pointer-events: none; }
 .win { position: absolute; display: flex; flex-direction: column; pointer-events: auto; min-width: 0; }
 .win .title-bar { flex: none; touch-action: none; }
 .win-icon { width: 16px; height: 16px; flex: none; }
-.win.inactive .title-bar { background: linear-gradient(90deg, #808080, #c0c0c0); }
-.win.inactive .title-bar-text { color: #d4d0c8; }
+.win.inactive .title-bar { background: linear-gradient(90deg, var(--idle-a), var(--idle-b)); }
+.win.inactive .title-bar-text { color: var(--idle-fg); }
+/* Another origin's page cannot tell the desktop it was clicked; the window takes the click. */
+.win.is-route.inactive .win-frame { pointer-events: none; }
 /* Beats the position and size desktop.js writes on the element. */
 .win.maximized {
   left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important;
@@ -177,7 +265,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .win.maximized .win-resize { display: none; }
 .win-bar {
   flex: none; display: flex; align-items: center; gap: 4px; padding: 1px;
-  border-bottom: 1px solid grey; box-shadow: 0 1px #fff; margin-bottom: 2px;
+  border-bottom: 1px solid var(--line); box-shadow: 0 1px var(--hi); margin-bottom: 2px;
 }
 .win-bar, .win-bar button, .win-bar .btn, .win-bar input { font-size: 12px; }
 .win-bar button, .win-bar .btn { min-width: 0; height: 21px; min-height: 21px; padding: 0 6px; }
@@ -185,7 +273,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .win-bar label { flex: 1; min-width: 0; color: var(--fg); }
 .win-bar input.win-address {
   flex: 1; min-width: 0; width: 100%; height: 21px; padding: 1px 4px;
-  background-color: #fff; color: var(--fg);
+  background-color: var(--panel); color: var(--fg);
 }
 .win-out { flex: none; }
 .win-frame {
@@ -198,7 +286,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 }
 .win-resize::after {
   content: ""; position: absolute; right: 4px; bottom: 4px; width: 11px; height: 11px;
-  background: repeating-linear-gradient(135deg, transparent 0 1px, #fff 1px 2px, #808080 2px 4px);
+  background: repeating-linear-gradient(135deg, transparent 0 1px, var(--hi) 1px 2px, var(--line) 2px 4px);
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 .win.is-dialog .win-bar,
@@ -206,17 +294,17 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 
 .taskbar {
   position: absolute; inset: auto 0 0 0; height: 32px; display: flex; align-items: center; gap: 4px;
-  padding: 2px; background: var(--bg); box-shadow: inset 0 1px #dfdfdf, inset 0 2px #fff;
+  padding: 2px; background: var(--bg); box-shadow: inset 0 1px var(--light), inset 0 2px var(--hi);
 }
 .start-button {
   display: flex; align-items: center; gap: 4px; min-width: 0; height: 26px; min-height: 26px;
   padding: 0 6px 0 4px; font-weight: 600;
 }
 .start-button.active { box-shadow: var(--pressed); }
-.start-button .mdi { width: 16px; height: 16px; fill: #0a246a; flex: none; }
+.start-button .mdi { width: 16px; height: 16px; fill: var(--coral); flex: none; }
 .task-list {
   flex: 1; min-width: 0; height: 26px; display: flex; gap: 3px; overflow: hidden;
-  padding-left: 6px; border-left: 1px solid grey; box-shadow: inset 1px 0 #fff;
+  padding-left: 6px; border-left: 1px solid var(--line); box-shadow: inset 1px 0 var(--hi);
 }
 .task {
   display: flex; align-items: center; gap: 4px; flex: 0 1 160px; min-width: 0; height: 26px;
@@ -224,7 +312,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 }
 .task.active:not(:disabled) {
   font-weight: 600; box-shadow: var(--pressed);
-  background: repeating-conic-gradient(#fff 0 25%, var(--bg) 0 50%) 0 0 / 2px 2px;
+  background: repeating-conic-gradient(var(--hi) 0 25%, var(--bg) 0 50%) 0 0 / 2px 2px;
 }
 .task img { width: 16px; height: 16px; flex: none; }
 .task span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -241,13 +329,13 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 }
 .start-band {
   flex: none; width: 21px; display: flex; align-items: flex-end; justify-content: center;
-  padding: 6px 0; background: linear-gradient(0deg, #0a246a, #a6caf0);
+  padding: 6px 0; background: linear-gradient(0deg, var(--title-a), var(--title-b));
 }
 .start-band span {
-  writing-mode: vertical-rl; transform: rotate(180deg); color: #fff; font: 600 15px var(--sans);
+  writing-mode: vertical-rl; transform: rotate(180deg); color: var(--title-fg); font: 600 15px var(--sans);
   white-space: nowrap;
 }
-.start-band b { color: #d4d0c8; font-weight: normal; }
+.start-band b { opacity: .8; font-weight: normal; }
 .start-list { flex: 1; min-width: 0; }
 .menu { margin: 0; padding: 0; list-style: none; }
 .has-sub { position: relative; }
@@ -263,8 +351,8 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 }
 .start-list > li > .menu-item { height: 30px; min-height: 30px; gap: 8px; }
 .menu-item:not(:disabled):active, .menu-item:focus { box-shadow: none; outline: none; }
-.menu-item:hover, .menu-item:focus, .has-sub.open > .menu-item { color: #fff; background: #0a246a; }
-.menu-item.is-empty { color: #808080; }
+.menu-item:hover, .menu-item:focus, .has-sub.open > .menu-item { color: var(--ink); background: var(--coral); }
+.menu-item.is-empty { color: var(--off); }
 .has-sub > .menu-item::after {
   content: ""; position: absolute; right: 8px; top: 50%; margin-top: -4px;
   border: 4px solid transparent; border-left-color: currentColor; border-right-width: 0;
@@ -281,8 +369,8 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 .menu-item.is-off .menu-glyph img { filter: grayscale(1) opacity(.8); }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .menu-default .menu-label { font-weight: 600; }
-.menu-note { padding: 3px 22px 3px 26px; color: #808080; text-shadow: 1px 1px #fff; white-space: nowrap; }
-.menu-sep { margin: 3px 2px; border-top: 1px solid grey; border-bottom: 1px solid #fff; }
+.menu-note { padding: 3px 22px 3px 26px; color: var(--off); text-shadow: 1px 1px light-dark(var(--hi), transparent); white-space: nowrap; }
+.menu-sep { margin: 3px 2px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--hi); }
 .start-list form { margin: 0; }
 @media (max-width: 767px) {
   .start-menu { width: calc(100% - 4px); }
@@ -299,11 +387,11 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   background: none; box-shadow: none;
 }
 .desk-menu button:first-child { font-weight: 600; }
-.desk-menu button:hover, .desk-menu button:focus { color: #fff; background: #0a246a; outline: none; }
+.desk-menu button:hover, .desk-menu button:focus { color: var(--ink); background: var(--coral); outline: none; }
 
 .balloon {
   position: absolute; right: 8px; bottom: 38px; z-index: 100000; max-width: 300px;
-  padding: 6px 24px 6px 8px; background: #ffffe1; border: 1px solid #000;
+  padding: 6px 24px 6px 8px; background: var(--note); border: 1px solid var(--dark);
 }
 .balloon p { margin: 0 0 4px; }
 .balloon-close {
@@ -314,7 +402,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
 /* --- command bar, tabs, dialogs ------------------------------------------ */
 .cmdbar {
   flex: none; display: flex; flex-wrap: wrap; align-items: stretch; gap: 1px; padding: 2px 4px;
-  border-bottom: 1px solid grey; box-shadow: 0 1px #fff; margin-bottom: 1px;
+  border-bottom: 1px solid var(--line); box-shadow: 0 1px var(--hi); margin-bottom: 1px;
 }
 .cmdbar .cmd {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -322,13 +410,13 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   color: var(--fg); background: none; box-shadow: none; text-decoration: none;
   font-size: 12px; line-height: 1.15; white-space: nowrap;
 }
-.cmdbar .cmd svg { width: 24px; height: 24px; fill: var(--coral); display: block; }
+.cmdbar .cmd svg { width: 24px; height: 24px; fill: var(--link); display: block; }
 .cmdbar .cmd-go svg { fill: var(--ok); }
 .cmdbar .cmd-stop svg { fill: var(--bad); }
-.cmdbar .cmd:hover:not(:disabled) { box-shadow: inset -1px -1px grey, inset 1px 1px #fff; }
+.cmdbar .cmd:hover:not(:disabled) { box-shadow: inset -1px -1px var(--line), inset 1px 1px var(--hi); }
 .cmdbar .cmd:not(:disabled):active { box-shadow: var(--etched); }
 .cmdbar .cmd:disabled svg { fill: var(--off); }
-.cmd-sep { margin: 4px 3px; border-left: 1px solid grey; border-right: 1px solid #fff; }
+.cmd-sep { margin: 4px 3px; border-left: 1px solid var(--line); border-right: 1px solid var(--hi); }
 
 menu[role=tablist] { margin: 4px 0 -2px; }
 menu[role=tablist] > li, menu[role=tablist] > li[aria-selected=true] { background: var(--bg); }
@@ -353,15 +441,15 @@ table.sized { table-layout: fixed; }
 table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
 
 /* --- disk usage, in the drive Properties palette ------------------------- */
-.usage { background: #fff; border: 1px solid #000; }
-.usage .mine { fill: #008080; }
-.usage .other { fill: #c0c0c0; }
+.usage { background: var(--panel); border: 1px solid var(--dark); }
+.usage .mine { fill: var(--coral); }
+.usage .other { fill: var(--off); }
 .usage-key { display: flex; align-items: center; gap: 6px; margin: 4px 6px; }
-.swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid #000; margin-left: 8px; }
+.swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--dark); margin-left: 8px; }
 .swatch:first-child { margin-left: 0; }
-.swatch.mine { background: #008080; }
-.swatch.other { background: #c0c0c0; }
-.swatch.free { background: #fff; }
+.swatch.mine { background: var(--coral); }
+.swatch.other { background: var(--off); }
+.swatch.free { background: var(--panel); }
 .repo-head { flex-wrap: nowrap; align-items: flex-start; }
 .repo-head .lede { margin: 0 0 8px; }
 .repo-head .act { display: flex; gap: 6px; flex: none; }
@@ -373,6 +461,7 @@ table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
   background: linear-gradient(var(--desk-top), var(--desk-bottom));
 }
 .bg-custom { gap: 12px; margin-left: 20px; }
+.bg-custom * { margin-top: 0; }
 .bg-custom input[type=color] { width: 44px; height: 23px; padding: 0 2px; }
 .settings-form .dialog-buttons { justify-content: flex-start; }
 
@@ -380,26 +469,26 @@ table.sized td, table.sized th { overflow: hidden; text-overflow: ellipsis; }
 .app > .status-bar { flex: none; margin: 2px 2px 0; }
 .status-bar-field { margin: 0; }
 .resource-row { display: flex; gap: 10px; align-items: stretch; }
-.meter, .history { background: #000; box-shadow: var(--sunken); }
+.meter, .history { --lit: var(--ansi-10); background: var(--void); box-shadow: var(--sunken); }
 .meter {
   flex: none; width: 80px; padding: 8px 2px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  color: #00ff00; font: 12px var(--mono);
+  color: var(--lit); font: 12px var(--mono);
 }
 /* Sized by what the graph beside it leaves, never by its own aspect ratio. */
 .meter-bars { width: 44px; flex: 1 1 0; min-height: 0; }
-.meter-bars rect { fill: #004000; }
-.meter-bars rect.lit { fill: #00ff00; }
+.meter-bars rect { fill: color-mix(in srgb, var(--lit) 25%, var(--void)); }
+.meter-bars rect.lit { fill: var(--lit); }
 .history { flex: 1; min-width: 0; padding: 2px; }
 /* The grid: a line every 20% up and the same distance across, so squares.
    Each tile draws its top line; the extra pixel is the bottom one, at 0%. */
 .history-plot {
   position: relative; height: 121px;
-  background-image: linear-gradient(#008040 1px, transparent 1px),
-    linear-gradient(90deg, #008040 1px, transparent 1px);
+  background-image: linear-gradient(color-mix(in srgb, var(--lit) 45%, var(--void)) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--lit) 45%, var(--void)) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 .history-plot svg { position: absolute; top: 0; left: 0; width: 100%; height: 120px; }
-.history-plot polyline { fill: none; stroke: #00ff00; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.history-none { position: absolute; inset: 0; display: grid; place-items: center; color: #00a000; }
+.history-plot polyline { fill: none; stroke: var(--lit); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.history-none { position: absolute; inset: 0; display: grid; place-items: center; color: color-mix(in srgb, var(--lit) 65%, var(--void)); }
 .resource-notes { margin: 6px 0 0; color: var(--muted); }

@@ -173,15 +173,18 @@
     win.key = path;
     win.address.value = path;
     syncHistory(win, path);
-    leaveBy(win, win.frame.contentDocument);
-    var title = win.frame.contentDocument.title.replace(/ · kelso$/, "");
+    var doc = win.frame.contentDocument;
+    leaveBy(win, doc);
+    // The blur below only sees the first click that leaves this document.
+    doc.addEventListener("pointerdown", function () { focusWindow(win); });
+    var title = doc.title.replace(/ · kelso$/, "");
     if (title) setTitle(win, title);
-    if (win.opener) fitHeight(win);
+    if (win.opener || doc.querySelector("[data-fit]")) fitHeight(win);
     // A saved form or a finished dialog may have changed what the desktop shows.
     if (/[?&]ok=/.test(path)) refreshIcons();
   }
 
-  // A dialog is as tall as its page's content, up to the desk.
+  // A dialog, or a page that asks with data-fit, is as tall as its content, up to the desk.
   function fitHeight(win) {
     var doc = win.frame.contentDocument;
     var main = doc.querySelector("main");
@@ -289,6 +292,7 @@
     // Only a route has a tab of its own to open in; a kelso page is a window.
     win.out.hidden = !spec.url;
     if (spec.url) {
+      el.classList.add("is-route");
       win.out.href = key;
       el.querySelector(".win-nav").hidden = true;
       el.querySelector(".win-status").hidden = false;
@@ -399,6 +403,12 @@
 
   function paint() {
     window.kelso.paintDesktop(JSON.parse(icons.querySelector(".desk-colors").textContent));
+    var theme = JSON.parse(icons.querySelector(".desk-theme").textContent);
+    window.kelso.setTheme(theme);
+    // A route's window is another origin, and has no theme of ours to set.
+    document.querySelectorAll("iframe.win-frame").forEach(function (frame) {
+      try { frame.contentWindow.kelso.setTheme(theme); } catch (e) {}
+    });
   }
 
   // --- start menu --------------------------------------------------------

@@ -1,7 +1,7 @@
 """kelso-ui's own settings: one JSON file in its `settings` volume.
 
-Only the desktop background so far. Without a saved choice the background is
-drawn from the install's id, so each machine running kelso looks its own.
+The theme and the desktop background. Without a saved choice the background
+is drawn from the install's id, so each machine running kelso looks its own.
 """
 
 import colorsys
@@ -15,6 +15,13 @@ PATH = Path(os.environ.get("KELSO_UI_SETTINGS", "/settings/settings.json"))
 HEX = re.compile(r"^#[0-9a-f]{6}$")
 # Windows 2000's own desktop blue: what an install with no id gets.
 PLAIN = ("#3a6ea5", "#3a6ea5")
+# Each is static/themes/<id>.css; the first is what an install starts with.
+THEMES = {
+  "win9x": "Win9x",
+  "mojave-night": "Mojave Night",
+  "mojave-day": "Mojave Day",
+  "rally": "Rally",
+}
 
 
 def load():
@@ -44,6 +51,15 @@ def save(values):
     ) from e
 
 
+def theme():
+  """The saved theme's id, or the first when none is saved or the file is bad."""
+  try:
+    chosen = load().get("theme")
+  except RuntimeError:
+    chosen = None
+  return chosen if chosen in THEMES else next(iter(THEMES))
+
+
 def _hex(r, g, b):
   return "#" + "".join(f"{round(c * 255):02x}" for c in (r, g, b))
 
@@ -61,9 +77,9 @@ def id_colors(instance_id):
 
 
 def background(instance_id):
-  """The desktop's (top, bottom) colours: the saved custom pair, or the id's.
+  """The desktop's (top, bottom) colors: the saved custom pair, or the id's.
 
-  A bad settings file paints the id's colours; the Settings window says why.
+  A bad settings file paints the id's colors; the Settings window says why.
   """
   try:
     chosen = load().get("background") or {}

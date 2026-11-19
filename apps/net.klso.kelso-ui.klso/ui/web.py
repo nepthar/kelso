@@ -128,6 +128,7 @@ templates.globals.update(
   mdi=mdi,
   icon_url=icon_url,
   desktop_colors=lambda: settings.background(INSTANCE_ID),
+  theme_url=lambda name=None: asset(f"themes/{name or settings.theme()}.css"),
   nav=NAV,
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
