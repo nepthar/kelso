@@ -112,3 +112,18 @@ def test_a_unit_may_list_a_connection_it_references_no_property_of(kelso_env):
   )
   refused = kelso_env.run("load", APP)
   assert "connection 'admin' is not declared in [connections]" in refused.stderr
+
+
+def test_a_mounted_connection_is_a_danger_note(kelso_env):
+  from kelso.lib.views import app_view
+  from tests.test_api import ctx
+
+  a_bundle(kelso_env)
+  assert kelso_env.run("load", APP).returncode == 0
+  c = ctx()
+  notes = app_view(c.resolve_app_id(APP), c)["security"]
+  assert notes[0] == {
+    "level": "danger",
+    "text": "Its admin connection gives it kelsod's admin API: full control of kelso.",
+  }
+  assert notes[-1]["level"] == "caution"  # open: reaches anything

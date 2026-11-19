@@ -18,6 +18,8 @@ class AppOption:
   desc: str
   default: Callable[[AppID], str]
   check: Callable[[str], None]
+  choices: tuple[str, ...] | None = None
+  labels: tuple[str, ...] = ()
 
   def validate(self, value: str) -> None:
     """Raise ValueError naming the option if `value` is not acceptable."""
@@ -44,21 +46,21 @@ def _int_between(low: int, high: int | None) -> Callable[[str], None]:
   return check
 
 
-# The named start_order groups. The odd numbers between them are free, for
+# The named start groups. The odd numbers between them are free, for
 # squeezing something in.
 START_GROUPS = {
   0: "init",
   2: "support services",
   4: "routing & connections",
-  6: "applications",
-  8: "lazy applications",
+  6: "apps (default)",
+  9: "last",
 }
 
 
 def start_group_name(order: int) -> str:
   """The group as shown: its number, then its name if it has one."""
   name = START_GROUPS.get(order)
-  return f"{order} - {name}" if name else str(order)
+  return f"{order}: {name}" if name else str(order)
 
 
 APP_OPTIONS: dict[str, AppOption] = {
@@ -66,17 +68,17 @@ APP_OPTIONS: dict[str, AppOption] = {
   for option in (
     AppOption(
       "subdomain",
-      "DNS label this app's routes are published under",
+      "Subdomain for published routes",
       lambda app: AppID(app).stem,
       _subdomain,
     ),
     AppOption(
-      "start_order",
-      "Start group, 0 to 9: "
-      + ", ".join(f"{n} {name}" for n, name in START_GROUPS.items())
-      + ". Group 0 runs while kelsod does; `kelso up` starts the rest in order",
+      "start_group",
+      "Startup group order used with `kelso up|down`",
       lambda app: "6",
       _int_between(0, 9),
+      tuple(str(n) for n in range(10)),
+      tuple(start_group_name(n) for n in range(10)),
     ),
   )
 }

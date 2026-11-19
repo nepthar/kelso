@@ -93,15 +93,14 @@ APP_DETAIL = {
   "description": f"Web interface {EVIL}",
   "author": f"Jordan {EVIL}",
   "url": "https://example.com/help",
-  "metadata": {
-    "version": "0.6.0",
-    "subdomain": "kelso",
-    "display_name": "Kelso UI",
-    "description": "ignored",
-    "main": "main",
-    "note": EVIL,
-  },
+  "security": [
+    {"level": "danger", "text": f"Its admin connection gives it {EVIL}."},
+    {"level": "caution", "text": "It can change files on this machine."},
+    {"level": "ok", "text": "It asks you before reaching a domain."},
+  ],
   "manifest_stale": True,
+  "manifest_text": f'[app]\nversion = "0.6.0"\ndescription = "{EVIL}"\n',
+  "run_path": "/home/kelso/var/run/kelso-ui",
   "changes_pending": True,
   "units": [
     {
@@ -198,7 +197,6 @@ APP_DETAIL = {
 APP_BARE = {
   **APPS[2],
   "description": "",
-  "metadata": {"app_id": "mealie"},
   "manifest_stale": False,
   "units": [],
   "routes": [],
@@ -229,7 +227,71 @@ APP_CONFIG = {
     _field("backup.movies", value="on", choices=["on", "off"]),
     _field("tuning", section="advanced"),
     _field("debug", section="advanced", default="0"),
-    _field("start_order", section="option", default="6"),
+    _field(
+      "start_group",
+      section="option",
+      default="6",
+      choices=[str(n) for n in range(10)],
+      labels=[
+        "0: init",
+        "1",
+        "2: support services",
+        "3",
+        "4",
+        "5",
+        "6: apps",
+        "7",
+        "8",
+        "9",
+      ],
+    ),
+    _field(
+      "network.mode",
+      value="ask",
+      default="restrict",
+      section="option",
+      choices=["open", "restrict", "ask", "watch"],
+    ),
+  ],
+}
+
+
+def _net_row(domain, **kw):
+  base = {
+    "domain": domain,
+    "verdict": None,
+    "decided_as": None,
+    "listed": None,
+    "waiting": False,
+    "hosts": [],
+    "conns": 0,
+    "allowed": 0,
+    "refused": 0,
+    "bytes_in": 0,
+    "bytes_out": 0,
+    "last_seen": "",
+  }
+  base.update(kw)
+  return base
+
+
+NET = {
+  "network_mode": "ask",
+  "manifest_mode": "restrict",
+  "proxied": True,
+  "source": "live",
+  "rows": [
+    _net_row(
+      "api.weather.com",
+      verdict="deny",
+      decided_as="weather.com",
+      listed=EVIL,
+      conns=2,
+      refused=2,
+      last_seen="2026-11-15T20:31:02.5Z",
+    ),
+    _net_row("tmdb.org", waiting=True, hosts=["image.tmdb.org", EVIL]),
+    _net_row(EVIL, verdict="allow", decided_as=EVIL, conns=1, bytes_in=2048),
   ],
 }
 
@@ -613,6 +675,7 @@ GET = {
   "/apps/kelso-ui": APP_DETAIL,
   "/apps/kelso-ui/config-request": APP_CONFIG,
   "/apps/kelso-ui/logs": LOGS,
+  "/apps/kelso-ui/net": NET,
   "/apps/mealie": APP_BARE,
   "/apps/mealie/config-request": {"title": "mealie", "fields": [], "missing": []},
   "/catalog": CATALOG,

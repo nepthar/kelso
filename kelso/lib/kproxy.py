@@ -17,6 +17,9 @@ from typing import Any
 KPROXY_SERVICE = "kproxy"
 KPROXY_GUEST_DIR = "/run/kproxy"
 KPROXY_RUN_DIR = "kproxy"
+# Off the bind mount: Docker Desktop's file sharing can leave a socket there
+# that a later kproxy cannot bind over.
+KPROXY_ADMIN_SOCKET = "/admin.sock"
 # What kproxy saw, written when it stops: `{"stats": ..., "pending": ...}`.
 STATS_FILE = "stats.json"
 INTERNAL_NETWORK = "internal"
@@ -232,7 +235,7 @@ def compose_networks(subnet: str) -> dict[str, Any]:
 def compose_service(*, source: Path, subnet: str, ports: list[str]) -> dict[str, Any]:
   """The kproxy service. `ports` publishes each route's host port on the
   `ingress_port` its rule listens on."""
-  command = ["-admin", f"{KPROXY_GUEST_DIR}/admin.sock"]
+  command = ["-admin", KPROXY_ADMIN_SOCKET]
   command += ["-rules-file", f"{KPROXY_GUEST_DIR}/rules.txt"]
   command += ["-stats-file", f"{KPROXY_GUEST_DIR}/{STATS_FILE}"]
   service: dict[str, Any] = {
@@ -259,7 +262,7 @@ def compose_service(*, source: Path, subnet: str, ports: list[str]) -> dict[str,
         "/kproxy",
         "healthcheck",
         "-admin",
-        f"{KPROXY_GUEST_DIR}/admin.sock",
+        KPROXY_ADMIN_SOCKET,
       ],
       "interval": "2s",
       "retries": 30,

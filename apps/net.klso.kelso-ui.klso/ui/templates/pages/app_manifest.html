@@ -1,0 +1,9 @@
+{% extends "frame.html" %}
+
+{% block content %}
+<p class="lede mono">{{ path }}</p>
+<pre class="app-card-manifest app-manifest"><code class="language-toml">{{ text }}</code></pre>
+<div class="dialog-buttons"><button type="button" class="default" data-close>Close</button></div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ asset('vendor/highlight-11.11.1/highlight.min.js') }}"></script><script src="{{ asset('js/highlight.js') }}"></script>{% endblock %}

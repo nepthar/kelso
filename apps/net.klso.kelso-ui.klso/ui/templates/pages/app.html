@@ -1,5 +1,5 @@
 {% extends "frame.html" %}
-{% from "macros.html" import byline, pill, sub, tag, kv_table, job_button, command, command_gap, empty, app_status, app_units %}
+{% from "macros.html" import byline, pill, sub, tag, kv_table, job_button, command, command_gap, empty, app_status, app_units, error_card, icon_button %}
 {% from "configform.html" import config_form %}
 {% set app_id = app.app_id %}
 {% set name = app.get('display_name') or app_id %}
@@ -13,6 +13,7 @@
 {% block commands %}
 {{ command('Logs', 'text-box-outline', here ~ '/logs') }}
 {% if app.get('units', [])|selectattr('state', 'equalto', 'running')|list %}{{ command('Console', 'console', here ~ '/console') }}{% endif %}
+{% if loaded %}{{ command('Manifest', 'file-code-outline', here ~ '/manifest', dialog=true) }}{% endif %}
 {{ command_gap() }}
 {% if app.status not in ('stopped', 'finished', None) %}
 {{ job_button('Stop', 'stop', icon='stop', bar=true, tone='stop', title='Stop ' ~ name, args={'app': app_id},
@@ -30,19 +31,19 @@
     desc='Backs up ' ~ app_id ~ "'s data volumes, configuration and loaded copy, and the bulk volumes turned on in its configuration. The app is stopped for the moment its data is read and started again after.",
     enabled=loaded) }}
 {#- Labelled for what it opens, not for any one outcome: it is a chooser. -#}
+{#- Least lost first. Each needs the app stopped, so while it runs they are
+  shown but can't be picked. -#}
+{% set running = app.status not in ('stopped', 'finished', None) %}
+{% set stop_first = 'Stop it first.' if running else '' %}
 {{ job_button('Remove', icon='delete-outline', bar=true, tone='stop', title='Remove ' ~ name, danger=true,
-    desc='Pick how much of ' ~ app_id ~ ' to remove. To keep a copy of the data first, close this and Back up.',
+    desc='Pick how much of ' ~ name ~ ' to remove. None of these can be undone. To keep a copy of its data first, close this and Back up.',
     choices=[
-      {'label': 'Unload', 'verb': 'unload', 'args': {'app': app_id},
-       'desc': 'Stops it, unpublishes its routes and removes its loaded copy. Data, configuration, secrets and its address are kept, so loading it again picks up where it left off.'},
-      {'label': 'Empty temp and logs', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'temp'},
-       'desc': 'Empties its temp and logs volumes. It must be stopped, and stays loaded.'},
-      {'label': 'Empty all data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'},
-       'desc': 'Empties every volume, keeping its configuration, so it starts as if just loaded. It must be stopped, and stays loaded.'},
-      {'label': 'Remove', 'verb': 'rm', 'args': {'app': app_id},
-       'desc': 'Unloads it and deletes its temp and logs volumes. It must be stopped. Data and configuration are kept.'},
-      {'label': 'Purge', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'purge'},
-       'desc': 'Removes everything kelso holds: the loaded copy, every volume, the configuration and secrets, and its address. It must be stopped. The catalog copy survives.'},
+      {'label': 'Clear temp and logs', 'verb': 'rm', 'args': {'app': app_id}, 'disabled': running,
+       'desc': 'Takes it down and empties its temp and logs volumes. Its data and settings are kept, and Start brings it back. ' ~ stop_first},
+      {'label': 'Reset data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'}, 'disabled': running,
+       'desc': 'Empties every volume, so it starts as if newly installed. Its settings and secrets are kept, and it stays loaded. ' ~ stop_first},
+      {'label': 'Delete everything', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'purge'}, 'disabled': running,
+       'desc': 'Deletes every volume, its settings and secrets, and its address. The catalog copy stays, so it can be installed again. ' ~ stop_first},
     ]) }}
 {% endblock %}
 
@@ -74,10 +75,11 @@
 </div>
 </fieldset>
 <fieldset class="group">
-<legend>Manifest</legend>
-{% set skip = ['display_name', 'description', 'app_id', 'author', 'url'] %}
-{% set pairs = (app.get('metadata') or {})|dictsort(true)|rejectattr(0, 'in', skip)|list %}
-{{ kv_table(pairs) if pairs else empty('No extra metadata.') }}
+<legend>Security</legend>
+{% set notes = app.get('security') or [] %}
+{% if notes %}<ul class="security">
+{% for n in notes %}<li class="{{ n.level }}">{{ n.text }}</li>{% endfor %}
+</ul>{% else %}{{ empty('Not loaded.', short=true) }}{% endif %}
 </fieldset>
 </div>
 
@@ -102,10 +104,40 @@
 {{ config_form(config, here, {'action': 'config'}) }}
 </fieldset>
 
+{% if mode %}
+<fieldset class="group">
+<legend>Network</legend>
+{% set manifest_mode = net.manifest_mode if net else none %}
+<p class="lede">Network mode: <span class="tag">{{ mode }}</span>
+  {%- if manifest_mode and manifest_mode != mode %} overridden.{% endif %}
+  {%- if mode != 'host' %} Change it under Configuration -> Options.{% endif %}</p>
+{% if mode == 'open' %}
+<p class="lede">Silently allowing access to the internet</p>
+{% elif mode == 'host' %}
+<p class="lede">Silently allowing access to the host's network and the internet.</p>
+{% else %}
+<p class="lede">{{ {
+  'restrict': 'Silently restricting domains not explicitly allowed in the manifest or by you.',
+  'ask': 'Connections require your explicit permission the first time they connect.',
+  'watch': 'Monitoring all outgoing connections.',
+}[mode] }} A decision covers the domain and its subdomains, and applies at once.</p>
+{% if net_error %}{{ error_card(net_error) }}{% endif %}
+<div class="net" data-net-src="{{ here }}/net.json" data-net-mode="{{ mode }}">
+  <p class="net-stamp" data-net-stamp></p>
+  <div class="card"><div class="scroll"><table><thead><tr><th>Domain</th><th>Rule</th><th>Conns</th><th>Refused</th><th>In</th><th>Out</th><th>Last seen</th><th class="act"></th></tr></thead>
+  <tbody data-net-rows></tbody></table></div></div>
+  <div class="net-actions" hidden><button type="button" class="default" data-net-save>Save</button><button type="button" data-net-cancel>Cancel</button></div>
+  <template data-net-buttons>{{ icon_button('Allow', 'check') }}{{ icon_button('Deny', 'close') }}{{ icon_button('Forget', 'delete-outline') }}</template>
+</div>
+<script type="application/json" id="net-data">{{ net|tojson }}</script>
+{% endif %}
+</fieldset>
+{% endif %}
+
 <fieldset class="group">
 <legend>Commands</legend>
 <div class="card">
-{% if not app.get('commands') %}{{ empty('This app declares no commands.') }}{% else %}
+{% if not app.get('commands') %}{{ empty('This app declares no commands.', short=true) }}{% else %}
 <div class="scroll"><table><thead><tr><th>Command</th><th>Description</th><th>Unit</th><th class="act"></th></tr></thead><tbody>
 {% for c in app.commands %}
 <tr><td class="key">{{ c.name }}</td>
@@ -177,4 +209,4 @@
 </fieldset>
 {% endblock %}
 
-{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/tagpick.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/tagpick.js') }}"></script>{% if mode in ('restrict', 'ask', 'watch') %}<script src="{{ asset('js/net.js') }}"></script>{% endif %}{% endblock %}

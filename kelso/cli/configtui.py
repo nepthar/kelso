@@ -95,7 +95,7 @@ class ConfigApp(App[ConfigResponse]):
       )
     if entry.choices is not None:
       return Select(
-        [(choice, choice) for choice in entry.choices],
+        list(zip(entry.labels or entry.choices, entry.choices, strict=True)),
         value=entry.value if entry.value in entry.choices else Select.NULL,
         prompt=entry.display() if entry.choices else "(none defined)",
         disabled=not entry.choices,

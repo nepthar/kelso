@@ -370,3 +370,18 @@ def test_the_line_form_lists_a_fields_choices(monkeypatch, capsys):
 
   assert "  one of: media, other\n" in capsys.readouterr().out
   assert response.values == {"volume.files": "media"}
+
+
+def test_start_group_is_a_labelled_choice_and_its_default_stays_unset(kelso_env):
+  from kelso.lib.configflow.app import app_config_request, apply_app_config
+  from tests.test_api import ctx
+
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  c = ctx()
+  spec = c.require_loaded_spec(c.resolve_app_id("ports-demo"))
+  field = app_config_request(spec, c).field("start_group")
+  assert field.choices == tuple(str(n) for n in range(10))
+  assert field.labels[0] == "0: init"
+  assert apply_app_config(spec, ConfigResponse(values={"start_group": "6"}), c) == []
+  written = apply_app_config(spec, ConfigResponse(values={"start_group": "4"}), c)
+  assert written == ["start_group"]

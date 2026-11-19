@@ -601,7 +601,7 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
         **HEALTHCHECK_TIMING,
       }
 
-    # Only on failure: at boot, kelsod starts apps in start_order, not docker.
+    # Only on failure: at boot, kelsod starts apps by start_group, not docker.
     service["restart"] = "on-failure" if run_unit.restart == "yes" else "no"
 
     # Rotate container logs; dockerd otherwise keeps every byte. Deliberately not a

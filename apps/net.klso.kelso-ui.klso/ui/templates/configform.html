@@ -25,10 +25,14 @@
   <span class="muted">none defined yet</span>
   {%- endif %}
 {%- elif f.get('choices') is not none %}
-  {#- The blank option submits nothing, which leaves what is on file alone. -#}
+  {#- The blank option submits nothing, which leaves what is on file alone. An
+    unset field shows its default picked; kelsod keeps it unset when that comes
+    back. -#}
+  {%- set current = f.get('value') if f.get('value') is not none else f.get('default') %}
+  {%- set labels = f.get('labels') or f.choices %}
   <select name="set.{{ f.name }}"{% if not f.choices %} disabled{% endif %}>
     <option value="">{{ 'choose one' if f.choices else 'none defined yet' }}</option>
-    {%- for c in f.choices %}<option value="{{ c }}"{% if c == f.get('value') %} selected{% endif %}>{{ c }}</option>{% endfor -%}
+    {%- for c in f.choices %}<option value="{{ c }}"{% if c == current %} selected{% endif %}>{{ labels[loop.index0] }}</option>{% endfor -%}
   </select>
 {%- elif f.secret %}
   {#- The placeholder, never the value: a blank secret leaves what is on file. -#}

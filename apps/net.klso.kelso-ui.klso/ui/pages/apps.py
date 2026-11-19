@@ -9,6 +9,8 @@ from web import NO_STORE, PageDep, field, see, submitted_values
 
 router = APIRouter()
 
+PROXIED = ("restrict", "ask", "watch")
+
 
 @router.get("/apps")
 def apps_list():
@@ -28,8 +30,38 @@ def detail(page: PageDep, app_id: str):
   page.title = app_id
   app = api(f"/apps/{quote(app_id)}")
   config = api(f"/apps/{quote(app_id)}/config-request")
+  mode = next(
+    (f.get("value") for f in config.get("fields", []) if f["name"] == "network.mode"),
+    None,
+  )
+  net, net_error = None, None
+  if mode in PROXIED:
+    try:
+      net = api(f"/apps/{quote(app_id)}/net")
+    except ApiError as e:
+      net_error = str(e)
   title = app.get("display_name") or app_id
-  return page.render("pages/app.html", title, app=app, config=config)
+  return page.render(
+    "pages/app.html",
+    title,
+    app=app,
+    config=config,
+    mode=mode,
+    net=net,
+    net_error=net_error,
+  )
+
+
+@router.get("/apps/{app_id}/manifest")
+def manifest(page: PageDep, app_id: str):
+  """The manifest the app was loaded from, as a dialog over its page."""
+  page.title = app_id
+  app = api(f"/apps/{quote(app_id)}")
+  title = f"{app.get('display_name') or app_id} manifest"
+  path = f"$kelso/var/run/{app_id}/app_bundle/manifest.toml"
+  return page.render(
+    "pages/app_manifest.html", title, text=app.get("manifest_text") or "", path=path
+  )
 
 
 @router.post("/apps/{app_id}")
@@ -63,3 +95,29 @@ def logs_json(app_id: str):
     return JSONResponse(api(f"/apps/{quote(app_id)}/logs"), headers=NO_STORE)
   except ApiError as e:
     return JSONResponse({"error": str(e)}, status_code=502, headers=NO_STORE)
+
+
+@router.get("/apps/{app_id}/net.json")
+def net_json(app_id: str):
+  """What the Network group polls: the app's domains, live or from its last run."""
+  try:
+    return JSONResponse(api(f"/apps/{quote(app_id)}/net"), headers=NO_STORE)
+  except ApiError as e:
+    return JSONResponse({"error": str(e)}, status_code=502, headers=NO_STORE)
+
+
+@router.post("/apps/{app_id}/net.json")
+async def net_decide(app_id: str, request: Request):
+  """Save the Network group's decisions: domain -> allow, deny, or null to forget."""
+  try:
+    body = await request.json()
+  except ValueError:
+    body = None
+  decisions = body.get("decisions") if isinstance(body, dict) else None
+  if not isinstance(decisions, dict):
+    return JSONResponse({"error": "Expected decisions"}, status_code=400)
+  try:
+    view = api(f"/apps/{quote(app_id)}/net", "POST", {"decisions": decisions})
+  except ApiError as e:
+    return JSONResponse({"error": str(e)}, status_code=400, headers=NO_STORE)
+  return JSONResponse(view, headers=NO_STORE)

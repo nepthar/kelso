@@ -901,18 +901,18 @@ def test_config_set_subdomain_rejects_a_dotted_name(kelso_env):
 
 
 @pytest.mark.parametrize("value", ["10", "-1", "five"])
-def test_config_set_refuses_a_start_order_out_of_range(kelso_env, value):
-  result = kelso_env.run("config", "ports-demo", "--set", f"start_order={value}")
+def test_config_set_refuses_a_start_group_out_of_range(kelso_env, value):
+  result = kelso_env.run("config", "ports-demo", "--set", f"start_group={value}")
   assert result.returncode == 1
   assert "from 0 to 9" in result.stderr
-  assert kelso_env.run("config", "ports-demo", "--get", "start_order").stdout == "6\n"
+  assert kelso_env.run("config", "ports-demo", "--get", "start_group").stdout == "6\n"
 
 
 def test_config_lists_app_options_in_their_own_section(kelso_env):
   listed = kelso_env.run("config", "ports-demo")
   assert listed.returncode == 0, listed.stderr
   options = listed.stdout.split("App options:")[1]
-  assert "start_order" in options
+  assert "start_group" in options
   # ports-demo declares subdomain itself, so it sits with the app's own config.
   assert "subdomain" not in options
 

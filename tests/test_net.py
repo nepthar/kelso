@@ -285,3 +285,15 @@ def test_the_network_mode_is_an_app_option(kelso_env):
   assert c.app_store(spec.app).get_network_mode() == "watch"
   apply_app_config(spec, ConfigResponse(values={"network.mode": "restrict"}), c)
   assert c.app_store(spec.app).get_network_mode() is None
+
+
+def test_every_compose_placeholder_is_set_after_the_mode_changes(kelso_env):
+  from kelso.lib.lifecycle.run import compose_env
+  from tests.test_api import ctx
+
+  _write(kelso_env, RESTRICTED)
+  assert kelso_env.run("load", APP).returncode == 0
+  assert kelso_env.run("config", APP, "--network", "open").returncode == 0
+  c = ctx()
+  env = compose_env(c.resolve_app_id(APP), c)
+  assert env[kproxy.RULES_ENV] == ""

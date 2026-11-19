@@ -33,7 +33,7 @@ from kelso.lib.lifecycle.routes import (
 from kelso.lib.observations import changes_since_start
 from kelso.lib.routes import RouteProviderError
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
-from kelso.lib.spec import KELSO_CONFIG_ENV_PREFIX, AppSpec
+from kelso.lib.spec import AppSpec
 from kelso.lib.util import now_ts
 
 
@@ -113,7 +113,7 @@ def start(
       cwd=paths.run_path,
       json_output=False,
       check=True,
-      env=run_data.config_env(),
+      env={**blank_env(paths.run_path), **run_data.config_env()},
     )
   except DockerError as e:
     record_app_action("start-failed", app, ctx)
@@ -147,28 +147,34 @@ def restart(app: AppID, ctx: KelsoCtx) -> LoadResult:
 
 
 def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
-  """The config environment compose.yml interpolates `${__KELSO_CONFIG__*}` from."""
+  """What compose.yml interpolates: every placeholder in it, set from config where
+  config still has a value for it."""
+  paths = ctx.loaded_paths(app_id)
+  env = blank_env(paths.run_path)
   try:
-    spec = AppSpec.from_file(ctx.loaded_paths(app_id).manifest_path, app_id)
-    return load_run_data(spec, ctx).config_env()
+    spec = AppSpec.from_file(paths.manifest_path, app_id)
+    env.update(load_run_data(spec, ctx).config_env())
   except ValueError as e:
     logger.debug("no config env for %s: %s", app_id, e)
-    return {}
+  return env
 
 
 # How long kelso watches a command before it detaches.
 WATCH_SECONDS = 5 * 60
 
-_CONFIG_REF = re.compile(r"\$\{(" + re.escape(KELSO_CONFIG_ENV_PREFIX) + r"_[^}]+)\}")
+_PLACEHOLDER = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)")
 
 
-def down_env(run_path: Path) -> dict[str, str]:
-  """Every config placeholder in the run dir's compose.yml, empty.
+def blank_env(run_path: Path) -> dict[str, str]:
+  """Every placeholder in the run dir's compose.yml, empty.
 
-  `compose down` interpolates the whole file and warns about each unset one.
+  Every compose command interpolates the whole file and warns about each unset one.
   """
-  text = (run_path / "compose.yml").read_text()
-  return dict.fromkeys(_CONFIG_REF.findall(text), "")
+  try:
+    text = (run_path / "compose.yml").read_text()
+  except FileNotFoundError:
+    return {}
+  return dict.fromkeys(_PLACEHOLDER.findall(text), "")
 
 
 def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
@@ -321,7 +327,7 @@ def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
       cwd=state.run_path,
       json_output=False,
       check=True,
-      env=down_env(state.run_path),
+      env=blank_env(state.run_path),
     )
     unlink_host_volumes(state.run_path)
     record_app_action(action, app_id, ctx)

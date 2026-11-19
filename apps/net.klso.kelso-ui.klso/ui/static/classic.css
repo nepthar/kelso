@@ -98,6 +98,7 @@ code, .tag { background: #c4c0b7; }
 .job-choice { background: #fff; box-shadow: var(--etched); }
 .job-choice:has(input:checked) { background: var(--coral); color: var(--ink); }
 .job-choice:has(input:checked) .sub { color: var(--ink); }
+.job-choice:has(input:disabled) { color: var(--muted); cursor: default; }
 .app-card { box-shadow: var(--frame); }
 .app-card-manifest { padding: 6px 8px; background: #f4f3ef; color: var(--fg); }
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, format_route_providers
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.manifest import NETWORK_MODES
+from kelso.lib.options import APP_OPTIONS
 from kelso.lib.spec import PRIMARY_ROUTE_NAME, AppSpec
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   fields = []
   for name, config in spec.config.items():
     secret, value = store.get_config(name)
+    option = APP_OPTIONS.get(name)
     fields.append(
       ConfigField(
         name=name,
@@ -42,6 +44,8 @@ def _config_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
         # A secret's default is a generator kelso runs at load, so nobody
         # has to supply it.
         required=not (config.secret and config.default is not None),
+        choices=option.choices if option else None,
+        labels=option.labels if option else (),
       )
     )
   return fields
@@ -116,9 +120,7 @@ def _network_field(spec: AppSpec, ctx: KelsoCtx) -> ConfigField:
     name=NETWORK_FIELD,
     value=ctx.app_store(spec.app).get_network_mode() or spec.network_mode,
     default=spec.network_mode,
-    desc="How the app reaches the network; the manifest says "
-    + spec.network_mode
-    + (", and host can't be changed" if host else ""),
+    desc=f"Override the app's defualt network mode of ${spec.network_mode}",
     section="option",
     required=False,
     choices=("host",) if host else tuple(m for m in NETWORK_MODES if m != "host"),
@@ -156,10 +158,13 @@ def apply_app_config(
   if errors:
     raise ValueError("; ".join(errors))
 
+  # An unset field sent back as its default stays unset, so it keeps following
+  # the manifest.
   changed = [
     (name, value)
     for name, value in response.values.items()
-    if value != request.field(name).value
+    if (field := request.field(name)).value != value
+    and not (field.value is None and value == field.default)
   ]
   sets = [(n, v) for n, v in changed if "." not in n]
   if sets:

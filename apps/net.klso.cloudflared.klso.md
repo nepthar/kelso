@@ -26,7 +26,7 @@ tunnel_token = { desc = "Tunnel token from Zero Trust > Networks > Tunnels", sec
 
 [adv_config]
 # Routing: up before the apps it routes to.
-start_order = { default = "4" }
+start_group = { default = "4" }
 
 [run.main]
 image = "docker.io/cloudflare/cloudflared:2026.9.1"

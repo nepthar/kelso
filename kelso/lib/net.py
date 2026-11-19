@@ -22,7 +22,7 @@ from kelso.lib.spec import AppSpec
 
 logger = logging.getLogger("kelso.net")
 
-_ADMIN = ["/kproxy", "admin", "-admin", f"{kproxy.KPROXY_GUEST_DIR}/admin.sock"]
+_ADMIN = ["/kproxy", "admin", "-admin", kproxy.KPROXY_ADMIN_SOCKET]
 
 
 def kproxy_admin(app: AppID, ctx: KelsoCtx, method: str, path: str, body=None) -> Any:
