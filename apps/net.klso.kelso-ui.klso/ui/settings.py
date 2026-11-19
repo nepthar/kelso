@@ -13,15 +13,10 @@ from pathlib import Path
 
 PATH = Path(os.environ.get("KELSO_UI_SETTINGS", "/settings/settings.json"))
 HEX = re.compile(r"^#[0-9a-f]{6}$")
-# Windows 2000's own desktop blue: what an install with no id gets.
+# What an install with no id gets.
 PLAIN = ("#3a6ea5", "#3a6ea5")
 # Each is static/themes/<id>.css; the first is what an install starts with.
-THEMES = {
-  "win9x": "Win9x",
-  "mojave-night": "Mojave Night",
-  "mojave-day": "Mojave Day",
-  "rally": "Rally",
-}
+THEMES = {"light": "Light", "dark": "Dark"}
 
 
 def load():

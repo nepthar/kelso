@@ -220,7 +220,7 @@
 
   function wire(win) {
     var el = win.el;
-    var bar = el.querySelector(".title-bar");
+    var bar = el.querySelector(".titlebar");
     dragging(bar, function () {
       focusWindow(win);
       if (el.classList.contains("maximized")) return null;

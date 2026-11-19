@@ -2,8 +2,8 @@
 {% extends "base.html" %}
 {% block body %}
 <div class="solo">
-<div class="window solo-box">
-  <div class="title-bar"><div class="title-bar-text">{{ hostname|default('', true)|brand }}: {{ title|lower }}</div></div>
+<div class="pane solo-box">
+  <div class="titlebar"><div class="titlebar-text">{{ hostname|default('', true)|brand }}: {{ title|lower }}</div></div>
   <div class="solo-body">{% block content %}{% endblock %}</div>
 </div>
 </div>

@@ -1,0 +1,26 @@
+/* Cool greys on white, one blue accent, a dark well. */
+:root {
+  color-scheme: light;
+
+  /* wells (logs, terminals, meters) and text in them; a page's ground; panels and fields; faint rows */
+  --void: #1c2128;  --void-fg: #d6dbe2;  --bg: #f5f6f8;  --panel: #ffffff;  --hair: #eceef2;
+  /* borders */
+  --line: #d9dde3;
+  /* text: content, secondary, metadata, disabled */
+  --fg: #1f2733;  --dim: #3d4756;  --muted: #5f6a79;  --off: #9aa3af;
+  /* the one accent, and type on it */
+  --coral: #0b6cdf;  --ink: #ffffff;
+  /* destroys, wants attention, healthy */
+  --rosewood: #c7332b;  --gold: #9a6700;  --ok: #1a7f37;
+  /* links; notices and balloons */
+  --link: #0b5cc0;  --note: #fff6d6;
+
+  --ansi-0: #1c2128;  --ansi-8: #7d8590;
+  --ansi-1: #ff7b72;  --ansi-9: #ffa198;
+  --ansi-2: #3fb950;  --ansi-10: #56d364;
+  --ansi-3: #d29922;  --ansi-11: #e3b341;
+  --ansi-4: #58a6ff;  --ansi-12: #79c0ff;
+  --ansi-5: #bc8cff;  --ansi-13: #d2a8ff;
+  --ansi-6: #39c5cf;  --ansi-14: #56d4dd;
+  --ansi-7: #b1bac4;  --ansi-15: #f0f6fc;
+}

@@ -3,7 +3,7 @@
 
   A page fills `content`, and optionally `commands` (the window's command
   bar, of `command` and `job_button(bar=true)`), `actions` (verbs beside the title),
-  `head` (stylesheets), `statusbar` (98.css `status-bar-field`s, pinned under
+  `head` (stylesheets), `statusbar` (`statusbar-field`s, pinned under
   the page) and `scripts`. Refresh is the window's, in its address bar.
 -#}
 {% extends "base.html" %}
@@ -24,7 +24,7 @@
   {{ notice_banner(ok, err) }}
   {% block content %}{% endblock %}
 </main>
-{% if self.statusbar()|trim %}<div class="status-bar">{% block statusbar %}{% endblock %}</div>{% endif %}
+{% if self.statusbar()|trim %}<div class="statusbar">{% block statusbar %}{% endblock %}</div>{% endif %}
 </div>
 {% include "modals.html" %}
 <script src="{{ asset('js/shell.js') }}"></script>

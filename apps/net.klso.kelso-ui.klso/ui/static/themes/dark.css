@@ -1,0 +1,26 @@
+/* The same greys, inverted: dark panels, a lighter blue accent. */
+:root {
+  color-scheme: dark;
+
+  /* wells (logs, terminals, meters) and text in them; a page's ground; panels and fields; faint rows */
+  --void: #171b21;  --void-fg: #c3c9d1;  --bg: #20242b;  --panel: #292e36;  --hair: #323841;
+  /* borders */
+  --line: #434a54;
+  /* text: content, secondary, metadata, disabled */
+  --fg: #c9cfd7;  --dim: #b3bac4;  --muted: #969fab;  --off: #646d79;
+  /* the one accent, and type on it */
+  --coral: #4c9aff;  --ink: #0d1014;
+  /* destroys, wants attention, healthy */
+  --rosewood: #f0645a;  --gold: #e0b341;  --ok: #4fc26b;
+  /* links; notices and balloons */
+  --link: #6cb0ff;  --note: #3a3320;
+
+  --ansi-0: #0d1014;  --ansi-8: #7d8590;
+  --ansi-1: #ff7b72;  --ansi-9: #ffa198;
+  --ansi-2: #3fb950;  --ansi-10: #56d364;
+  --ansi-3: #d29922;  --ansi-11: #e3b341;
+  --ansi-4: #58a6ff;  --ansi-12: #79c0ff;
+  --ansi-5: #bc8cff;  --ansi-13: #d2a8ff;
+  --ansi-6: #39c5cf;  --ansi-14: #56d4dd;
+  --ansi-7: #b1bac4;  --ansi-15: #f0f6fc;
+}

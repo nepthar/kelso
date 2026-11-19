@@ -26,7 +26,7 @@
   <li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li><li role="tab" aria-selected="false"><a href="#host-system">System</a></li>
 </menu>
 
-<div class="window tabpanel" role="tabpanel" id="host-apps">
+<div class="pane tabpanel" role="tabpanel" id="host-apps">
 {% if not apps %}
 <div class="card"><p class="empty">No apps loaded yet. Pick one from <a href="/catalog">Apps &amp; Repos</a>.</p></div>
 {% else %}
@@ -57,7 +57,7 @@
 {% endif %}
 </div>
 
-<div class="window tabpanel" role="tabpanel" id="host-system" hidden>
+<div class="pane tabpanel" role="tabpanel" id="host-system" hidden>
 <div class="row lede-line">
   <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
   {#- Longer spans wait on rolled-up metrics; only the last hour is kept at full detail. -#}
@@ -84,7 +84,7 @@
 {% endblock %}
 
 {% block statusbar %}
-<p class="status-bar-field">Apps: {{ apps|length }}</p>
-<p class="status-bar-field">CPU: {{ cpu ~ '%' if cpu is not none else '—' }}</p>
-<p class="status-bar-field">RAM: {{ ram ~ '%' if ram is not none else '—' }}</p>
+<p class="statusbar-field">Apps: {{ apps|length }}</p>
+<p class="statusbar-field">CPU: {{ cpu ~ '%' if cpu is not none else '—' }}</p>
+<p class="statusbar-field">RAM: {{ ram ~ '%' if ram is not none else '—' }}</p>
 {% endblock %}

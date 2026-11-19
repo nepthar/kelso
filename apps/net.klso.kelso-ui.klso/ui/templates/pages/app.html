@@ -179,7 +179,7 @@
 </menu>
 {% for unit in units %}
 {% set state = unit.get('state') %}
-<div class="window tabpanel" role="tabpanel" id="unit-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+<div class="pane tabpanel" role="tabpanel" id="unit-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
   <div class="row between">{{ pill(state or 'not created', 'running' if state in ('running', 'finished') else ('exited' if state else '')) }}<span class="muted mono">{{ unit.image }}</span></div>
   {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
   <h3>Volumes</h3>

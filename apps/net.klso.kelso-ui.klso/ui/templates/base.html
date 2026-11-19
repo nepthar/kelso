@@ -8,9 +8,8 @@
 {#- The desktop's two colors (settings.py), painted by boot.js before first paint. -#}
 <script type="application/json" id="kelso-desktop">{{ desktop_colors()|list|tojson }}</script>
 <script src="{{ asset('js/boot.js') }}"></script>
-<link rel="stylesheet" href="{{ asset('vendor/98.css-0.1.21/98.css') }}">
 <link rel="stylesheet" href="{{ asset('kelso.css') }}">
-<link rel="stylesheet" href="{{ asset('classic.css') }}">
+<link rel="stylesheet" href="{{ asset('skin.css') }}">
 {% block head %}{% endblock %}
 </head>
 <body>

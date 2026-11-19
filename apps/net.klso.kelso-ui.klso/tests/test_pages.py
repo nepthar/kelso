@@ -254,20 +254,20 @@ def test_the_tray_names_the_version_and_instance_id(client, fake, monkeypatch):
 
 
 def test_sign_in_is_titled_with_the_daemons_hostname(client, fake):
-  assert '<div class="title-bar-text">tycho &lt;i' in client.get("/login").text
+  assert '<div class="titlebar-text">tycho &lt;i' in client.get("/login").text
 
 
 def test_sign_in_uses_the_hostname_kelsod_already_gave(client, fake):
   client.get("/")
   fake.fail = "down"
-  assert '<div class="title-bar-text">tycho &lt;i' in client.get("/login").text
+  assert '<div class="titlebar-text">tycho &lt;i' in client.get("/login").text
 
 
 def test_sign_in_still_works_when_kelsod_does_not_answer(client, fake):
   fake.fail = "down"
   response = client.get("/login")
   assert response.status_code == 200
-  assert '<div class="title-bar-text">Kelso' in response.text
+  assert '<div class="titlebar-text">Kelso' in response.text
 
 
 def test_every_page_has_the_dune_favicon(client, fake):
@@ -480,7 +480,7 @@ def test_host_opens_on_apps_with_the_status_bar_below(client, fake):
     '<li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li>' in text
   )
   assert 'id="host-system" hidden' in text
-  bar = text.split('<div class="status-bar">')[1].split("</div>")[0]
+  bar = text.split('<div class="statusbar">')[1].split("</div>")[0]
   fields = [f.strip() for f in bar.split("</p>") if f.strip()]
   assert [f.split(">")[-1] for f in fields] == ["Apps: 4", "CPU: 50%", "RAM: —"]
 

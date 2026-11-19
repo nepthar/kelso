@@ -81,7 +81,7 @@
     {%- for id, label, group in panels %}<li role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}"><a href="#cfg-{{ id }}">{{ label }}</a></li>{% endfor -%}
   </menu>
   {% for id, label, group in panels %}
-  <div class="window tabpanel" role="tabpanel" id="cfg-{{ id }}"{% if not loop.first %} hidden{% endif %}>{{ _table(group, missing) }}</div>
+  <div class="pane tabpanel" role="tabpanel" id="cfg-{{ id }}"{% if not loop.first %} hidden{% endif %}>{{ _table(group, missing) }}</div>
   {% endfor %}
   {% else %}
   {{ _table(panels[0][2], missing) }}

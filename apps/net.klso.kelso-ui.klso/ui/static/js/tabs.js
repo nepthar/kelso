@@ -1,4 +1,4 @@
-// Tabs: 98.css's menu[role=tablist]. A tab's link names its panel by id;
+// Tabs: a menu[role=tablist]. A tab's link names its panel by id;
 // choosing one shows that panel and hides its siblings'.
 (function () {
   document.querySelectorAll('menu[role="tablist"]').forEach(function (list) {

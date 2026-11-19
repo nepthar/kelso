@@ -18,7 +18,7 @@
 
 {% import "_menu.html" as menu %}
 {% set top = ('/activity', '/logs', '/settings') %}
-<div class="window start-menu" id="start-menu" hidden>
+<div class="pane start-menu" id="start-menu" hidden>
   <div class="start-band"><span>kelso <b>{{ brand }}</b></span></div>
   <ul class="menu start-list" role="menu">
     {% call menu.folder('Apps', 'app') %}{% endcall %}
@@ -45,10 +45,10 @@
 </div>
 
 <template id="window-tpl">
-<div class="window win" role="dialog">
-  <div class="title-bar">
-    <div class="title-bar-text"><img class="win-icon" src="{{ icon_url('app') }}" alt=""><span class="win-title"></span></div>
-    <div class="title-bar-controls"><button type="button" aria-label="Minimize"></button><button type="button" aria-label="Maximize"></button><button type="button" aria-label="Close"></button></div>
+<div class="pane win" role="dialog">
+  <div class="titlebar">
+    <div class="titlebar-text"><img class="win-icon" src="{{ icon_url('app') }}" alt=""><span class="win-title"></span></div>
+    <div class="titlebar-controls"><button type="button" aria-label="Minimize"></button><button type="button" aria-label="Maximize"></button><button type="button" aria-label="Close"></button></div>
   </div>
   <div class="win-bar">
     <span class="win-nav"><button type="button" class="win-back" disabled>&#9664; Back</button><button type="button" class="win-forward" disabled>Forward &#9654;</button></span>
@@ -57,7 +57,7 @@
     <button type="button" class="win-refresh">Refresh</button>
   </div>
   <iframe class="win-frame" title="window"></iframe>
-  <div class="status-bar win-status" hidden><p class="status-bar-field">Blank? This app refuses to open inside another page. Use Open in new tab.</p></div>
+  <div class="statusbar win-status" hidden><p class="statusbar-field">Blank? This app refuses to open inside another page. Use Open in new tab.</p></div>
   <div class="win-resize" aria-hidden="true"></div>
 </div>
 </template>

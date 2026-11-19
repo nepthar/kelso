@@ -5,8 +5,8 @@ A desktop over ordinary pages. `/` is `templates/desktop.html` and
 iframe, and does not know it. A new section is a page plus a `NAV` entry in
 `web.py` and an icon in `static/icons/`.
 
-**Kelso's words stay.** The desktop borrows Windows 2000's shapes, not its names: Host,
-not My Computer. A new metaphor has to name something kelso already has.
+**Kelso's words stay.** The desktop borrows a desktop's shapes, not another
+system's names: Host, not My Computer. A new metaphor has to name something kelso already has.
 
 **Pages frame only each other,** and a window may frame any http(s) route, so
 `frontdoor.py` allows both and `desktop.js` sandboxes the route. A page opened
@@ -52,26 +52,26 @@ kelsod endpoint gets a fixture in `fakekelsod.py`.
 
 ## The visual language
 
-98.css (`static/vendor/`) draws windows and controls; `static/classic.css`
-turns them into Windows 2000 (the gradient title bar) set in IBM Plex Sans, and draws
-the desktop. Reach for 98.css's classes and elements first: a page's sections
-are `fieldset.group` with a `legend`. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for anything bold; IBM Plex Mono, also Text, at 12px.
-`static/kelso.css` lays pages out from the theme's tokens and
-holds no color of its own; a property classic.css sets is not set there too,
-and 98.css's bevels are classic.css's `--raised`, `--pressed`, `--sunken`,
-`--frame` and `--etched`. A surface's one committing button is 98.css's
-`default`. No per-page `<style>`, no inline `style=`: scripts set only
+`static/skin.css` draws the controls, the windows and the desktop: flat, neutral
+and dense, with 1px `--line` borders, 4px corners on controls and 6px on
+sections and windows, and one shadow, on what floats. No bevels, and no
+gradients but the desktop's and the Host graph's grid. A page's sections are
+`fieldset.group` with a `legend`, which reads as a small heading inside the
+panel. Type is IBM Plex Sans at 13px in its Text weight (450), and 600 for
+anything bold; IBM Plex Mono, also Text, at 12px. `static/kelso.css` lays
+pages out from the theme's tokens and holds no color of its own; a property
+skin.css sets is not set there too. A surface's one committing button is
+`button.default`. No per-page `<style>`, no inline `style=`: scripts set only
 positions, sizes and custom properties, through the CSSOM.
 
-**Color carries meaning.** `--coral` is the accent, highlight navy in win9x.
-`--gold` wants attention, `--rosewood` destroys, `--ok` is healthy.
+**Color carries meaning.** `--coral` is the one accent: the default button,
+the selected tab, a selection. `--gold` wants attention, `--rosewood`
+destroys, `--ok` is healthy. Everything else is grey.
 
 **A theme is colors only.** Each is one `:root` rule in `static/themes/<id>.css`
 setting the same tokens, listed in `settings.THEMES`; `tests/test_themes.py` holds
-every one to the token list and a contrast floor. classic.css restates 98.css's
-literal greys and glyphs in tokens, so a 98.css control used for the first time
-needs its colors restated there too. The desktop is painted per install and is
-not themed.
+every one to the token list and a contrast floor. The desktop is painted per
+install and is not themed.
 
 **Artwork is ours.** Icons are drawn for this app. No Microsoft
 assets.
