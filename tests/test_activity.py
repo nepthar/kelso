@@ -285,3 +285,17 @@ def test_docker_can_be_left_uncaptured(ctx):
     assert kelso.lib.docker._output_sink.get() is None
   with activity.Activity(ctx, "start", started_by="test"):
     assert kelso.lib.docker._output_sink.get() is not None
+
+
+def test_a_run_with_no_trailer_is_running_only_while_its_process_lives():
+  now = datetime.now(UTC).isoformat(timespec="seconds")
+  mine = f"# kelso start\n# started {now}\n# pid {activity.os.getpid()}\n\nhello\n"
+  assert activity.run_state(mine) == activity.RUNNING
+  assert activity.run_state(mine + "# — ok · finished x · 0.1s\n") == activity.OK
+  # Past any pid a kernel hands out; and nothing started in 2000 outlived a boot.
+  assert activity.run_state(
+    mine.replace(f"pid {activity.os.getpid()}", "pid 999999999")
+  ) == (activity.KILLED)
+  assert activity.run_state(mine.replace(now, "2000-01-01T00:00:00+00:00")) == (
+    activity.KILLED
+  )

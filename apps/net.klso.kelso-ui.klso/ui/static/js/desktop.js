@@ -268,8 +268,15 @@
 
   function open(spec) {
     var key = spec.url || spec.src;
-    var found = windows.filter(function (w) { return w.key === key; })[0];
-    if (found && !spec.job) { restore(found); return; }
+    // A page's #hash picks a tab inside it; the page is still the one window.
+    var hash = spec.url ? "" : (key.split("#")[1] || "");
+    var page = spec.url ? key : key.split("#")[0];
+    var found = windows.filter(function (w) { return w.key === page; })[0];
+    if (found && !spec.job) {
+      if (hash) found.frame.contentWindow.location.hash = hash;
+      restore(found);
+      return;
+    }
     // A browser will not show http inside https, so the tab is all there is.
     if (spec.url && spec.url.indexOf("http:") === 0 && location.protocol === "https:") {
       window.open(spec.url, "_blank", "noopener");
@@ -358,6 +365,8 @@
 
   // `detail` is 0 for Enter or Space, so the keyboard opens on one press.
   icons.addEventListener("click", function (event) {
+    var status = event.target.closest(".desk-status");
+    if (status) { select(null); openIcon(status); return; }
     var icon = event.target.closest(".desk-icon");
     if (!icon) return;
     if (touch || event.detail === 0) openIcon(icon);

@@ -438,6 +438,7 @@ def test_a_job_files_activity_that_the_api_serves(kelso_env, client, jobs):
 
   body = client.get(f"/activity/{job['log']}").json()
   assert body["app_id"] == APP
+  assert body["state"] == "ok"
   assert f"Loaded {APP}" in body["text"]
 
 
@@ -449,6 +450,7 @@ def test_a_failed_job_still_files_activity_with_its_error(kelso_env, client, job
   runs = client.get("/activity").json()["activity"]
   assert runs[0]["status"] == "error"
   body = client.get(f"/activity/{job['log']}").json()
+  assert body["state"] == "error"
   assert "admin_user is unset" in body["text"]
 
 
@@ -458,6 +460,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
   import logging
 
   from kelso.jobs import JOBS, Job
+  from kelso.lib.activity import run_state
 
   class LiveJob(Job):
     name = "load"
@@ -474,6 +477,7 @@ def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
       text = (ctx.config.activity_root / running[0]["log"]).read_text()
       assert "# kelso load" in text
       assert "live line" in text
+      assert run_state(text) == "running"
       logging.getLogger("kelso").info("done")
 
   monkeypatch.setitem(JOBS, "load", LiveJob)
@@ -1244,9 +1248,11 @@ def test_host_reports_its_size_and_the_disks_kelso_uses(kelso_env, client):
   assert kelso_env.run("load", APP).returncode == 0
   body = client.get("/host").json()
   assert body["cpus"] > 0
-  assert body["memory_bytes"] > 0
+  assert 0 < body["memory_used_bytes"] <= body["memory_bytes"]
+  assert body["uptime_seconds"] > 0
+  assert len(body["load"]) == 3
   [disk] = body["disks"]
-  assert disk["total_bytes"] > 0
+  assert 0 < disk["used_bytes"] <= disk["total_bytes"]
   assert "data" in disk["holds"]
   assert disk["gauge"].startswith("host_drive_used_ratio/")
 

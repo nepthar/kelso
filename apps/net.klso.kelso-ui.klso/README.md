@@ -121,7 +121,7 @@ unaffected, and `kelso load kelso-ui` clears both counts. A refusal does
 not move the window, so service resumes when the flooding stops rather than
 staying shut.
 
-Over the limit, a browser gets a page saying so and the job modal's `fetch`
+Over the limit, a browser gets a page saying so and the job window's `fetch`
 gets the same sentence as JSON, both with an honest `Retry-After`. Which one
 you get is decided by the `Accept` header, not the method — the sign-in form
 is a POST too.

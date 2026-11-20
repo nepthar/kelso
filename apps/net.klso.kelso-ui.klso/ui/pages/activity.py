@@ -22,7 +22,7 @@ def activity(page: PageDep):
 
 @router.get("/activity/{filename}")
 def log(filename: str):
-  """One run's output, for the job modal. JSON."""
+  """One run's output and how it ended, for the job window. JSON."""
   try:
     return api(f"/activity/{quote(filename)}")
   except ApiError as e:

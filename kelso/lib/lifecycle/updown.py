@@ -55,8 +55,6 @@ def to_group(
 
   With `resume`, only apps whose last action was "started" are started.
   """
-  if target not in range(10):
-    raise ValueError(f"start_group {target} is not a whole number from 0 to 9")
   problems = _down(ctx, range(target + 1, 10))
   return problems + _up(ctx, range(1, target + 1), wait, resume=resume)
 

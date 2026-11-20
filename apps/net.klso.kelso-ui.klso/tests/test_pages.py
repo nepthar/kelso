@@ -30,6 +30,7 @@ PAGES = [
   "/volumes/new",
   "/done?then=/routes&ok=Saved",
   "/job",
+  "/job/x.log",
   "/settings",
   "/cron",
   "/activity",
@@ -149,10 +150,26 @@ def test_the_start_menu_has_a_folder_per_loaded_app(client, fake):
   assert 'data-src="/apps/immich"' in text
   assert 'data-src="/apps/mealie"' not in text, "unloaded"
   assert 'data-src="/apps/jellyfin/console"' not in text, "nothing running"
-  assert 'data-run="start_group:9"' in text and 'data-run="start_group:1"' in text
+  assert 'data-run="start_group:9"' in text and 'data-run="start_group:0"' in text
   assert 'data-title="main"' in text and 'kelso.example.test"' in text, "a link"
   for item in web.NAV:
     assert f'data-src="{item.href}"' in text
+
+
+def test_the_desktop_groups_its_icons_under_a_status_group(client, fake):
+  text = client.get("/").text
+  status, kelso, sites = (
+    text.index("<legend>Status</legend>"),
+    text.index("<legend>Kelso</legend>"),
+    text.index("<legend>Published Sites</legend>"),
+  )
+  assert status < kelso < sites
+  assert text.index('data-src="/catalog"') in range(kelso, sites)
+  assert text.index('data-url="https://kelso.example.test"') > sites
+  assert 'data-src="/host#host-system"' in text
+  assert '<span class="status-host">tycho ' in text
+  assert "up 12d 4h" in text and "load 0.42 0.38 0.30" in text
+  assert ">38%<" in text and ">50%<" in text, "memory, then the disk"
 
 
 def test_an_app_without_commands_still_lists_the_folder_greyed(client, fake):
@@ -167,7 +184,7 @@ def test_host_offers_start_and_stop_for_every_app(client, fake):
     for b in _job_buttons(client.get("/host").text)
     if b["verb"] == "start_group"
   }
-  assert groups == {"9", "1"}
+  assert groups == {"9", "0"}
 
 
 def test_a_route_icon_is_its_primary_url(client, fake):
@@ -471,10 +488,11 @@ def test_dashboard_lists_host_resources_with_a_usage_line_each(client, fake):
   assert "<span>50 %</span>" in cpu
   assert cpu.count('class="lit"') == 10, "five rows of two lit at 50%"
   assert "<legend>Host memory · 8.0 GB</legend>" in memory
-  assert "no samples yet" in memory and "lit" not in memory
+  # The meter reads /host, so it has a number before the graph has a sample.
+  assert "no samples yet" in memory and "<span>38 %</span>" in memory
   # Named by where it is mounted; the device, often unreadable, on hover.
   assert "<legend>Disk / · 2.0 TB</legend>" in disk and 'title="/dev/sda2"' in disk
-  assert "<span>42 %</span>" in disk
+  assert "<span>50 %</span>" in disk
   assert "Holds bulk, backups, &lt;i" in disk
   assert "<option disabled>1 day</option>" in text
 
@@ -487,7 +505,7 @@ def test_host_opens_on_apps_with_the_status_bar_below(client, fake):
   assert 'id="host-system" hidden' in text
   bar = text.split('<div class="statusbar">')[1].split("</div>")[0]
   fields = [f.strip() for f in bar.split("</p>") if f.strip()]
-  assert [f.split(">")[-1] for f in fields] == ["Apps: 4", "CPU: 50%", "RAM: —"]
+  assert [f.split(">")[-1] for f in fields] == ["Apps: 4", "CPU: 50%", "RAM: 38%"]
 
 
 def test_volume_roots_name_their_disk_by_mount_point(client, fake):
@@ -640,3 +658,14 @@ def test_the_manifest_dialog_shows_the_loaded_text(client, fake):
     'href="/apps/kelso-ui/manifest" data-dialog="Manifest"'
     in client.get("/apps/kelso-ui").text
   )
+
+
+def test_a_run_is_a_page_named_by_its_log(client, fake):
+  page = client.get("/job/2026-09-23T155500Z.mealie.cmd.log")
+  assert page.status_code == 404, "the fake has no such log"
+  page = client.get("/job/x.log")
+  assert page.status_code == 200
+  assert '<div class="job-page" data-log="x.log">' in page.text
+  assert '<h1 id="job-title">x</h1>' in page.text
+  titled = client.get("/job/x.log?title=Back+up+Mealie").text
+  assert '<h1 id="job-title">Back up Mealie</h1>' in titled

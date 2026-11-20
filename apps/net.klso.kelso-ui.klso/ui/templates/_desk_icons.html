@@ -1,7 +1,7 @@
-{#- Every icon on the desktop, and the start menu's Apps folder. The whole
-  page's first paint, and what /desktop/icons sends when desktop.js re-reads
-  them. Expects `apps`, `routes`. desktop.js opens an icon from its data
-  attributes. -#}
+{#- Every icon on the desktop, in its groups, and the start menu's Apps folder.
+  The whole page's first paint, and what /desktop/icons sends when desktop.js
+  re-reads them. Expects `apps`, `routes`, `status`. desktop.js opens an icon,
+  or the status group, from its data attributes. -#}
 {% import "_menu.html" as menu %}
 {% macro icon(label, img, src="", url="", state="", kind="", title="", pic="") -%}
 <button type="button" class="desk-icon{{ ' is-' ~ state if state }}{{ ' is-' ~ kind if kind }}" title="{{ title or label }}"
@@ -15,13 +15,41 @@
 {#- The desktop's colors and the theme ride along, so a saved change repaints it. -#}
 <script type="application/json" class="desk-colors">{{ desktop_colors()|list|tojson }}</script>
 <script type="application/json" class="desk-theme">{{ theme_url()|tojson }}</script>
+{% macro group(name) -%}
+<fieldset class="desk-group"><legend>{{ name }}</legend>{{ caller() }}</fieldset>
+{%- endmacro %}
+{#- A usage bar, 0-100. -#}
+{% macro bar(name, percent, title="") -%}
+<span class="status-use"{% if title %} title="{{ title }}"{% endif %}><span class="status-use-name">{{ name }}</span>
+  <svg class="status-use-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="4"/><rect class="lit" width="{{ percent }}" height="4"/></svg>
+  <span class="status-use-pct">{{ percent }}%</span></span>
+{%- endmacro %}
+{% call group('Status') %}
+<button type="button" class="desk-status" title="Open Host"
+  data-src="/host#host-system" data-title="Host" data-icon="{{ icon_url('host') }}">
+  <span class="status-host">{{ status.host }}</span>
+  <span class="status-apps">{{ status.running }} running
+    {%- if status.failing %} · <span class="status-bad">{{ status.failing|length }} failing</span>{% endif %}</span>
+  {%- if status.failing %}<span class="status-failing">{{ status.failing|join(', ') }}</span>{% endif %}
+  <span>up {{ status.uptime }}</span>
+  <span>load {{ status.load }}</span>
+  {{ bar('Memory', status.memory) }}
+  {% for disk in status.disks %}{{ bar(disk.name, disk.percent, disk.title) }}{% endfor %}
+</button>
+{% endcall %}
+{% call group('Kelso') %}
 {% for item in nav %}
 {{ icon(item.label, item.icon, src=item.href, kind='system') }}
 {% endfor %}
+{% endcall %}
+{% if routes %}
+{% call group('Published Sites') %}
 {% for route in routes %}
 {{ icon(route.label, 'route', url=route.url, state=route.state, kind='route', title=route.url,
     pic='/icons/' ~ route.app_id|urlencode ~ '/' ~ route.name|urlencode) }}
 {% endfor %}
+{% endcall %}
+{% endif %}
 
 {#- Each loaded app's folder, as the app page offers it; desktop.js copies this
   into the start menu when it opens. -#}
@@ -60,5 +88,5 @@
 {% endfor %}
 {{ menu.sep() }}
 {{ menu.item('Start all apps', 'start', src='/host', run='start_group:9') }}
-{{ menu.item('Stop all apps', 'stop', src='/host', run='start_group:1') }}
+{{ menu.item('Stop all apps', 'stop', src='/host', run='start_group:0') }}
 </template>

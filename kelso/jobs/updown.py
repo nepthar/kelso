@@ -1,6 +1,7 @@
 from kelso.jobs.job import Job
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.updown import DEFAULT_WAIT, to_group
+from kelso.lib.options import validate_option
 
 
 class StartGroupJob(Job):
@@ -10,10 +11,8 @@ class StartGroupJob(Job):
   optional_args = ("timeout", "resume")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    raw = kwargs["group"]
-    if raw not in tuple(str(n) for n in range(10)):
-      raise ValueError(f"group {raw!r} is not a whole number from 0 to 9")
-    self.group = int(raw)
+    validate_option("start_group", kwargs["group"])
+    self.group = int(kwargs["group"])
     raw = kwargs.get("timeout", "")
     try:
       self.wait = float(raw) if raw else DEFAULT_WAIT

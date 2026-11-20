@@ -4,6 +4,8 @@ Note that secrets should never be rendered to the user through this module.
 """
 
 import difflib
+import os
+import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -270,23 +272,31 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def host_view(ctx: KelsoCtx) -> dict[str, Any]:
-  """The host's size, and the disks kelso keeps things on.
+  """The host's size and use now, and the disks kelso keeps things on.
 
   Each disk's `gauge` names its usage history under GET /metrics.
   """
-  return {
-    "cpus": psutil.cpu_count(),
-    "memory_bytes": psutil.virtual_memory().total,
-    "disks": [
+  memory = psutil.virtual_memory()
+  disks = []
+  for disk in kelso_disks(ctx):
+    usage = psutil.disk_usage(str(disk.mountpoint))
+    disks.append(
       {
         "device": disk.device,
         "mountpoint": str(disk.mountpoint),
-        "total_bytes": psutil.disk_usage(str(disk.mountpoint)).total,
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
         "holds": list(disk.holds),
         "gauge": disk.gauge,
       }
-      for disk in kelso_disks(ctx)
-    ],
+    )
+  return {
+    "cpus": psutil.cpu_count(),
+    "memory_bytes": memory.total,
+    "memory_used_bytes": memory.total - memory.available,
+    "uptime_seconds": int(time.time() - psutil.boot_time()),
+    "load": list(os.getloadavg()),
+    "disks": disks,
   }
 
 
@@ -397,12 +407,17 @@ def activity_view(
 
 
 def activity_log_view(ctx: KelsoCtx, filename: str) -> dict[str, Any]:
-  """One run's output file, as `list_runs` named it in `log`."""
+  """One run's output file, as `list_runs` named it in `log`.
+
+  `state` is how it ended, "running", or "killed" for a run whose process
+  died without saying.
+  """
   text = activity.read_run_log(ctx, filename)
   middle = filename.removesuffix(".log").split(".")[1:-1]
   return {
     "app_id": ".".join(middle) or None,
     "file": filename,
+    "state": activity.run_state(text),
     "text": text,
   }
 

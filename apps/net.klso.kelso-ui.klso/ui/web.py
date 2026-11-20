@@ -101,6 +101,10 @@ def icon_url(name):
   return asset(f"icons/{name}.svg")
 
 
+def percent(used, total):
+  return round(100 * used / total) if total else 0
+
+
 def fmt_size(n):
   if n is None:
     return "—"

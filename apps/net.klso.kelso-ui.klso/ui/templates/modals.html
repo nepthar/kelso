@@ -1,14 +1,5 @@
-{#- The two dialogs every page shares, modal to their own window. jobs.js drives
-  the first, for a page opened outside the desktop; on the desktop a job opens
-  in a window of its own (pages/job.html).
-  confirm.js drives the second: any form with `data-confirm` asks it before
-  submitting. -#}
-<div id="job-shade" class="shade" hidden>
-<div class="pane job-modal" role="dialog" aria-modal="true" aria-labelledby="job-title">
-  <div class="titlebar"><div class="titlebar-text" id="job-title"></div>
-    <div class="titlebar-controls"><button type="button" id="job-dismiss" aria-label="Close" hidden></button></div></div>
-  {% include "_job_body.html" %}
-</div></div>
+{#- The dialog every page shares, modal to its own window. confirm.js drives
+  it: any form with `data-confirm` asks it before submitting. -#}
 <div id="ask-shade" class="shade" hidden>
 <div class="pane job-modal" role="dialog" aria-modal="true" aria-labelledby="ask-title">
   <div class="titlebar"><div class="titlebar-text" id="ask-title">Are you sure?</div></div>
