@@ -1,5 +1,7 @@
 import argparse
+import json
 import logging
+import sys
 
 from tabulate import tabulate
 
@@ -7,7 +9,7 @@ from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
-from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
+from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigResponse
 from kelso.lib.configflow.app import app_config_request, apply_app_config
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import apply_config_sets, assign_route, bind, set_network
@@ -15,6 +17,7 @@ from kelso.lib.manifest import NETWORK_MODES
 from kelso.lib.observations import observe
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
+from kelso.lib.views import config_request_view
 
 logger = logging.getLogger("kelso.cli")
 
@@ -87,6 +90,16 @@ def register(subparsers) -> None:
     help="Fill in this app's config interactively",
   )
   parser.add_argument(
+    "--json",
+    action="store_true",
+    help="Print everything this app can be asked, as a ConfigRequest in JSON",
+  )
+  parser.add_argument(
+    "--response",
+    action="store_true",
+    help='Apply a ConfigResponse read from stdin: {"values": {NAME: VALUE}}',
+  )
+  parser.add_argument(
     "--show-secret",
     action="store_true",
     help="With --get, print secret values in plaintext",
@@ -95,7 +108,7 @@ def register(subparsers) -> None:
     func=run,
     activity=lambda a: (
       "config"
-      if a.sets or a.routes or a.binds or a.backups or a.network or a.edit
+      if a.sets or a.routes or a.binds or a.backups or a.network or a.edit or a.response
       else None
     ),
   )
@@ -117,6 +130,15 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
     if args.show_secret:
       raise ValueError("--show-secret requires --get")
+
+    if args.json:
+      print(json.dumps(config_request_view(app_config_request(spec, ctx))))
+      return
+    if args.response:
+      response = ConfigResponse(values=json.load(sys.stdin)["values"])
+      written = apply_app_config(spec, response, ctx)
+      print(f"Set {', '.join(written)}" if written else "No changes")
+      return
 
     if args.backups:
       _apply_backups(spec, args.backups, ctx)

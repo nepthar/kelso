@@ -44,4 +44,4 @@ shows everything on the box.
 Run kelso on another box with `ssh <host> '<command>'`. If that says `kelso:
 command not found`, kelso is in `~/.local/bin`, which a non-interactive shell
 does not add: prefix the command with `export PATH=$HOME/.local/bin:$PATH;`.
-`kelso deploy` needs `ssh <host> kelso root` to work without that prefix.
+`kelso deploy` adds that itself.

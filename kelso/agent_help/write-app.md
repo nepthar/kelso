@@ -42,10 +42,12 @@
 
 ## When deploy stops partway
 
-- **The app needs config or a host volume.** The first deploy loads the app
-  and `start` refuses, naming what is missing. Finish on the box:
-  `ssh <host> 'kelso start <app> --set key=value --bind volume=tag'`. A host
-  volume tag must exist in that box's `config.toml` first.
+- **The app needs config or a host volume.** Deploy copies the bundle, then
+  stops and lists what the app needs on that box, with the choices for each.
+  Run it again with `--set NAME=VALUE` for each: a config name, or
+  `volume.<name>` for a host volume. A host volume tag must exist in that
+  box's `config.toml` first. A secret is for a person to set:
+  `ssh <host>` then `kelso config <app> --edit`.
 - **The box has the app from somewhere else.** Deploy refuses and copies
   nothing. The message says where it was loaded from.
 

@@ -132,4 +132,19 @@ class ConfigResponse:
   values: dict[str, str] = field(default_factory=dict)
 
 
+def request_from_view(view: dict) -> ConfigRequest:
+  """A ConfigRequest back from the JSON `views.config_request_view` made of it."""
+  fields = tuple(
+    ConfigField(
+      **{
+        **entry,
+        "choices": None if entry["choices"] is None else tuple(entry["choices"]),
+        "labels": tuple(entry["labels"]),
+      }
+    )
+    for entry in view["fields"]
+  )
+  return ConfigRequest(view["title"], fields, view["note"], view["config_title"])
+
+
 EMPTY_CONFIG_RESPONSE = ConfigResponse(values=dict())
