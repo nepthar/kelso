@@ -1,0 +1,10 @@
+{#- A job in a desktop window of its own: the job dialog's body, filled by
+  jobs.js from the query string. -#}
+{% extends "base.html" %}
+{% block body %}
+<div class="job-page">
+{% include "_job_body.html" %}
+</div>
+<script src="{{ asset('js/shell.js') }}"></script>
+<script src="{{ asset('js/jobs.js') }}"></script>
+{% endblock %}

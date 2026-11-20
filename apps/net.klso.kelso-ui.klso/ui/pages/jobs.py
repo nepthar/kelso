@@ -1,12 +1,19 @@
-"""The job modal's backend: start a kelso verb, then poll it. JSON only."""
+"""The job window's backend: start a kelso verb, then poll it."""
 
 from urllib.parse import quote
 
 from api import STARTED_BY, ApiError, api
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web import PageDep
 
 router = APIRouter()
+
+
+@router.get("/job")
+def window(page: PageDep):
+  """A job in a window of its own; js/jobs.js fills it from the query string."""
+  return page.render("pages/job.html", "Job")
 
 
 @router.post("/jobs")

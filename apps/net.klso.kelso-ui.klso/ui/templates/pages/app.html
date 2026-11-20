@@ -22,7 +22,7 @@
     desc='Stops ' ~ app_id ~ ' and starts it again from its loaded copy, so configuration changed since it started takes effect.') }}
 {% else %}
 {{ job_button('Start', 'start', icon='play', bar=true, tone='go', title='Start ' ~ name, args={'app': app_id},
-    desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
+    desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.', autorun=true) }}
 {% endif %}
 {{ job_button('Reload', 'load', icon='reload', bar=true, title='Reload ' ~ name, args={'app': app_id},
     desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}

@@ -324,7 +324,7 @@ share the config namespace and always have a default.
 | Name | Default | Accepts |
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
-| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops; `kelso up` starts 1 to 9 in order, and `kelso down` stops them in reverse. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
+| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops. `kelso start_group N` stops the groups above N, highest first, then starts 1 to N in order; `kelso up` is `start_group 9` and `kelso down` is `start_group 0`. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the

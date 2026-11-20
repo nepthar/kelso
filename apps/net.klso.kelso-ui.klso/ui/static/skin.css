@@ -221,7 +221,7 @@ body:has(.desktop) { display: block; position: relative; user-select: none; -web
   content: ""; position: absolute; right: 3px; bottom: 3px; width: 6px; height: 6px;
   border-right: 2px solid var(--off); border-bottom: 2px solid var(--off);
 }
-.win.is-dialog .win-bar,
+.win.is-dialog .win-bar, .win.is-job .win-bar,
 .win.is-dialog [aria-label=Minimize], .win.is-dialog [aria-label=Maximize] { display: none; }
 .taskbar {
   position: absolute; inset: auto 0 0 0; height: 32px; display: flex; align-items: center; gap: 4px;

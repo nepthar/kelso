@@ -112,7 +112,7 @@ ordering, and drift between compose versions.
 **`kelso up` at boot.** `test_updown.py` drives the ordering against the fake,
 with the settle time at zero. Untested: that after a reboot Docker leaves
 `restart = "yes"` (`on-failure`) containers down, kelsod starts group 0 before
-it listens and queues an `up` that resumes, by `start_group`, every app whose
+it listens and queues a `start_group 9` that resumes, by `start_group`, every app whose
 last action was `started`, a real healthcheck's
 `(healthy)` is what ends a group's wait, an app with no healthcheck is held for
 the 10 seconds before the next group, and stopping kelsod (`systemctl --user

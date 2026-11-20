@@ -1,19 +1,13 @@
 {#- The two dialogs every page shares, modal to their own window. jobs.js drives
-  the first: any `.job-open` button fills it from its data attributes.
+  the first, for a page opened outside the desktop; on the desktop a job opens
+  in a window of its own (pages/job.html).
   confirm.js drives the second: any form with `data-confirm` asks it before
   submitting. -#}
 <div id="job-shade" class="shade" hidden>
 <div class="pane job-modal" role="dialog" aria-modal="true" aria-labelledby="job-title">
   <div class="titlebar"><div class="titlebar-text" id="job-title"></div>
     <div class="titlebar-controls"><button type="button" id="job-dismiss" aria-label="Close" hidden></button></div></div>
-  <div class="job-body">
-    <p id="job-desc"></p>
-    <div class="job-choices" id="job-choices" hidden></div>
-    <div class="row job-fields" id="job-fields"></div>
-    <div class="row job-bar" id="job-bar"><button type="button" id="job-go" class="default">OK</button><button type="button" id="job-close">Cancel</button></div>
-    <progress id="job-progress" hidden></progress>
-    <pre id="job-out" class="job-out" hidden></pre>
-  </div>
+  {% include "_job_body.html" %}
 </div></div>
 <div id="ask-shade" class="shade" hidden>
 <div class="pane job-modal" role="dialog" aria-modal="true" aria-labelledby="ask-title">

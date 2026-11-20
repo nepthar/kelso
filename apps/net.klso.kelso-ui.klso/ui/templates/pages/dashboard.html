@@ -15,10 +15,10 @@
 {%- endmacro %}
 
 {% block commands %}
-{{ job_button('Start all', 'up', icon='play', bar=true, tone='go', title='Start all apps',
+{{ job_button('Start all', 'start_group', icon='play', bar=true, tone='go', title='Start all apps', args={'group': '9'},
     desc='Starts every loaded app by start_group, 1 to 9, waiting for each group to be ready before the next.') }}
-{{ job_button('Stop all', 'down', icon='stop', bar=true, tone='stop', title='Stop all apps',
-    desc='Stops every running app, including this web interface, by start_group, 9 down to 1. Data, configuration and published routes are untouched. To bring them back, run kelso up on the host.') }}
+{{ job_button('Stop all', 'start_group', icon='stop', bar=true, tone='stop', title='Stop all apps', args={'group': '1'},
+    desc='Stops every running app in start_group 2 to 9, highest first. Group 0, which holds this web interface, and group 1 keep running. Data, configuration and published routes are untouched.') }}
 {% endblock %}
 
 {% block content %}

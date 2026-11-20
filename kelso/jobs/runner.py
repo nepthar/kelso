@@ -27,7 +27,7 @@ from kelso.jobs.restore import RestoreJob
 from kelso.jobs.start import StartJob
 from kelso.jobs.stop import StopJob
 from kelso.jobs.update import UpdateJob
-from kelso.jobs.updown import DownJob, UpJob
+from kelso.jobs.updown import StartGroupJob
 from kelso.lib.activity import BY_CRON, BY_KELSOD
 from kelso.lib.backup import backup_due
 from kelso.lib.kelso import KelsoCtx
@@ -48,8 +48,7 @@ JOBS: dict[str, type[Job]] = {
   "start": StartJob,
   "stop": StopJob,
   "restart": RestartJob,
-  "up": UpJob,
-  "down": DownJob,
+  "start_group": StartGroupJob,
   "load": LoadJob,
   "update": UpdateJob,
   "backup": BackupJob,

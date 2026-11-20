@@ -97,8 +97,9 @@ Apps
 This box
   status      Show the host, apps, routes, and storage at a glance
   root        Print the kelso root path
-  up          Start all apps by start_group
-  down        Stop all apps by start_group
+  start_group Run apps in start_group 1 to N; stop the groups above N
+  up          Start all apps by start_group (start_group 9)
+  down        Stop all apps by start_group (start_group 0)
   cleanup     List what kelso no longer needs; --apply deletes it
               (unused images, orphaned routes; --temp)
 

@@ -29,6 +29,7 @@ PAGES = [
   "/routes/new",
   "/volumes/new",
   "/done?then=/routes&ok=Saved",
+  "/job",
   "/settings",
   "/cron",
   "/activity",
@@ -148,7 +149,7 @@ def test_the_start_menu_has_a_folder_per_loaded_app(client, fake):
   assert 'data-src="/apps/immich"' in text
   assert 'data-src="/apps/mealie"' not in text, "unloaded"
   assert 'data-src="/apps/jellyfin/console"' not in text, "nothing running"
-  assert 'data-run="up"' in text and 'data-run="down"' in text
+  assert 'data-run="start_group:9"' in text and 'data-run="start_group:1"' in text
   assert 'data-title="main"' in text and 'kelso.example.test"' in text, "a link"
   for item in web.NAV:
     assert f'data-src="{item.href}"' in text
@@ -161,8 +162,12 @@ def test_an_app_without_commands_still_lists_the_folder_greyed(client, fake):
 
 
 def test_host_offers_start_and_stop_for_every_app(client, fake):
-  verbs = {b["verb"] for b in _job_buttons(client.get("/host").text)}
-  assert {"up", "down"} <= verbs
+  groups = {
+    b["args"].get("group")
+    for b in _job_buttons(client.get("/host").text)
+    if b["verb"] == "start_group"
+  }
+  assert groups == {"9", "1"}
 
 
 def test_a_route_icon_is_its_primary_url(client, fake):

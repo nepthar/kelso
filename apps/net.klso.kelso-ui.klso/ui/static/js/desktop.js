@@ -78,6 +78,19 @@
     dialog: function (src, title, from) {
       open({ src: src, title: title, dialog: true, opener: windowOf(from) });
     },
+    // A job is a window of its own, placed over the one that asked for it.
+    job: function (src, title, from) {
+      open({ src: src, title: title, job: true, opener: windowOf(from) });
+    },
+    // A job has ended: the window that asked for it reloads, or goes to `then`.
+    refresh: function (from, then) {
+      var win = windowOf(from);
+      var opener = win && windows.indexOf(win.opener) >= 0 ? win.opener : null;
+      if (!opener) return;
+      var inner = opener.frame.contentWindow.location;
+      if (then && then !== inner.pathname + inner.search) inner.replace(then);
+      else inner.reload();
+    },
     close: function (from) {
       var win = windowOf(from);
       if (win) closeWindow(win);
@@ -106,7 +119,8 @@
       win.el.style.height = dh + "px";
       win.el.style.left = Math.max(0, Math.min(o.offsetLeft + (o.offsetWidth - dw) / 2, desk.clientWidth - dw)) + "px";
       win.el.style.top = Math.max(0, Math.min(o.offsetTop + 40, desk.clientHeight - dh)) + "px";
-      win.el.style.visibility = "hidden";
+      if (!win.job) win.el.style.visibility = "hidden";
+      if (win.job && desk.clientWidth < SMALL) setMaximized(win, true);
       return;
     }
     var w = Math.min(920, desk.clientWidth - 40);
@@ -179,7 +193,7 @@
     doc.addEventListener("pointerdown", function () { focusWindow(win); });
     var title = doc.title.replace(/ · kelso$/, "");
     if (title) setTitle(win, title);
-    if (win.opener || doc.querySelector("[data-fit]")) fitHeight(win);
+    if ((win.opener && !win.job) || doc.querySelector("[data-fit]")) fitHeight(win);
     // A saved form or a finished dialog may have changed what the desktop shows.
     if (/[?&]ok=/.test(path)) refreshIcons();
   }
@@ -237,7 +251,7 @@
       el.style.height = Math.max(200, from.height + dy) + "px";
     });
     bar.addEventListener("dblclick", function (event) {
-      if (!win.opener && !event.target.closest("button")) setMaximized(win, !el.classList.contains("maximized"));
+      if ((!win.opener || win.job) && !event.target.closest("button")) setMaximized(win, !el.classList.contains("maximized"));
     });
     el.addEventListener("pointerdown", function () { focusWindow(win); });
     el.querySelector('[aria-label="Minimize"]').addEventListener("click", function () { minimize(win); });
@@ -255,7 +269,7 @@
   function open(spec) {
     var key = spec.url || spec.src;
     var found = windows.filter(function (w) { return w.key === key; })[0];
-    if (found) { restore(found); return; }
+    if (found && !spec.job) { restore(found); return; }
     // A browser will not show http inside https, so the tab is all there is.
     if (spec.url && spec.url.indexOf("http:") === 0 && location.protocol === "https:") {
       window.open(spec.url, "_blank", "noopener");
@@ -273,13 +287,15 @@
       forward: el.querySelector(".win-forward"),
       history: [],
       at: -1,
-      opener: spec.dialog ? spec.opener || null : null,
+      opener: spec.dialog || spec.job ? spec.opener || null : null,
+      job: !!spec.job,
       task: document.createElement("button")
     };
     var icon = el.querySelector(".win-icon");
     if (spec.icon) icon.src = spec.icon;
     else if (win.opener) icon.src = win.opener.el.querySelector(".win-icon").src;
     if (spec.dialog) el.classList.add("is-dialog");
+    if (spec.job) el.classList.add("is-job");
     win.task.type = "button";
     win.task.className = "task";
     var taskIcon = document.createElement("img");

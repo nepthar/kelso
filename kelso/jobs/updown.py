@@ -1,14 +1,19 @@
 from kelso.jobs.job import Job
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.updown import DEFAULT_WAIT, down, up
+from kelso.lib.lifecycle.updown import DEFAULT_WAIT, to_group
 
 
-class UpJob(Job):
-  name = "up"
-  description = "Start every loaded app by start_group, 1 to 9"
+class StartGroupJob(Job):
+  name = "start_group"
+  description = "Run every loaded app in start_group 1 to N; stop those above N"
+  required_args = ("group",)
   optional_args = ("timeout", "resume")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
+    raw = kwargs["group"]
+    if raw not in tuple(str(n) for n in range(10)):
+      raise ValueError(f"group {raw!r} is not a whole number from 0 to 9")
+    self.group = int(raw)
     raw = kwargs.get("timeout", "")
     try:
       self.wait = float(raw) if raw else DEFAULT_WAIT
@@ -17,17 +22,6 @@ class UpJob(Job):
     self.resume = self._bool_arg(kwargs, "resume")
 
   def run(self, ctx: KelsoCtx) -> None:
-    _finish(up(ctx, wait=self.wait, resume=self.resume))
-
-
-class DownJob(Job):
-  name = "down"
-  description = "Stop every running app by start_group, 9 down to 1"
-
-  def run(self, ctx: KelsoCtx) -> None:
-    _finish(down(ctx))
-
-
-def _finish(problems: list[str]) -> None:
-  if problems:
-    raise RuntimeError("; ".join(problems))
+    problems = to_group(ctx, self.group, wait=self.wait, resume=self.resume)
+    if problems:
+      raise RuntimeError("; ".join(problems))

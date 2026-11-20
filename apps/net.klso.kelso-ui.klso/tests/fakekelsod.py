@@ -667,7 +667,7 @@ LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n
 GET = {
   "/version": {
     "kelso": "0.1.0",
-    "api": 1,
+    "api": 2,
     "hostname": f"tycho {EVIL}",
     "kelso_root": f"/home/kelso {EVIL}",
   },
@@ -707,7 +707,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 1
+    self.api = 2
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

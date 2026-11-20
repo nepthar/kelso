@@ -1,5 +1,5 @@
 [app]
-version      = "1.0.1"
+version      = "1.0.2"
 display_name = "Kelso UI"
 description  = "Web interface for kelso: apps and routes are icons, and everything opens in a window"
 
@@ -15,6 +15,8 @@ admin_pass  = { secret = true, desc = "password for the web ui" }
 # for anyone who can reach the page. Any other value leaves it on.
 no_password = { default = "off", desc = "Testing only: i-swear-im-just-testing-this turns the password off" }
 subdomain   = { default = "kelso" }
+# Group 0: up with kelsod, and left running by "Stop all apps".
+start_group = { default = "0" }
 instance_id = { secret = true, default = "{hex:4}", desc = "Shown beside the hostname, to tell kelso-ui installs apart" }
 
 [volumes]
