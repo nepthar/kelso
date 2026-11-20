@@ -761,8 +761,8 @@ class FakeKelsod:
     self.server.shutdown()
 
 
-class FakeConsole:
-  """kelsod's console socket: echoes, and closes the way kelsod would.
+class FakeShell:
+  """kelsod's shell socket: echoes, and closes the way kelsod would.
 
   Bytes come back as sent and text comes back as `ctl:<text>`; typing `exit`
   ends it with "exited 0". Any app but kelso-ui is refused, as a stopped one is.
@@ -777,7 +777,7 @@ class FakeConsole:
     def handler(ws):
       path = ws.request.path
       fake.paths.append(path)
-      if not path.startswith(("/apps/kelso-ui/console", "/host/console")):
+      if not path.startswith(("/apps/kelso-ui/shell", "/host/shell")):
         ws.send(b"mealie is not running\r\n")
         ws.close(4001, "mealie is not running")
         return

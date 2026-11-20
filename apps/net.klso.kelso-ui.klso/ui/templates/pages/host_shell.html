@@ -5,11 +5,11 @@
 
 
 {% block content %}
-{% call terminal('/host/console/ws') %}<span class="mono">{{ host_name }}</span> - <span class="mono">$KELSO_ROOT</span> is <span class="mono">{{ kelso_root }}</span>{% endcall %}
+{% call terminal('/host/shell/ws') %}<p class="lede"><span class="mono">{{ host_name }}</span> - <span class="mono">$KELSO_ROOT</span> is <span class="mono">{{ kelso_root }}</span></p>{% endcall %}
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ asset('vendor/xterm-6.0.0/xterm.js') }}"></script>
 <script src="{{ asset('vendor/xterm-addon-fit-0.11.0/addon-fit.js') }}"></script>
-<script src="{{ asset('js/console.js') }}"></script>
+<script src="{{ asset('js/terminal.js') }}"></script>
 {% endblock %}

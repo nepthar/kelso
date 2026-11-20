@@ -1,8 +1,8 @@
 """A shell in one of an app's running containers.
 
-`console_command` resolves what to run and refuses what cannot be; `kelso
+`shell_command` resolves what to run and refuses what cannot be; `kelso
 shell` hands it the operator's own terminal and kelsod runs it on a PTY.
-`ConsoleRecord` puts each session in the activity log -- that it happened, not
+`ShellRecord` puts each session in the activity log -- that it happened, not
 what was typed.
 
 docker has no way to end an exec: killing the client leaves its shell running
@@ -14,7 +14,6 @@ it from inside.
 import os
 import pwd
 import re
-import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,7 +29,7 @@ PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
 
 @dataclass(frozen=True)
-class ConsoleCommand:
+class ShellCommand:
   app_id: AppID
   unit: str
   unit_shell: tuple[str, ...]
@@ -40,13 +39,13 @@ class ConsoleCommand:
   commands: tuple[AppCommand, ...]
 
 
-def console_command(
+def shell_command(
   app: str,
   unit: str,
   ctx: KelsoCtx,
   *,
   announce_pid: bool = False,
-) -> ConsoleCommand:
+) -> ShellCommand:
   """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
   app_id = ctx.resolve_app_id(app, prefer_loaded=True)
   state = ctx.run_state(app_id)
@@ -61,21 +60,27 @@ def console_command(
     raise ValueError(f"{app_id} is not running; run `kelso start {app_id}` first")
   spec = ctx.require_loaded_spec(app_id)
   unit_shell = spec.run_units[unit].shell
-  script = f"exec {shlex.quote(unit_shell[0])} -i"
+  prompt = f"{app_id.stem}:{unit}"
+  script = "command -v bash >/dev/null 2>&1 && exec bash || exec sh"
   if announce_pid:
     script = "printf '\\033]697;kelso-pid=%s\\007' $$; " + script
-  return ConsoleCommand(
+  # bash's rc files set PS1 after the environment does; PROMPT_COMMAND runs later.
+  rc = f'PROMPT_COMMAND=PS1="{prompt} \\$ "; unset PROMPT_COMMAND'
+  return ShellCommand(
     app_id=app_id,
     unit=unit,
     unit_shell=unit_shell,
-    docker_args=["compose", "exec", unit, *unit_shell, script],
+    docker_args=[
+      *("compose", "exec", "-e", f"PS1={prompt} $ ", "-e", rc),
+      *(unit, *unit_shell, script),
+    ],
     cwd=state.run_path,
     env=compose_env(app_id, ctx),
     commands=tuple(unit_commands(spec, unit)),
   )
 
 
-def hangup_args(cmd: ConsoleCommand, pid: int) -> list[str]:
+def hangup_args(cmd: ShellCommand, pid: int) -> list[str]:
   """Docker args that hang up the shell `PID_MARKER` named, and its foreground job."""
   return ["compose", "exec", "-T", cmd.unit, *cmd.unit_shell, f"kill -HUP {pid}"]
 
@@ -86,7 +91,7 @@ def host_shell() -> tuple[list[str], Path]:
   return [user.pw_shell or "/bin/sh", "-l"], Path(user.pw_dir)
 
 
-class ConsoleRecord:
+class ShellRecord:
   """One session in the activity log, filed when it opens and closed by `close`."""
 
   def __init__(
@@ -101,7 +106,7 @@ class ConsoleRecord:
     self.app_id = app_id
     self.started_by = started_by
     self.started = datetime.now(UTC)
-    self.log = begin_run(ctx, "console", args, app_id=app_id, started=self.started)
+    self.log = begin_run(ctx, "shell", args, app_id=app_id, started=self.started)
 
   def close(self, ending: str, *, ok: bool = True) -> None:
     with open(self.ctx.config.activity_root / self.log, "a", encoding="utf-8") as f:
@@ -109,7 +114,7 @@ class ConsoleRecord:
     finish_run(
       self.ctx,
       self.log,
-      "console",
+      "shell",
       app_id=self.app_id,
       status=OK if ok else ERROR,
       started=self.started,

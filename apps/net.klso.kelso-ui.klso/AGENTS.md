@@ -37,7 +37,7 @@ or `data-*` attribute, and a page loads it from its `scripts` block with
 at a pinned version, never loaded from a CDN: kelso-ui must work on a host
 with no internet access. Data a script needs goes in a
 `<script type="application/json">` block, which the policy allows. The
-console page is the one exception on styles: xterm.js writes its layout into
+shell page is the one exception on styles: xterm.js writes its layout into
 `<style>` elements, so that page alone sends `TERMINAL_CSP`, which allows
 inline styles and never inline script.
 

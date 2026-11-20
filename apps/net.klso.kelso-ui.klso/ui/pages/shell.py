@@ -2,7 +2,7 @@
 websockets they open.
 
 The socket is relayed frame for frame to kelsod, which owns the PTY and the
-protocol (kelso/daemon/console.py); this side adds only the front door.
+protocol (kelso/daemon/shell.py); this side adds only the front door.
 """
 
 import asyncio
@@ -21,17 +21,19 @@ REFUSED = 4003
 UNSENDABLE = {1005, 1006, 1015}
 
 
-@router.get("/apps/{app_id}/console")
-def console_page(page: PageDep, app_id: str, unit: str = ""):
+@router.get("/apps/{app_id}/shell")
+def shell_page(page: PageDep, app_id: str, unit: str = ""):
   page.title = app_id
   app = api(f"/apps/{quote(app_id)}")
   running = [u["name"] for u in app.get("units", []) if u.get("state") == "running"]
   if unit not in running:
     unit = "main" if "main" in running else (running[0] if running else "")
-  title = f"{app.get('display_name') or app_id} console"
+  title = f"{app.get('display_name') or app_id} shell"
+  if unit:
+    title += f" in {unit}"
   commands = [c for c in app.get("commands", []) if c.get("unit") == unit]
   response = page.render(
-    "pages/app_console.html",
+    "pages/app_shell.html",
     title,
     app_id=app_id,
     unit=unit,
@@ -42,18 +44,18 @@ def console_page(page: PageDep, app_id: str, unit: str = ""):
   return response
 
 
-@router.websocket("/apps/{app_id}/console/ws")
-async def console_socket(ws: WebSocket, app_id: str, unit: str = "main"):
+@router.websocket("/apps/{app_id}/shell/ws")
+async def shell_socket(ws: WebSocket, app_id: str, unit: str = "main"):
   query = urlencode({"unit": unit, "started_by": STARTED_BY})
-  await _bridge(ws, f"/apps/{quote(app_id)}/console?{query}")
+  await _bridge(ws, f"/apps/{quote(app_id)}/shell?{query}")
 
 
-@router.get("/host/console")
-def host_console_page(page: PageDep):
+@router.get("/host/shell")
+def host_shell_page(page: PageDep):
   page.title = "Host shell"
   version = api("/version")
   response = page.render(
-    "pages/host_console.html",
+    "pages/host_shell.html",
     "Host shell",
     host_name=version.get("hostname") or "",
     kelso_root=version.get("kelso_root") or "",
@@ -62,9 +64,9 @@ def host_console_page(page: PageDep):
   return response
 
 
-@router.websocket("/host/console/ws")
-async def host_console_socket(ws: WebSocket):
-  await _bridge(ws, f"/host/console?{urlencode({'started_by': STARTED_BY})}")
+@router.websocket("/host/shell/ws")
+async def host_shell_socket(ws: WebSocket):
+  await _bridge(ws, f"/host/shell?{urlencode({'started_by': STARTED_BY})}")
 
 
 async def _bridge(ws, path):

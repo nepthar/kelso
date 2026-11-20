@@ -1,4 +1,4 @@
-"""The console: its page, and the websocket relayed to kelsod behind the front door."""
+"""The shell: its page, and the websocket relayed to kelsod behind the front door."""
 
 import json
 import re
@@ -6,23 +6,23 @@ import re
 import api
 import pytest
 import server
-from fakekelsod import APP_DETAIL, FakeConsole
+from fakekelsod import APP_DETAIL, FakeShell
 from starlette.routing import WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
-_console = FakeConsole().start()
+_shell = FakeShell().start()
 
 # Absolute: TestClient opens a relative websocket URL on `testserver`, which
 # neither the origin check nor the cookie jar would take for kelso.test.
 BASE = "wss://kelso.test"
-WS = f"{BASE}/apps/kelso-ui/console/ws"
+WS = f"{BASE}/apps/kelso-ui/shell/ws"
 
 
 @pytest.fixture
 def kelsod(monkeypatch):
-  monkeypatch.setattr(api, "API", _console.address)
-  _console.paths.clear()
-  return _console
+  monkeypatch.setattr(api, "API", _shell.address)
+  _shell.paths.clear()
+  return _shell
 
 
 def drain(ws):
@@ -43,11 +43,11 @@ def test_relays_both_ways_and_passes_the_close_on(client, kelsod):
     ws.send_bytes(b"exit\r")
     _, closed = drain(ws)
   assert (closed.code, closed.reason) == (1000, "exited 0")
-  assert kelsod.paths == ["/apps/kelso-ui/console?unit=main&started_by=kelso_ui"]
+  assert kelsod.paths == ["/apps/kelso-ui/shell?unit=main&started_by=kelso_ui"]
 
 
 def test_passes_a_refusal_on(client, kelsod):
-  with client.websocket_connect(f"{BASE}/apps/mealie/console/ws") as ws:
+  with client.websocket_connect(f"{BASE}/apps/mealie/shell/ws") as ws:
     out, closed = drain(ws)
   assert closed.code == 4001
   assert b"not running" in out
@@ -71,8 +71,8 @@ SOCKETS = [
 
 
 def test_every_socket_is_covered():
-  assert f"{BASE}/apps/kelso-ui/console/ws" in SOCKETS
-  assert f"{BASE}/host/console/ws" in SOCKETS
+  assert f"{BASE}/apps/kelso-ui/shell/ws" in SOCKETS
+  assert f"{BASE}/host/shell/ws" in SOCKETS
 
 
 @pytest.mark.parametrize("url", SOCKETS)
@@ -95,59 +95,59 @@ def test_every_socket_refuses_another_site(client, kelsod, url):
   assert kelsod.paths == []
 
 
-def test_only_the_console_page_allows_inline_styles(client, fake):
-  console = client.get("/apps/kelso-ui/console")
-  policy = console.headers["content-security-policy"]
+def test_only_the_shell_page_allows_inline_styles(client, fake):
+  shell = client.get("/apps/kelso-ui/shell")
+  policy = shell.headers["content-security-policy"]
   assert "style-src 'self' 'unsafe-inline'" in policy
   assert "script-src 'self';" in policy
   assert (
     "unsafe-inline"
     not in client.get("/apps/kelso-ui").headers["content-security-policy"]
   )
-  assert 'data-src="/apps/kelso-ui/console/ws?unit=main"' in console.text
+  assert 'data-src="/apps/kelso-ui/shell/ws?unit=main"' in shell.text
 
 
 def test_a_second_running_unit_gets_a_picker(client, fake, monkeypatch):
   units = [dict(u, state="running") for u in APP_DETAIL["units"]]
   monkeypatch.setitem(APP_DETAIL, "units", units)
-  text = client.get("/apps/kelso-ui/console?unit=worker").text
-  assert 'href="/apps/kelso-ui/console?unit=main">main</a>' in text
+  text = client.get("/apps/kelso-ui/shell?unit=worker").text
+  assert 'href="/apps/kelso-ui/shell?unit=main">main</a>' in text
   assert 'aria-current="true">worker</a>' in text
-  assert 'data-src="/apps/kelso-ui/console/ws?unit=worker"' in text
+  assert 'data-src="/apps/kelso-ui/shell/ws?unit=worker"' in text
 
 
-def test_the_console_lists_the_units_commands_to_copy(client, fake, monkeypatch):
-  text = client.get("/apps/kelso-ui/console").text
+def test_the_shell_lists_the_units_commands_to_copy(client, fake, monkeypatch):
+  text = client.get("/apps/kelso-ui/shell").text
+  assert " shell in main · kelso</title>" in text
+  assert "A shell in the" not in text
   assert 'Commands in <span class="mono">main</span> (2)' in text
   assert "<pre>true</pre>" in text
   assert "<pre>run-tests &lt;" in text
 
   units = [dict(u, state="running") for u in APP_DETAIL["units"]]
   monkeypatch.setitem(APP_DETAIL, "units", units)
-  assert "Commands in" not in client.get("/apps/kelso-ui/console?unit=worker").text
+  assert "Commands in" not in client.get("/apps/kelso-ui/shell?unit=worker").text
 
 
 def test_nothing_running_draws_no_terminal(client, fake):
-  text = client.get("/apps/mealie/console").text
-  assert "Start it to open a console" in text
-  assert 'id="console"' not in text
+  text = client.get("/apps/mealie/shell").text
+  assert "Start it to open a shell" in text
+  assert 'id="shell"' not in text
   assert "xterm.js" not in text
 
 
 def test_the_host_shell_is_relayed_too(client, kelsod):
-  with client.websocket_connect(f"{BASE}/host/console/ws") as ws:
+  with client.websocket_connect(f"{BASE}/host/shell/ws") as ws:
     ws.send_bytes(b"hi")
     assert ws.receive_bytes() == b"hi"
-  assert kelsod.paths == ["/host/console?started_by=kelso_ui"]
+  assert kelsod.paths == ["/host/shell?started_by=kelso_ui"]
 
 
 def test_the_desktop_offers_the_host_shell(client, fake):
   assert "tycho " in client.get("/").text
-  assert 'data-src="/host/console"' in client.get("/").text
-  shell = client.get("/host/console").text
+  assert 'data-src="/host/shell"' in client.get("/").text
+  shell = client.get("/host/shell").text
   assert '<span class="mono">$KELSO_ROOT</span> is' in shell
   assert "/home/kelso " in shell
   assert "Back to dashboard" not in shell
-  assert (
-    "unsafe-inline" in client.get("/host/console").headers["content-security-policy"]
-  )
+  assert "unsafe-inline" in client.get("/host/shell").headers["content-security-policy"]

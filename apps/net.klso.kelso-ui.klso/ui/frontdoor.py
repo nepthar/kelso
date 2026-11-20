@@ -51,7 +51,7 @@ def _csp(style_src="'self'"):
 CSP = _csp()
 
 # xterm.js lays out and colors the terminal through <style> elements it
-# creates, which the strict policy blocks. Only the console page sends this.
+# creates, which the strict policy blocks. Only the shell page sends this.
 TERMINAL_CSP = _csp("'self' 'unsafe-inline'")
 
 SECURITY_HEADERS = {

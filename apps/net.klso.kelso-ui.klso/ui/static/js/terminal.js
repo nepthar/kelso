@@ -1,11 +1,11 @@
-// An app's console: xterm.js on a websocket to kelsod's PTY, by way of this
+// An app's terminal: xterm.js on a websocket to kelsod's PTY, by way of this
 // server. Binary frames carry the terminal both ways; a resize goes up as JSON
 // text. How the session ended arrives as the close code and reason.
 (function () {
-  var box = document.getElementById("console");
+  var box = document.getElementById("terminal");
   if (!box) return;
-  var status = document.getElementById("console-status");
-  var again = document.getElementById("console-reconnect");
+  var status = document.getElementById("terminal-status");
+  var again = document.getElementById("terminal-reconnect");
   var url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
     box.getAttribute("data-src");
   var IDLE = 4000;

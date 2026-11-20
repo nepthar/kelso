@@ -173,17 +173,22 @@ ul.security li.danger { font-weight: 600; }
 html:not(.standalone) .job-page h1 { display: none; }
 /* A page of nothing but logs, so it takes the height a job's output cannot. */
 .logs-out { max-height: none; height: calc(100vh - 92px); white-space: pre; }
-/* The terminal fills the same well. Padding sits on xterm's own element, which
-   the fit addon subtracts; on this box it would push the last row out. */
-.console {
-  height: calc(100vh - 92px); overflow: hidden;
+/* The terminal takes the height the bar above it leaves. Padding sits on xterm's
+   own element, which the fit addon subtracts; on this box it would push the last
+   row out. */
+main:has(.terminal) { display: flex; flex-direction: column; padding-bottom: 10px; }
+.terminal-bar { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.terminal-bar .lede { margin: 0; }
+.terminal-state { margin-left: auto; flex-wrap: nowrap; }
+.terminal {
+  flex: 1; min-height: 120px; overflow: hidden;
   background: var(--term-bg); font: 12px var(--mono);
 }
-.console .xterm { height: 100%; padding: 8px 12px; }
+.terminal .xterm { height: 100%; padding: 8px 12px; }
 /* xterm.css paints this #000 (as `.xterm .xterm-viewport`, and loads later); the
    theme only reaches the element inside it. */
-.console .xterm .xterm-viewport { background: var(--term-bg); }
-.unit-commands { margin-top: 12px; }
+.terminal .xterm .xterm-viewport { background: var(--term-bg); }
+.unit-commands { flex: 1; min-width: 0; max-height: 40vh; overflow: auto; }
 .unit-commands summary { cursor: pointer; }
 .unit-commands p { margin: 10px 0 0; }
 /* One click selects the whole command, ready to copy. */

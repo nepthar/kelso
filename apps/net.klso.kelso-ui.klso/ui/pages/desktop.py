@@ -67,6 +67,9 @@ def _apps():
         "desk_state": _state(app),
         "links": _links(app, detail),
         "commands": detail.get("commands") or [],
+        "shells": [
+          u["name"] for u in detail.get("units", []) if u.get("state") == "running"
+        ],
       }
     )
   return found

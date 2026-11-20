@@ -3,7 +3,7 @@ import argparse
 from kelso.lib.activity import BY_CLI
 from kelso.lib.docker import docker_run_command
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import ConsoleRecord, console_command
+from kelso.lib.lifecycle.shell import ShellRecord, shell_command
 
 
 def register(subparsers) -> None:
@@ -19,12 +19,12 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  cmd = console_command(args.app_id, args.unit, ctx)
+  cmd = shell_command(args.app_id, args.unit, ctx)
   if cmd.commands:
     print(f"Commands in {cmd.unit}:")
     for c in cmd.commands:
       print(f"  {c.cmd}  # {c.name}")
-  record = ConsoleRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=BY_CLI)
+  record = ShellRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=BY_CLI)
   code = None
   try:
     code = docker_run_command(

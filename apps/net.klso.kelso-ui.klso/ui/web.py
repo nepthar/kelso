@@ -65,14 +65,14 @@ class NavItem(NamedTuple):
 # static/icons/.
 NAV = (
   NavItem("/host", "Host", "host"),
-  NavItem("/catalog", "Apps & Repos", "repos"),
+  NavItem("/catalog", "App Repos", "repos"),
   NavItem("/volumes", "Volumes", "volumes"),
   NavItem("/backups", "Backups", "backups"),
   NavItem("/routes", "Routes", "routes"),
   NavItem("/cron", "Cron", "cron"),
   NavItem("/activity", "Activity", "activity"),
   NavItem("/logs", "Logs", "logs"),
-  NavItem("/host/console", "Shell", "shell"),
+  NavItem("/host/shell", "Shell", "shell"),
   NavItem("/settings", "Settings", "settings"),
 )
 

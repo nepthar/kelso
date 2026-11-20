@@ -1,4 +1,4 @@
-"""The Apps & Repos page: the repos apps come from, and the bundles in each of them."""
+"""The App Repos page: the repos apps come from, and the bundles in each of them."""
 
 from api import api
 from fastapi import APIRouter
@@ -23,7 +23,7 @@ def catalog(page: PageDep, app: str = ""):
       bundle["contested"] = contested.get(app_id) or []
   return page.render(
     "pages/catalog.html",
-    "Apps & Repos",
+    "App Repos",
     catalogs=catalogs,
     repos={repo.get("name"): repo for repo in repos},
     contested=contested,

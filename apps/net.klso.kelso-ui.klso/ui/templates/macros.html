@@ -16,14 +16,15 @@
   <p class="muted">This app reaches kelsod through its admin socket, or over TCP when <code>api_address</code> is set (Docker Desktop on macOS). If kelsod answered with an error, <code>journalctl --user-unit kelsod</code> on the host says why.</p></div>
 {%- endmacro %}
 
-{#- A terminal on the websocket at `src`; console.js draws it. The caller is the
-  lede. The page links xterm.css in `head` and the three scripts in `scripts`. -#}
+{#- A terminal on the websocket at `src`; terminal.js draws it. The caller sits
+  beside its status. The page links xterm.css in `head` and the three scripts
+  in `scripts`. -#}
 {% macro terminal(src) -%}
-<div class="row between">
-  <p class="lede">{{ caller() }}</p>
-  <span class="row"><span class="muted" id="console-status">connecting</span><button type="button" id="console-reconnect" hidden>Reconnect</button></span>
+<div class="terminal-bar">
+  {{ caller() }}
+  <span class="row terminal-state"><span class="muted" id="terminal-status">connecting</span><button type="button" id="terminal-reconnect" hidden>Reconnect</button></span>
 </div>
-<div id="console" class="console" data-src="{{ src }}"></div>
+<div id="terminal" class="terminal" data-src="{{ src }}"></div>
 {%- endmacro %}
 
 {% macro empty(text, short=false) -%}
