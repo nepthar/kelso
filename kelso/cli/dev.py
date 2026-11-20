@@ -39,6 +39,12 @@ def register(subparsers) -> None:
     action="store_true",
     help="Publish the app's routes to their providers for the duration of the run",
   )
+  parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Skip the confirmation for compose keys kelso does not model",
+  )
   parser.set_defaults(func=run)
 
 
@@ -53,7 +59,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   with ctx.locked(f"dev {app}", app):
     refuse_other_origin(app, source, ctx)
-    if not confirm_compose_warnings(app, source):
+    if not args.yes and not confirm_compose_warnings(app, source):
       print("Nothing started.")
       return
 

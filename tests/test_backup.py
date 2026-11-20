@@ -359,7 +359,7 @@ def test_restore_declined_at_the_prompt_changes_nothing(kelso_env):
   backup_id = _back_up(kelso_env, app_id)
   marker = kelso_env.run_root / app_id / "app_bundle" / "marker.txt"
   marker.write_text("still here")
-  declined = kelso_env.run("restore", app_id, backup_id, input="n\n")
+  declined = kelso_env.run("restore", app_id, backup_id, input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
   assert "Nothing restored." in declined.stdout
   assert marker.exists()

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from kelso import VERSION
 from kelso.cli import (
+  agent_help,
   app,
   backup,
   cleanup,
@@ -34,6 +35,7 @@ from kelso.cli import (
   update,
   updown,
 )
+from kelso.cli.confirm import Refused
 from kelso.lib.activity import BY_CLI, Activity
 from kelso.lib.bundle import app_id_from_path, is_pathlike
 from kelso.lib.config import load_config
@@ -70,6 +72,7 @@ COMMANDS = [
   routes,
   system,
   init,
+  agent_help,
 ]
 
 HELP = """\
@@ -113,6 +116,7 @@ System        kelso system doctor | activity | volumes | secret | host-volume
 Setup         kelso init | init --with-phrase
 
 Run `kelso COMMAND --help` for details on any command.
+Agents: run `kelso agent-help` first. It is written for you.
 """
 
 
@@ -203,7 +207,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     # Before anything else, and before `init` in particular: the first command
     # is the one that would create the kelso root with the wrong owner.
     refuse_root("kelso")
-    if args.command is None or args.command == "init":
+    if args.command in (None, "init", "agent-help"):
       args.func(args, None)
     else:
       cfg = load_config()
@@ -229,6 +233,9 @@ def _dispatch(args: argparse.Namespace) -> None:
           args.func(args, ctx)
   except KeyboardInterrupt:
     raise SystemExit(130) from None
+  except Refused as error:
+    logger.error("%s", error)
+    raise SystemExit(2) from error
   except (RuntimeError, ValueError) as error:
     logger.error("%s", error)
     raise SystemExit(1) from error

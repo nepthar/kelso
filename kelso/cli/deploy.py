@@ -36,6 +36,12 @@ def register(subparsers) -> None:
     action="store_true",
     help="Update without backing up first, when the box's backup disk is not there",
   )
+  parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Skip the confirmation for compose keys kelso does not model",
+  )
   parser.set_defaults(func=run)
 
 
@@ -44,7 +50,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = app_id_from_path(source)
   host = args.host
   files = _files(source)
-  if not confirm_compose_warnings(app, source):
+  if not args.yes and not confirm_compose_warnings(app, source):
     print("Nothing deployed.")
     return
 

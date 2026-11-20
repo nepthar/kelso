@@ -181,3 +181,17 @@ def test_resume_brings_back_only_what_was_running(kelso_env):
   assert updown.to_group(ctx, 9, resume=True) == []
 
   assert _compose(kelso_env, "up")[before:] == ["ports-demo"]
+
+
+def test_up_starts_an_app_with_a_unit_down(kelso_env):
+  _load(kelso_env, "ports-demo")
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  containers = json.loads(kelso_env.docker_state.read_text())
+  down = {**containers[0], "run_unit": "db", "id": "db", "state": "exited"}
+  kelso_env.set_containers([*containers, down])
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  before = len(_compose(kelso_env, "up"))
+
+  assert updown.to_group(ctx, 9, resume=True) == []
+
+  assert _compose(kelso_env, "up")[before:] == ["ports-demo"]

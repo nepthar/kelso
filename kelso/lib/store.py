@@ -27,6 +27,10 @@ STORE_MAX_BYTES = 1 * 1024 * 1024
 REKEY_FIELD = "rekey"
 
 
+# App meta: why the last start could not publish its routes, or None.
+ROUTES_UNPUBLISHED = "routes_unpublished"
+
+
 class ConfigStore(Protocol):
   """A flat string-keyed configuration store, suitable for lightweight state storage"""
 

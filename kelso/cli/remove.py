@@ -5,6 +5,7 @@ routes.
 
 import argparse
 
+from kelso.cli.confirm import confirm
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   DATA,
@@ -105,11 +106,7 @@ def _confirmed(plan: RemovalPlan) -> bool:
     )
   else:
     _describe_removal(plan)
-  try:
-    answer = input(f"{_ASKED[plan.mode]} {plan.app_id}? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")
+  return confirm(f"{_ASKED[plan.mode]} {plan.app_id}?")
 
 
 def _describe_removal(plan: RemovalPlan) -> None:

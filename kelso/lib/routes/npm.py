@@ -12,7 +12,12 @@ from kelso.lib.config import RouteProviderEntry
 from kelso.lib.configflow import ConfigField
 from kelso.lib.store import KelsoStore
 
-from .base import RouteProvider, RouteProviderError, refuse_foreign_route
+from .base import (
+  RouteProvider,
+  RouteProviderError,
+  RouteProviderUnreachable,
+  refuse_foreign_route,
+)
 
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
@@ -103,7 +108,9 @@ class NginxProxyManagerRouteProvider(RouteProvider):
         timeout=self._timeout,
       )
     except requests.RequestException as e:
-      raise RouteProviderError(f"Could not reach NPM at {self.endpoint}: {e}") from e
+      raise RouteProviderUnreachable(
+        f"Could not reach NPM at {self.endpoint}: {e}"
+      ) from e
 
     if resp.status_code == 401:
       raise RouteProviderError("NPM rejected the credentials (401)")
@@ -141,7 +148,7 @@ class NginxProxyManagerRouteProvider(RouteProvider):
         method, url, headers=headers, timeout=self._timeout, **kwargs
       )
     except requests.RequestException as e:
-      raise RouteProviderError(f"NPM {method} {path} failed: {e}") from e
+      raise RouteProviderUnreachable(f"NPM {method} {path} failed: {e}") from e
 
     if not resp.ok:
       raise RouteProviderError(

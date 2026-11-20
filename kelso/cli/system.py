@@ -5,6 +5,7 @@ from getpass import getpass
 from tabulate import tabulate
 
 from kelso.cli import activity, decrypt, doctor, phrase, service, volumes
+from kelso.cli.confirm import Refused
 from kelso.cli.kv import parse_kv
 from kelso.lib import recovery
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
@@ -284,6 +285,11 @@ def run_purge(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("No apps to purge; kelso is ready to restore into.")
     return
   if not args.yes:
+    if not sys.stdin.isatty():
+      raise Refused(
+        f"Purge deletes {len(apps)} app(s). There is no terminal to ask on; "
+        "pass --yes to go ahead."
+      )
     last = ctx.kelso_db.last_backup_run()
     print(f"This permanently deletes {len(apps)} app(s), with their data and config:")
     for app in apps:

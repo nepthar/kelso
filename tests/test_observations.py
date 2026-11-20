@@ -151,3 +151,12 @@ def _with_units(*units: KelsoRunUnitStatus) -> AppObservation:
 )
 def test_status_says_how_a_loaded_app_is_doing(units, declared, status):
   assert _with_units(*units).status(declared) == status
+
+
+def test_a_service_that_exited_cleanly_is_not_a_finished_one_shot():
+  app = _with_units(
+    _unit("main", "running", "Up 1 minute"),
+    _unit("db", "exited", "Exited (0) 1 minute ago"),
+  )
+  assert app.status(("main", "db"), one_shots=()) == DEGRADED
+  assert app.status(("main", "db"), one_shots={"db"}) == OK

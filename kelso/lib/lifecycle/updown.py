@@ -89,7 +89,10 @@ def _up(
         continue
       try:
         with ctx.locked(f"up {app}", app):
-          if ctx.run_state(app).running_count:
+          # docker leaves a unit it stopped cleanly at shutdown down, so some
+          # units running does not mean the app is.
+          units = ctx.run_state(app).containers
+          if units and all(unit.state.lower() == "running" for unit in units):
             logger.info("  %s: already running", app)
           else:
             start(app, ctx.config.app_run_path(app), ctx)
