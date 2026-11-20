@@ -66,7 +66,7 @@ def manifest(page: PageDep, app_id: str):
 
 @router.post("/apps/{app_id}")
 async def post_config(app_id: str, request: Request):
-  """The config form; lifecycle verbs go through the job modal."""
+  """The config form; lifecycle verbs go through the job window."""
   form = await request.form()
   here = f"/apps/{quote(app_id)}"
   if field(form, "action") != "config":

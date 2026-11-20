@@ -15,10 +15,10 @@
 {%- endmacro %}
 
 {% block commands %}
-{{ job_button('Start all', 'up', icon='play', bar=true, tone='go', title='Start all apps',
+{{ job_button('Start all', 'start_group', icon='play', bar=true, tone='go', title='Start all apps', args={'group': '9'},
     desc='Starts every loaded app by start_group, 1 to 9, waiting for each group to be ready before the next.') }}
-{{ job_button('Stop all', 'down', icon='stop', bar=true, tone='stop', title='Stop all apps',
-    desc='Stops every running app, including this web interface, by start_group, 9 down to 1. Data, configuration and published routes are untouched. To bring them back, run kelso up on the host.') }}
+{{ job_button('Stop all', 'start_group', icon='stop', bar=true, tone='stop', title='Stop all apps', args={'group': '0'},
+    desc='Stops every running app by start_group, 9 down to 1. This web interface, and anything else in group 0, keeps running. Data, configuration and published routes are untouched.') }}
 {% endblock %}
 
 {% block content %}
@@ -26,7 +26,7 @@
   <li role="tab" aria-selected="true"><a href="#host-apps">Apps</a></li><li role="tab" aria-selected="false"><a href="#host-system">System</a></li>
 </menu>
 
-<div class="window tabpanel" role="tabpanel" id="host-apps">
+<div class="pane tabpanel" role="tabpanel" id="host-apps">
 {% if not apps %}
 <div class="card"><p class="empty">No apps loaded yet. Pick one from <a href="/catalog">Apps &amp; Repos</a>.</p></div>
 {% else %}
@@ -57,7 +57,7 @@
 {% endif %}
 </div>
 
-<div class="window tabpanel" role="tabpanel" id="host-system" hidden>
+<div class="pane tabpanel" role="tabpanel" id="host-system" hidden>
 <div class="row lede-line">
   <p class="lede">Connected to kelso {{ version }} on <span class="mono">{{ hostname }}</span> over <code>{{ where }}</code>.</p>
   {#- Longer spans wait on rolled-up metrics; only the last hour is kept at full detail. -#}
@@ -84,7 +84,7 @@
 {% endblock %}
 
 {% block statusbar %}
-<p class="status-bar-field">Apps: {{ apps|length }}</p>
-<p class="status-bar-field">CPU: {{ cpu ~ '%' if cpu is not none else '—' }}</p>
-<p class="status-bar-field">RAM: {{ ram ~ '%' if ram is not none else '—' }}</p>
+<p class="statusbar-field">Apps: {{ apps|length }}</p>
+<p class="statusbar-field">CPU: {{ cpu ~ '%' if cpu is not none else '—' }}</p>
+<p class="statusbar-field">RAM: {{ ram ~ '%' if ram is not none else '—' }}</p>
 {% endblock %}

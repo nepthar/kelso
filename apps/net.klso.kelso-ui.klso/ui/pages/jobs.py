@@ -1,17 +1,35 @@
-"""The job modal's backend: start a kelso verb, then poll it. JSON only."""
+"""The job window: start a kelso verb and follow it, or look at a run by its log."""
 
 from urllib.parse import quote
 
 from api import STARTED_BY, ApiError, api
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web import PageDep, render
 
 router = APIRouter()
 
 
+@router.get("/job")
+def window(page: PageDep):
+  """A job in a window of its own; js/jobs.js fills it."""
+  return page.render("pages/job.html", "Job", log="")
+
+
+@router.get("/job/{log}")
+def view(page: PageDep, log: str, title: str = ""):
+  """One recorded run, running or long over, by the name of its log."""
+  try:
+    api(f"/activity/{quote(log)}")
+  except ApiError:
+    return render(page.request, "not_found.html", "Not found", status_code=404)
+  name = log.removesuffix(".log").split(".", 1)[-1]
+  return page.render("pages/job.html", title or name, log=log)
+
+
 @router.post("/jobs")
 async def submit(request: Request):
-  """Forward a job from the job modal. JSON in, JSON out."""
+  """Forward a job from the job window. JSON in, JSON out."""
   try:
     body = await request.json()
   except Exception:

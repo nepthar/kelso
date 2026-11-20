@@ -23,6 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
+import psutil
+
 from kelso.lib.apps import AppID
 from kelso.lib.docker import sink_output
 
@@ -47,6 +49,8 @@ FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.log")
 OK = "ok"
 ERROR = "error"
 DETACHED = "detached"
+RUNNING = "running"
+KILLED = "killed"
 DETACH_NOTE = "\n[kelso] detaching from running activity after 5 minutes\n"
 
 # Who started a run, as `started_by` records it. Every run records one; runs
@@ -85,6 +89,7 @@ def _run_header(
   lines = [
     f"# kelso {verb}{who}",
     f"# started {started.isoformat(timespec='seconds')}",
+    f"# pid {os.getpid()}",
   ]
   arg_text = " ".join(f"{k}={v}" for k, v in sorted(args.items()))
   if arg_text:
@@ -466,6 +471,27 @@ def list_runs(
     )
   runs.reverse()
   return runs[: max(0, limit)]
+
+
+def run_state(text: str) -> str:
+  """How a run file's run ended, from its trailer.
+
+  With no trailer it is RUNNING while the process that wrote it lives, and
+  KILLED once that process is gone or the host has booted since.
+  """
+  last = text.rstrip().rsplit("\n", 1)[-1]
+  ended = re.fullmatch(r"# — (\w+) · finished .*", last)
+  if ended:
+    return ended[1]
+  pid = re.search(r"^# pid (\d+)$", text, re.M)
+  started = re.search(r"^# started (\S+)$", text, re.M)
+  alive = (
+    pid
+    and started
+    and psutil.pid_exists(int(pid[1]))
+    and datetime.fromisoformat(started[1]).timestamp() >= psutil.boot_time()
+  )
+  return RUNNING if alive else KILLED
 
 
 def read_run_log(ctx: KelsoCtx, filename: str) -> str:

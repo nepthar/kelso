@@ -651,11 +651,15 @@ METRICS = {
 HOST = {
   "cpus": 6,
   "memory_bytes": 8 * 1024**3,
+  "memory_used_bytes": 3 * 1024**3,
+  "uptime_seconds": 12 * 86400 + 4 * 3600,
+  "load": [0.42, 0.38, 0.3],
   "disks": [
     {
       "device": "/dev/sda2",
       "mountpoint": "/",
       "total_bytes": 2 * 1024**4,
+      "used_bytes": 1024**4,
       "holds": ["bulk", "backups", EVIL],
       "gauge": "host_drive_used_ratio/sda2",
     }
@@ -667,7 +671,7 @@ LOGS = {"app_id": "kelso-ui", "tail": 200, "text": f"main-1  | started\n{EVIL}\n
 GET = {
   "/version": {
     "kelso": "0.1.0",
-    "api": 1,
+    "api": 2,
     "hostname": f"tycho {EVIL}",
     "kelso_root": f"/home/kelso {EVIL}",
   },
@@ -690,7 +694,7 @@ GET = {
   "/activity?limit=100": ACTIVITY,
   "/cron": CRON,
   "/activity?verb=cron&limit=25": CRON_RUNS,
-  "/activity/x.log": {"text": "log text"},
+  "/activity/x.log": {"file": "x.log", "state": "ok", "text": "log text"},
   "/metrics?prefix=host_&hours=1": METRICS,
   "/host": HOST,
   "/jobs/j1": {"id": "j1", "state": "done", "log": "x.log"},
@@ -707,7 +711,7 @@ class FakeKelsod:
   def __init__(self):
     self.posts = []
     self.fail = None
-    self.api = 1
+    self.api = 2
     fake = self
 
     class Handler(BaseHTTPRequestHandler):

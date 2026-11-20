@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------
-   How pages are laid out. colors come from the tokens in theme.css; nothing
-   in this file is a color literal. 98.css draws the controls and classic.css
-   paints them and the desktop; a property set there is not set here.
+   How pages are laid out. colors come from the theme's tokens; nothing in
+   this file is a color literal. skin.css draws the controls and the desktop;
+   a property set there is not set here.
    --------------------------------------------------------------------------- */
 :root {
   --bad: var(--rosewood);
@@ -46,9 +46,9 @@ h3 { margin: 20px 0 8px; font-size: 13px; font-weight: 600; }
 .warnish { color: var(--warn); }
 .scroll { overflow-x: auto; }
 
-/* --- tables --------------------------------------------------------------
-   98.css draws the header and pads the cells. */
+/* --- tables -------------------------------------------------------------- */
 table { width: 100%; border-collapse: collapse; }
+th, td { padding: 4px 8px; }
 th { text-align: left; white-space: nowrap; }
 td { border-bottom: 1px solid var(--hair); white-space: nowrap; vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
@@ -89,7 +89,7 @@ td.muted.wrap { color: var(--muted); }
 
 /* --- forms --------------------------------------------------------------- */
 /* Out of the layout until something changes, so a form ends at its last field. */
-.cfg-form .cfg-actions { display: none; justify-content: flex-end; padding: 8px 0 0; }
+.cfg-form .cfg-actions { display: none; justify-content: flex-end; gap: 6px; padding: 8px 0 0; }
 .cfg-form.is-dirty .cfg-actions { display: flex; }
 .cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
 /* A pick-several field: a tag per choice, which js/tagpick.js toggles into a
@@ -163,14 +163,15 @@ ul.security li.danger { font-weight: 600; }
 }
 .job-out.ok { border-left-color: var(--ok); }
 .job-out.bad { border-left-color: var(--bad); }
-/* Showing output, the dialog resizes from its corner. A dragged one carries an
-   inline height, and its output takes what the dialog was given. */
-.job-modal:has(.job-out:not([hidden])) {
-  resize: both; overflow: hidden; min-width: 18rem; min-height: 12rem; max-width: 100%;
-}
-.job-modal[style*="height"] .job-body { flex: 1; }
-.job-modal[style*="height"] .job-out { flex: 1; max-height: none; }
-/* A page of nothing but logs, so it takes the height the modal's copy cannot. */
+.field-row + .lede { margin-top: 12px; }
+/* A job's own window: the output takes whatever height the window has. */
+.job-page { flex: 1; min-width: 0; height: 100vh; display: flex; flex-direction: column; }
+.job-page .job-body { flex: 1; }
+.job-page .job-out { flex: 1; max-height: none; min-height: 0; }
+.job-page p { margin: 0; }
+/* In a window the title bar names the job. */
+html:not(.standalone) .job-page h1 { display: none; }
+/* A page of nothing but logs, so it takes the height a job's output cannot. */
 .logs-out { max-height: none; height: calc(100vh - 92px); white-space: pre; }
 /* The terminal fills the same well. Padding sits on xterm's own element, which
    the fit addon subtracts; on this box it would push the last row out. */

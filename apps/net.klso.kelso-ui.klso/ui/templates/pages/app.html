@@ -8,7 +8,7 @@
 
 
 {#- The command bar: logs and, while something runs, the console; then start
-  or stop, restart, reload; back up, remove. Each verb opens the job modal.
+  or stop, restart, reload; back up, remove. Each verb opens the job window.
   Only one of start/stop can apply, so only that one is drawn. -#}
 {% block commands %}
 {{ command('Logs', 'text-box-outline', here ~ '/logs') }}
@@ -22,7 +22,7 @@
     desc='Stops ' ~ app_id ~ ' and starts it again from its loaded copy, so configuration changed since it started takes effect.') }}
 {% else %}
 {{ job_button('Start', 'start', icon='play', bar=true, tone='go', title='Start ' ~ name, args={'app': app_id},
-    desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.') }}
+    desc='Starts ' ~ app_id ~ ', loading it first if it is not loaded yet.', autorun=true) }}
 {% endif %}
 {{ job_button('Reload', 'load', icon='reload', bar=true, title='Reload ' ~ name, args={'app': app_id},
     desc='Stops ' ~ app_id ~ ' if it is running, rebuilds its loaded copy from the catalog copy (pending configuration and a changed manifest included), then starts it again if it was running. Data and its address are kept.') }}
@@ -179,7 +179,7 @@
 </menu>
 {% for unit in units %}
 {% set state = unit.get('state') %}
-<div class="window tabpanel" role="tabpanel" id="unit-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+<div class="pane tabpanel" role="tabpanel" id="unit-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
   <div class="row between">{{ pill(state or 'not created', 'running' if state in ('running', 'finished') else ('exited' if state else '')) }}<span class="muted mono">{{ unit.image }}</span></div>
   {% if unit.get('command') %}<div class="muted mono">$ {{ unit.command|join(' ') }}</div>{% endif %}
   <h3>Volumes</h3>

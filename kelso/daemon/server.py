@@ -125,7 +125,7 @@ def serve(
   updown.start_kelsod_group(ctx)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  jobs.submit("up", {"resume": "yes"}, ctx, started_by=BY_KELSOD)
+  jobs.submit("start_group", {"group": "9", "resume": "yes"}, ctx, started_by=BY_KELSOD)
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)

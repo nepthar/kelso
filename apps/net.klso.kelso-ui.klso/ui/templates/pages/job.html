@@ -1,0 +1,19 @@
+{#- A job. Opened by a button, jobs.js fills it from what the button handed
+  over and runs it; opened at /job/<log>, it shows that run. A desktop window
+  of its own, or the whole tab for a page opened outside the desktop. -#}
+{% extends "base.html" %}
+{% block body %}
+<div class="job-page"{% if log %} data-log="{{ log }}"{% endif %}>
+  <div class="job-body">
+    <h1 id="job-title">{{ title if log }}</h1>
+    <p id="job-desc" hidden></p>
+    <div class="job-choices" id="job-choices" hidden></div>
+    <div class="row job-fields" id="job-fields" hidden></div>
+    <div class="row job-bar"><button type="button" id="job-go" class="default">OK</button><button type="button" id="job-close">Cancel</button></div>
+    <progress id="job-progress" hidden></progress>
+    <pre id="job-out" class="job-out" hidden></pre>
+  </div>
+</div>
+<script src="{{ asset('js/shell.js') }}"></script>
+<script src="{{ asset('js/jobs.js') }}"></script>
+{% endblock %}

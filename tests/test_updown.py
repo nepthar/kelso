@@ -1,4 +1,4 @@
-"""`kelso up` and `kelso down`: the whole box, by start_group."""
+"""`kelso start_group`, `up` and `down`: the whole box, by start_group."""
 
 import json
 from pathlib import Path
@@ -53,6 +53,19 @@ def test_down_stops_in_reverse_and_up_brings_it_back(kelso_env):
   assert _compose(kelso_env, "down") == ["ports-demo", "routes-demo"]
   assert kelso_env.run("up").returncode == 0
   assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo"] * 2
+
+
+def test_start_group_stops_the_groups_above_and_starts_up_to_it(kelso_env):
+  _load(kelso_env, "ports-demo", "routes-demo")
+  kelso_env.run("config", "routes-demo", "--set", "start_group=4")
+  assert kelso_env.run("up").returncode == 0
+
+  lowered = kelso_env.run("start_group", "4")
+
+  assert lowered.returncode == 0, lowered.stderr
+  assert _compose(kelso_env, "down") == ["ports-demo"]
+  assert kelso_env.run("start_group", "9").returncode == 0
+  assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo", "ports-demo"]
 
 
 def test_up_leaves_an_app_stopped_with_kelso_stop_alone(kelso_env):
@@ -165,6 +178,6 @@ def test_resume_brings_back_only_what_was_running(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(_compose(kelso_env, "up"))
 
-  assert updown.up(ctx, resume=True) == []
+  assert updown.to_group(ctx, 9, resume=True) == []
 
   assert _compose(kelso_env, "up")[before:] == ["ports-demo"]

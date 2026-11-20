@@ -20,7 +20,7 @@
   <td>{{ run_status(run.status) }}</td>
   <td class="muted">{{ '%.1fs'|format(run.duration_ms / 1000) if run.duration_ms is not none else '—' }}</td>
   <td>
-    {%- if run.available %}{{ log_button('view', run.log, run.status, title=run.verb ~ ' ' ~ app) }}
+    {%- if run.available %}{{ log_button('view', run.log, title=run.verb ~ ' ' ~ app) }}
     {%- else %}<span class="muted">pruned</span>{% endif -%}
   </td>
 </tr>

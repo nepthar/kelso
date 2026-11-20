@@ -1,6 +1,6 @@
 # Kelso UI
 
-The kelso web interface, as a Windows 2000 style desktop. `/` is the desktop,
+The kelso web interface, as a desktop. `/` is the desktop,
 a taskbar and a start menu. Every loaded app and every reachable route is an
 icon, and so is each section. Double click opens a window, which is an iframe
 of an ordinary server-rendered page, so nothing about a page changes to live in
@@ -41,9 +41,9 @@ matches.
 | `templates/` | All markup. `desktop.html` is the desktop, `frame.html` what a window shows, `macros.html` the components |
 | `static/js/desktop.js` | Windows, icons, the taskbar and start menu |
 | `static/kelso.css` | How pages are laid out; no colors of its own |
-| `static/classic.css` | The desktop, the type, and kelso's components as classic controls |
+| `static/skin.css` | The type, the controls, the windows and the desktop |
 | `static/icons/` | Original artwork, drawn for this app |
-| `static/theme.css` | The color tokens, and nothing else |
+| `static/themes/` | The color tokens, light and dark, and nothing else |
 | `settings.py` | The desktop's own settings (its background), kept in the `settings` volume |
 | `static/js/` | One script per behaviour, loaded by the pages that need it |
 | `static/vendor/` | Third-party browser code, pinned and served from here |
@@ -121,7 +121,7 @@ unaffected, and `kelso load kelso-ui` clears both counts. A refusal does
 not move the window, so service resumes when the flooding stops rather than
 staying shut.
 
-Over the limit, a browser gets a page saying so and the job modal's `fetch`
+Over the limit, a browser gets a page saying so and the job window's `fetch`
 gets the same sentence as JSON, both with an honest `Retry-After`. Which one
 you get is decided by the `Accept` header, not the method — the sign-in form
 is a POST too.

@@ -2,7 +2,7 @@
 
 from api import api, where
 from fastapi import APIRouter
-from web import PageDep, fmt_size
+from web import PageDep, fmt_size, percent
 
 router = APIRouter()
 
@@ -17,29 +17,41 @@ def dashboard(page: PageDep):
   body = api("/metrics?prefix=host_&hours=1")
   metrics = body.get("metrics") or {}
 
-  def resource(name, gauge, total, notes="", title=""):
-    points = metrics.get(gauge) or []
+  def resource(name, gauge, total, current, notes="", title=""):
     return {
       "name": name,
       "title": title,
-      "line": _line(points, body["since"], body["until"]),
-      "current": round(points[-1]["v"] * 100) if points else None,
+      "line": _line(metrics.get(gauge) or [], body["since"], body["until"]),
+      "current": current,
       "total": total,
       "notes": notes,
     }
 
+  # /host has no CPU reading, so that one is the newest sample.
+  cpu = metrics.get("host_cpu_used_ratio") or []
   resources = [
-    resource("Host CPU", "host_cpu_used_ratio", f"{host['cpus']} CPUs"),
-    resource("Host memory", "host_mem_used_ratio", fmt_size(host["memory_bytes"])),
+    resource(
+      "Host CPU",
+      "host_cpu_used_ratio",
+      f"{host['cpus']} CPUs",
+      round(cpu[-1]["v"] * 100) if cpu else None,
+    ),
+    resource(
+      "Host memory",
+      "host_mem_used_ratio",
+      fmt_size(host["memory_bytes"]),
+      percent(host["memory_used_bytes"], host["memory_bytes"]),
+    ),
     *(
       resource(
         f"Disk {disk['mountpoint']}",
         disk["gauge"],
         fmt_size(disk["total_bytes"]),
+        percent(disk["used_bytes"], disk["total_bytes"]),
         ", ".join(disk["holds"]),
         title=disk["device"],
       )
-      for disk in host.get("disks", [])
+      for disk in host["disks"]
     ),
   ]
   return page.render(

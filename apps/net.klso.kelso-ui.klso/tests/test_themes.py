@@ -23,11 +23,8 @@ TOKENS = (
   "--bg",
   "--panel",
   "--hair",
-  # a bevel's four edges, lightest to darkest
-  "--hi",
-  "--light",
+  # borders
   "--line",
-  "--dark",
   # text: content, secondary, metadata, disabled
   "--fg",
   "--dim",
@@ -41,13 +38,6 @@ TOKENS = (
   "--ok",
   "--link",
   "--note",
-  # a title bar's two ends and its text, active and not
-  "--title-a",
-  "--title-b",
-  "--title-fg",
-  "--idle-a",
-  "--idle-b",
-  "--idle-fg",
   # the terminal's sixteen colors: black red green yellow blue magenta cyan
   # white, then the bright eight. Drawn on --void.
   *(f"--ansi-{i}" for i in range(16)),
@@ -111,11 +101,6 @@ def test_a_theme_is_legible(name):
     ("--link", "--bg"): 4.5,
     ("--link", "--panel"): 4.5,
     ("--ink", "--coral"): 4.5,
-    # A title reads at either end of its bar; an inactive one only has to be found.
-    ("--title-fg", "--title-a"): 4.5,
-    ("--title-fg", "--title-b"): 4.5,
-    ("--idle-fg", "--idle-a"): 3.0,
-    ("--idle-fg", "--idle-b"): 3.0,
   }
   for accent in ("--coral", "--rosewood", "--gold", "--ok"):
     floors[accent, "--bg"] = 3.0
@@ -151,4 +136,4 @@ def test_the_layout_stylesheet_has_no_colors_of_its_own():
 def test_every_page_links_the_theme(client, anon, fake):
   for page in (client.get("/volumes"), anon.get("/login")):
     head = page.text.split("</head>")[0]
-    assert "/static/themes/win9x.css?v=" in head
+    assert "/static/themes/light.css?v=" in head

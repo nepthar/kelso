@@ -44,7 +44,7 @@ from kelso.lib.util import Identifier, validate_identifier
 
 # Bumped when a response shape changes in a way a client would notice: the web
 # UI ships separately from the daemon, and checks it.
-API_VERSION = 1
+API_VERSION = 2
 
 CtxFactory = Callable[[], KelsoCtx]
 

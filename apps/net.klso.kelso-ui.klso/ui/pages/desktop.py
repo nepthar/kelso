@@ -8,7 +8,15 @@ from urllib.parse import quote, urlencode
 from api import ApiError, api, where
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-from web import NO_STORE, PageDep, local_path, templates
+from web import (
+  NO_STORE,
+  PageDep,
+  brand,
+  known_hostname,
+  local_path,
+  percent,
+  templates,
+)
 
 router = APIRouter()
 
@@ -64,9 +72,44 @@ def _apps():
   return found
 
 
+def _uptime(seconds):
+  days, rest = divmod(int(seconds), 86400)
+  hours, rest = divmod(rest, 3600)
+  if days:
+    return f"{days}d {hours}h"
+  return f"{hours}h {rest // 60}m" if hours else f"{rest // 60}m"
+
+
+def _status(apps):
+  """The status group: which apps run or fail, and how busy the host is."""
+  host = api("/host")
+  return {
+    "host": brand(known_hostname() or api("/version").get("hostname", "")),
+    "running": sum(1 for a in apps if a["desk_state"] == "ok"),
+    "failing": [
+      a.get("display_name") or a["app_id"] for a in apps if a["desk_state"] == "bad"
+    ],
+    "uptime": _uptime(host["uptime_seconds"]),
+    "load": " ".join(f"{n:.2f}" for n in host["load"]),
+    "memory": percent(host["memory_used_bytes"], host["memory_bytes"]),
+    "disks": [
+      {
+        "name": disk["mountpoint"],
+        "title": f"{disk['mountpoint']} on {disk['device']}",
+        "percent": percent(disk["used_bytes"], disk["total_bytes"]),
+      }
+      for disk in host["disks"]
+    ],
+  }
+
+
 def _icons():
   apps = _apps()
-  return {"apps": apps, "routes": [r for a in apps for r in a["links"]]}
+  return {
+    "apps": apps,
+    "routes": [r for a in apps for r in a["links"]],
+    "status": _status(apps),
+  }
 
 
 @router.get("/")

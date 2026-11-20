@@ -27,7 +27,7 @@ NO_STORE = {"Cache-Control": "no-store"}
 
 # The kelsod API version this UI is written against; a mismatch means one of
 # the two was loaded without the other.
-NEEDS_API = 1
+NEEDS_API = 2
 
 # Random per load (kelso-ui's `instance_id`), so two kelso-ui tabs can be
 # told apart even when neither can reach its kelsod.
@@ -99,6 +99,10 @@ def asset(name):
 
 def icon_url(name):
   return asset(f"icons/{name}.svg")
+
+
+def percent(used, total):
+  return round(100 * used / total) if total else 0
 
 
 def fmt_size(n):
