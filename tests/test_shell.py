@@ -1,4 +1,4 @@
-"""Consoles: `kelso shell`, and kelsod's PTY behind a websocket.
+"""Shells: `kelso shell`, and kelsod's PTY behind a websocket.
 
 kelsod's tests swap `docker compose exec` for a local `sh`, so the PTY, the
 relay and the process handling are real and only the container is not.
@@ -15,18 +15,18 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from kelso.daemon import console
+from kelso.daemon import shell
 from kelso.daemon.api import create_app
 from kelso.jobs import JobRunner
 from kelso.lib.config import load_config
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import host_shell
+from kelso.lib.lifecycle.shell import host_shell
 
 APP = "net.klso.basic-features"
 # Absolute: TestClient opens a relative websocket URL on `testserver`, which is
 # not loopback. This is kelso-ui arriving through Docker Desktop.
 LOOPBACK = "ws://127.0.0.1"
-URL = f"{LOOPBACK}/apps/{APP}/console?started_by=test"
+URL = f"{LOOPBACK}/apps/{APP}/shell?started_by=test"
 
 
 def ctx() -> KelsoCtx:
@@ -45,8 +45,8 @@ def running(kelso_env):
   kelso_env.run("start", "basic-features", "--set", "admin_user=root")
 
 
-def shell(monkeypatch, script: str) -> None:
-  monkeypatch.setattr(console, "shell_argv", lambda cmd: ["/bin/sh", "-c", script])
+def stand_in(monkeypatch, script: str) -> None:
+  monkeypatch.setattr(shell, "shell_argv", lambda cmd: ["/bin/sh", "-c", script])
 
 
 def drain(ws) -> tuple[bytes, WebSocketDisconnect]:
@@ -66,14 +66,18 @@ def test_shell_execs_into_the_running_unit(kelso_env, running, client):
   assert json.loads(log[-1])["args"] == [
     "compose",
     "exec",
+    "-e",
+    "PS1=basic-features:main $ ",
+    "-e",
+    'PROMPT_COMMAND=PS1="basic-features:main \\$ "; unset PROMPT_COMMAND',
     "main",
     "/bin/sh",
     "-c",
-    "exec /bin/sh -i",
+    "command -v bash >/dev/null 2>&1 && exec bash || exec sh",
   ]
 
   run = client.get("/activity").json()["activity"][0]
-  assert (run["verb"], run["app_id"], run["status"]) == ("console", APP, "ok")
+  assert (run["verb"], run["app_id"], run["status"]) == ("shell", APP, "ok")
   body = client.get(f"/activity/{run['log']}").json()["text"]
   assert run["started_by"] == "cli"
   assert "via" not in body
@@ -87,11 +91,11 @@ def test_shell_prints_the_units_commands_before_opening(kelso_env):
     '[commands.ping]\ncmd = "echo pong"\n'
   )
   assert kelso_env.run("start", "cmd-demo").returncode == 0
-  shell = kelso_env.run("shell", "cmd-demo")
-  assert shell.returncode == 0
-  assert shell.stdout == "Commands in main:\n  echo pong  # ping\n"
+  opened = kelso_env.run("shell", "cmd-demo")
+  assert opened.returncode == 0
+  assert opened.stdout == "Commands in main:\n  echo pong  # ping\n"
   log = kelso_env.docker_log.read_text().splitlines()
-  assert json.loads(log[-1])["args"][-1] == "exec /bin/sh -i"
+  assert json.loads(log[-1])["args"][-1].endswith("|| exec sh")
 
 
 def test_shell_refuses_a_stopped_app(kelso_env):
@@ -101,10 +105,10 @@ def test_shell_refuses_a_stopped_app(kelso_env):
   assert f"run `kelso start {APP}` first" in result.stderr
 
 
-def test_console_relays_a_pty_and_reports_the_exit(
+def test_shell_relays_a_pty_and_reports_the_exit(
   kelso_env, running, client, monkeypatch
 ):
-  shell(monkeypatch, 'read line; stty size; echo "got:$line"; exit 3')
+  stand_in(monkeypatch, 'read line; stty size; echo "got:$line"; exit 3')
   with client.websocket_connect(URL) as ws:
     ws.send_text(json.dumps({"resize": [100, 30]}))
     ws.send_bytes(b"hello\n")
@@ -113,10 +117,10 @@ def test_console_relays_a_pty_and_reports_the_exit(
   text = out.decode()
   assert "30 100" in text
   assert "got:hello" in text
-  assert (closed.code, closed.reason) == (console.EXITED, "exited 3")
+  assert (closed.code, closed.reason) == (shell.EXITED, "exited 3")
 
   run = client.get("/activity").json()["activity"][0]
-  assert (run["verb"], run["app_id"], run["status"]) == ("console", APP, "error")
+  assert (run["verb"], run["app_id"], run["status"]) == ("shell", APP, "error")
   body = client.get(f"/activity/{run['log']}").json()["text"]
   assert "Session exited 3" in body
   assert "got:hello" not in body
@@ -128,8 +132,8 @@ def test_a_resize_reaches_the_whole_process_group(running, client, monkeypatch):
   # the trailing `true` stops sh from exec'ing it in its own place. Idle ends a
   # session whose watcher never hears. macOS delivers SIGWINCH to sh's group
   # by itself, so only Linux can fail this.
-  monkeypatch.setattr(console, "IDLE_SECONDS", 2)
-  shell(
+  monkeypatch.setattr(shell, "IDLE_SECONDS", 2)
+  stand_in(
     monkeypatch,
     "sh -c 'trap \"stty size; exit\" WINCH; echo ready; while :; do sleep 0.05; done'"
     "; true",
@@ -143,19 +147,19 @@ def test_a_resize_reaches_the_whole_process_group(running, client, monkeypatch):
   assert b"40 120" in out
 
 
-def test_console_refuses_a_unit_that_is_not_running(running, client):
+def test_shell_refuses_a_unit_that_is_not_running(running, client):
   with client.websocket_connect(f"{URL}&unit=worker") as ws:
     out, closed = drain(ws)
-  assert closed.code == console.REFUSED
+  assert closed.code == shell.REFUSED
   assert b"worker is not running" in out
   assert b"running units: main" in out
 
 
-def test_consoles_are_refused_over_the_network(client):
-  for path in (f"/apps/{APP}/console", "/host/console"):
+def test_shells_are_refused_over_the_network(client):
+  for path in (f"/apps/{APP}/shell", "/host/shell"):
     with client.websocket_connect(f"ws://192.0.2.7{path}") as ws:
       out, closed = drain(ws)
-    assert closed.code == console.REFUSED
+    assert closed.code == shell.REFUSED
     assert b"admin socket or loopback" in out
 
 
@@ -163,30 +167,30 @@ def test_consoles_are_refused_over_the_network(client):
   ("query", "expected"),
   [("", b"started_by is required"), ("?started_by=a+b", b"started_by")],
 )
-def test_consoles_need_to_know_who_opened_them(client, query, expected):
-  for path in (f"/apps/{APP}/console", "/host/console"):
+def test_shells_need_to_know_who_opened_them(client, query, expected):
+  for path in (f"/apps/{APP}/shell", "/host/shell"):
     with client.websocket_connect(f"{LOOPBACK}{path}{query}") as ws:
       out, closed = drain(ws)
-    assert closed.code == console.REFUSED
+    assert closed.code == shell.REFUSED
     assert expected in out
 
 
-def test_consoles_open_on_the_admin_socket_and_loopback():
+def test_shells_open_on_the_admin_socket_and_loopback():
   def arriving_at(server):
     return SimpleNamespace(scope={"server": server})
 
-  assert console.network_refusal(arriving_at(("/k/var/conn/admin.sock", None))) is None
-  assert console.network_refusal(arriving_at(("127.0.0.1", 9000))) is None
-  assert console.network_refusal(arriving_at(("192.0.2.7", 9000)))
-  assert console.network_refusal(arriving_at(None))
+  assert shell.network_refusal(arriving_at(("/k/var/conn/admin.sock", None))) is None
+  assert shell.network_refusal(arriving_at(("127.0.0.1", 9000))) is None
+  assert shell.network_refusal(arriving_at(("192.0.2.7", 9000)))
+  assert shell.network_refusal(arriving_at(None))
 
 
-def test_console_closes_an_idle_session(running, client, monkeypatch):
-  monkeypatch.setattr(console, "IDLE_SECONDS", 0.2)
-  shell(monkeypatch, "exec sleep 30")
+def test_shell_closes_an_idle_session(running, client, monkeypatch):
+  monkeypatch.setattr(shell, "IDLE_SECONDS", 0.2)
+  stand_in(monkeypatch, "exec sleep 30")
   with client.websocket_connect(URL) as ws:
     out, closed = drain(ws)
-  assert closed.code == console.IDLE
+  assert closed.code == shell.IDLE
   assert b"idle" in out
 
 
@@ -200,7 +204,7 @@ def hangups(kelso_env) -> list[list[str]]:
 def test_leaving_hangs_up_the_shell_here_and_in_the_container(
   kelso_env, running, client, monkeypatch
 ):
-  shell(
+  stand_in(
     monkeypatch, "printf '\\033]697;kelso-pid=%s\\007' $$; echo ready; exec sleep 30"
   )
   with client.websocket_connect(URL) as ws:
@@ -225,32 +229,30 @@ def test_the_host_shell_is_a_login_shell_in_home():
   assert host_shell() == ([user.pw_shell, "-l"], Path(user.pw_dir))
 
 
-def test_the_host_console_gets_a_real_terminal(
-  kelso_env, client, monkeypatch, tmp_path
-):
+def test_the_host_shell_gets_a_real_terminal(kelso_env, client, monkeypatch, tmp_path):
   # /dev/tty only opens for a process whose controlling terminal this is. macOS
   # hands a session leader its terminal by itself, so only Linux can fail this.
   script = 'echo x > /dev/tty && echo has-ctty; echo "TERM=$TERM"; pwd -P'
   monkeypatch.setattr(
-    console, "host_shell", lambda: (["/bin/sh", "-c", script], tmp_path)
+    shell, "host_shell", lambda: (["/bin/sh", "-c", script], tmp_path)
   )
-  with client.websocket_connect(f"{LOOPBACK}/host/console?started_by=test") as ws:
+  with client.websocket_connect(f"{LOOPBACK}/host/shell?started_by=test") as ws:
     out, closed = drain(ws)
 
   text = out.decode()
   assert "has-ctty" in text
   assert "TERM=xterm-256color" in text
   assert str(tmp_path.resolve()) in text
-  assert closed.code == console.EXITED
+  assert closed.code == shell.EXITED
 
   run = client.get("/activity").json()["activity"][0]
-  assert (run["verb"], run["app_id"]) == ("console", None)
+  assert (run["verb"], run["app_id"]) == ("shell", None)
 
 
 def test_leaving_ends_a_shell_that_is_still_writing(running, client, monkeypatch):
   # Exiting from a terminal waits for unread output to drain: kelsod has to let
   # go of the terminal before it waits, or the two wait on each other.
-  shell(monkeypatch, "echo pid:$$; exec yes")
+  stand_in(monkeypatch, "echo pid:$$; exec yes")
   with client.websocket_connect(URL) as ws:
     out = b""
     while b"pid:" not in out or b"\n" not in out.split(b"pid:")[1]:

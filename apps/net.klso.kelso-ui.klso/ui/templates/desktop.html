@@ -23,11 +23,11 @@
   <ul class="menu start-list" role="menu">
     {% call menu.folder('Apps', 'app') %}{% endcall %}
     {% call menu.folder('System', 'host') %}
-      {% for i in nav if i.href not in top and i.href != '/host/console' %}{{ menu.item(i.label, i.icon, src=i.href) }}{% endfor %}
+      {% for i in nav if i.href not in top and i.href != '/host/shell' %}{{ menu.item(i.label, i.icon, src=i.href) }}{% endfor %}
     {% endcall %}
     {% for i in nav if i.href in top %}{{ menu.item(i.label, i.icon, src=i.href) }}{% endfor %}
     {{ menu.sep() }}
-    {% for i in nav if i.href == '/host/console' %}{{ menu.item(i.label ~ '…', i.icon, src=i.href) }}{% endfor %}
+    {% for i in nav if i.href == '/host/shell' %}{{ menu.item(i.label ~ '…', i.icon, src=i.href) }}{% endfor %}
     <li role="none"><form method="post" action="/logout"><button type="submit" role="menuitem" class="menu-item"><span class="menu-glyph"><img src="{{ icon_url('signout') }}" alt=""></span><span class="menu-label">Sign out…</span></button></form></li>
   </ul>
 </div>

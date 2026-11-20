@@ -16,9 +16,9 @@ PAGES = [
   "/apps/mealie",
   "/apps/kelso-ui/logs",
   "/apps/kelso-ui/manifest",
-  "/apps/kelso-ui/console",
-  "/apps/mealie/console",
-  "/host/console",
+  "/apps/kelso-ui/shell",
+  "/apps/mealie/shell",
+  "/host/shell",
   "/catalog",
   "/catalog?app=kelso-ui",
   "/volumes",
@@ -143,13 +143,14 @@ def test_the_start_menu_has_a_folder_per_loaded_app(client, fake):
   assert "is-app" not in text, "apps are no longer desktop icons"
   assert 'data-src="/apps/kelso-ui"' in text
   assert 'data-src="/apps/kelso-ui/logs"' in text
-  assert 'data-src="/apps/kelso-ui/console"' in text
+  assert 'data-src="/apps/kelso-ui/shell?unit=main"' in text
+  assert ">Shell - main<" in text
   assert 'data-run="cmd:test"' in text
   assert 'data-run="stop"' in text, "kelso-ui is running"
   assert 'data-run="start"' in text, "jellyfin is stopped"
   assert 'data-src="/apps/immich"' in text
   assert 'data-src="/apps/mealie"' not in text, "unloaded"
-  assert 'data-src="/apps/jellyfin/console"' not in text, "nothing running"
+  assert 'data-src="/apps/jellyfin/shell' not in text, "nothing running"
   assert 'data-run="start_group:9"' in text and 'data-run="start_group:0"' in text
   assert 'data-title="main"' in text and 'kelso.example.test"' in text, "a link"
   for item in web.NAV:

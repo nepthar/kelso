@@ -70,6 +70,9 @@
   {% call menu.folder('Commands', cls='' if app.commands else 'is-empty') %}
     {% for c in app.commands %}{{ menu.item(c.name, 'command', src=here, run='cmd:' ~ c.name, title=c.get('desc') or '') }}{% else %}{{ menu.note('(Empty)') }}{% endfor %}
   {% endcall %}
+  {% call menu.folder('Shells', cls='' if app.shells else 'is-empty') %}
+    {% for unit in app.shells %}{{ menu.item('Shell - ' ~ unit, 'shell', src=here ~ '/shell?unit=' ~ unit|urlencode) }}{% else %}{{ menu.note('(Empty)') }}{% endfor %}
+  {% endcall %}
   {{ menu.sep() }}
   {% if running %}
   {{ menu.item('Stop', 'stop', src=here, run='stop') }}
@@ -81,10 +84,9 @@
   {{ menu.item('Back up', 'backups', src=here, run='backup') }}
   {{ menu.sep() }}
   {{ menu.item('Logs', 'logs', src=here ~ '/logs') }}
-  {% if app.desk_state != 'off' %}{{ menu.item('Console', 'shell', src=here ~ '/console') }}{% endif %}
 {% endcall %}
 {% else %}
-{{ menu.note('No apps loaded. Pick one from Apps & Repos.') }}
+{{ menu.note('No apps loaded. Pick one from App Repos.') }}
 {% endfor %}
 {{ menu.sep() }}
 {{ menu.item('Start all apps', 'start', src='/host', run='start_group:9') }}

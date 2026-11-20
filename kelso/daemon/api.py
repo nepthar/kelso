@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from kelso import VERSION
-from kelso.daemon import console
+from kelso.daemon import shell
 from kelso.jobs import JobRunner
 from kelso.lib import views
 from kelso.lib.apps import AppID
@@ -36,8 +36,8 @@ from kelso.lib.configflow.route_provider import (
   route_provider_config_request,
 )
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import console_command
 from kelso.lib.lifecycle.routes import remove_published_route
+from kelso.lib.lifecycle.shell import shell_command
 from kelso.lib.lifecycle.volumes import remove_orphaned_volume
 from kelso.lib.net import decide_many, net_view
 from kelso.lib.util import Identifier, validate_identifier
@@ -109,7 +109,7 @@ Jobs = Annotated[JobRunner, Depends(_runner)]
 
 
 def _started_by_refusal(started_by: str) -> str | None:
-  """Why a console's `started_by` query parameter is unusable, if it is."""
+  """Why a shell's `started_by` query parameter is unusable, if it is."""
   if not started_by:
     return "started_by is required, e.g. ?started_by=kelso_ui"
   try:
@@ -217,34 +217,34 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
     except (ValueError, RuntimeError) as e:
       raise HTTPException(400, str(e)) from e
 
-  @app.websocket("/apps/{app_id}/console")
-  async def app_console(
+  @app.websocket("/apps/{app_id}/shell")
+  async def app_shell(
     websocket: WebSocket, app_id: str, started_by: str = "", unit: str = "main"
   ):
-    """A shell in one of the app's running units. See kelso/daemon/console.py."""
-    refusal = console.network_refusal(websocket) or _started_by_refusal(started_by)
+    """A shell in one of the app's running units. See kelso/daemon/shell.py."""
+    refusal = shell.network_refusal(websocket) or _started_by_refusal(started_by)
     if refusal:
-      await console.refuse(websocket, refusal)
+      await shell.refuse(websocket, refusal)
       return
     try:
       ctx = await asyncio.to_thread(ctx_factory)
       cmd = await asyncio.to_thread(
-        lambda: console_command(app_id, unit, ctx, announce_pid=True)
+        lambda: shell_command(app_id, unit, ctx, announce_pid=True)
       )
     except (ValueError, RuntimeError) as e:
-      await console.refuse(websocket, str(e))
+      await shell.refuse(websocket, str(e))
       return
-    await console.serve(websocket, cmd, ctx, started_by=started_by)
+    await shell.serve(websocket, cmd, ctx, started_by=started_by)
 
-  @app.websocket("/host/console")
-  async def host_console(websocket: WebSocket, started_by: str = ""):
+  @app.websocket("/host/shell")
+  async def host_shell(websocket: WebSocket, started_by: str = ""):
     """A login shell on the host, as kelsod's own user."""
-    refusal = console.network_refusal(websocket) or _started_by_refusal(started_by)
+    refusal = shell.network_refusal(websocket) or _started_by_refusal(started_by)
     if refusal:
-      await console.refuse(websocket, refusal)
+      await shell.refuse(websocket, refusal)
       return
     ctx = await asyncio.to_thread(ctx_factory)
-    await console.serve_host(websocket, ctx, started_by=started_by)
+    await shell.serve_host(websocket, ctx, started_by=started_by)
 
   @app.get("/apps/{app_id}/config-request", tags=["config"])
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:

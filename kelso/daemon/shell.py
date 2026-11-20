@@ -1,4 +1,4 @@
-"""kelsod's end of a console: a PTY between a websocket and a shell, either
+"""kelsod's end of a shell: a PTY between a websocket and either
 `docker compose exec` into an app's unit or a login shell on the host.
 
 In, binary frames are keystrokes and text frames are JSON control, only
@@ -27,15 +27,15 @@ from starlette.websockets import WebSocket
 
 from kelso.lib.docker import DOCKER, docker_run_command
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.console import (
+from kelso.lib.lifecycle.shell import (
   PID_MARKER,
-  ConsoleCommand,
-  ConsoleRecord,
+  ShellCommand,
+  ShellRecord,
   hangup_args,
   host_shell,
 )
 
-logger = logging.getLogger("kelsod.console")
+logger = logging.getLogger("kelsod.shell")
 
 IDLE_SECONDS = 15 * 60
 
@@ -57,11 +57,11 @@ except OSError as e:
 """
 
 
-def shell_argv(cmd: ConsoleCommand) -> list[str]:
+def shell_argv(cmd: ShellCommand) -> list[str]:
   return [DOCKER, *cmd.docker_args]
 
 
-def hang_up(cmd: ConsoleCommand, pid: int) -> None:
+def hang_up(cmd: ShellCommand, pid: int) -> None:
   """End the shell an abandoned session left running in its container."""
   code = docker_run_command(
     hangup_args(cmd, pid), cwd=cmd.cwd, json_output=False, check=False, env=cmd.env
@@ -71,11 +71,11 @@ def hang_up(cmd: ConsoleCommand, pid: int) -> None:
 
 
 def network_refusal(ws: WebSocket) -> str | None:
-  """Why a console may not open on this connection, or None.
+  """Why a shell may not open on this connection, or None.
 
   Only the admin socket and loopback stand in front of an API with no
-  authentication, and a console is a shell. So one that arrived over the
-  network is refused, whatever `kelsod --host` was told.
+  authentication. So a shell that arrived over the network is refused,
+  whatever `kelsod --host` was told.
   """
   server = ws.scope.get("server")
   if server and server[1] is None:
@@ -85,7 +85,7 @@ def network_refusal(ws: WebSocket) -> str | None:
       return None
   except ValueError:
     pass
-  return "Consoles open only over kelsod's admin socket or loopback."
+  return "Shells open only over kelsod's admin socket or loopback."
 
 
 async def refuse(ws: WebSocket, message: str) -> None:
@@ -96,11 +96,11 @@ async def refuse(ws: WebSocket, message: str) -> None:
 
 
 async def serve(
-  ws: WebSocket, cmd: ConsoleCommand, ctx: KelsoCtx, *, started_by: str
+  ws: WebSocket, cmd: ShellCommand, ctx: KelsoCtx, *, started_by: str
 ) -> None:
   """A shell in an app's unit, filed in the activity log."""
   record = await asyncio.to_thread(
-    lambda: ConsoleRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=started_by)
+    lambda: ShellRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=started_by)
   )
   await _session(
     ws,
@@ -116,7 +116,7 @@ async def serve_host(ws: WebSocket, ctx: KelsoCtx, *, started_by: str) -> None:
   """A login shell on the host as kelsod's own user, filed in the activity log."""
   argv, home = host_shell()
   record = await asyncio.to_thread(
-    lambda: ConsoleRecord(ctx, None, {"shell": argv[0]}, started_by=started_by)
+    lambda: ShellRecord(ctx, None, {"shell": argv[0]}, started_by=started_by)
   )
   # Nothing else sets TERM here: docker does it for a container's shell.
   env = {"TERM": "xterm-256color"}
@@ -125,7 +125,7 @@ async def serve_host(ws: WebSocket, ctx: KelsoCtx, *, started_by: str) -> None:
 
 async def _session(
   ws: WebSocket,
-  record: ConsoleRecord,
+  record: ShellRecord,
   argv: list[str],
   *,
   cwd: Path,

@@ -233,7 +233,7 @@ class RunEntry(BaseModel):
   routes: dict[Identifier, RouteEntry] = Field(default_factory=dict)
   restart: Literal["yes", "no"] = "yes"
   # How kelso runs anything in this unit: `[*shell, script]`. The unit's commands
-  # and its console need it to exist in the image.
+  # and its shell need it to exist in the image.
   shell: list[str] = Field(default_factory=lambda: ["/bin/sh", "-c"], min_length=1)
   # Run in the container to say it is healthy: a list as it is, a string by
   # `shell`. Kelso sets how often. Unset, the image's own healthcheck applies.

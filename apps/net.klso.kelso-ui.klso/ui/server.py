@@ -15,7 +15,6 @@ from pages import (
   apps,
   backups,
   catalog,
-  console,
   cron,
   dashboard,
   desktop,
@@ -23,6 +22,7 @@ from pages import (
   routes,
   session,
   settings,
+  shell,
   volumes,
 )
 from web import STATIC, api_error, render
@@ -38,7 +38,7 @@ for feature in (
   desktop,
   dashboard,
   apps,
-  console,
+  shell,
   catalog,
   volumes,
   backups,

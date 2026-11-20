@@ -51,7 +51,7 @@ creates.
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
 | `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, by `start_group`. |
-| `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its console. It must exist in the image; without it they fail with docker's "not found". |
+| `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its shell. It must exist in the image; without it they fail with docker's "not found". |
 | `connections` | list of strings | `[]` | [Connections](#connectionsname) to give this unit even though its `env` references none of their properties. |
 | `healthcheck` | string or list of strings | the image's own | Run in the container to say it is healthy: exits 0 when it is. A list runs as it is; a string runs in `shell`. See [Healthchecks](#healthchecks). |
 | `compose` | table | `{}` | The escape hatch. See [Free-form docker options](#free-form-docker-options). |
@@ -379,7 +379,7 @@ reindex, a password reset.
 
 The Run button and `kelso cmd` run a command's string in its unit's `shell`,
 with the operator's arguments added to the end. `kelso shell` prints a unit's
-commands before opening its shell, and the web UI's console lists them to copy.
+commands before opening its shell, and the web UI's shell lists them to copy.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
