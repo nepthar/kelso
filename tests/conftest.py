@@ -182,6 +182,13 @@ class KelsoEnv:
       sys.stdin = original_stdin
     return Result(code, out.getvalue(), err.getvalue())
 
+  def start(self, app: str, *config: str) -> Result:
+    """`kelso config app *config`, which must succeed, then `kelso start app`."""
+    if config:
+      configured = self.run("config", app, *config)
+      assert configured.returncode == 0, configured.stderr
+    return self.run("start", app)
+
   def run_subprocess(
     self,
     *args: str,

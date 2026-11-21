@@ -96,7 +96,7 @@ def test_cleanup_temp_empties_stopped_apps_and_skips_running_ones(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   cache = kelso_env.volumes_root / "temp" / BASIC / "cache"
   (cache / "junk").write_text("x")
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=root").returncode == 0
 
   assert kelso_env.run("start", BASIC).returncode == 0
   running = kelso_env.run("cleanup", "--temp", "--apply")

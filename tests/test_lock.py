@@ -59,10 +59,12 @@ def test_the_lock_timeout_message_names_the_holder(kelso_env):
 
 
 def test_the_recorded_holder_is_the_command_not_the_argv(kelso_env):
-  """`config --set k=secret` must never put the value in the lockfile."""
+  """`config k=-` must never put the secret in the lockfile."""
   app_id = "net.klso.basic-features"
   assert kelso_env.run("load", app_id).returncode == 0
-  assert kelso_env.run("config", app_id, "--set", "admin_pass=hunter2").returncode == 0
+  assert (
+    kelso_env.run("config", app_id, "admin_pass=-", input="hunter2").returncode == 0
+  )
 
   recorded = kelso_env.kelso_lockfile_path.read_text()
   assert "hunter2" not in recorded

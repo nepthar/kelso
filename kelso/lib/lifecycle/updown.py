@@ -1,12 +1,13 @@
-"""Bringing the box to a `start_group`, one group at a time.
+"""Bringing the host up or down to a `start_group`, one group at a time.
 
-`to_group(n)` stops groups above `n`, highest first, then starts groups 1 to
-`n`, lowest first, waiting for each to be ready before starting the next:
-healthy where a container's image has a healthcheck, and otherwise still
-running `SETTLE` seconds in. A group that is not ready in time is reported and
-the next one starts anyway. `kelso up` is group 9 and `kelso down` group 0.
+`up(n)` starts groups 1 to `n`, lowest first, waiting for each to be ready
+before starting the next: healthy where a container's image has a healthcheck,
+and otherwise still running `SETTLE` seconds in. A group that is not ready in
+time is reported and the next one starts anyway. `down(n)` stops groups above
+`n`, highest first. Neither goes the other way: `up` never stops an app, and
+`down` never starts one.
 
-When kelsod starts it resumes to group 9, but only apps whose last action was
+When kelsod starts it brings the host up, but only apps whose last action was
 "started", so whatever was running before a restart runs again. Group 0
 belongs to kelsod: it starts it, without waiting, as it starts, and takes it
 down as it exits. Progress is logged to `kelso.lifecycle.updown`."""
@@ -48,15 +49,19 @@ def _start_group(app: AppID, ctx: KelsoCtx) -> int:
   return int(ctx.app_option(app, "start_group"))
 
 
-def to_group(
-  ctx: KelsoCtx, target: int, *, wait: float = DEFAULT_WAIT, resume: bool = False
+def up(
+  ctx: KelsoCtx, target: int = 9, *, wait: float = DEFAULT_WAIT, resume: bool = False
 ) -> list[str]:
-  """Stop groups above `target`, then start 1 to `target`; what went wrong.
+  """Start groups 1 to `target`; what went wrong.
 
   With `resume`, only apps whose last action was "started" are started.
   """
-  problems = _down(ctx, range(target + 1, 10))
-  return problems + _up(ctx, range(1, target + 1), wait, resume=resume)
+  return _up(ctx, range(1, target + 1), wait, resume=resume)
+
+
+def down(ctx: KelsoCtx, target: int = 0) -> list[str]:
+  """Stop groups above `target`; what went wrong."""
+  return _down(ctx, range(target + 1, 10))
 
 
 def start_kelsod_group(ctx: KelsoCtx) -> list[str]:

@@ -270,7 +270,7 @@ def _load_config_values(
         issues.append(
           ConfigIssue(
             f"config {config_name} expected secret={config.secret}, but found secret={is_secret}",
-            "Overwrite existing value with `kelso config`",
+            f"Overwrite existing value with `kelso config {spec.app} {config_name}=...`",
           )
         )
     elif config.has_default():
@@ -281,7 +281,8 @@ def _load_config_values(
       issues.append(
         ConfigIssue(
           f"config {config_name} is unset and no default specified",
-          "Set with `kelso config`",
+          f"Set with `kelso config {spec.app} {config_name}="
+          f"{'-' if config.secret else '<value>'}`",
         )
       )
     result[config_name] = ConfigValue(config, resolved)
@@ -334,7 +335,7 @@ def _load_volume_links(
   volume_links = {}
   for volume_name, volume in spec.volumes.items():
     mkdir = volume.kind not in ("app", "host")
-    bind_cmd = f"`kelso config {app_id} --bind {volume_name}=<host_volume>`"
+    bind_cmd = f"`kelso config {app_id} volume.{volume_name}=<host_volume>`"
 
     if volume.kind == "host":
       tag = found_binds.get(volume_name)
@@ -862,7 +863,7 @@ def _http_addresses(
       issues.append(
         ConfigIssue(
           f"connection {name}: {e}",
-          f"Run `kelso config {spec.app} --set {fix}`",
+          f"Run `kelso config {spec.app} {fix}`",
         )
       )
   return addresses

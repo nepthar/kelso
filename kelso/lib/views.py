@@ -432,7 +432,7 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 
 
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
-  """One app in full: what `kelso inspect` shows, as data."""
+  """One app in full: what `kelso status APP` shows, as data."""
   observation = observe(app_id, ctx)
   try:
     spec = ctx.loaded_spec(app_id)

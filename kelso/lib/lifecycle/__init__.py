@@ -31,8 +31,8 @@ from kelso.lib.lifecycle.restore import (
   restore_plan,
 )
 from kelso.lib.lifecycle.rm import (
-  DATA,
   PURGE,
+  RESET,
   RM,
   TEMP,
   UNLOAD,
@@ -89,7 +89,7 @@ __all__ = [
   "refuse_other_origin",
   "RM",
   "TEMP",
-  "DATA",
+  "RESET",
   "UNLOAD",
   "RemovalMode",
   "removal_plan",

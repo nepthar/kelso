@@ -15,9 +15,9 @@
 {%- endmacro %}
 
 {% block commands %}
-{{ job_button('Start all', 'start_group', icon='play', bar=true, tone='go', title='Start all apps', args={'group': '9'},
+{{ job_button('Start all', 'up', icon='play', bar=true, tone='go', title='Start all apps', args={},
     desc='Starts every loaded app by start_group, 1 to 9, waiting for each group to be ready before the next.') }}
-{{ job_button('Stop all', 'start_group', icon='stop', bar=true, tone='stop', title='Stop all apps', args={'group': '0'},
+{{ job_button('Stop all', 'down', icon='stop', bar=true, tone='stop', title='Stop all apps', args={},
     desc='Stops every running app by start_group, 9 down to 1. This web interface, and anything else in group 0, keeps running. Data, configuration and published routes are untouched.') }}
 {% endblock %}
 

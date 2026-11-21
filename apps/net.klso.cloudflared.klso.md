@@ -8,7 +8,8 @@ Create the tunnel in the Cloudflare dashboard (Zero Trust → Networks →
 Tunnels), copy its token, and set it here:
 
 ```
-kelso start cloudflared --set tunnel_token=<token>
+kelso config cloudflared tunnel_token=-
+kelso start cloudflared
 ```
 
 The token is what this container needs. The route provider separately needs an

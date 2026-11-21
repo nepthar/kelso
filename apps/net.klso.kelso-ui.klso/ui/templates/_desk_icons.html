@@ -89,6 +89,6 @@
 {{ menu.note('No apps loaded. Pick one from App Repos.') }}
 {% endfor %}
 {{ menu.sep() }}
-{{ menu.item('Start all apps', 'start', src='/host', run='start_group:9') }}
-{{ menu.item('Stop all apps', 'stop', src='/host', run='start_group:0') }}
+{{ menu.item('Start all apps', 'start', src='/host', run='up') }}
+{{ menu.item('Stop all apps', 'stop', src='/host', run='down') }}
 </template>

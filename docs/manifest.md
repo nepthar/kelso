@@ -25,7 +25,7 @@ The only required section. Keys kelso does not know are refused.
 | `app_id` | string | from the filename | Refused if it disagrees with the filename. |
 | `display_name` | string | `""` | Shown in the UI and `kelso ps` instead of the id. |
 | `description` | string | `""` | One line. Shown in the catalog. |
-| `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso inspect` and the web UI. |
+| `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso status APP` and the web UI. |
 | `url` | string | `""` | Where to read more. Must start with `https://` or `http://`; the web UI links to it. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
 | `network_mode` | `open` \| `restrict` \| `ask` \| `watch` \| `host` | `open` | What the app can reach. See [Network modes](#network-modes). |
@@ -104,7 +104,7 @@ A `host` volume is not a path — it is a *request*. Kelso will not start the
 app until the operator binds it to one of the host volumes they declared:
 
 ```
-kelso config <app> --bind media=photos
+kelso config <app> volume.media=photos
 ```
 
 ## `[connections.<name>]`
@@ -200,7 +200,7 @@ NAS_URL = "${conn.nas.url}"
 
 The app calls `http://nas`, and kproxy connects it to whatever `nas_address`
 says. The host is a name or an IPv4 address, and the port is required. Kelso
-fills `address` in on every start, so `kelso config --set` takes effect at the next
+fills `address` in on every start, so `kelso config` takes effect at the next
 start, and a value that isn't `host:port` stops the app from starting, naming
 the fix.
 
@@ -229,7 +229,7 @@ app-wide: every unit gets the same.
 | `host` | Anything, on the host's own network, with no port isolation. Called out as dangerous. | Refused: the app binds the host's ports itself. |
 
 The manifest's mode is the author's. You can run any app but a `host` one in
-another mode with `kelso config <app> --network <mode>`, and go back to the
+another mode with `kelso config <app> network.mode=<mode>`, and go back to the
 manifest's with `--network default`. It takes effect at the next start, and
 receipts say when the mode is yours rather than the manifest's.
 
@@ -268,7 +268,7 @@ What running behind kproxy costs the app:
 Behind kproxy, an app needs docker 27 or newer: older versions ignore the option
 that keeps the app's network from having an address on the host, so the app
 could reach the host's own services. `kelso start` refuses on an older docker,
-and `kelso system doctor` notes it.
+and `kelso doctor` notes it.
 
 kproxy's source ships inside kelso, and docker builds it the first time an app
 starts behind it, which takes about a minute; later starts reuse the image.
@@ -309,7 +309,7 @@ timezone    = { desc = "IANA timezone", default = "UTC" }
 mongo_pass  = { secret = true, default = "auto" }
 ```
 
-Set them with `kelso config <app> --set timezone=America/Denver`, or from the
+Set them with `kelso config <app> timezone=America/Denver`, or from the
 app's page in the web UI.
 
 A change to a loaded app takes effect the next time it starts. That goes for
@@ -325,7 +325,7 @@ share the config namespace and always have a default.
 | Name | Default | Accepts |
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
-| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops. `kelso start_group N` stops the groups above N, highest first, then starts 1 to N in order; `kelso up` is `start_group 9` and `kelso down` is `start_group 0`. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
+| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops. `kelso up N` starts groups 1 to N in order (default 9) and never stops anything; `kelso down N` stops the groups above N, highest first (default 0), and never starts anything. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the
@@ -365,7 +365,7 @@ manifest's. A route can go through several at once — say, Pangolin for the
 internet and Nginx Proxy Manager for the LAN:
 
 ```sh
-kelso config immich --route main=pangolin,npm
+kelso config immich route.main=pangolin,npm
 ```
 
 The first one listed is the primary: its domain is the one `${routes.<name>}`
@@ -574,9 +574,9 @@ never run kelso. See [demo-markdown](../demo-apps/net.klso.demo-markdown.klso.md
 ## Checking your work
 
 ```bash
-kelso inspect <app>      # what the manifest declares, resolved
+kelso status <app>       # what the manifest declares, resolved
 kelso load <app>         # parse errors, one list, with the key that caused each
 ```
 
-`kelso inspect` on an unloaded app reads the manifest it *would* load
+`kelso status APP` on an unloaded app reads the manifest it *would* load
 from, so it is the fastest way to see whether an edit did what you meant.

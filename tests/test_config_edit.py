@@ -156,7 +156,7 @@ def test_changing_an_unknown_tag_lists_the_known_ones(kelso_env, host_dir):
 def test_a_new_host_volume_is_immediately_bindable(kelso_env, host_dir):
   """The point of the feature: declare it, then bind an app to it."""
   add_host_volume(ctx_of(kelso_env), "fresh", str(host_dir))
-  bound = kelso_env.run("config", "host-volumes", "--bind", "hostvol1=fresh")
+  bound = kelso_env.run("config", "host-volumes", "volume.hostvol1=fresh")
   assert bound.returncode == 0, bound.stderr
   assert kelso_env.run("start", "host-volumes").returncode == 0
   link = kelso_env.run_root / "host-volumes" / "volumes" / "host" / "hostvol1"

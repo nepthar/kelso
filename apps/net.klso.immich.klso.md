@@ -15,7 +15,8 @@ path = "/mnt/immich"
 ```
 
 ```
-kelso start immich --bind photos=photos
+kelso config immich volume.photos=photos
+kelso start immich
 ```
 
 ## manifest.toml

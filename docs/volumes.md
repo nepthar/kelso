@@ -34,7 +34,7 @@ downloaded archives. Too large to copy casually, and often already somewhere
 safe, such as a NAS with its own redundancy.
 
 Bulk volumes are not backed up unless you ask, one volume at a time, with the
-checkbox on the app's page or `kelso config <app> --backup <volume>=on`. They
+checkbox on the app's page or `kelso config <app> backup.<volume>=on`. They
 are read without stopping the app: files that are written once do not change
 under the reader.
 
@@ -59,7 +59,7 @@ downloads folder. The manifest asks for one by name and you bind it to a host
 volume you declared:
 
 ```
-kelso config <app> --bind media=photos
+kelso config <app> volume.media=photos
 ```
 
 It is your directory, not the app's, so kelso never backs it up: it may be
@@ -80,4 +80,4 @@ configuration, kelsodb, and your own apps in the `local` repo. Restoring an
 app puts all of that back together, as it was at the moment it was backed up.
 
 Secrets stay encrypted in the backup. Reading them anywhere but this machine
-takes your recovery phrase (`kelso system recovery-phrase`).
+takes your recovery phrase (`kelso secret recovery-phrase`).

@@ -57,7 +57,7 @@ readonly = true
 ```
 
 ```
-kelso config jellyfin --bind media=media
+kelso config jellyfin volume.media=media
 kelso start jellyfin
 ```
 

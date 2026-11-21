@@ -36,7 +36,7 @@ root instead.
 The last thing `init` shows is a twelve-word recovery phrase. Every key kelso
 encrypts your apps' secrets with is derived from it, and it is the only way to
 read them, or a backup of them, on another machine. Save it in a password
-manager. `kelso system recovery-phrase` shows it again.
+manager. `kelso secret recovery-phrase` shows it again.
 
 The reboot matters even though you just logged back in. kelsod runs under
 systemd's per-user manager, which keeps the groups it started with; if that
@@ -66,7 +66,8 @@ one above. `kelso repo list` shows every app you can start, and when you are
 done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
 For the web UI, choose its admin password and start it; it prints the address
-to open: `kelso start kelso-ui --set admin_pass=<password>`.
+to open: `kelso config kelso-ui admin_pass=-`, which asks for it, then
+`kelso start kelso-ui`.
 
 ## Upgrading kelso
 Install the release you want by its tag, then restart kelsod on it:
@@ -164,7 +165,7 @@ To bring kelso back on a new machine, or a rebuilt one, from its backups:
    and state, then every app, and points `backups/` at that directory so the
    next backup adds to it.
 4. Check `config.toml`'s host volumes and `route_address` for this machine;
-   `kelso system doctor` reports paths that are not there. Then `kelso up`.
+   `kelso doctor` reports paths that are not there. Then `kelso up`.
 
 Restore refuses a kelso that already holds apps. `kelso system purge` deletes
 every app, its data and its config, leaving config.toml, the phrase, repos,

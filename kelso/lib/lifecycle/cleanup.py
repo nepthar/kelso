@@ -58,8 +58,10 @@ class CleanupPlan:
     return sum(item.size or 0 for item in self.items)
 
 
-def cleanup_plan(ctx: KelsoCtx, *, temp: bool = False) -> CleanupPlan:
-  """What cleanup would delete, without deleting it."""
+def cleanup_plan(
+  ctx: KelsoCtx, *, temp: bool = False, app: AppID | None = None
+) -> CleanupPlan:
+  """What cleanup would delete, without deleting it; only `app`'s, if given."""
   items = _incomplete_restores(ctx)
   skipped: list[AppID] = []
   observations = ctx.observations()
@@ -77,6 +79,9 @@ def cleanup_plan(ctx: KelsoCtx, *, temp: bool = False) -> CleanupPlan:
   items += [
     Reclaim("routes", o.app_id, None, None) for o in observations if o.orphaned_routes
   ]
+  if app is not None:
+    items = [item for item in items if item.app == app]
+    return CleanupPlan(tuple(items), tuple(a for a in skipped if a == app))
   items += [Reclaim("image", None, image, image.size) for image in _unused_images(ctx)]
   return CleanupPlan(tuple(items), tuple(skipped))
 

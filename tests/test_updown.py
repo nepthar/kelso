@@ -1,4 +1,4 @@
-"""`kelso start_group`, `up` and `down`: the whole box, by start_group."""
+"""`kelso up` and `kelso down`: the whole box, by start_group."""
 
 import json
 from pathlib import Path
@@ -30,7 +30,7 @@ def _load(kelso_env, *apps):
 
 def test_up_starts_each_start_group_before_the_next(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  set_ = kelso_env.run("config", "routes-demo", "--set", "start_group=4")
+  set_ = kelso_env.run("config", "routes-demo", "start_group=4")
   assert set_.returncode == 0, set_.stderr
 
   up = kelso_env.run("up")
@@ -44,7 +44,7 @@ def test_up_starts_each_start_group_before_the_next(kelso_env):
 
 def test_down_stops_in_reverse_and_up_brings_it_back(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=4")
+  kelso_env.run("config", "routes-demo", "start_group=4")
   assert kelso_env.run("up").returncode == 0
 
   down = kelso_env.run("down")
@@ -55,16 +55,19 @@ def test_down_stops_in_reverse_and_up_brings_it_back(kelso_env):
   assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo"] * 2
 
 
-def test_start_group_stops_the_groups_above_and_starts_up_to_it(kelso_env):
+def test_down_and_up_to_a_group_each_go_one_way(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=4")
+  kelso_env.run("config", "routes-demo", "start_group=4")
   assert kelso_env.run("up").returncode == 0
 
-  lowered = kelso_env.run("start_group", "4")
-
+  assert kelso_env.run("up", "4").returncode == 0
+  assert _compose(kelso_env, "down") == [], "up never stops"
+  lowered = kelso_env.run("down", "4")
   assert lowered.returncode == 0, lowered.stderr
   assert _compose(kelso_env, "down") == ["ports-demo"]
-  assert kelso_env.run("start_group", "9").returncode == 0
+  assert kelso_env.run("down", "6").returncode == 0
+  assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo"], "down never starts"
+  assert kelso_env.run("up").returncode == 0
   assert _compose(kelso_env, "up") == ["routes-demo", "ports-demo", "ports-demo"]
 
 
@@ -81,7 +84,7 @@ def test_up_leaves_an_app_stopped_with_kelso_stop_alone(kelso_env):
 
 def test_a_group_not_ready_in_time_is_reported_and_the_next_still_starts(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=4")
+  kelso_env.run("config", "routes-demo", "start_group=4")
   assert kelso_env.run("start", "routes-demo").returncode == 0
   containers = json.loads(kelso_env.docker_state.read_text())
   containers[0]["status"] = "Up 1 second (health: starting)"
@@ -96,7 +99,7 @@ def test_a_group_not_ready_in_time_is_reported_and_the_next_still_starts(kelso_e
 
 def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=0")
+  kelso_env.run("config", "routes-demo", "start_group=0")
   assert kelso_env.run("start", "routes-demo").returncode == 0
 
   up = kelso_env.run("up")
@@ -110,7 +113,7 @@ def test_up_and_down_leave_group_0_to_kelsod(kelso_env):
 
 def test_kelsods_groups_come_up_and_go_down_with_it(kelso_env):
   _load(kelso_env, "ports-demo", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=0")
+  kelso_env.run("config", "routes-demo", "start_group=0")
   ctx = KelsoCtx(load_config_file(kelso_env.config))
 
   assert updown.start_kelsod_group(ctx) == []
@@ -124,7 +127,7 @@ def test_up_without_waiting_does_not_ask_docker_whether_anything_is_ready(
   kelso_env,
 ):
   _load(kelso_env, "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "start_group=0")
+  kelso_env.run("config", "routes-demo", "start_group=0")
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(kelso_env.docker_log.read_text().splitlines())
 
@@ -136,7 +139,7 @@ def test_up_without_waiting_does_not_ask_docker_whether_anything_is_ready(
 
 def test_an_odd_group_is_named_by_its_number(kelso_env):
   _load(kelso_env, "ports-demo")
-  kelso_env.run("config", "ports-demo", "--set", "start_group=3")
+  kelso_env.run("config", "ports-demo", "start_group=3")
 
   assert "Starting run group 3\n" in kelso_env.run("up").stderr
 
@@ -178,7 +181,7 @@ def test_resume_brings_back_only_what_was_running(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(_compose(kelso_env, "up"))
 
-  assert updown.to_group(ctx, 9, resume=True) == []
+  assert updown.up(ctx, resume=True) == []
 
   assert _compose(kelso_env, "up")[before:] == ["ports-demo"]
 
@@ -192,6 +195,6 @@ def test_up_starts_an_app_with_a_unit_down(kelso_env):
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   before = len(_compose(kelso_env, "up"))
 
-  assert updown.to_group(ctx, 9, resume=True) == []
+  assert updown.up(ctx, resume=True) == []
 
   assert _compose(kelso_env, "up")[before:] == ["ports-demo"]

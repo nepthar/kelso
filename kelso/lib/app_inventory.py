@@ -58,10 +58,17 @@ class Inventory:
         f'No app matching "{name}" found{where}. `kelso ps` lists loaded apps, '
         f"and `kelso repo list` the apps in each repo."
       )
+    listed = ", ".join(f"{i} ({self._where(i)})" for i in found)
     raise ValueError(
-      f'Multiple apps matching "{name}" found{where}: {", ".join(found)}. '
-      f"Name the one you mean in full."
+      f'Multiple apps matching "{name}" found{where}: {listed}. '
+      f"Name the one you mean in full, or as <app>@<repo>."
     )
+
+  def _where(self, app_id: AppID) -> str:
+    if app_id in self.loaded:
+      return "loaded"
+    repos = [e.repo for e in self.catalog if e.app_id == app_id and e.repo]
+    return f"repo {', '.join(repos)}" if repos else "not loaded"
 
   def bundle(self, app_id: AppID, repo: str = "") -> CatalogEntry | None:
     """The bundle `app_id` loads from, or None if there is none.

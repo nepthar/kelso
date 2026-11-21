@@ -42,7 +42,7 @@ def client() -> TestClient:
 
 @pytest.fixture
 def running(kelso_env):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
 
 
 def stand_in(monkeypatch, script: str) -> None:

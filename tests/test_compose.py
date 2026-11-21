@@ -778,7 +778,7 @@ compose = { pid = "host" }
 
 
 def test_compose_warnings_reach_the_capability_receipt(tmp_path):
-  """`kelso inspect` reads these beside host networking and writable binds."""
+  """`kelso status APP` reads these beside host networking and writable binds."""
   from kelso.lib.receipt import danger_callouts
 
   spec = spec_of(

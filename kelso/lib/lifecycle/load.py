@@ -125,7 +125,7 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
   if spec.routes and not app_subdomain:
     raise ValueError(
       f"App {spec.app} needs a subdomain for its routes; "
-      f"run `kelso config {spec.app} --set subdomain=<label>`"
+      f"run `kelso config {spec.app} subdomain=<label>`"
     )
 
   store = ctx.app_store(spec.app)
@@ -534,8 +534,6 @@ def load(
   bundle: Path,
   ctx: KelsoCtx,
   *,
-  sets: list[tuple[str, str]] | None = None,
-  binds: list[tuple[str, str]] | None = None,
   version_change: bool = False,
 ) -> LoadResult:
   """Load `bundle` into `var/run/<id>/` without starting it, binding the app to it.
@@ -581,13 +579,6 @@ def load(
 
   store = ctx.app_store(app)
   store.set_meta("origin", str(bundle))
-
-  if sets:
-    apply_config_sets(spec, sets, ctx)
-
-  if binds:
-    for volname, host_volume_tag in binds:
-      bind(spec, volname, host_volume_tag, ctx)
 
   # On the way down: routes are re-derived below, and may come back under a
   # different name, so what was published goes first.

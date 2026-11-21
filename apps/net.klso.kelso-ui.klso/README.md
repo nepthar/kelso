@@ -61,7 +61,8 @@ connection, so kelso mounts the admin socket in and tells the app where it is;
 there is nothing to bind:
 
 ```
-kelso start kelso-ui --set admin_pass=<password>
+kelso config kelso-ui admin_pass=-
+kelso start kelso-ui
 ```
 
 On a host whose bind mounts cannot carry a unix socket — Docker Desktop on
@@ -70,7 +71,7 @@ macOS, where the socket is visible in the container and unusable — run
 reaches the host's loopback, so kelsod stays off the network:
 
 ```
-kelso config kelso-ui --set api_address=host.docker.internal:N
+kelso config kelso-ui api_address=host.docker.internal:N
 kelso load kelso-ui
 ```
 
@@ -82,7 +83,7 @@ and reset the way every other kelso secret is. The first time, pass it to
 the app with the new value:
 
 ```
-kelso config kelso-ui --set admin_pass=<password>
+kelso config kelso-ui admin_pass=-
 kelso load kelso-ui
 ```
 

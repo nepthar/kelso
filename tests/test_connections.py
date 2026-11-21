@@ -59,7 +59,7 @@ def test_kelso_admin_mounts_the_socket_folder_and_says_where(kelso_env):
   # Only a unit that references a connection is given it.
   assert "/run/kelso/conn" not in str(service(kelso_env, "worker").get("volumes"))
 
-  inspected = kelso_env.run("inspect", APP)
+  inspected = kelso_env.run("status", APP)
   assert "connection 'admin' to kelsod's admin API" in inspected.stdout
 
 

@@ -74,8 +74,12 @@ def start_hint(app: AppID, run_data: AppRunData) -> str:
   ]
   if not unset:
     return f"Start it with: kelso start {app}"
-  flags = " ".join(f"--set {name}=<{name}>" for name in unset)
-  return f"Set {', '.join(unset)}, then start it with: kelso start {app} {flags}"
+  secret = [n for n in unset if run_data.config_values[n].config.secret]
+  plain = " ".join(f"{name}=<value>" for name in unset if name not in secret)
+  commands = [f"kelso config {app} {plain}"] if plain else []
+  commands += [f"kelso config {app} {name}=-" for name in secret]
+  lines = [f"Set {', '.join(unset)} with:", *(f"  {c}" for c in commands)]
+  return "\n".join([*lines, f"Then start it with: kelso start {app}"])
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:

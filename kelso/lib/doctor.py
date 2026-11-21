@@ -1,4 +1,4 @@
-"""Checks behind `kelso system doctor`: orphaned or inconsistent kelso state.
+"""Checks behind `kelso doctor`: orphaned or inconsistent kelso state.
 
 Diagnosis only reads; the caller holds the kelso lock and renders the result.
 """
@@ -63,7 +63,7 @@ def _key_problems(ctx: KelsoCtx) -> list[Finding]:
       Finding(
         "the recovery phrase",
         f"there is none in {ctx.config.master_keyfile}, so kelso cannot encrypt "
-        "or read secrets. Make one with `kelso system rekey`.",
+        "or read secrets. Make one with `kelso secret rekey`.",
       )
     ]
   return []
@@ -76,8 +76,8 @@ def _secret_problems(ctx: KelsoCtx) -> list[Finding]:
   return [
     Finding(
       ref.split(".args.")[0],
-      f"{ref} names system secret {name!r}, which is not set. "
-      f"Set it with `kelso system secret {name}`.",
+      f"{ref} names host secret {name!r}, which is not set. "
+      f"Set it with `kelso secret set {name}`.",
     )
     for name, refs in ctx.config.secret_references().items()
     if name not in stored

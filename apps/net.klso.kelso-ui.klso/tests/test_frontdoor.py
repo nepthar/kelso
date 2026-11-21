@@ -140,4 +140,4 @@ def test_every_page_says_when_the_password_is_off(client, fake, monkeypatch):
   monkeypatch.setitem(web.templates.globals, "NO_PASSWORD", True)
   text = client.get("/backups").text
   assert "No password" in text
-  assert "kelso config kelso-ui --set no_password=off" in text
+  assert "kelso config kelso-ui no_password=off" in text

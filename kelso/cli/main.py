@@ -6,8 +6,8 @@ from pathlib import Path
 
 from kelso import VERSION
 from kelso.cli import (
+  activity,
   agent_help,
-  app,
   backup,
   cleanup,
   cmd,
@@ -15,8 +15,8 @@ from kelso.cli import (
   cron,
   deploy,
   dev,
+  doctor,
   init,
-  inspect,
   load,
   logs,
   net,
@@ -27,6 +27,7 @@ from kelso.cli import (
   restore,
   root,
   routes,
+  secret,
   shell,
   start,
   status,
@@ -47,6 +48,8 @@ logger = logging.getLogger("kelso.cli")
 COMMANDS = [
   updown,
   status,
+  doctor,
+  activity,
   cleanup,
   ps,
   start,
@@ -58,8 +61,6 @@ COMMANDS = [
   update,
   restore,
   remove,
-  inspect,
-  app,
   logs,
   shell,
   dev,
@@ -70,53 +71,64 @@ COMMANDS = [
   cron,
   repo,
   routes,
+  secret,
   system,
   init,
   agent_help,
 ]
 
 HELP = """\
+Develop
+  dev PATH          Run an app bundle in this terminal, as a host would run it
+  deploy PATH HOST  Copy an app bundle to a host, and start or update it there
+
 Apps
-  ps          List loaded apps and their state
-  start       Start an app, loading it first if needed
-  stop        Stop a running app
-  restart     Stop an app and start it again, applying any config changes
-  config      View or set an app's config, routes, and volume binds
-  cmd         List or run an app's commands
-  load        Load or re-load an app, restarting it if running
-  update      Snapshot an app and re-load it from its source's new version
-  unload      Stop an app and remove its loaded copy, keeping data and config
-  rm          Unload a stopped app and delete its temp and logs
-              (--temp, --data, --purge: more or less)
-  inspect     Show an app's state, ports, routes, volumes, and config
-  app which   Print the app an id resolves to, and its bundle
-  logs        Show an app's logs
-  shell       Open a shell in one of an app's containers
+  ps                List loaded apps and their state
+  status [APP]      The host at a glance; with APP, what it resolves to, in full
+  start APP         Start an app, loading it first if needed
+  stop APP          Stop a running app
+  restart APP       Stop an app and start it again, applying config changes
+  update APP        Back up an app and re-load it from its repo's new version
+  rm APP            Unload a stopped app and delete its temp and logs
+                    (--reset: every volume too; --purge: its config as well)
+  config APP        View or set an app's config, routes, volume binds, network
+  logs APP          Show an app's logs
+  shell APP         Open a shell in one of an app's containers
+  cmd APP           List or run an app's commands
+  repo              Where apps come from: list | add | update | remove
 
-  dev         Run an app bundle in this terminal
-  deploy      Copy an app bundle to another box and load or update it there
-  net         Show what an app behind kproxy reaches; allow or deny domains
+Host
+  up [N]            Start apps by start_group, 1 to N (default 9); stops nothing
+  down [N]          Stop apps by start_group above N (default 0); starts nothing
+  doctor            What is wrong on this host, with the fix for each
+  activity          What kelso ran, and what each run printed
+  backup            Back up now, or list backups: run | list | delete
+  restore           Put an app back from a backup, or a whole host
 
-This box
-  status      Show the host, apps, routes, and storage at a glance
-  root        Print the kelso root path
-  start_group Run apps in start_group 1 to N; stop the groups above N
-  up          Start all apps by start_group (start_group 9)
-  down        Stop all apps by start_group (start_group 0)
-  cleanup     List what kelso no longer needs; --apply deletes it
-              (unused images, orphaned routes; --temp)
+A new machine starts with `kelso init`.
 
-Backups       kelso backup | backup run | backup list
-              kelso restore <app> <backup> | restore <backups directory>
-Cron          kelso cron | cron tick
-Repos         kelso repo list | add | update | remove
-Routes        kelso route list | add | remove | check | add-provider
-System        kelso system doctor | activity | volumes | secret | host-volume
-                           service | rekey | recovery-phrase | decrypt | purge
-Setup         kelso init | init --with-phrase
-
-Run `kelso COMMAND --help` for details on any command.
+`kelso help advanced` lists the other commands; `kelso COMMAND --help` details one.
 Agents: run `kelso agent-help` first. It is written for you.
+"""
+
+HELP_ADVANCED = """\
+Advanced
+  init              Set kelso up on this machine; --with-phrase to restore one
+  load APP|PATH     Load or re-load an app, restarting it if running
+  unload APP        Stop an app and remove its loaded copy; data and config stay
+  net APP           What an app behind kproxy reaches; allow or deny domains
+  route             Route providers and manual routes:
+                    list | add | remove | check | add-provider
+  secret            Host secrets and the recovery phrase:
+                    set | unset | reveal | rekey | recovery-phrase
+  system            Set up and tear down this host:
+                    service | host-volume | volumes | purge
+  cleanup [APP]     What kelso no longer needs; --apply deletes it
+                    (--temp: stopped apps' temp and logs too)
+  cron              List upcoming cron jobs; cron tick runs the due ones
+  root              Print the kelso root path
+
+`kelso help` lists the everyday commands; `kelso COMMAND --help` details one.
 """
 
 
@@ -172,6 +184,14 @@ def build_parser() -> argparse.ArgumentParser:
   for command in COMMANDS:
     command.register(subparsers)
 
+  help_parser = subparsers.add_parser("help", help="Show the commands")
+  help_parser.add_argument("topic", nargs="?", choices=["advanced"])
+  help_parser.set_defaults(
+    func=lambda args, ctx: (
+      print(HELP_ADVANCED, end="") if args.topic else parser.print_help()
+    )
+  )
+
   return parser
 
 
@@ -207,7 +227,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     # Before anything else, and before `init` in particular: the first command
     # is the one that would create the kelso root with the wrong owner.
     refuse_root("kelso")
-    if args.command in (None, "init", "agent-help"):
+    if args.command in (None, "help", "init", "agent-help"):
       args.func(args, None)
     else:
       cfg = load_config()

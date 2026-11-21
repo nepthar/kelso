@@ -44,7 +44,7 @@ port_base = 41000
 # published on that address alone, not on every interface.
 # route_address = "10.0.0.5"
 
-# The host in links people click: the `<-` URLs `kelso inspect` prints and
+# The host in links people click: the `<-` URLs `kelso status APP` prints and
 # the web UI. Defaults to route_address, then localhost. Set it when
 # route_address is a name only containers can use, as on Docker Desktop.
 # link_address = "10.0.0.5"
@@ -59,7 +59,7 @@ port_base = 41000
 # tables like the ones below -- a directory on this machine, or a folder in a
 # GitHub repository that kelso mirrors into repos/<name> with git.
 #
-# An app id carried by two repos is ambiguous: `kelso system doctor` reports those,
+# An app id carried by two repos is ambiguous: `kelso doctor` reports those,
 # and you load one by naming its repo, `kelso load <app>@<repo>`.
 #
 # Adding a repo is a standing commitment to whatever appears in it later, not
@@ -90,9 +90,9 @@ schedule = "0 3 * * *"
 # Optional: reverse-proxy (or other) providers that publish app routes.
 # Each block is tagged by you ("web", "lan", "homelab", …); `kind` selects
 # the implementation. Kind-specific settings go under `args`. Store the
-# password with `kelso system secret route_provider.web.password`,
+# password with `kelso secret set route_provider.web.password`,
 # then verify with `kelso route check web`. Assign routes with
-# `kelso config <app> --route main=web`.
+# `kelso config <app> route.main=web`.
 #
 # [route_provider.web]
 # kind   = "nginx_proxy_manager"
@@ -106,7 +106,7 @@ schedule = "0 3 * * *"
 # target on `site` pointing at route_address. `endpoint` must be https -- the
 # API key is a bearer token on every call. `org_id` and `site` are the names in
 # the Pangolin dashboard URL: .../<org_id>/settings/sites/<site>/general. Store
-# the key with `kelso system secret route_provider.tunnel.api_key`.
+# the key with `kelso secret set route_provider.tunnel.api_key`.
 #
 # [route_provider.tunnel]
 # kind   = "pangolin"
@@ -122,7 +122,7 @@ schedule = "0 3 * * *"
 # Run the connector itself with `kelso load cloudflared`. `account_id` and
 # `tunnel_id` are in the Zero Trust dashboard; the API token needs Account >
 # Cloudflare Tunnel: Edit and Zone > DNS: Edit. Store the token with
-# `kelso system secret route_provider.cf.api_token`.
+# `kelso secret set route_provider.cf.api_token`.
 #
 # [route_provider.cf]
 # kind   = "cloudflare_tunnel"
@@ -134,8 +134,8 @@ schedule = "0 3 * * *"
 # # zone_id is optional; kelso looks the zone up by domain when it is omitted.
 
 # Optional: tagged host paths that apps with kind = "host" volumes can bind to.
-# Paths must exist before `kelso config|start --bind`. Assign with
-# `kelso config <app> --bind media=media`.
+# Paths must exist before an app binds one. Assign with
+# `kelso config <app> volume.media=media`.
 # Set require_mount = true for network shares or external drives so an empty
 # mount-point directory is refused when the share is not mounted.
 #
@@ -159,9 +159,10 @@ feature. Add them as a repo, then start one and run its commands:
 `kelso repo list` shows every app you can start. When you are done exploring,
 `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
-For the web UI, choose its admin password and start it; it prints the address
-to open:
-  kelso start kelso-ui --set admin_pass=<password>"""
+For the web UI, choose its admin password (typed at a hidden prompt) and start
+it; it prints the address to open:
+  kelso config kelso-ui admin_pass=-
+  kelso start kelso-ui"""
 
 
 # kelsod runs under systemd's user manager, which keeps the groups it started
@@ -363,7 +364,7 @@ def run(args: argparse.Namespace, _ctx) -> None:
     print(RECOVERING.format(root=root))
   else:
     phrase.show(recovery.phrase(entropy))
-    print("`kelso system recovery-phrase` shows it again.")
+    print("`kelso secret recovery-phrase` shows it again.")
 
   if service.has_systemd():
     print(RESTART)

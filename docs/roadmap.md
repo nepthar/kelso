@@ -102,7 +102,7 @@ does well (refuse, and name the fix) into something an agent can parse.
 - **Questions as data.** When a plan cannot go ahead without an answer (a
   required config value, a host volume to bind), the command exits 2 and prints
   the `ConfigRequest` it needs as JSON. The answer is a `ConfigResponse`, given
-  with `kelso config <app> --set`, the same one the TUI and the web form fill.
+  with `kelso config <app> NAME=VALUE`, the same one the TUI and the web form fill.
   Plan, answer, plan again converges to ready.
 - **Nothing waits on a terminal that isn't there.** A command that would ask
   `[y/N]` checks for a terminal first. Without one it refuses with exit 2,

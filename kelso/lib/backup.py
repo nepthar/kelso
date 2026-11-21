@@ -130,7 +130,7 @@ def repository(ctx: KelsoCtx) -> Restic:
   if seed is None:
     raise ValueError(
       "There is no recovery phrase, so there is no key to encrypt backups with. "
-      "Make one with `kelso system rekey`."
+      "Make one with `kelso secret rekey`."
     )
   return Restic(
     destination(ctx),

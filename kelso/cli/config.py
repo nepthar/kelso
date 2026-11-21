@@ -1,19 +1,24 @@
 import argparse
 import json
 import logging
+import shlex
 import sys
 
 from tabulate import tabulate
 
 from kelso.cli.configform import collect
-from kelso.cli.kv import parse_kv
+from kelso.cli.kv import parse_kv, read_secret
+from kelso.cli.remote import run_remote
 from kelso.lib.apps import AppID
-from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, parse_route_providers
-from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigResponse
-from kelso.lib.configflow.app import app_config_request, apply_app_config
+from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
+from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigRequest, ConfigResponse
+from kelso.lib.configflow.app import (
+  BACKUP_PREFIX,
+  NETWORK_FIELD,
+  app_config_request,
+  apply_app_config,
+)
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import apply_config_sets, assign_route, bind, set_network
-from kelso.lib.manifest import NETWORK_MODES
 from kelso.lib.observations import observe
 from kelso.lib.spec import AppSpec
 from kelso.lib.store import AppStore
@@ -21,67 +26,47 @@ from kelso.lib.views import config_request_view
 
 logger = logging.getLogger("kelso.cli")
 
+FROM_STDIN = "-"
+
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "config",
-    help="List or set app config, route assignments, and host volume binds",
-    description="Changes to a loaded app take effect when it next starts; "
-    "`kelso restart <app>` applies them to a running one.",
+    help="View or set an app's config, routes, volume binds, and network mode",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    description=(
+      "With no NAME, lists everything. A NAME prints that one value;\n"
+      "NAME=VALUE sets it. Besides the app's own config, the names are\n"
+      "route.<route>, volume.<volume>, backup.<volume> and network.mode.\n"
+      "\n"
+      "A secret is never given on the command line: NAME=- asks for it on a\n"
+      "terminal, or reads it from stdin. One NAME=- per call.\n"
+      "\n"
+      "--host HOST runs the same command on HOST over ssh.\n"
+      "\n"
+      "Changes to a loaded app take effect when it next starts;\n"
+      "`kelso restart <app>` applies them to a running one."
+    ),
+    epilog=(
+      "examples:\n"
+      "  kelso config immich                        list everything\n"
+      "  kelso config immich route.main             print one value\n"
+      "  kelso config immich route.main=web,lan network.mode=watch\n"
+      "  kelso config immich db_password=-          asks for it, hidden\n"
+      "  kelso config immich network.mode=default   back to the manifest's\n"
+      "  kelso config immich --edit --host den       the form, for den's immich"
+    ),
   )
   parser.add_argument(
     "app",
     metavar="APP",
-    help="App ID of a loaded app, or of an app in the catalog",
+    help="App ID of a loaded app, or of an app in a repo",
   )
   parser.add_argument(
-    "--set",
-    action="append",
-    default=[],
-    dest="sets",
-    metavar="KEY=VALUE",
-    help="Set a config value (repeatable)",
-  )
-  parser.add_argument(
-    "--route",
-    action="append",
-    default=[],
-    dest="routes",
-    metavar="ROUTE=PROVIDER[,PROVIDER...]",
-    help=(
-      "Publish a route through these route-provider tags; the first gives its URL "
-      "(repeatable for other routes; use none to publish it nowhere)"
-    ),
-  )
-  parser.add_argument(
-    "--bind",
-    action="append",
-    default=[],
-    dest="binds",
-    metavar="VOLUME=HOST_VOLUME",
-    help="Bind an app volume to a host_volume tag from config.toml (repeatable)",
-  )
-  parser.add_argument(
-    "--network",
-    metavar="MODE",
-    help=(
-      f"Run the app {' | '.join(m for m in NETWORK_MODES if m != 'host')} "
-      "instead of what its manifest says; default goes back to the manifest's"
-    ),
-  )
-  parser.add_argument(
-    "--backup",
-    action="append",
-    default=[],
-    dest="backups",
-    metavar="VOLUME=on|off",
-    help="Include a bulk volume in backups, or leave it out (repeatable)",
-  )
-  parser.add_argument(
-    "--get",
-    dest="get_name",
-    metavar="NAME",
-    help="Print a single config value (secrets show as 'set' unless --show-secret)",
+    "items",
+    nargs="*",
+    metavar="NAME[=VALUE]",
+    help="A name to print, or NAME=VALUE to set (repeatable)",
   )
   parser.add_argument(
     "--edit",
@@ -95,69 +80,128 @@ def register(subparsers) -> None:
     help="Print everything this app can be asked, as a ConfigRequest in JSON",
   )
   parser.add_argument(
-    "--response",
+    "--json-response",
     action="store_true",
     help='Apply a ConfigResponse read from stdin: {"values": {NAME: VALUE}}',
   )
   parser.add_argument(
-    "--show-secret",
-    action="store_true",
-    help="With --get, print secret values in plaintext",
+    "--host",
+    metavar="HOST",
+    help="Run this on HOST, a host you can `ssh` to, instead of here",
   )
   parser.set_defaults(
     func=run,
     activity=lambda a: (
       "config"
-      if a.sets or a.routes or a.binds or a.backups or a.network or a.edit or a.response
+      if not a.host
+      and (a.edit or a.json_response or any("=" in item for item in a.items))
       else None
     ),
   )
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if args.host:
+    run_remote(args.host, f"kelso config {shlex.join(_remote_args(args))}")
+    return
   app = ctx.resolve_app_id(args.app)
+  # Asked for before the lock, which nothing else should wait on while you type.
+  typed = _read_typed(app, args.items)
   with ctx.locked(f"config {app}", app):
-    store = ctx.app_store(app)
     spec = _config_spec(app, ctx)
-
-    if args.get_name is not None:
-      if args.sets or args.binds or args.routes or args.backups or args.network:
-        raise ValueError(
-          "--get cannot be combined with --set, --route, --bind, --network, or --backup"
-        )
-      _get(spec, store, args.get_name, show_secret=args.show_secret)
-      return
-
-    if args.show_secret:
-      raise ValueError("--show-secret requires --get")
+    modes = [args.edit, args.json, args.json_response, bool(args.items)]
+    if sum(modes) > 1:
+      raise ValueError(
+        "Give one of NAME, NAME=VALUE, --edit, --json or --json-response"
+      )
 
     if args.json:
       print(json.dumps(config_request_view(app_config_request(spec, ctx))))
-      return
-    if args.response:
+    elif args.json_response:
       response = ConfigResponse(values=json.load(sys.stdin)["values"])
-      written = apply_app_config(spec, response, ctx)
-      print(f"Set {', '.join(written)}" if written else "No changes")
-      return
-
-    if args.backups:
-      _apply_backups(spec, args.backups, ctx)
-    if args.network:
-      set_network(spec, None if args.network == "default" else args.network, ctx)
-      print(f"network: {_network_display(spec, store)}")
-    if args.sets or args.binds or args.routes:
-      _apply(app, spec, args.sets, args.binds, args.routes, ctx)
-      return
-    if args.backups or args.network:
-      if args.network:
-        _what_applies_it(app, ctx)
-      return
-
-    if args.edit:
+      _report(apply_app_config(spec, response, ctx), spec, ctx)
+    elif args.edit:
       _edit(app, spec, ctx)
-      return
+    elif not args.items:
+      _list(app, spec, ctx)
+    elif any("=" in item for item in args.items):
+      _set(app, spec, args.items, typed, ctx)
+    elif len(args.items) == 1:
+      _get(app_config_request(spec, ctx), args.items[0])
+    else:
+      raise ValueError("Give one NAME to print, or NAME=VALUE pairs to set")
 
-    _list(app, spec, ctx)
+
+def _get(request: ConfigRequest, name: str) -> None:
+  field = request.field(name)
+  if field is None:
+    raise ValueError(
+      f"{request.title} has no config named {name!r}; "
+      f"`kelso config {request.title}` lists them"
+    )
+  if field.secret:
+    if not field.secret_set:
+      raise SystemExit(1)
+    print("set")
+  elif field.value is not None:
+    print(field.value)
+  elif field.default is not None:
+    logger.info("Config %s using default value", name)
+    print(field.default)
+  else:
+    raise SystemExit(1)
+
+
+def _read_typed(app: AppID, items: list[str]) -> dict[str, str]:
+  """The NAME=- values, read from a prompt or stdin."""
+  typed = [item.partition("=")[0] for item in items if item.endswith(f"={FROM_STDIN}")]
+  if len(typed) > 1:
+    raise ValueError(
+      "Only one NAME=- per call, since there is one stdin; "
+      f"`kelso config {app} --edit` sets several"
+    )
+  return {name: read_secret(name) for name in typed}
+
+
+def _set(
+  app: AppID, spec: AppSpec, items: list[str], typed: dict[str, str], ctx: KelsoCtx
+) -> None:
+  pairs = [parse_kv(item, "NAME=VALUE") for item in items]
+  names = [name for name, _ in pairs]
+  if repeated := sorted({n for n in names if names.count(n) > 1}):
+    raise ValueError(f"{', '.join(repeated)} given more than once")
+
+  request = app_config_request(spec, ctx)
+  values = {}
+  for name, value in pairs:
+    field = request.field(name)
+    if field is None:
+      _refuse_unknown(spec, name)
+    if field is not None and field.secret and name not in typed:
+      raise ValueError(
+        f"{name} is a secret, and would land in your shell history; "
+        f"give it as {name}=- to type it, or pipe it on stdin"
+      )
+    value = typed.get(name, value)
+    if name == NETWORK_FIELD and value == "default":
+      value = spec.network_mode
+    values[name] = value
+
+  _report(apply_app_config(spec, ConfigResponse(values=values), ctx), spec, ctx)
+
+
+def _refuse_unknown(spec: AppSpec, name: str) -> None:
+  volume_name = name.removeprefix(BACKUP_PREFIX)
+  volume = spec.volumes.get(volume_name)
+  if name.startswith(BACKUP_PREFIX) and volume is not None:
+    always = {"data": "always backed up"}.get(volume.kind, "never backed up")
+    raise ValueError(
+      f"Volume {volume_name} is a {volume.kind} volume, which is {always}; "
+      f"only bulk volumes can be turned on or off"
+    )
+  raise ValueError(
+    f"{spec.app} has no config named {name!r}; `kelso config {spec.app}` lists them"
+  )
 
 
 def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
@@ -167,16 +211,33 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
     return
 
   response = collect(
-    request, f"set values with `kelso config {app} --set NAME=VALUE` (see --help)"
+    request, f"set values with `kelso config {app} NAME=VALUE` (see --help)"
   )
   if response == EMPTY_CONFIG_RESPONSE:
     print("No changes")
     return
+  _report(apply_app_config(spec, response, ctx), spec, ctx)
 
-  written = apply_app_config(spec, response, ctx)
+
+def _remote_args(args: argparse.Namespace) -> list[str]:
+  flags = [("--edit", args.edit), ("--json", args.json)]
+  flags.append(("--json-response", args.json_response))
+  return [args.app, *args.items, *(flag for flag, on in flags if on)]
+
+
+def _report(written: list[str], spec: AppSpec, ctx: KelsoCtx) -> None:
+  """What was set, and what the app still needs before it can start."""
   print(f"Set {', '.join(written)}" if written else "No changes")
+  request = app_config_request(spec, ctx)
+  missing = [
+    f"{name} (secret)" if request.field(name).secret else name
+    for name in request.missing()
+  ]
+  print(
+    f"Still needs: {', '.join(missing)}" if missing else "All required config is set"
+  )
   if written:
-    _what_applies_it(app, ctx)
+    _what_applies_it(spec.app, ctx)
 
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
@@ -188,101 +249,10 @@ def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
   return ctx.bundle_spec(app)
 
 
-def _get(
-  spec: AppSpec,
-  store: AppStore,
-  name: str,
-  *,
-  show_secret: bool,
-) -> None:
-  config = spec.config.get(name)
-  if not config:
-    raise ValueError(
-      f"config {name!r} not declared in manifest; `kelso config {spec.app}` lists them"
-    )
-
-  secret, value = store.get_config(name)
-  if value is None:
-    if config.has_default():
-      logger.info("Config %s using default value", config.name)
-      print(config.default)
-    else:
-      raise SystemExit(1)
-  elif secret and not show_secret:
-    print("set")
-  else:
-    print(value)
-
-
-def _apply(
-  app: AppID,
-  spec: AppSpec,
-  sets_raw: list[str],
-  binds_raw: list[str],
-  routes_raw: list[str],
-  ctx: KelsoCtx,
-) -> None:
-  sets = [parse_kv(item, "--set") for item in sets_raw]
-  binds = [parse_kv(item, "--bind") for item in binds_raw]
-  routes = [parse_kv(item, "--route") for item in routes_raw]
-
-  if sets:
-    apply_config_sets(spec, sets, ctx)
-  for volname, host_volume_tag in binds:
-    bind(spec, volname, host_volume_tag, ctx)
-  if routes:
-    _apply_routes(app, spec, routes, ctx)
-
-  _what_applies_it(app, ctx)
-
-
 def _what_applies_it(app: AppID, ctx: KelsoCtx) -> None:
   """The next start applies a change; say so only when one is not coming."""
   if ctx.is_loaded(app) and observe(app, ctx).running_count:
     logger.info(f"Takes effect on restart: kelso restart {app}")
-
-
-def _apply_backups(spec: AppSpec, raw: list[str], ctx: KelsoCtx) -> None:
-  """Turn backing up a bulk volume on or off. Data volumes always are, and
-  temp, logs and host volumes never are, so only bulk has a choice."""
-  store = ctx.app_store(spec.app)
-  for volume_name, value in (parse_kv(item, "--backup") for item in raw):
-    volume = spec.volumes.get(volume_name)
-    if volume is None:
-      raise ValueError(
-        f"No volume {volume_name} in {spec.app}'s manifest; "
-        f"`kelso config {spec.app}` lists its bulk volumes"
-      )
-    if volume.kind != "bulk":
-      always = {"data": "always backed up"}.get(volume.kind, "never backed up")
-      raise ValueError(
-        f"Volume {volume_name} is a {volume.kind} volume, which is {always}; "
-        f"only bulk volumes can be turned on or off"
-      )
-    if value not in ("on", "off"):
-      raise ValueError(f"--backup {volume_name}= takes on or off, not {value!r}")
-    store.set_backup_bulk(volume_name, value == "on")
-    print(f"{volume_name}: {'backed up' if value == 'on' else 'not backed up'}")
-
-
-def _apply_routes(
-  app: AppID,
-  spec: AppSpec,
-  routes: list[tuple[str, str]],
-  ctx: KelsoCtx,
-) -> None:
-  names = [route_name for route_name, _ in routes]
-  if repeated := sorted({n for n in names if names.count(n) > 1}):
-    raise ValueError(
-      f"--route {', '.join(repeated)} given more than once; "
-      f"list every provider in one, e.g. --route {repeated[0]}=external,internal"
-    )
-  # Refuse a bad one before any is written.
-  for route_name, raw in routes:
-    parse_route_providers(route_name, raw)
-  for route_name, raw in routes:
-    tags = assign_route(spec, route_name, raw, ctx)
-    print(f"route {route_name} -> {', '.join(tags) or NONE_ROUTE_PROVIDER_TAG}")
 
 
 def _network_display(spec: AppSpec, store: AppStore) -> str:

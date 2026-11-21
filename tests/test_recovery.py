@@ -105,14 +105,14 @@ def test_the_key_file_answers_for_any_moment_in_its_history(tmp_path):
 
 def test_rekey_moves_every_secret_onto_the_new_key(kelso_env, monkeypatch):
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("system", "secret", "--set", "api=hunter2").returncode == 0
+  assert kelso_env.run("secret", "set", "api", input="hunter2").returncode == 0
   ctx = _ctx(kelso_env)
   _, admin_pass = ctx.app_store(BASIC).get_config("admin_pass")
   app_log = ctx.config.app_config_path(BASIC)
   assert _secret_blobs(app_log)
 
   _fix_phrase(monkeypatch, NEW_SEED)
-  result = kelso_env.run("system", "rekey")
+  result = kelso_env.run("secret", "rekey")
   assert result.returncode == 0, result.stderr
   # Shown on stdout, never through logging into the activity log.
   assert recovery.phrase(NEW_SEED)[0] in result.stdout
@@ -132,13 +132,13 @@ def test_rekey_moves_every_secret_onto_the_new_key(kelso_env, monkeypatch):
   with pytest.raises(InvalidToken):
     _fernet(OLD_KEY).decrypt(blobs[-1].encode())
 
-  doctor = kelso_env.run("system", "doctor")
+  doctor = kelso_env.run("doctor")
   assert "recovery phrase" not in doctor.stdout + doctor.stderr
 
 
 def test_rekey_can_adopt_a_phrase_you_already_have(kelso_env):
   words = " ".join(recovery.phrase(NEW_SEED))
-  result = kelso_env.run("system", "rekey", "--phrase", input=words + "\n")
+  result = kelso_env.run("secret", "rekey", "--phrase", input=words + "\n")
   assert result.returncode == 0, result.stderr
   assert _ctx(kelso_env).config.master_key == recovery.master_key_from(NEW_SEED)
 
@@ -152,7 +152,7 @@ def test_a_backup_from_before_a_rekey_restores(kelso_env, monkeypatch, backup_cl
   backup_id = _back_up(kelso_env, BASIC)
 
   _fix_phrase(monkeypatch, NEW_SEED)
-  rekeyed = kelso_env.run("system", "rekey")
+  rekeyed = kelso_env.run("secret", "rekey")
   assert rekeyed.returncode == 0, rekeyed.stderr
   # The repository moved to the password the new phrase derives.
   assert [b.id for b in _backups(kelso_env, BASIC)] == [backup_id]
@@ -175,7 +175,7 @@ def test_rekey_refuses_while_the_backup_disk_is_missing(
   backups.symlink_to(tmp_path / "gone")
   before = kelso_env.master_keyfile.read_text()
   _fix_phrase(monkeypatch, NEW_SEED)
-  refused = kelso_env.run("system", "rekey")
+  refused = kelso_env.run("secret", "rekey")
   assert refused.returncode == 1
   assert "Nothing changed" in refused.stderr
   assert kelso_env.master_keyfile.read_text() == before
@@ -185,7 +185,7 @@ def test_rekey_refuses_while_the_backup_disk_is_missing(
 
 
 def test_recovery_phrase_shows_the_words_on_file(kelso_env):
-  result = kelso_env.run("system", "recovery-phrase")
+  result = kelso_env.run("secret", "recovery-phrase")
   assert result.returncode == 0, result.stderr
   for word in recovery.phrase(TEST_SEED):
     assert word in result.stdout
@@ -193,14 +193,14 @@ def test_recovery_phrase_shows_the_words_on_file(kelso_env):
 
 def test_a_root_without_a_seed_is_told_to_rekey(kelso_env):
   kelso_env.master_keyfile.write_text("")
-  result = kelso_env.run("system", "recovery-phrase")
+  result = kelso_env.run("secret", "recovery-phrase")
   assert result.returncode != 0
-  assert "kelso system rekey" in result.stderr
-  doctor = kelso_env.run("system", "doctor")
-  assert "kelso system rekey" in doctor.stdout + doctor.stderr
+  assert "kelso secret rekey" in result.stderr
+  doctor = kelso_env.run("doctor")
+  assert "kelso secret rekey" in doctor.stdout + doctor.stderr
 
   # Secrets are refused rather than stored in the clear.
-  refused = kelso_env.run("config", BASIC, "--set", "admin_pass=x")
+  refused = kelso_env.run("config", BASIC, "admin_pass=-", input="x")
   assert refused.returncode != 0
   assert "No recovery phrase" in refused.stderr
 
@@ -208,26 +208,26 @@ def test_a_root_without_a_seed_is_told_to_rekey(kelso_env):
 def test_rekey_on_a_root_without_a_seed_gives_it_one(kelso_env, monkeypatch):
   kelso_env.master_keyfile.write_text("")
   _fix_phrase(monkeypatch, NEW_SEED)
-  result = kelso_env.run("system", "rekey")
+  result = kelso_env.run("secret", "rekey")
   assert result.returncode == 0, result.stderr
   assert _ctx(kelso_env).config.master_key == recovery.master_key_from(NEW_SEED)
 
 
 def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
   """The plaintext did not change, so there is nothing to restart for."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   _fix_phrase(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey").returncode == 0
+  assert kelso_env.run("secret", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout
   row = next(line for line in ps.splitlines() if line.startswith(BASIC)).split()
   assert row[2] == "ready"
 
 
 def test_rekey_keeps_a_change_that_was_already_pending(kelso_env, monkeypatch):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=bob").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=bob").returncode == 0
   _fix_phrase(monkeypatch, NEW_SEED)
-  assert kelso_env.run("system", "rekey").returncode == 0
+  assert kelso_env.run("secret", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout
   row = next(line for line in ps.splitlines() if line.startswith(BASIC)).split()
   assert row[2] == "restart"

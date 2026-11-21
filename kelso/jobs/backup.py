@@ -25,7 +25,7 @@ class BackupJob(Job):
     if result.created:
       lines.append(
         "  This is the first backup. Only the recovery phrase can read it: "
-        "`kelso system recovery-phrase` shows it."
+        "`kelso secret recovery-phrase` shows it."
       )
     logger.info("\n".join(lines))
     if result.failed:

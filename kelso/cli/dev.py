@@ -4,7 +4,6 @@ import signal
 from pathlib import Path
 
 from kelso.cli.configform import collect
-from kelso.cli.kv import parse_kv
 from kelso.cli.load import confirm_compose_warnings
 from kelso.cli.net import summary
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, is_pathlike
@@ -42,17 +41,6 @@ def register(subparsers) -> None:
     help="Publish the app's routes to their providers for the duration of the run",
   )
   parser.add_argument(
-    "--set",
-    action="append",
-    default=[],
-    dest="sets",
-    metavar="NAME=VALUE",
-    help=(
-      "Set something the app needs before it runs: a config name, or "
-      "volume.<name> for a host volume (repeatable)"
-    ),
-  )
-  parser.add_argument(
     "--allow-compose",
     action="store_true",
     help=(
@@ -84,7 +72,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
         f"volume {name} is no longer declared in the manifest; "
         f"its link is gone but its data was left in place"
       )
-    _fill_missing_config(result.spec, args.sets, ctx)
+    _fill_missing_config(result.spec, ctx)
 
     plan = dev_plan(app, source, ctx, publish_routes=args.routes)
     print(_receipt(plan, ctx))
@@ -108,15 +96,16 @@ def _interrupt(signum, frame) -> None:
   raise KeyboardInterrupt
 
 
-def _fill_missing_config(spec: AppSpec, sets: list[str], ctx: KelsoCtx) -> None:
-  """Apply `--set`, then ask for what the app still cannot start without."""
-  if sets:
-    values = dict(parse_kv(raw, "--set") for raw in sets)
-    apply_app_config(spec, app_config_request(spec, ctx).response(values), ctx)
+def _fill_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
+  """Ask for what the app cannot start without."""
   request = app_config_request(spec, ctx)
   if not request.missing():
     return
-  response = collect(request, "pass --set NAME=VALUE for each")
+  response = collect(
+    request,
+    f"set them with `kelso config {spec.app} NAME=VALUE` (NAME=- for a secret), "
+    f"then run this again",
+  )
   if response != EMPTY_CONFIG_RESPONSE:
     apply_app_config(spec, response, ctx)
 

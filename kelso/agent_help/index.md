@@ -21,7 +21,7 @@ kelso that is installed here; prefer them to anything on the web.
   else. Do not reach for `--force` or `rm --purge` unless the message offers it
   and you understand why: `--purge` deletes the app's data.
 - **Never handle secrets.** Do not read, print or pass secret values. A person
-  sets them with `kelso system secret <name>` or `kelso config <app> --edit`.
+  sets them with `kelso secret set <name>` or `kelso config <app> --edit`.
 - **Do not edit files under `var/` or `conf/`** in the kelso root. Change
   things with commands. `config.toml` is the one file meant to be edited.
 
@@ -32,19 +32,19 @@ kelso --version           # version and the git commit this install is from
 kelso root                # the kelso root; everything lives under it
 kelso status              # host, apps, routes, storage, last backup
 kelso ps                  # loaded apps and their state
-kelso inspect <app>       # one app: containers, ports, routes, volumes, config
+kelso status <app>        # one app: where it resolves, containers, ports, routes, config
 kelso logs <app> --tail 50
-kelso system doctor       # what is wrong on this box, with the fix for each
-kelso system activity     # what kelso did recently; --show N prints a run's log
+kelso doctor       # what is wrong on this host, with the fix for each
+kelso activity     # what kelso did recently; --show N prints a run's log
 kelso repo list           # every app that can be started here
 ```
 
 Docker containers kelso did not start are invisible to these. `docker ps -a`
-shows everything on the box.
+shows everything on the host.
 
 ## Over ssh
 
-Run kelso on another box with `ssh <host> '<command>'`. If that says `kelso:
+Run kelso on another host with `ssh <host> '<command>'`. If that says `kelso:
 command not found`, kelso is in `~/.local/bin`, which a non-interactive shell
 does not add: prefix the command with `export PATH=$HOME/.local/bin:$PATH;`.
 `kelso deploy` adds that itself.

@@ -112,7 +112,7 @@ ordering, and drift between compose versions.
 **`kelso up` at boot.** `test_updown.py` drives the ordering against the fake,
 with the settle time at zero. Untested: that after a reboot Docker leaves
 `restart = "yes"` (`on-failure`) containers down, kelsod starts group 0 before
-it listens and queues a `start_group 9` that resumes, by `start_group`, every app whose
+it listens and queues an `up` that resumes, by `start_group`, every app whose
 last action was `started`, a real healthcheck's
 `(healthy)` is what ends a group's wait, an app with no healthcheck is held for
 the 10 seconds before the next group, and stopping kelsod (`systemctl --user
@@ -140,7 +140,7 @@ large bundle. The fake serves the two endpoints kelso uses and nothing else.
 **Apps behind kproxy.** `test_restricted.py` and `test_net.py` check the compose
 file, rules and admin calls kelso makes, not what docker or kproxy do with them. On a Linux host with docker 27 or
 newer, and once on Docker Desktop: kproxy's own `kproxy/itest/run.sh`, then
-`kelso start demo-network --set lan_address=<host:port>` and
+`kelso config demo-network lan_address=<host:port>`, `kelso start demo-network` and
 `kelso cmd demo-network probe`, which exits non-zero on any unexpected result.
 Also check that the app can't reach the host itself (its sshd, `docker0`, and on
 Docker Desktop `host.docker.internal`), that a `web` host resolving to a private

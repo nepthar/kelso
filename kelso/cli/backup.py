@@ -18,7 +18,7 @@ FIRST_BACKUP = """\
 
   If it is not in your password manager yet, put it there now:
 
-      kelso system recovery-phrase
+      kelso secret recovery-phrase
 ************************************************************************"""
 
 

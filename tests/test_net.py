@@ -96,7 +96,7 @@ def test_a_decision_reaches_a_running_kproxy_at_once(kelso_env):
 
 def test_net_shows_pending_and_traffic_by_domain(kelso_env):
   _write(kelso_env, RESTRICTED)
-  assert kelso_env.run("config", APP, "--network", "ask").returncode == 0
+  assert kelso_env.run("config", APP, "network.mode=ask").returncode == 0
   assert kelso_env.run("start", APP).returncode == 0
   assert kelso_env.run("net", APP, "deny", "ads.example.com").returncode == 0
   _kproxy_answers(
@@ -140,7 +140,7 @@ def test_an_open_app_has_nothing_to_show(kelso_env):
   assert kelso_env.run("start", APP).returncode == 0
   shown = kelso_env.run("net", APP)
   assert shown.returncode == 0
-  assert f"kelso config {APP} --network watch" in shown.stdout
+  assert f"kelso config {APP} network.mode=watch" in shown.stdout
   assert _admin_calls(kelso_env) == []
 
 
@@ -166,7 +166,7 @@ def test_dev_says_what_it_reached_when_it_stops(kelso_env):
   nas = 'nas = { kind = "http", address = "10.0.0.5:80" }\n'
   _write(kelso_env, RESTRICTED.replace("[run.main]", nas + "\n[run.main]", 1))
   assert kelso_env.run("load", APP).returncode == 0
-  assert kelso_env.run("config", APP, "--network", "watch").returncode == 0
+  assert kelso_env.run("config", APP, "network.mode=watch").returncode == 0
   _kproxy_answers(kelso_env, {"stats-file": LAST_RUN})
 
   ran = kelso_env.run("dev", str(kelso_env.local_repo / f"{APP}.klso"))
@@ -190,7 +190,7 @@ def test_a_restrict_dev_run_says_unlisted_names_are_not_counted(kelso_env):
   _kproxy_answers(kelso_env, {"stats-file": {"stats": {}, "pending": []}})
   ran = kelso_env.run("dev", str(kelso_env.local_repo / f"{APP}.klso"))
   assert "fails at its DNS lookup" in ran.stdout
-  assert f"kelso config {APP} --network watch" in ran.stdout
+  assert f"kelso config {APP} network.mode=watch" in ran.stdout
 
 
 def _client():
@@ -205,7 +205,7 @@ def _client():
 
 def test_the_api_lists_domains_and_decides_several_at_once(kelso_env):
   _write(kelso_env, RESTRICTED)
-  assert kelso_env.run("config", APP, "--network", "ask").returncode == 0
+  assert kelso_env.run("config", APP, "network.mode=ask").returncode == 0
   assert kelso_env.run("start", APP).returncode == 0
   assert kelso_env.run("net", APP, "deny", "weather.com").returncode == 0
   _kproxy_answers(
@@ -293,7 +293,7 @@ def test_every_compose_placeholder_is_set_after_the_mode_changes(kelso_env):
 
   _write(kelso_env, RESTRICTED)
   assert kelso_env.run("load", APP).returncode == 0
-  assert kelso_env.run("config", APP, "--network", "open").returncode == 0
+  assert kelso_env.run("config", APP, "network.mode=open").returncode == 0
   c = ctx()
   env = compose_env(c.resolve_app_id(APP), c)
   assert env[kproxy.RULES_ENV] == ""

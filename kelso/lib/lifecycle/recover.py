@@ -118,7 +118,7 @@ def open_backups(ctx: KelsoCtx, path: Path) -> Restic:
     if e.returncode == WRONG_PASSWORD:
       raise ValueError(
         f"The backups at {path} were made under a different recovery phrase. "
-        f"Run `kelso system rekey --phrase` with the phrase they were made "
+        f"Run `kelso secret rekey --phrase` with the phrase they were made "
         f"under, then restore again."
       ) from e
     raise

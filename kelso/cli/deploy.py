@@ -1,6 +1,6 @@
-"""`kelso deploy`: copy a bundle to another box over ssh and load or update it there.
+"""`kelso deploy`: copy a bundle to another host over ssh and load or update it there.
 
-Everything that changes the app happens on the box, through its own `kelso`.
+Everything that changes the app happens on the host, through its own `kelso`.
 """
 
 import argparse
@@ -11,24 +11,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-from kelso.cli.configform import collect
-from kelso.cli.kv import parse_kv
 from kelso.cli.load import confirm_compose_warnings
+from kelso.cli.remote import SSH, remote, remote_request, run_remote
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, load_bundle
 from kelso.lib.config import REPOS_DIR
-from kelso.lib.configflow import ConfigRequest, request_from_view
+from kelso.lib.configflow import ConfigRequest
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.repo import LOCAL_REPO
 
 logger = logging.getLogger("kelso.cli")
 
-SSH = ["ssh", "-o", "BatchMode=yes"]
-
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "deploy",
-    help="Copy an app bundle to another box and load or update it there",
+    help="Copy an app bundle to another host and load or update it there",
   )
   parser.add_argument(
     "bundle",
@@ -39,18 +36,7 @@ def register(subparsers) -> None:
   parser.add_argument(
     "--no-backup",
     action="store_true",
-    help="Update without backing up first, when the box's backup disk is not there",
-  )
-  parser.add_argument(
-    "--set",
-    action="append",
-    default=[],
-    dest="sets",
-    metavar="NAME=VALUE",
-    help=(
-      "Answer something the app needs on the box: a config name, or "
-      "volume.<name> for a host volume there (repeatable)"
-    ),
+    help="Update without backing up first, when the host's backup disk is not there",
   )
   parser.add_argument(
     "--allow-compose",
@@ -72,7 +58,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing deployed.")
     return
 
-  found = subprocess.run(_remote(host, "kelso root"), capture_output=True, text=True)
+  found = subprocess.run(remote(host, "kelso root"), capture_output=True, text=True)
   if found.returncode:
     raise ValueError(
       f"Could not run kelso on {host}: {found.stderr.strip()}\n"
@@ -81,12 +67,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   root = found.stdout.strip()
   dest = f"{root}/{REPOS_DIR}/{LOCAL_REPO}/{source.name}"
 
-  loaded = subprocess.run(
-    _remote(host, f"kelso app which --loaded {app}"), capture_output=True, text=True
+  asked = subprocess.run(
+    remote(host, f"kelso status {app} --json"), capture_output=True, text=True
   )
-  if loaded.returncode not in (0, 1):
-    raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
-  was = loaded.stdout.strip().partition(" ")[2]
+  if asked.returncode not in (0, 1):
+    raise ValueError(f"Could not ask {host} about {app}: {asked.stderr.strip()}")
+  there = json.loads(asked.stdout) if asked.returncode == 0 else {}
+  was = there.get("bundle") if there.get("loaded") else None
   if not was:
     command = f"kelso start {app}@{LOCAL_REPO} --allow-compose"
   elif was == dest:
@@ -111,37 +98,22 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     copy = subprocess.run([*rsync, str(source), f"{host}:{dest}"])
   _check(copy)
 
-  answers = _answers(host, app, args.sets)
-  if answers:
-    _check(
-      subprocess.run(
-        _remote(host, f"kelso config {app} --response"),
-        input=json.dumps({"values": answers}),
-        text=True,
-      )
-    )
-  _check(subprocess.run(_remote(host, command)))
+  _ask_for_missing(host, app)
+  _check(subprocess.run(remote(host, command)))
 
 
-def _answers(host: str, app: str, sets: list[str]) -> dict[str, str]:
-  """What to set on the box before starting: `--set`, plus whatever the app
-  still needs, asked here. Raises ValueError when there is no one to ask."""
-  asked = subprocess.run(
-    _remote(host, f"kelso config {app} --json"), capture_output=True, text=True
-  )
-  if asked.returncode:
-    raise ValueError(f"Could not ask {host} what {app} needs: {asked.stderr.strip()}")
-  request = request_from_view(json.loads(asked.stdout))
-  answers = dict(parse_kv(raw, "--set") for raw in sets)
-  errors = request.validate(answers)
-  if errors:
-    raise ValueError("; ".join(errors) + f"\n{app} was copied but not started.")
-  missing = [name for name in request.missing() if name not in answers]
+def _ask_for_missing(host: str, app: str) -> None:
+  """Have the person here fill in what the app still needs on `host`.
+
+  Raises ValueError when there is no one to ask.
+  """
+  request = remote_request(host, app)
+  missing = request.missing()
   if not missing:
-    return answers
-  if sys.stdin.isatty() and sys.stdout.isatty():
-    return {**collect(request, "pass --set NAME=VALUE").values, **answers}
-  raise ValueError(_needs(host, app, request, missing))
+    return
+  if not sys.stdin.isatty():
+    raise ValueError(_needs(host, app, request, missing))
+  run_remote(host, f"kelso config {app} --edit")
 
 
 def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> str:
@@ -153,16 +125,11 @@ def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> s
     secret = " (secret)" if entry.secret else ""
     lines.append(f"  {name}{secret}: {entry.desc}{one_of}")
   lines.append(
-    f"Run this again with `--set NAME=VALUE` for each, or have a person fill "
-    f"them in on {host} with `kelso config {app} --edit`."
+    f"Set each with `kelso config {app} NAME=VALUE --host {host}` (NAME=- for a "
+    f"secret), or fill them in with `kelso config {app} --edit --host {host}`; "
+    f"then deploy again."
   )
   return "\n".join(lines)
-
-
-def _remote(host: str, command: str) -> list[str]:
-  # sshd's shell runs no profile, so the PATH lacks ~/.local/bin, where kelso's
-  # own install (`uv tool install`) puts it.
-  return [*SSH, host, f"PATH=~/.local/bin:$PATH; {command}"]
 
 
 def _files(source: Path) -> list[str]:
