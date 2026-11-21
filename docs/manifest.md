@@ -441,7 +441,8 @@ an empty string:
 - `${<config key>}` — anything from `[config]` or `[adv_config]`, and the app
   options.
 - `${routes.<name>}` — the full public URL of a declared route, through its
-  primary (first-listed) provider.
+  primary (first-listed) provider. A route published nowhere gives its address
+  on the host instead, as the start receipt prints it.
 - `${klso.…}` — the app's own resolved values:
 
   | Key | Resolves to |

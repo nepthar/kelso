@@ -533,6 +533,9 @@ the invoking user and cannot touch what the app's containers wrote.
   (10 MB x 3), `restart: on-failure` and kelsod resuming apps at boot, a private
   network per app, the `kelso.*` labels, the `KLSO_*` variables, and the host
   port range (`port_base` to `port_base + 1000`) to open in a firewall.
+- **Rework routes into routes and ports,** or something similar. We need to
+  differentiate between actual HTTP and HTTPS routes and ports that are just
+  forwarded.
 - **Release hygiene.** A changelog or GitHub release notes for each tag; a
   platform statement in the README (Linux with systemd, amd64 and arm64, tested
   on Ubuntu Server 26.04 and Raspberry Pi OS); a GitHub description and topics
