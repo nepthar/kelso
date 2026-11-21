@@ -30,10 +30,12 @@ def register(subparsers) -> None:
     help="Load even though this id was last loaded from somewhere else",
   )
   parser.add_argument(
-    "-y",
-    "--yes",
+    "--allow-compose",
     action="store_true",
-    help="Skip the confirmation for compose keys kelso does not model",
+    help=(
+      "Go ahead although the manifest sets compose keys kelso does not model; "
+      "the operator should review them first"
+    ),
   )
   parser.set_defaults(func=run, activity="load")
 
@@ -42,7 +44,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
   bundle = target.require_bundle()
-  if not args.yes and not confirm_compose_warnings(app, bundle):
+  if not args.allow_compose and not confirm_compose_warnings(app, bundle):
     print("Nothing loaded.")
     return
   with ctx.locked(f"load {app}", app):
@@ -95,4 +97,4 @@ def confirm_compose_warnings(app: str, bundle: Path) -> bool:
     for line in warning.option_lines():
       print(f"  {line}")
 
-  return confirm(f"Load {app} anyway?")
+  return confirm(f"Load {app} anyway?", flag="--allow-compose")

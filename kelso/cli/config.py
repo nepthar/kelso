@@ -313,14 +313,14 @@ def _list(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
         display = "(unassigned)"
       else:
         display = ", ".join(tags) or NONE_ROUTE_PROVIDER_TAG
-      private = "yes" if route.private else ""
-      route_rows.append([name, display, private, route.desc or ""])
+      admin = "yes" if route.admin else ""
+      route_rows.append([name, display, admin, route.desc or ""])
     print("")
     print("Route assignments:")
     print(
       tabulate(
         route_rows,
-        headers=["route", "providers", "private", "description"],
+        headers=["route", "providers", "admin", "description"],
         tablefmt="simple",
       )
     )

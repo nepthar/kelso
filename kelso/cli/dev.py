@@ -20,7 +20,7 @@ from kelso.lib.lifecycle import (
 )
 from kelso.lib.manifest import PROXIED_MODES
 from kelso.lib.net import last_run
-from kelso.lib.receipt import LABEL_WIDTH, route_lines
+from kelso.lib.receipt import LABEL_WIDTH, port_lines, route_lines
 from kelso.lib.spec import AppSpec
 
 logger = logging.getLogger("kelso.cli")
@@ -53,10 +53,12 @@ def register(subparsers) -> None:
     ),
   )
   parser.add_argument(
-    "-y",
-    "--yes",
+    "--allow-compose",
     action="store_true",
-    help="Skip the confirmation for compose keys kelso does not model",
+    help=(
+      "Go ahead although the manifest sets compose keys kelso does not model; "
+      "the operator should review them first"
+    ),
   )
   parser.set_defaults(func=run)
 
@@ -72,7 +74,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   with ctx.locked(f"dev {app}", app):
     refuse_other_origin(app, source, ctx)
-    if not args.yes and not confirm_compose_warnings(app, source):
+    if not args.allow_compose and not confirm_compose_warnings(app, source):
       print("Nothing started.")
       return
 
@@ -139,9 +141,12 @@ def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
     )
   ):
     rows.append(("Routes:" if i == 0 else "", line))
-
   if not plan.published:
     rows.append(("", "routes are not published; publish them with --routes"))
+  for i, line in enumerate(
+    port_lines(plan.spec, plan.run_data, host=ctx.config.link_address)
+  ):
+    rows.append(("Ports:" if i == 0 else "", line))
 
   mode = plan.run_data.network_mode
   if mode in PROXIED_MODES:

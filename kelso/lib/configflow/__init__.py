@@ -22,7 +22,8 @@ class ConfigField:
   # Secrets never carry their value, so "is it set" has to be said separately.
   secret_set: bool = False
   desc: str = ""
-  # "config", "advanced", or "option" (an app option). Front ends group by it.
+  # "config", "advanced", "option" (an app option) or "route". Front ends group
+  # by it.
   section: str = "config"
   required: bool = True
   # None for free text. Otherwise the value must be one of these; an empty tuple
@@ -39,6 +40,8 @@ class ConfigField:
   # With multi: what being picked first means, when order matters. A front end
   # marks the first pick as the primary and says this beside it.
   primary_desc: str = ""
+  # With multi: the URL each choice would publish this at, in the same order.
+  choice_urls: tuple[str, ...] = ()
 
   def picked(self, value: str) -> list[str]:
     """The choices a value names: itself, or each comma-separated item if multi.
@@ -79,6 +82,7 @@ class ConfigRequest:
       "config": self.config_title,
       "advanced": "Advanced config",
       "option": "App options",
+      "route": "Routes",
     }
     return [
       (title, fields)
@@ -140,6 +144,7 @@ def request_from_view(view: dict) -> ConfigRequest:
         **entry,
         "choices": None if entry["choices"] is None else tuple(entry["choices"]),
         "labels": tuple(entry["labels"]),
+        "choice_urls": tuple(entry["choice_urls"]),
       }
     )
     for entry in view["fields"]

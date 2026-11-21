@@ -30,6 +30,8 @@ def _ask(entry: ConfigField, edits: dict[str, str]) -> None:
   if entry.choices is not None:
     some = "one or more, comma-separated, of" if entry.multi else "one of"
     alone = f" (or {entry.empty_value} for none)" if entry.empty_value else ""
+    if entry.primary_desc:
+      alone += "; the first is the primary"
     print(
       f"  {some}: {', '.join(entry.labels or entry.choices) or '(none defined)'}{alone}"
     )

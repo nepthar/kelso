@@ -1,4 +1,4 @@
-"""Tests for the [run.<unit>.routes] model: port specs, private, and the
+"""Tests for the [run.<unit>.routes] model: port specs, admin, and the
 route-name -> subdomain mapping (reserved "main" = the bare app subdomain).
 """
 
@@ -69,23 +69,25 @@ image = "alpine:latest"
 [run.main.routes]
 main    = { port = "8080" }
 api     = { port = "8081" }
-admin   = { port = "8082", private = true }
-default = { port = "8083", private = true }
-metrics = { port = "9090:9091/udp", private = true }
+admin   = { port = "8082", admin = true }
+default = { port = "8083", admin = true }
+
+[run.main.ports]
+metrics = { port = "9090:9091/udp" }
 """
 
 
 # ── resolution ────────────────────────────────────────────────────────────
-def test_private_defaults_to_false():
+def test_admin_defaults_to_false():
   spec = _spec(ROUTES)
-  assert spec.routes["main"].private is False
-  assert spec.routes["api"].private is False
+  assert spec.routes["main"].admin is False
+  assert spec.routes["api"].admin is False
 
 
-def test_private_true_resolved():
+def test_admin_true_resolved():
   spec = _spec(ROUTES)
-  assert spec.routes["default"].private is True
-  assert spec.routes["admin"].private is True
+  assert spec.routes["default"].admin is True
+  assert spec.routes["admin"].admin is True
 
 
 def test_scheme_defaults_to_http():
@@ -119,7 +121,7 @@ def test_primary_route_subdomain_is_bare_app_subdomain():
   spec = _spec(ROUTES)
   main = spec.routes["main"]
   assert main.subdomain("photos") == "photos"
-  assert main.private is False
+  assert main.admin is False
 
 
 def test_named_route_subdomain_is_prefixed():
@@ -132,10 +134,10 @@ def test_port_spec_parsed_onto_route():
   spec = _spec(ROUTES)
   # bare "8080" -> host auto-assigned, container 8080
   main = spec.routes["main"]
-  assert (main.host_port, main.container_port, main.proto) == (-1, 8080, "tcp")
+  assert (main.host_port, main.container_port) == (-1, 8080)
   assert main.needs_allocation is True
   # "9090:9091/udp" -> host 9090, container 9091, udp (no allocation)
-  metrics = spec.routes["metrics"]
+  metrics = spec.ports["metrics"]
   assert (metrics.host_port, metrics.container_port, metrics.proto) == (
     9090,
     9091,
@@ -148,13 +150,8 @@ def test_routes_report_their_run_unit():
   spec = _spec(ROUTES)
   assert {r.run_unit_name for r in spec.routes.values()} == {"main"}
   # the resolved port also lands on the run unit's port map
-  assert set(spec.run_units["main"].routes) == {
-    "main",
-    "api",
-    "admin",
-    "default",
-    "metrics",
-  }
+  assert set(spec.run_units["main"].routes) == {"main", "api", "admin", "default"}
+  assert set(spec.run_units["main"].ports) == {"metrics"}
 
 
 def test_routes_across_multiple_run_units():
@@ -315,7 +312,7 @@ dash = { port = "8081" }
 """
     )
   )
-  assert any("dash" in e and "multiple run units" in e for e in errors)
+  assert any("dash" in e and "declared more than once" in e for e in errors)
 
 
 def test_duplicate_route_name_never_reaches_a_spec():
@@ -325,7 +322,7 @@ def test_duplicate_route_name_never_reaches_a_spec():
   that got past validation would not raise -- the last unit declared would
   quietly win, and the other unit's port would vanish from the compose file.
   """
-  with pytest.raises(ConfigError, match="multiple run units"):
+  with pytest.raises(ConfigError, match="declared more than once"):
     _spec(
       """
 [app]
@@ -369,7 +366,45 @@ admin = { port = "8082" }
   assert any("host" in e for e in errors)
 
 
+def test_route_and_port_may_not_share_a_name():
+  with pytest.raises(ConfigError, match="declared more than once"):
+    _spec(
+      """
+[app]
+version = "0.1.0"
+
+[adv_config]
+subdomain = { default = "photos" }
+
+[run.main]
+image = "alpine:latest"
+[run.main.routes]
+dash = { port = "8080" }
+[run.main.ports]
+dash = { port = "8081/udp" }
+"""
+    )
+
+
 # ── schema ────────────────────────────────────────────────────────────────
+def test_route_refuses_a_proto():
+  with pytest.raises(ConfigError, match=r"\[run.<unit>.ports\]"):
+    _spec(
+      """
+[app]
+version = "0.1.0"
+
+[adv_config]
+subdomain = { default = "photos" }
+
+[run.main]
+image = "alpine:latest"
+[run.main.routes]
+dns = { port = "53/udp" }
+"""
+    )
+
+
 def test_invalid_port_spec_rejected():
   with pytest.raises(ConfigError, match="is not a port number"):
     _spec(
@@ -1313,7 +1348,6 @@ def _assigned(
     run_unit_name=route.run_unit_name,
     host_port=host_port,
     container_port=route.container_port,
-    proto=route.proto,
     scheme=route.scheme,
     providers=providers,
   )
@@ -1327,7 +1361,7 @@ def _run_data(
   ports = host_ports or {}
   if providers is None:
     providers = {
-      name: ("web",) for name, route in spec.routes.items() if not route.private
+      name: ("web",) for name, route in spec.routes.items() if not route.admin
     }
   assigned = {
     name: _assigned(spec, name, ports.get(name, 41000 + i), providers.get(name, ()))

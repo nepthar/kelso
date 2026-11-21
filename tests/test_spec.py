@@ -310,8 +310,10 @@ image = "alpine"
 [run.main.routes]
 main   = { port = "8080" }
 admin  = { port = "9000:80" }
-dns    = { port = "53/udp" }
 secure = { port = "8443", scheme = "https" }
+
+[run.main.ports]
+dns    = { port = "53/udp" }
 """,
   )
 
@@ -320,8 +322,7 @@ secure = { port = "8443", scheme = "https" }
   assert primary.host_port == -1
   assert primary.needs_allocation is True
   assert primary.container_port == 8080
-  assert primary.proto == "tcp"
-  assert primary.private is False
+  assert primary.admin is False
   assert primary.scheme == "http"
   assert primary.run_unit_name == "main"
 
@@ -329,10 +330,10 @@ secure = { port = "8443", scheme = "https" }
   admin = spec.routes["admin"]
   assert (admin.host_port, admin.container_port) == (9000, 80)
   assert admin.needs_allocation is False
-  assert admin.private is False
+  assert admin.admin is False
 
-  assert spec.routes["dns"].container_port == 53
-  assert spec.routes["dns"].proto == "udp"
+  assert spec.ports["dns"].container_port == 53
+  assert spec.ports["dns"].proto == "udp"
   assert spec.routes["secure"].scheme == "https"
 
   # The reserved name "main" takes the bare app subdomain; everything else is

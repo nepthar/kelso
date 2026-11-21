@@ -36,6 +36,8 @@ compose = { depends_on = ["db"] }
 
 [run.main.routes]
 main = { port = "8080" }
+
+[run.main.ports]
 dns  = { port = "53/udp" }
 
 [run.db]

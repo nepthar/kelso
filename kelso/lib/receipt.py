@@ -66,14 +66,31 @@ def route_lines(
   for name, route in spec.routes.items():
     where = host_url(spec, run_data, name, host) or "(no host port allocated)"
 
-    line = (
-      f"{name}: {route.run_unit_name}:{route.container_port}/{route.proto} <- {where}"
-    )
+    line = f"{name}: {route.run_unit_name}:{route.container_port} <- {where}"
     if published.get(name):
       line += f" <- {', '.join(published[name])}"
-    if route.private:
-      line += " (private)"
+    if route.admin:
+      line += " (admin)"
     lines.append(line)
+  return lines
+
+
+def port_lines(
+  spec: AppSpec, run_data: AppRunData | None, *, host: str = "localhost"
+) -> list[str]:
+  """Every declared port, read right to left like `route_lines`."""
+  lines: list[str] = []
+  for name, port in spec.ports.items():
+    assigned = run_data.ports.get(name) if run_data else None
+    if assigned is not None:
+      where = f"{host}:{assigned.host_port}"
+    elif not port.needs_allocation:
+      where = f"{host}:{port.host_port}"
+    else:
+      where = "(no host port allocated)"
+    lines.append(
+      f"{name}: {port.run_unit_name}:{port.container_port}/{port.proto} <- {where}"
+    )
   return lines
 
 
@@ -208,7 +225,7 @@ def location_receipt(
   *,
   heading: str | None = None,
 ) -> str:
-  """Post-up location block (Routes, Data, Logs)."""
+  """Post-up location block (Routes, Ports, Data, Logs)."""
   app_id = spec.app
   title = heading if heading is not None else f"Running {app_id}"
   rows: list[tuple[str, str]] = []
@@ -221,6 +238,8 @@ def location_receipt(
   )
   for i, line in enumerate(routes):
     rows.append(("Routes:" if i == 0 else "", line))
+  for i, line in enumerate(port_lines(spec, run_data, host=ctx.config.link_address)):
+    rows.append(("Ports:" if i == 0 else "", line))
 
   for name, kind, where in _volume_paths(spec, run_data, ctx):
     if kind == "data":
@@ -268,25 +287,14 @@ def capability_receipt(
     lines.append(_labeled_line("Network:" if i == 0 else "", line))
 
   if not compact:
-    declared_ports: list[str] = []
-    for unit_name, unit in spec.run_units.items():
-      for port_name, port in unit.routes.items():
-        if port.host_port < 0:
-          port_desc = f"{port.container_port}/{port.proto} (allocated)"
-        else:
-          port_desc = f"{port.host_port}:{port.container_port}/{port.proto}"
-        route = spec.routes.get(port_name)
-        private = ", private" if route and route.private else ""
-        declared_ports.append(f"{unit_name}.{port_name}: {port_desc}{private}")
-    if declared_ports:
-      lines.append(_labeled_line("Ports:", declared_ports[0]))
-      for extra in declared_ports[1:]:
-        lines.append(_labeled_line("", extra))
-
     if run_data is not None:
       lines += route_receipt_lines(spec, run_data, ctx)
     elif spec.routes and (subdomain := resolved_subdomain(spec, ctx)):
       lines.append(_labeled_line("Routes:", f"subdomain={subdomain}"))
+
+    ports = port_lines(spec, run_data, host=ctx.config.link_address)
+    for i, line in enumerate(ports):
+      lines.append(_labeled_line("Ports:" if i == 0 else "", line))
 
     vols = volume_lines(spec, run_data, ctx)
     if vols:
@@ -363,6 +371,7 @@ __all__ = [
   "config_lines",
   "danger_callouts",
   "location_receipt",
+  "port_lines",
   "published_route_urls",
   "published_urls",
   "route_lines",

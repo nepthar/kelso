@@ -53,10 +53,12 @@ def register(subparsers) -> None:
     ),
   )
   parser.add_argument(
-    "-y",
-    "--yes",
+    "--allow-compose",
     action="store_true",
-    help="Skip the confirmation for compose keys kelso does not model",
+    help=(
+      "Go ahead although the manifest sets compose keys kelso does not model; "
+      "the operator should review them first"
+    ),
   )
   parser.set_defaults(func=run)
 
@@ -66,7 +68,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = app_id_from_path(source)
   host = args.host
   files = _files(source)
-  if not args.yes and not confirm_compose_warnings(app, source):
+  if not args.allow_compose and not confirm_compose_warnings(app, source):
     print("Nothing deployed.")
     return
 
@@ -86,9 +88,9 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
   was = loaded.stdout.strip().partition(" ")[2]
   if not was:
-    command = f"kelso start {app}@{LOCAL_REPO} --yes"
+    command = f"kelso start {app}@{LOCAL_REPO} --allow-compose"
   elif was == dest:
-    command = f"kelso update {app} --yes"
+    command = f"kelso update {app} --allow-compose"
     if args.no_backup:
       command += " --no-backup"
     command += f" && kelso start {app}"

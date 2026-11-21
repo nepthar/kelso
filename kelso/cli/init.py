@@ -40,7 +40,8 @@ port_base = 41000
 # Where route providers send traffic: the address they reach this host at.
 # Required as soon as one is configured. On Docker Desktop, where they run in
 # containers, it is host.docker.internal. A top-level key, like link_address:
-# keep both above the first [table].
+# keep both above the first [table]. When it is an IP, route ports are
+# published on that address alone, not on every interface.
 # route_address = "10.0.0.5"
 
 # The host in links people click: the `<-` URLs `kelso inspect` prints and
@@ -49,7 +50,7 @@ port_base = 41000
 # link_address = "10.0.0.5"
 
 # Routes are auto-assigned to this provider tag on first load (like a config
-# default), unless marked private=true in the manifest. The reserved tag
+# default), unless marked admin = true in the manifest. The reserved tag
 # "none" is a built-in noop and is the default when this key is omitted.
 # default_route_provider = "web"
 

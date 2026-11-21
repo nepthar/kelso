@@ -458,6 +458,7 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "manifest_text": ctx.loaded_paths(app_id).manifest_path.read_text(),
       "units": _units(spec, observation, run_data),
       "routes": _routes(spec, run_data, ctx),
+      "ports": _ports(spec, run_data),
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
       "commands": [
@@ -576,7 +577,7 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
         "name": name,
         "unit": route.run_unit_name,
         "desc": route.desc,
-        "private": route.private,
+        "admin": route.admin,
         "scheme": route.scheme,
         "container_port": route.container_port,
         "host_port": assigned.host_port if assigned else None,
@@ -587,6 +588,23 @@ def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str
       }
     )
   return routes
+
+
+def _ports(spec: AppSpec, run_data: AppRunData) -> list[dict[str, Any]]:
+  ports = []
+  for name, port in spec.ports.items():
+    assigned = run_data.ports.get(name)
+    ports.append(
+      {
+        "name": name,
+        "unit": port.run_unit_name,
+        "desc": port.desc,
+        "proto": port.proto,
+        "container_port": port.container_port,
+        "host_port": assigned.host_port if assigned else None,
+      }
+    )
+  return ports
 
 
 def security_notes(

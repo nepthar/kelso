@@ -49,7 +49,8 @@ creates.
 | `cmd` | list of strings | image default | Overrides the image's command. Passed as written: a `$VAR` in it is the container's to expand, not kelso's or compose's. |
 | `volumes` | `{ <volume> = "<path in container>" }` | `{}` | Every name must be declared in `[volumes]`. Nothing may go under `/kelso`, which kelso reserves for future use. |
 | `env` | `{ KEY = "value" }` | `{}` | `${…}` placeholders are substituted; see below. |
-| `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | Ports the outside world may reach. |
+| `routes` | table of `[run.<unit>.routes.<name>]` | `{}` | HTTP or HTTPS services a route provider can publish. |
+| `ports` | table of `[run.<unit>.ports.<name>]` | `{}` | Raw TCP or UDP ports, reachable on the host's address only. |
 | `restart` | `"yes"` \| `"no"` | `"yes"` | `"yes"` restarts a container that crashes; `"no"` leaves it stopped, for one-shot commands. Neither brings it back at boot: kelsod starts apps then, by `start_group`. |
 | `shell` | list of strings | `["/bin/sh", "-c"]` | How kelso runs anything in this unit: its commands and its shell. It must exist in the image; without it they fail with docker's "not found". |
 | `connections` | list of strings | `[]` | [Connections](#connectionsname) to give this unit even though its `env` references none of their properties. |
@@ -249,7 +250,7 @@ In `restrict`, `ask` and `watch`, the app's units sit on an internal network
 with no route out, so a connection to a raw IP address fails. One more
 container, `kproxy`, is on both that network and an ordinary one. It answers
 the units' DNS, lets their HTTP and HTTPS through to the domains the mode
-allows, and relays each route, TCP or UDP, in to its unit. Kelso gives each
+allows, and relays each route and port, TCP or UDP, in to its unit. Kelso gives each
 such app its own subnet, kept across loads like a port.
 
 What running behind kproxy costs the app:
@@ -338,20 +339,21 @@ subdomain = { default = "recipes" }
 
 ## `[run.<unit>.routes.<name>]`
 
-A named port the outside world may reach. The route named `main` is published
-at the app's bare subdomain; every other name gets `<name>-<subdomain>`.
+A named HTTP or HTTPS service a route provider can publish. The route named
+`main` is published at the app's bare subdomain; every other name gets
+`<name>-<subdomain>`.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `port` | string | **required** | `"8080"` (kelso picks the host port), `"8443:8443"` (pinned), or either with `/udp`. |
+| `port` | string | **required** | `"8080"` (kelso picks the host port) or `"8443:8443"` (pinned). Always TCP. |
 | `scheme` | `http` \| `https` | `http` | How a reverse proxy should *dial the container*, not what a browser sees. |
-| `private` | bool | `false` | LAN-only: never handed to a route provider. |
+| `admin` | bool | `false` | Not handed to the default route provider on first load; the operator can still publish it. |
 | `desc` | string | `""` | Shown beside the URL. |
 
 ```toml
 [run.main.routes]
 main    = { port = "8443", scheme = "https" }
-metrics = { port = "9090", private = true, desc = "Prometheus scrape target" }
+console = { port = "9443", scheme = "https", admin = true, desc = "Admin console" }
 ```
 
 Pin a host port only when something outside kelso already points at it — a TV
@@ -370,6 +372,23 @@ The first one listed is the primary: its domain is the one `${routes.<name>}`
 and `${klso.domain}` resolve to. Take it out and the next one becomes primary.
 `--route main=none` publishes the route nowhere; `none` cannot be combined with
 other providers.
+
+## `[run.<unit>.ports.<name>]`
+
+A named TCP or UDP port that isn't HTTP: discovery, STUN, a game server. It is
+reachable on the host's address and is never published by a route provider.
+Route and port names share one namespace in an app.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `port` | string | **required** | `"3478"` (kelso picks the host port) or `"3478:3478"` (pinned), TCP unless it ends in `/udp`. |
+| `desc` | string | `""` | Shown beside the port. |
+
+```toml
+[run.main.ports]
+stun    = { port = "3478:3478/udp" }
+metrics = { port = "9090", desc = "Prometheus scrape target" }
+```
 
 ## `[commands.<name>]`
 
@@ -450,6 +469,7 @@ an empty string:
   | `${klso.domain}` | `<subdomain>.<domain>` of the `main` route's primary provider, e.g. `recipes.example.com`; `<subdomain>.kelso.localhost` while unassigned |
   | `${klso.volumes}` | This unit's volumes as `name:/path/in/container`, comma-separated |
   | `${klso.routes}` | This unit's routes as `name:container_port`, comma-separated |
+  | `${klso.ports}` | This unit's ports as `name:container_port`, comma-separated |
   | `${klso.cmd}` | This unit's `cmd`, joined with spaces |
 
 These are substitutions, not environment variables: a container sees one only

@@ -62,12 +62,13 @@
   {% for r in reachable %}
     {%- set where = r.unit ~ ':' ~ r.container_port ~ ' → ' ~ (r.host_port or 'unallocated') %}
     {%- set via = r.get('providers') or [] %}
+    {%- set admin_tag = (' ' ~ tag('admin', title='An admin route: not published by default')) if r.get('admin') else '' %}
     {#- One line per provider, primary first: its URL is the one the app is
       told, so it is the one marked when there is more than one. -#}
     {%- for p in via %}
-    <div><span class="key">{{ r.name }}:</span> <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ where }}">{{ p.url }}</a> {{ tag(p.tag, title=('primary: the URL the app is given for ' ~ r.name) if loop.first and via|length > 1 else 'via ' ~ p.tag) }}</div>
+    <div><span class="key">{{ r.name }}:</span> <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ where }}">{{ p.url }}</a> {{ tag(p.tag, title=('primary: the URL the app is given for ' ~ r.name) if loop.first and via|length > 1 else 'via ' ~ p.tag) }}{{ admin_tag }}</div>
     {% else %}
-    <div><span class="key">{{ r.name }}:</span> <a href="{{ r.host_url }}" target="_blank" rel="noopener" title="{{ where }}">{{ r.host_url }}</a></div>
+    <div><span class="key">{{ r.name }}:</span> <a href="{{ r.host_url }}" target="_blank" rel="noopener" title="{{ where }}">{{ r.host_url }}</a>{{ admin_tag }}</div>
     {% endfor %}
   {%- endfor %}
   </div>
@@ -153,6 +154,23 @@
 </div>
 </fieldset>
 
+{% if app.get('ports') %}
+<fieldset class="group">
+<legend>Ports</legend>
+<div class="card">
+<div class="scroll"><table><thead><tr><th>Port</th><th>Unit</th><th>Container</th><th>Host</th><th>Desc</th></tr></thead><tbody>
+{% for p in app.ports %}
+<tr><td class="key">{{ p.name }}</td>
+  <td class="muted">{{ p.unit }}</td>
+  <td class="mono">{{ p.container_port }}/{{ p.proto }}</td>
+  <td class="mono">{{ p.host_port or 'unallocated' }}</td>
+  <td class="muted wrap">{{ p.desc }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+</div>
+</fieldset>
+{% endif %}
+
 <fieldset class="group">
 <legend>Volumes</legend>
 <div class="card">
@@ -209,4 +227,4 @@
 </fieldset>
 {% endblock %}
 
-{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/tagpick.js') }}"></script>{% if mode in ('restrict', 'ask', 'watch') %}<script src="{{ asset('js/net.js') }}"></script>{% endif %}{% endblock %}
+{% block scripts %}<script src="{{ asset('js/configform.js') }}"></script><script src="{{ asset('js/routepick.js') }}"></script>{% if mode in ('restrict', 'ask', 'watch') %}<script src="{{ asset('js/net.js') }}"></script>{% endif %}{% endblock %}

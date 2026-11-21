@@ -92,9 +92,13 @@ td.muted.wrap { color: var(--muted); }
 .cfg-form .cfg-actions { display: none; justify-content: flex-end; gap: 6px; padding: 8px 0 0; }
 .cfg-form.is-dirty .cfg-actions { display: flex; }
 .cfg-form td.field input, .cfg-form td.field select { width: 16em; max-width: 100%; }
-/* A pick-several field: a tag per choice, which js/tagpick.js toggles into a
-   hidden list in the order picked. */
-.tag-picks { display: flex; flex-wrap: wrap; gap: 4px; max-width: 16em; }
+/* The routes tab: a dropdown of provider checkboxes, and a primary URL select. */
+.multi-pick { position: relative; width: 12em; max-width: 100%; }
+/* Fixed, placed by js/routepick.js: the table's scroll box would clip it. */
+.multi-pick-menu { position: fixed; z-index: 2; }
+.multi-pick-menu label { display: flex; gap: 6px; padding: 3px 6px; }
+.cfg-form td.field .multi-pick-menu input { width: auto; }
+.routes-pick td.field select { width: 22em; }
 .head-actions .actions { gap: 8px; }
 /* The Network group: clicks held until Save are marked on their row. */
 .net-stamp { margin: 0 0 6px; }

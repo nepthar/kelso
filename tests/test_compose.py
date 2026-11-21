@@ -8,6 +8,7 @@ covers the rest of what `AppRunData` decides.
 """
 
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from kelso.lib.manifest import ConfigError, parse_manifest
 from kelso.lib.run_layout import (
   LOCALTIME_PATH,
   AppRunData,
+  AssignedPort,
   AssignedRoute,
   ConfigIssue,
   ConfigValue,
@@ -59,7 +61,7 @@ def run_data(
   host_ports = host_ports or {}
   if assignments is None:
     assignments = {
-      name: ["web"] for name, route in spec.routes.items() if not route.private
+      name: ["web"] for name, route in spec.routes.items() if not route.admin
     }
   routes = {
     name: AssignedRoute(
@@ -68,7 +70,6 @@ def run_data(
       run_unit_name=route.run_unit_name,
       host_port=host_ports.get(name, route.host_port),
       container_port=route.container_port,
-      proto=route.proto,
       scheme=route.scheme,
       providers=tuple(assignments.get(name, ())),
     )
@@ -93,6 +94,16 @@ def run_data(
     route_urls=_route_urls(routes, config),
     host_mounts=host_mounts,
     issues=issues,
+    ports={
+      name: AssignedPort(
+        name=name,
+        run_unit_name=port.run_unit_name,
+        host_port=host_ports.get(name, port.host_port),
+        container_port=port.container_port,
+        proto=port.proto,
+      )
+      for name, port in spec.ports.items()
+    },
   )
 
 
@@ -124,6 +135,7 @@ image = "alpine:latest"
           "driver": "json-file",
           "options": {"max-size": "10m", "max-file": "3"},
         },
+        "security_opt": ["no-new-privileges:true"],
         "labels": {
           "kelso.app_id": "demo",
           "kelso.version": "1.2.3",
@@ -213,6 +225,8 @@ image = "alpine"
 [run.main.routes]
 main  = { port = "8080" }
 admin = { port = "9000:80" }
+
+[run.main.ports]
 dns   = { port = "53/udp" }
 """,
   )
@@ -222,6 +236,39 @@ dns   = { port = "53/udp" }
 
   assert service["ports"] == ["41000:8080", "9000:80", "41001:53/udp"]
   assert "KLSO_ROUTES" not in service["environment"]
+
+
+@pytest.mark.parametrize(
+  ("address", "published"),
+  [("100.64.1.2", "100.64.1.2:41000:8080"), ("fd7a::2", "[fd7a::2]:41000:8080")],
+)
+def test_route_ports_are_published_only_on_the_route_address(
+  tmp_path, address, published
+):
+  """Ports stay on every interface; routes are for the route provider alone."""
+  spec = spec_of(
+    tmp_path,
+    """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine"
+
+[run.main.routes]
+main = { port = "8080" }
+
+[run.main.ports]
+dns  = { port = "53/udp" }
+""",
+  )
+
+  data = replace(
+    run_data(spec, host_ports={"main": 41000, "dns": 41001}), route_bind=address
+  )
+  service = make_compose_dict(spec, data)["services"]["main"]
+
+  assert service["ports"] == [published, "41001:53/udp"]
 
 
 def test_kelso_mounts_land_after_the_bundles_own_and_outside_bundle_volumes(tmp_path):
@@ -485,7 +532,7 @@ api  = { port = "9001" }
 
   env = make_compose_dict(spec, run_data(spec))["services"]["main"]["environment"]
 
-  # Assigned non-private routes use the provider domain. Public URLs are
+  # Assigned non-admin routes use the provider domain. Public URLs are
   # https (TLS terminates at the reverse proxy); `scheme` on a route is only
   # how the proxy dials the backend.
   # "main" is the one route that gets the bare app subdomain.

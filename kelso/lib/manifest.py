@@ -105,7 +105,7 @@ class ConfigEntry(BaseModel):
 
 @dataclass(frozen=True)
 class PortSpec:
-  """A parsed route `port` string. host_port -1 means "assign one"."""
+  """A parsed `port` string. host_port -1 means "assign one"."""
 
   host_port: int
   container_port: int
@@ -138,12 +138,35 @@ def _port_number(value: str, text: str) -> int:
 
 
 class RouteEntry(BaseModel):
-  """A named port a run unit exposes, declared in [run.<unit>.routes]."""
+  """An HTTP(S) service a run unit exposes, declared in [run.<unit>.routes]."""
 
   model_config = ConfigDict(extra="forbid")
   port: str
-  private: bool = False
+  admin: bool = False
   scheme: Literal["http", "https"] = "http"
+  desc: str = ""
+
+  @model_validator(mode="after")
+  def check_port(self) -> Self:
+    if "/" in self.port:
+      raise ValueError(
+        f"route port {self.port!r}: a route is HTTP; "
+        "declare a tcp or udp port under [run.<unit>.ports]"
+      )
+    PortSpec.parse(self.port)
+    return self
+
+  @property
+  def port_spec(self) -> PortSpec:
+    """Always parses: `check_port` rejected anything malformed at load time."""
+    return PortSpec.parse(self.port)
+
+
+class PortEntry(BaseModel):
+  """A raw tcp or udp port a run unit exposes, declared in [run.<unit>.ports]."""
+
+  model_config = ConfigDict(extra="forbid")
+  port: str
   desc: str = ""
 
   @model_validator(mode="after")
@@ -231,6 +254,7 @@ class RunEntry(BaseModel):
   volumes: dict[Identifier, str] = Field(default_factory=dict)
   env: dict[Identifier, str] = Field(default_factory=dict)
   routes: dict[Identifier, RouteEntry] = Field(default_factory=dict)
+  ports: dict[Identifier, PortEntry] = Field(default_factory=dict)
   restart: Literal["yes", "no"] = "yes"
   # How kelso runs anything in this unit: `[*shell, script]`. The unit's commands
   # and its shell need it to exist in the image.
@@ -597,26 +621,24 @@ def _validate_run_volumes(manifest: Manifest) -> list[str]:
 
 
 def _validate_routes(manifest: Manifest) -> list[str]:
-  """Structural checks for [run.*.routes]."""
+  """Structural checks for [run.*.routes] and [run.*.ports]."""
   errors: list[str] = []
 
-  # Route names are app-level identifiers, globally unique across run units:
-  # each names a published port and a subdomain label.
-  route_owners: dict[str, list[str]] = {}
+  # Route and port names are app-level identifiers, unique across run units and
+  # each other: each names a host port, and a route also a subdomain label.
+  owners: dict[str, list[str]] = {}
   for unit_name, run_entry in manifest.run.items():
-    for route_name in run_entry.routes:
-      route_owners.setdefault(route_name, []).append(unit_name)
-  for route_name, owners in route_owners.items():
-    if len(owners) > 1:
-      errors.append(
-        f"[run]: route name {route_name!r} is declared by multiple run units: "
-        + ", ".join(owners)
-      )
+    for name in run_entry.routes:
+      owners.setdefault(name, []).append(f"[run.{unit_name}.routes]")
+    for name in run_entry.ports:
+      owners.setdefault(name, []).append(f"[run.{unit_name}.ports]")
+  for name, where in owners.items():
+    if len(where) > 1:
+      errors.append(f"[run]: {name!r} is declared more than once: " + ", ".join(where))
 
-  has_routes = any(run_entry.routes for run_entry in manifest.run.values())
-
-  if manifest.app.network_mode == "host":
-    if has_routes:
-      errors.append("[run]: network_mode 'host' forbids [run.*.routes]")
+  if manifest.app.network_mode == "host" and any(
+    run_entry.routes or run_entry.ports for run_entry in manifest.run.values()
+  ):
+    errors.append("[run]: network_mode 'host' forbids [run.*.routes] and [run.*.ports]")
 
   return errors

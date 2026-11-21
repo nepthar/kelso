@@ -210,12 +210,12 @@ services:
     restart: unless-stopped
 ```
 
-Lower down, they also provide information on what all of the ports are for. This is helpful for naming our `routes`. We pick the ones we need and skip ones that aren't relevant to our deployment.
+Lower down, they also provide information on what all of the ports are for. This is helpful for naming our `routes` and `ports`. We pick the ones we need and skip ones that aren't relevant to our deployment.
 
 Three choices are worth explaining:
 
 - **Pinned host ports.** Access points find the controller on fixed ports (8080 for device communication, 3478/udp for STUN, 10001/udp for discovery), so we pin them with `"host:container"` rather than letting kelso pick a port.
-- **Every route is `private`.** A private route is reachable on this machine's address but never handed to a route provider, so nothing is published to the internet by accident. If you want the admin page at `https://admin-unifi.<your domain>`, publish just that one with `kelso config unifi-network-application --route admin=<provider>`.
+- **Ports for the devices, one `admin` route.** STUN, discovery and device communication aren't web pages, so they are `ports`: reachable on this machine's address, never published. The web UI is a route marked `admin = true`, so it isn't handed to the default route provider and nothing is published to the internet by accident. If you want it at `https://admin-unifi.<your domain>`, publish it with `kelso config unifi-network-application --route admin=<provider>`.
 - **Logs get their own volume.** Linuxserver keeps everything under `/config`, logs included. Mounting `/config/logs` as a `logs` volume keeps them out of backups, which only capture `data` volumes.
 
 Using that information, we can complete our `manifest`:
@@ -254,11 +254,13 @@ image = "lscr.io/linuxserver/unifi-network-application:latest"
 volumes = { app_data = "/config/data", app_logs = "/config/logs" }
 
 [run.main.routes]
-admin        = { port = "8443:8443", private = true, scheme = "https" }
-stun         = { port = "3478:3478/udp", private = true }
-ap_discovery = { port = "10001:10001/udp", private = true }
-device_comm  = { port = "8080:8080", private = true }
-discover_l2  = { port = "1900:1900/udp", private = true }
+admin = { port = "8443:8443", admin = true, scheme = "https" }
+
+[run.main.ports]
+stun         = { port = "3478:3478/udp" }
+ap_discovery = { port = "10001:10001/udp" }
+device_comm  = { port = "8080:8080" }
+discover_l2  = { port = "1900:1900/udp" }
 
 [run.main.env]
 PUID = "1000"
