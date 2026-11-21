@@ -694,7 +694,9 @@ def test_config_before_loading_reads_the_bundle(kelso_env):
 
 def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
   """`--edit` renders the app's ConfigRequest and applies the response."""
-  edited = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nn\ns\n")
+  edited = kelso_env.run(
+    "config", BASIC, "--edit", input="\nalice\nn\nn\ns\n", tty=True
+  )
 
   assert edited.returncode == 0, edited.stderr
   assert "Set admin_user" in edited.stdout
@@ -702,7 +704,9 @@ def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
 
 
 def test_config_edit_writes_nothing_when_cancelled(kelso_env):
-  cancelled = kelso_env.run("config", BASIC, "--edit", input="\nalice\nn\nn\nq\n")
+  cancelled = kelso_env.run(
+    "config", BASIC, "--edit", input="\nalice\nn\nn\nq\n", tty=True
+  )
 
   assert cancelled.returncode == 0, cancelled.stderr
   assert "No changes" in cancelled.stdout
@@ -2525,6 +2529,13 @@ def test_unload_of_an_app_no_repo_carries_does_not_suggest_loading_by_id(kelso_e
   assert done.returncode == 0, done.stderr
   assert "No repo has" in done.stdout
   assert "Load it again with" not in done.stdout
+
+
+def test_config_edit_without_a_terminal_refuses_and_names_set(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  refused = kelso_env.run("config", BASIC, "--edit")
+  assert refused.returncode == 2
+  assert f"kelso config {BASIC} --set NAME=VALUE" in refused.stderr
 
 
 def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):

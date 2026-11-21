@@ -105,7 +105,7 @@ APP_DETAIL = {
   "units": [
     {
       "name": "main",
-      "image": "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
+      "image": "ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim",
       "state": "running",
       "environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "${admin_pass}"},
       "resolved_environment": {"PORT": "8080", "EVIL": EVIL, "PASS": "<secret>"},

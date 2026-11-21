@@ -32,8 +32,10 @@
    manifest resolves to, or every parse error with the key that caused it.
 
 3. **Run it:** `kelso dev <path>` loads the bundle and runs it in the
-   foreground until interrupted, printing its routes. It holds the terminal, so
-   run it in the background and stop it with an interrupt signal when done.
+   foreground, printing its routes. If the app needs config, pass
+   `--set NAME=VALUE` for each; with no terminal, dev refuses and names what
+   is missing. It holds the terminal, so run it in the background and stop it
+   with `kill <pid>`: that stops the containers and cleans up, as Ctrl-C does.
    Fetch the route's URL to see that the app answers.
 
 4. **Deploy it:** `kelso deploy <path> <host> --yes` copies the bundle into
@@ -53,7 +55,11 @@
 
 ## What a clean local run does not prove
 
-Docker Desktop on a Mac hides file ownership problems that Linux shows. Never
-mount one volume inside another's path. Check the app on a Linux box before
+Docker Desktop on a Mac hides file ownership problems that Linux shows. A
+container runs as whatever user its image sets; kelso does not change that.
+Kelso makes each volume folder writable by any user, so an image that runs as
+a non-root user can still write to its volumes, and files owned by root in a
+volume on the box are normal for an image that runs as root. Never mount one
+volume inside another's path. Check the app on a Linux box before
 calling it done: `kelso ps` there should say `running`, and `healthy` if the
 app has a healthcheck.

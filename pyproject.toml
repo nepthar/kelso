@@ -50,6 +50,7 @@ packages = ["kelso"]
 "kproxy" = "kelso/_kproxy"
 "docs/manifest.md" = "kelso/agent_help/manifest.md"
 "docs/volumes.md" = "kelso/agent_help/volumes.md"
+"docs/install.md" = "kelso/agent_help/install.md"
 
 [dependency-groups]
 dev = [

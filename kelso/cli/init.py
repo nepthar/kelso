@@ -340,8 +340,12 @@ def run(args: argparse.Namespace, _ctx) -> None:
   else:
     try:
       install_service(config.kelso_root)
-    except RuntimeError as e:
-      logger.warning(str(e))
+    except RuntimeError:
+      print(
+        "kelsod is installed but not running yet. If you only just joined the "
+        "docker group, that is expected: the restart below fixes it. If it is "
+        f"still down afterwards, see `journalctl --user-unit {service.UNIT_NAME}`."
+      )
 
   if root not in (r.expanduser().resolve() for r in ROOT_LOCATIONS):
     print(

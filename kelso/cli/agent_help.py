@@ -7,7 +7,7 @@ from kelso.lib.kelso import KelsoCtx
 
 _TOPICS = Path(__file__).parent.parent / "agent_help"
 # pyproject.toml copies these in from docs/ when kelso is built.
-_FROM_DOCS = ("manifest", "volumes")
+_FROM_DOCS = ("install", "manifest", "volumes")
 INDEX = "index"
 
 
