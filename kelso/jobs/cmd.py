@@ -3,6 +3,7 @@ import shlex
 from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import run_command
+from kelso.lib.lifecycle.run import require_command
 
 
 class CmdJob(Job):
@@ -21,15 +22,7 @@ class CmdJob(Job):
       except ValueError as e:
         raise ValueError(f"Could not parse arguments: {e}") from e
 
-    if not ctx.is_loaded(app):
-      raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
-    spec = ctx.require_loaded_spec(app)
-    if kwargs["command"] not in spec.commands:
-      available = ", ".join(sorted(spec.commands)) or "(none)"
-      raise ValueError(
-        f"Unknown command {kwargs['command']!r} for {app}; "
-        f"available: {available}. List with `kelso cmd {app}`"
-      )
+    require_command(app, kwargs["command"], ctx)
 
     self.app = str(app)
     self.app_id = app
@@ -38,10 +31,7 @@ class CmdJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.app_lock(app, f"cmd {app}"):
-      code = run_command(app, self.command, self.extra, ctx)
-      if code != 0:
-        raise ValueError(
-          f"Command {self.command!r} for {app} exited with status {code}"
-        )
+    code = run_command(app, self.command, self.extra, ctx)
+    if code != 0:
+      raise ValueError(f"Command {self.command!r} for {app} exited with status {code}")
     logger.info("Ran command %r for %s", self.command, app)

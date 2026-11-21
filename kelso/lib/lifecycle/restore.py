@@ -110,17 +110,19 @@ def restore(
   plan: RestorePlan, ctx: KelsoCtx, restic: Restic, *, backup_first: bool = True
 ) -> AppRunData | None:
   app = plan.app_id
-  backup = plan.backup
-  scratch = ctx.config.temp_root / "restore" / str(app)
-  _remove_as_root(scratch)
-  try:
-    for part in (DATA, BULK):
-      if part in backup.snapshots:
-        restic.restore(backup.snapshots[part], scratch, what=f"read {app}'s backup")
-    tree = scratch / APP_ROOT.lstrip("/") / str(app)
-    return _restore_from(plan, tree, ctx, restic, backup_first=backup_first)
-  finally:
+  # Not the kelso lock: restic reads and the backup below run without it.
+  with ctx.app_lock(app, f"restore {app}"):
+    backup = plan.backup
+    scratch = ctx.config.temp_root / "restore" / str(app)
     _remove_as_root(scratch)
+    try:
+      for part in (DATA, BULK):
+        if part in backup.snapshots:
+          restic.restore(backup.snapshots[part], scratch, what=f"read {app}'s backup")
+      tree = scratch / APP_ROOT.lstrip("/") / str(app)
+      return _restore_from(plan, tree, ctx, restic, backup_first=backup_first)
+    finally:
+      _remove_as_root(scratch)
 
 
 def _restore_from(
@@ -148,42 +150,43 @@ def _restore_from(
       ) from e
     logger.info("backed up %s before restoring, as %s", app, pre.id)
 
-  # Volumes first: the step most likely to fail outright, and failing here
-  # leaves the loaded copy and config untouched.
-  _replace_volumes(app, DATA, tree / DATA, ctx)
-  _replace_volumes(app, BULK, tree / BULK, ctx)
+  with ctx.kelso_lock(f"restore {app}"):
+    # Volumes first: the step most likely to fail outright, and failing here
+    # leaves the loaded copy and config untouched.
+    _replace_volumes(app, DATA, tree / DATA, ctx)
+    _replace_volumes(app, BULK, tree / BULK, ctx)
 
-  plan.config_path.parent.mkdir(parents=True, exist_ok=True)
-  shutil.copyfile(tree / "config.logtab", plan.config_path)
-  # Taken before a rekey, its secrets are under the key current then: append
-  # them again under today's.
-  then = master_key_at(ctx.config.master_keyfile, plan.backup.time)
-  if then and then != ctx.config.master_key:
-    ctx.app_store(app).rekey_secrets(FernetCryptoEngine(then))
+    plan.config_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(tree / "config.logtab", plan.config_path)
+    # Taken before a rekey, its secrets are under the key current then: append
+    # them again under today's.
+    then = master_key_at(ctx.config.master_keyfile, plan.backup.time)
+    if then and then != ctx.config.master_key:
+      ctx.app_store(app).rekey_secrets(FernetCryptoEngine(then))
 
-  if plan.run_path.exists():
-    shutil.rmtree(plan.run_path)
-  if spec is None:
+    if plan.run_path.exists():
+      shutil.rmtree(plan.run_path)
+    if spec is None:
+      record_app_action("restored", app, ctx, backup=plan.backup.id)
+      logger.info(
+        "restored %s from backup %s; it was not loaded then", app, plan.backup.id
+      )
+      return None
+
+    plan.run_path.mkdir(parents=True, mode=0o700)
+    shutil.copytree(bundle, plan.run_path / "app_bundle")
+    try:
+      run_data, _ = materialize(spec, ctx)
+    except Exception as e:
+      # The volumes and loaded copy are already the backup's; only the generated
+      # half is missing, which is what re-loading rebuilds.
+      record_app_action("restore-failed", app, ctx)
+      raise ValueError(
+        f"App {app} was restored from backup {plan.backup.id}, but its compose.yml "
+        f"and routes could not be rebuilt; fix the problem below and run "
+        f"`kelso load {app}`.\n{e}"
+      ) from e
+
     record_app_action("restored", app, ctx, backup=plan.backup.id)
-    logger.info(
-      "restored %s from backup %s; it was not loaded then", app, plan.backup.id
-    )
-    return None
-
-  plan.run_path.mkdir(parents=True, mode=0o700)
-  shutil.copytree(bundle, plan.run_path / "app_bundle")
-  try:
-    run_data, _ = materialize(spec, ctx)
-  except Exception as e:
-    # The volumes and loaded copy are already the backup's; only the generated
-    # half is missing, which is what re-loading rebuilds.
-    record_app_action("restore-failed", app, ctx)
-    raise ValueError(
-      f"App {app} was restored from backup {plan.backup.id}, but its compose.yml "
-      f"and routes could not be rebuilt; fix the problem below and run "
-      f"`kelso load {app}`.\n{e}"
-    ) from e
-
-  record_app_action("restored", app, ctx, backup=plan.backup.id)
-  logger.info("restored %s from backup %s", app, plan.backup.id)
-  return run_data
+    logger.info("restored %s from backup %s", app, plan.backup.id)
+    return run_data

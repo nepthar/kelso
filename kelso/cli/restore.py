@@ -121,8 +121,7 @@ def _restore_app(
   if not args.yes and not _confirmed(plan, backup_first):
     print("Nothing restored.")
     return
-  with ctx.locked(f"restore {app}", app):
-    restore(plan, ctx, restic, backup_first=backup_first)
+  restore(plan, ctx, restic, backup_first=backup_first)
   print(f"Restored {app} from backup {plan.backup.id}")
 
 

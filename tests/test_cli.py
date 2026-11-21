@@ -1593,7 +1593,7 @@ def test_duplicate_fqdn_is_rejected_before_compose_up(
 
   start_ctx = KelsoCtx(load_config_file(kelso_env.config))
   with pytest.raises(ValueError, match="already owned"):
-    lifecycle.start(app, start_ctx.inventory.bundle(app).path, start_ctx)
+    lifecycle.start(app, start_ctx, start_ctx.inventory.bundle(app).path)
   assert provider.registered == []
   assert ["compose", "up", "-d"] not in docker_calls
 
@@ -1613,7 +1613,7 @@ def test_an_unreachable_route_provider_does_not_stop_a_start(
   lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
+  lifecycle.start(app, ctx, ctx.inventory.bundle(app).path)
 
   assert ["compose", "up", "-d"] in docker_calls
   assert provider.registered == []
@@ -1622,7 +1622,7 @@ def test_an_unreachable_route_provider_does_not_stop_a_start(
   assert ctx.app_store(app).get_meta(ROUTES_UNPUBLISHED) == "no answer"
 
   provider.route_owners = Mock(return_value={})
-  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
+  lifecycle.start(app, ctx, ctx.inventory.bundle(app).path)
   assert provider.registered
   assert ctx.app_store(app).get_meta(ROUTES_UNPUBLISHED) is None
 
@@ -1651,7 +1651,7 @@ def _started_routes_demo(monkeypatch, kelso_env, stub_provider, owners=None):
   app = ctx.resolve_app_id("routes-demo")
   lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
+  lifecycle.start(app, ctx, ctx.inventory.bundle(app).path)
   return provider, app
 
 
@@ -1678,7 +1678,7 @@ def test_reload_takes_routes_down_then_publishes_them_again(
   assert provider.registered == []  # Stopped, so back on its next start.
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
-  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  lifecycle.start(app, ctx)
   assert [r[2] for r in provider.registered] == ["photos", "api-photos"]
 
 
@@ -1711,7 +1711,7 @@ def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   app = ctx.resolve_app_id("routes-demo")
   lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
-  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  lifecycle.start(app, ctx)
   assert [r[2] for r in providers["web"].registered] == ["photos", "api-photos"]
 
   spec = ctx.loaded_spec(app)
@@ -1720,7 +1720,7 @@ def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
   assert ("photos", "kelso.localhost") in providers["web"].unregistered
   assert providers["other"].unregistered == []
 
-  lifecycle.start(app, ctx.config.app_run_path(app), ctx)
+  lifecycle.start(app, ctx)
   assert [r[2:4] for r in providers["other"].registered] == [
     ("photos", "other.example")
   ]

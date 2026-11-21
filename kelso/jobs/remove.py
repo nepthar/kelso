@@ -16,9 +16,7 @@ class _RemovalJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.locked(f"{self.mode} {app}", app):
-      # Planning resolves what is about to go before anything is deleted.
-      rm(removal_plan(app, ctx, mode=self.mode), ctx)
+    rm(removal_plan(app, ctx, mode=self.mode), ctx)
     logger.info("%s: %s", self.mode, app)
 
 

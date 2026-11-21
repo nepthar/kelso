@@ -488,60 +488,61 @@ def load(
   *,
   version_change: bool = False,
 ) -> LoadResult:
-  paths = ctx.loaded_paths(app)
-  was_loaded = paths.exists()
+  with ctx.locked(f"load {app}", app):
+    paths = ctx.loaded_paths(app)
+    was_loaded = paths.exists()
 
-  running_count = ctx.run_state(app).running_count
-  if running_count:
-    raise ValueError(
-      f"App {app} has {running_count} running Kelso-labeled container(s); "
-      f"run `kelso stop {app}` first"
-    )
+    running_count = ctx.run_state(app).running_count
+    if running_count:
+      raise ValueError(
+        f"App {app} has {running_count} running Kelso-labeled container(s); "
+        f"run `kelso stop {app}` first"
+      )
 
-  # Config gone while the data it belongs to is still here means someone
-  # deleted the logtab by hand. Loading would generate fresh `auto` secrets
-  # against data expecting the old ones, so refuse instead.
-  config_path = ctx.config.app_config_path(app)
-  if not config_path.is_file() and _has_volume_data(app, ctx):
-    raise ValueError(
-      f"App {app} has volume data but no config at {config_path}. "
-      f"Loading would generate new secrets that its existing data does not "
-      f"expect. Restore it from a backup, or run "
-      f"`kelso rm --purge {app}` to delete its config and data together."
-    )
+    # Config gone while the data it belongs to is still here means someone
+    # deleted the logtab by hand. Loading would generate fresh `auto` secrets
+    # against data expecting the old ones, so refuse instead.
+    config_path = ctx.config.app_config_path(app)
+    if not config_path.is_file() and _has_volume_data(app, ctx):
+      raise ValueError(
+        f"App {app} has volume data but no config at {config_path}. "
+        f"Loading would generate new secrets that its existing data does not "
+        f"expect. Restore it from a backup, or run "
+        f"`kelso rm --purge {app}` to delete its config and data together."
+      )
 
-  # Extract the bundle under var/run/ first, validate *that* copy, then promote it
-  # to app_bundle/. AppSpec always comes from the run tree, never the source bundle.
-  run_path = paths.run_path
-  run_path.mkdir(parents=True, exist_ok=True)
-  try:
-    incoming = _load_incoming(bundle, run_path)
-    spec = AppSpec.from_file(incoming / "manifest.toml", app)
-    if not version_change:
-      _refuse_version_change(app, spec, ctx)
-  except Exception:
-    _discard_incoming(run_path)
-    raise
-  _commit_incoming(paths, incoming)
+    # Extract the bundle under var/run/ first, validate *that* copy, then promote it
+    # to app_bundle/. AppSpec always comes from the run tree, never the source bundle.
+    run_path = paths.run_path
+    run_path.mkdir(parents=True, exist_ok=True)
+    try:
+      incoming = _load_incoming(bundle, run_path)
+      spec = AppSpec.from_file(incoming / "manifest.toml", app)
+      if not version_change:
+        _refuse_version_change(app, spec, ctx)
+    except Exception:
+      _discard_incoming(run_path)
+      raise
+    _commit_incoming(paths, incoming)
 
-  store = ctx.app_store(app)
-  store.set_meta("origin", str(bundle))
+    store = ctx.app_store(app)
+    store.set_meta("origin", str(bundle))
 
-  # On the way down: routes are re-derived below, and may come back under a
-  # different name, so what was published goes first.
-  if was_loaded:
-    take_down_routes(app, ctx)
+    # On the way down: routes are re-derived below, and may come back under a
+    # different name, so what was published goes first.
+    if was_loaded:
+      take_down_routes(app, ctx)
 
-  _generate_missing_config(spec, ctx)
-  _apply_default_route_assignments(spec, ctx)
+    _generate_missing_config(spec, ctx)
+    _apply_default_route_assignments(spec, ctx)
 
-  try:
-    run_data, dropped = materialize(spec, ctx)
-  except Exception:
-    record_app_action("load-failed", app, ctx)
-    raise
+    try:
+      run_data, dropped = materialize(spec, ctx)
+    except Exception:
+      record_app_action("load-failed", app, ctx)
+      raise
 
-  store.set_meta("loaded_at", now_ts())
-  store.set_meta("loaded_version", spec.version)
-  record_app_action("loaded", app, ctx, version=spec.version)
-  return LoadResult(spec, run_data, dropped)
+    store.set_meta("loaded_at", now_ts())
+    store.set_meta("loaded_version", spec.version)
+    record_app_action("loaded", app, ctx, version=spec.version)
+    return LoadResult(spec, run_data, dropped)

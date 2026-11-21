@@ -100,32 +100,33 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
 
 def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
   app_id = plan.app_id
-  if plan.stop_first:
-    logger.info("Stopping %s", app_id)
-    stop(app_id, ctx)
+  with ctx.locked(f"{plan.mode} {app_id}", app_id):
+    if plan.stop_first:
+      logger.info("Stopping %s", app_id)
+      stop(app_id, ctx)
 
-  if plan.run_path is not None:
-    take_down_routes(app_id, ctx)
+    if plan.run_path is not None:
+      take_down_routes(app_id, ctx)
 
-  if plan.run_path is not None and plan.run_path.exists():
-    shutil.rmtree(plan.run_path)
-    logger.info("Removed run directory %s", plan.run_path)
+    if plan.run_path is not None and plan.run_path.exists():
+      shutil.rmtree(plan.run_path)
+      logger.info("Removed run directory %s", plan.run_path)
 
-  if plan.config_path is not None and plan.config_path.is_file():
-    plan.config_path.unlink()
-    logger.info("Removed config %s", plan.config_path)
+    if plan.config_path is not None and plan.config_path.is_file():
+      plan.config_path.unlink()
+      logger.info("Removed config %s", plan.config_path)
 
-  if plan.empties:
-    _empty_volumes(app_id, plan.volume_paths)
-  else:
-    _remove_volumes(app_id, plan.volume_paths)
+    if plan.empties:
+      _empty_volumes(app_id, plan.volume_paths)
+    else:
+      _remove_volumes(app_id, plan.volume_paths)
 
-  if plan.purges:
-    ctx.kelso_db.purge_app(app_id)
+    if plan.purges:
+      ctx.kelso_db.purge_app(app_id)
 
-  # The activity log outlives the app on purpose, so close it out rather than
-  # leaving the trail ending at whatever happened before the removal.
-  record_app_action(_ACTIONS[plan.mode], app_id, ctx)
+    # The activity log outlives the app on purpose, so close it out rather than
+    # leaving the trail ending at whatever happened before the removal.
+    record_app_action(_ACTIONS[plan.mode], app_id, ctx)
 
 
 def _remove_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:

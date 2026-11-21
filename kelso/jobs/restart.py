@@ -16,8 +16,7 @@ class RestartJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.locked(f"restart {app}", app):
-      result = restart(app, ctx)
+    result = restart(app, ctx)
     lines = [f"Restarted {app}"]
     lines += [f"  {url}" for url in published_urls(result.spec, result.run_data, ctx)]
     logger.info("\n".join(lines))

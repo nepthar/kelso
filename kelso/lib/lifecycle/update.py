@@ -89,7 +89,7 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
       except Exception as e:
         if running:
           with ctx.kelso_lock(by):
-            start(app, ctx.config.app_run_path(app), ctx)
+            start(app, ctx)
         raise ValueError(
           f"Nothing changed: backing up {app} before updating failed. Fix the "
           f"problem below, or pass --no-backup to update without one.\n{e}"
@@ -115,5 +115,5 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
         backup=name or "",
       )
       if running:
-        start(app, ctx.config.app_run_path(app), ctx)
+        start(app, ctx)
   return UpdateResult(previous, spec.version, name, running)

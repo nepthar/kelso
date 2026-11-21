@@ -295,7 +295,7 @@ def backup_app(
     finally:
       if running:
         with ctx.kelso_lock(by):
-          start(app, ctx.config.app_run_path(app), ctx)
+          start(app, ctx)
 
     # Written once and read while the app runs: nothing is gained by stopping.
     if bulk:

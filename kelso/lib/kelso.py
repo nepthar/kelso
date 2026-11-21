@@ -127,7 +127,8 @@ class KelsoCtx:
     timeout = lock_timeout()
     try:
       with lock.acquire(timeout=timeout):
-        write_lock_holder(path, by)
+        if lock.lock_counter == 1:
+          write_lock_holder(path, by)
         yield
     except Timeout:
       raise ValueError(

@@ -35,9 +35,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   extra = list(args.args or [])
   if extra and extra[0] == "--":
     extra = extra[1:]
-  with ctx.app_lock(app, f"cmd {app}"):
-    code = run_command(app, args.cmd_name, extra, ctx)
-  raise SystemExit(code)
+  raise SystemExit(run_command(app, args.cmd_name, extra, ctx))
 
 
 def _list_commands(app, ctx: KelsoCtx) -> None:

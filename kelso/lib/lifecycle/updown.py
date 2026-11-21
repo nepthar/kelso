@@ -75,7 +75,7 @@ def _up(
           if units and all(unit.state.lower() == "running" for unit in units):
             logger.info("  %s: already running", app)
           else:
-            start(app, ctx.config.app_run_path(app), ctx)
+            start(app, ctx)
             logger.info("  %s: started", app)
         waiting.append(app)
       except (ValueError, RuntimeError) as error:

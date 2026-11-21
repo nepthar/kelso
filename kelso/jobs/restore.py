@@ -21,6 +21,5 @@ class RestoreJob(Job):
     app = self.app_id
     restic = repository(ctx)
     plan = restore_plan(app, self.backup, ctx, restic)
-    with ctx.locked(f"restore {app}", app):
-      restore(plan, ctx, restic)
+    restore(plan, ctx, restic)
     logger.info("Restored %s from backup %s", app, plan.backup.id)
