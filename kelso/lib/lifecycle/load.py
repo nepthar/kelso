@@ -281,7 +281,12 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
   run_data = load_run_data(spec, ctx)
   if run_data.load_blockers:
-    raise ValueError("\n".join(i.problem for i in run_data.load_blockers))
+    raise ValueError(
+      "\n".join(
+        f"{i.problem}\n  {i.fix}" if i.fix else i.problem
+        for i in run_data.load_blockers
+      )
+    )
 
   dropped = _rebuild_volume_links(spec, run_data)
   _rebuild_kproxy_dir(spec, run_data)
@@ -393,7 +398,10 @@ def apply_config_sets(
   for name, value in sets:
     config = spec.config.get(name)
     if not config:
-      raise ValueError(f"No config {name} in {spec.app}'s manifest")
+      raise ValueError(
+        f"No config {name} in {spec.app}'s manifest; "
+        f"`kelso config {spec.app}` lists them"
+      )
     if not value:
       raise ValueError(f"Empty value for config {name!r}")
     validate_option(name, value)
@@ -449,7 +457,10 @@ def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> No
   app = spec.app
 
   if volname not in spec.volumes:
-    raise ValueError(f"App {app} - no such volume {volname}")
+    raise ValueError(
+      f"App {app} - no such volume {volname}; "
+      f"`kelso config {app}` lists its host volumes"
+    )
 
   vol = spec.volumes[volname]
   if vol.kind != "host":
@@ -475,7 +486,8 @@ def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> No
   if not host_vol.path.exists():
     raise ValueError(
       f"App {app} - host volume {host_volume_tag!r} path does not exist: "
-      f"{host_vol.path}"
+      f"{host_vol.path}. Create it, or point the host volume elsewhere with "
+      f"`kelso system host-volume --set {host_volume_tag}=<path>`"
     )
 
   if host_vol.require_mount and not host_vol.path.is_mount():

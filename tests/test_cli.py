@@ -2502,6 +2502,31 @@ def test_unload_confirmation_says_what_it_keeps(kelso_env):
   assert (kelso_env.run_root / BASIC).is_dir()
 
 
+def test_a_dropped_config_key_says_what_to_do_with_it(kelso_env):
+  text = kelso_env.config.read_text()
+  kelso_env.config.write_text('kelso_address = "10.0.0.5"\nbogus = 1\n' + text)
+
+  refused = kelso_env.run("ps")
+
+  assert refused.returncode == 1
+  assert "kelso_address: renamed; change it to route_address" in refused.stderr
+  assert "bogus: not a setting; check its spelling or delete it" in refused.stderr
+
+
+def test_unload_of_an_app_no_repo_carries_does_not_suggest_loading_by_id(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  source = ctx.inventory.bundle(ctx.resolve_app_id("ports-demo")).path
+  moved = source.with_name("elsewhere" + "".join(source.suffixes))
+  source.rename(moved)
+
+  done = kelso_env.run("unload", "ports-demo", "-y")
+
+  assert done.returncode == 0, done.stderr
+  assert "No repo has" in done.stdout
+  assert "Load it again with" not in done.stdout
+
+
 def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
 

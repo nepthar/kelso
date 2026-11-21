@@ -66,7 +66,11 @@ change; skip tests entirely for cosmetic ones.
 - **Module docstrings** may run to a short paragraph when they orient a reader
   to something the file's contents don't show — what this module owns, and what
   it deliberately doesn't. Not a design record, not history.
-- Errors are `ValueError` / `RuntimeError` whose message names the fix.
+- Errors are `ValueError` / `RuntimeError`, in plain English, for a person or
+  an agent to act on. When the fix is obvious, the message names it, as the
+  command to run where there is one. A message that is already clear on its
+  own (`"a b" is not a valid app id`) needs nothing added. No error codes or
+  structured fields.
 - **Output.** What a command produces -- a table, a value, a receipt -- is
   `print()`ed to stdout, so it can be piped. Everything else is narration and
   goes through `logging` (`getLogger("kelso.…")`), which the CLI shows on

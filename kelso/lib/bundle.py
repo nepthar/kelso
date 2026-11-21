@@ -191,7 +191,10 @@ def bundle_text(path: Path) -> str:
 
 def load_bundle(path: Path) -> KelsoApp:
   if not could_be_bundle(path):
-    raise ValueError(f"{path.name} does not seem to be a valid kelso app.")
+    raise ValueError(
+      f"{path.name} does not seem to be a valid kelso app. An app is a .klso "
+      f"folder holding a manifest.toml, or a .klso.md file."
+    )
 
   name = path.name
 
@@ -265,7 +268,8 @@ def md_bundle_files(name: str, content: str) -> list[MdFile]:
   size_kb = len(content.encode()) / 1024
   if size_kb > KLSO_MD_CUTOFF_KB:
     raise ValueError(
-      f"{name} is too large to load as a .klso.md file ({size_kb} > {KLSO_MD_CUTOFF_KB})kb"
+      f"{name} is too large to load as a .klso.md file ({size_kb} > {KLSO_MD_CUTOFF_KB})kb; "
+      f"make it a .klso folder instead"
     )
 
   files = extract_md_files(content)

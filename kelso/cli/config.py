@@ -195,7 +195,9 @@ def _get(
 ) -> None:
   config = spec.config.get(name)
   if not config:
-    raise ValueError(f"config {name!r} not declared in manifest")
+    raise ValueError(
+      f"config {name!r} not declared in manifest; `kelso config {spec.app}` lists them"
+    )
 
   secret, value = store.get_config(name)
   if value is None:
@@ -245,7 +247,10 @@ def _apply_backups(spec: AppSpec, raw: list[str], ctx: KelsoCtx) -> None:
   for volume_name, value in (parse_kv(item, "--backup") for item in raw):
     volume = spec.volumes.get(volume_name)
     if volume is None:
-      raise ValueError(f"No volume {volume_name} in {spec.app}'s manifest")
+      raise ValueError(
+        f"No volume {volume_name} in {spec.app}'s manifest; "
+        f"`kelso config {spec.app}` lists its bulk volumes"
+      )
     if volume.kind != "bulk":
       always = {"data": "always backed up"}.get(volume.kind, "never backed up")
       raise ValueError(

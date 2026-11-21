@@ -54,7 +54,10 @@ class Inventory:
       return found[0]
     where = f" in repo {repo}" if repo else ""
     if not found:
-      raise ValueError(f'No app matching "{name}" found{where}')
+      raise ValueError(
+        f'No app matching "{name}" found{where}. `kelso ps` lists loaded apps, '
+        f"and `kelso repo list` the apps in each repo."
+      )
     raise ValueError(
       f'Multiple apps matching "{name}" found{where}: {", ".join(found)}. '
       f"Name the one you mean in full."
@@ -71,7 +74,10 @@ class Inventory:
     if repo:
       entries = [e for e in entries if e.repo == repo]
       if not entries:
-        raise ValueError(f"Repo {repo} does not carry {app_id}")
+        raise ValueError(
+          f"Repo {repo} does not carry {app_id}; "
+          f"`kelso repo list` shows what each repo carries"
+        )
     else:
       origin = self.origins.get(app_id)
       if origin is not None and origin.exists():
