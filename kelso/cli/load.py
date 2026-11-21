@@ -5,6 +5,7 @@ from pathlib import Path
 from kelso.cli.confirm import confirm
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
+from kelso.lib.describe import describe
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_source, load_target, reload_app
 from kelso.lib.receipt import capability_receipt, route_receipt_lines
@@ -61,7 +62,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print(f"Restarted {app}")
     print(capability_receipt(load.spec, load.run_data, ctx, compact=True))
     # Routes were re-published just now; a stopped app has none to show.
-    for line in route_receipt_lines(load.spec, load.run_data, ctx):
+    for line in route_receipt_lines(describe(load.spec, load.run_data, ctx).routes):
       print(line)
   else:
     print(start_hint(app, load.run_data))
