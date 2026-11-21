@@ -1,5 +1,5 @@
 [app]
-version      = "10.0.162"
+version      = "10.6.109"
 display_name = "Unifi Network Application"
 
 [adv_config]
@@ -35,7 +35,7 @@ MONGO_DBNAME = "unifi"
 MONGO_AUTHSOURCE = "admin"
 
 [run.main]
-image = "lscr.io/linuxserver/unifi-network-application:10.0.162"
+image = "lscr.io/linuxserver/unifi-network-application:10.6.109"
 volumes = { app_data = "/config/data", app_logs = "/config/logs" }
 healthcheck = "curl -fsk https://localhost:8443/status || exit 1"
 
