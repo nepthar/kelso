@@ -48,7 +48,6 @@ def _project_name(app_id: str) -> str:
 
 
 def _mount(source: str, guest_path: str, *, readonly: bool) -> dict[str, Any]:
-  """One compose bind, long form to set create_host_path to false."""
   mount: dict[str, Any] = {"type": "bind", "source": source, "target": guest_path}
   if readonly:
     mount["read_only"] = True
@@ -63,8 +62,6 @@ def unit_commands(spec: AppSpec, unit_name: str) -> list[AppCommand]:
 def command_argv(
   unit: AppRunUnit, command: AppCommand, args: Sequence[str]
 ) -> list[str]:
-  """What `docker compose exec` runs for a manifest command: its string in the
-  unit's shell, with `args` added to the end as typed."""
   return [*unit.shell, f'{command.cmd} "$@"', command.name, *args]
 
 
@@ -84,8 +81,6 @@ def _port_string(
 
 
 def route_bind_address(route_address: str) -> str | None:
-  """The IP route ports are published on: route_address if it is one, else None
-  for every interface."""
   try:
     return str(ipaddress.ip_address(route_address))
   except ValueError:
@@ -104,8 +99,6 @@ def address_on_host(address: str) -> bool:
 
 @dataclass(frozen=True)
 class ConfigIssue:
-  """A per-app requirement that is still unmet."""
-
   problem: str
   fix: str | None
 
@@ -120,8 +113,6 @@ class ConfigIssue:
 
 @dataclass(frozen=True)
 class ResolvedConnection:
-  """A `[connections]` entry as this machine provides it."""
-
   # None, with an empty guest path, for a network connection: nothing is mounted.
   host_path: Path | None
   guest_path: str
@@ -131,8 +122,6 @@ class ResolvedConnection:
 
 @dataclass(frozen=True)
 class VolumeLink:
-  """One entry under ``var/run/<id>/volumes/<kind>/``."""
-
   source: Path
   target: Path
   destination: Path
@@ -166,16 +155,13 @@ class AssignedRoute:
 
   @property
   def primary_provider(self) -> str:
-    """The tag whose domain `${routes.<name>}` and `${klso.domain}` use."""
     return self.providers[0] if self.providers else NONE_ROUTE_PROVIDER_TAG
 
   def record(self) -> dict[str, Any]:
-    """What kelsodb holds for this route; `from_record` reads it back."""
     return {**self.__dict__, "providers": list(self.providers)}
 
   @classmethod
   def from_record(cls, entry: Mapping[str, Any]) -> "AssignedRoute":
-    """Raises TypeError for a record that does not fit."""
     fields = dict(entry)
     # Loads before multiple providers recorded the one tag as `provider`.
     if "provider" in fields:
@@ -201,14 +187,11 @@ class AssignedPort:
   proto: Literal["tcp", "udp"]
 
   def record(self) -> dict[str, Any]:
-    """What kelsodb holds for this port; `AssignedPort(**record)` reads it back."""
     return dict(self.__dict__)
 
 
 @dataclass(frozen=True)
 class Restricted:
-  """What an app runs behind kproxy with."""
-
   subnet: str
   # What kproxy's image is built from.
   source: Path
@@ -219,8 +202,6 @@ class Restricted:
 
 @dataclass(frozen=True)
 class AppRunData:
-  """Runtime data used to materialize and run an AppSpec."""
-
   app: AppID
   run_path: Path
   app_domain: str | None
@@ -246,7 +227,6 @@ class AppRunData:
 
   @property
   def start_blockers(self) -> tuple[ConfigIssue, ...]:
-    """Issues the operator must resolve before the app can start."""
     return tuple(issue for issue in self.issues if not issue.self_healing)
 
   def config_env(self) -> dict[str, str]:
@@ -461,7 +441,6 @@ def _compare_route(
 
 
 def loaded_routes(app: AppID | str, ctx: KelsoCtx) -> dict[str, AssignedRoute]:
-  """The routes kelsodb holds for `app`, as its last load allocated them."""
   return {
     name: AssignedRoute.from_record(entry)
     for name, entry in ctx.kelso_db.list_routes(str(app)).items()
@@ -538,7 +517,6 @@ def _load_ports(
 
 
 def _host_mounts() -> tuple[dict[str, Any], ...]:
-  """Binds kelso adds to every run unit, on top of the bundle's own [volumes]."""
   if not Path(LOCALTIME_PATH).exists():
     return ()
   return (_mount(LOCALTIME_PATH, LOCALTIME_PATH, readonly=True),)
@@ -547,8 +525,6 @@ def _host_mounts() -> tuple[dict[str, Any], ...]:
 def _route_urls(
   routes: Mapping[str, AssignedRoute], config: Config, *, host_network: bool = False
 ) -> dict[str, str]:
-  """Where each route answers: through its primary provider, or, published
-  nowhere, on the host itself."""
   urls: dict[str, str] = {}
   for name, route in routes.items():
     port = route.container_port if host_network else route.host_port
@@ -563,7 +539,6 @@ def _route_urls(
 
 
 def provider_route_urls(route: AssignedRoute, config: Config) -> dict[str, str]:
-  """provider tag -> where `route` answers through it, primary first."""
   if not route.subdomain:
     return {}
   return {
@@ -573,7 +548,6 @@ def provider_route_urls(route: AssignedRoute, config: Config) -> dict[str, str]:
 
 
 def resolved_subdomain(spec: AppSpec, ctx: KelsoCtx) -> str | None:
-  """The DNS label this load uses, or None if it is required and unset."""
   _, value = ctx.app_store(spec.app).get_config("subdomain")
   return value or spec.config["subdomain"].default
 
@@ -590,7 +564,6 @@ def _app_domain(
 def _env_substitutions(
   spec: AppSpec, run_unit: AppRunUnit, data: AppRunData
 ) -> dict[str, str]:
-  """Flat key → value map for one unit's `[run.*.env]` placeholders."""
   volumes = ",".join(
     _env_kvpair(name, bound.guest_path) for name, bound in run_unit.volumes.items()
   )
@@ -632,7 +605,6 @@ SECURITY_OPT = ["no-new-privileges:true"]
 def shown_environment(
   spec: AppSpec, run_unit: AppRunUnit, data: AppRunData
 ) -> dict[str, str]:
-  """A unit's environment as its container gets it, each secret as `<secret>`."""
   substitutions = _env_substitutions(spec, run_unit, data)
   for name, config in spec.config.items():
     value = data.config_values.get(name)
@@ -646,7 +618,6 @@ def shown_environment(
 
 
 def _depends_on_kproxy(depends_on: Any) -> dict[str, Any]:
-  """A unit's own `depends_on`, in compose's long form, plus a healthy kproxy."""
   if isinstance(depends_on, list):
     depends_on = {name: {"condition": "service_started"} for name in depends_on}
   return {
@@ -817,15 +788,12 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
 
 
 def network_mode(spec: AppSpec, ctx: KelsoCtx) -> str:
-  """The operator's `--network` for the app if set, else the manifest's."""
   return ctx.app_store(spec.app).get_network_mode() or spec.network_mode
 
 
 def _ingress(
   routes: Mapping[str, AssignedRoute], ports: Mapping[str, AssignedPort]
 ) -> list[tuple[str, int, str, int, str]]:
-  """Routes and ports as kproxy takes them, in the one order its rules and ports
-  share."""
   return sorted(
     [
       (name, route.host_port, route.run_unit_name, route.container_port, "tcp")
@@ -843,7 +811,6 @@ def _http_addresses(
   issues: list[ConfigIssue],
   config_values: Mapping[str, ConfigValue],
 ) -> dict[str, str]:
-  """Each http connection's host:port, as config fills it in."""
   config = {name: cv.value for name, cv in config_values.items() if cv.value}
   addresses: dict[str, str] = {}
   for name, entry in network_connections(spec.connections).items():
@@ -925,7 +892,6 @@ def _volume_paths(
   binds: dict[str, str],
   config: Config,
 ) -> tuple[Path, Path] | None:
-  """The (host path, symlink target) for a volume, or None if unresolvable."""
   match volume.kind:
     case "app":
       src = volume.src if volume.src else volume.name

@@ -40,7 +40,6 @@ def write_test_seed(path: Path) -> None:
 
 
 def spec_of(tmp_path: Path, manifest: str, app_id: str = "demo") -> AppSpec:
-  """Build an `AppSpec` from manifest TOML, via the real parse-and-validate path."""
   bundle = tmp_path / f"{app_id}.klso"
   bundle.mkdir()
   (bundle / "manifest.toml").write_text(manifest)
@@ -80,8 +79,6 @@ main()
 
 @dataclass(frozen=True)
 class Result:
-  """What a kelso command produced. Shaped like `CompletedProcess`."""
-
   returncode: int
   stdout: str
   stderr: str
@@ -134,13 +131,6 @@ class KelsoEnv:
     return self.root / "var" / "lock" / f"{app_id}.lock"
 
   def read_db(self) -> dict[str, Any]:
-    """Reconstruct the kelso DB as a nested dict from its flat logtab keys.
-
-    The store persists flat ``section/.../key -> value`` entries (see
-    :class:`kelso.lib.store.JsonConfigStore`). This rebuilds the nested shape
-    tests assert against, e.g. ``db["routes"][app_id][route]`` and
-    ``db["system"]["secrets"][name]``.
-    """
     db: dict[str, Any] = {}
     for key, value in JsonLogtabStore(self.db_path).scan().items():
       parts = key.split("/")
@@ -160,17 +150,11 @@ class KelsoEnv:
     return db
 
   def seed_db(self, entries: dict[str, Any]) -> None:
-    """Write raw flat ``key -> value`` entries directly into the DB logtab."""
     store = JsonLogtabStore(self.db_path)
     for key, value in entries.items():
       store.write(key, value)
 
   def run(self, *args: str, input: str | None = None, tty: bool = False) -> Result:
-    """Run a kelso command in this process, capturing both streams.
-
-    `tty` makes stdin claim to be a terminal, so kelso asks instead of refusing.
-    Use `run_subprocess` when a test needs a genuinely separate process.
-    """
     out, err = io.StringIO(), io.StringIO()
     stdin = (_Terminal if tty else io.StringIO)(input or "")
     original_stdin = sys.stdin
@@ -183,7 +167,6 @@ class KelsoEnv:
     return Result(code, out.getvalue(), err.getvalue())
 
   def start(self, app: str, *config: str) -> Result:
-    """`kelso config app *config`, which must succeed, then `kelso start app`."""
     if config:
       configured = self.run("config", app, *config)
       assert configured.returncode == 0, configured.stderr
@@ -195,12 +178,6 @@ class KelsoEnv:
     input: str | None = None,
     timeout: float | None = None,
   ) -> subprocess.CompletedProcess[str]:
-    """Run a kelso command as a real child process.
-
-    Only for tests about what happens *between* processes -- lock contention.
-    `timeout` raises `subprocess.TimeoutExpired` (killing the child) rather
-    than hanging, which is how a test asserts that a command blocked.
-    """
     return subprocess.run(
       [sys.executable, "-m", "kelso.cli", *args],
       cwd=self.root,
@@ -215,7 +192,6 @@ class KelsoEnv:
     self.docker_state.write_text(json.dumps(containers))
 
   def set_images(self, images: list[dict[str, str]]) -> None:
-    """`docker image ls` rows: ID, Repository, Tag, Size."""
     self.docker_state.with_name("docker-images").write_text(json.dumps(images))
 
 
@@ -239,11 +215,6 @@ sys.exit(
 
 
 def use_fake_docker(monkeypatch: pytest.MonkeyPatch, docker) -> None:
-  """Route kelso's docker calls to `docker` in-process instead of a child.
-
-  These three modules are the only places kelso starts docker. The one test that
-  keeps a real process is `test_a_streamed_failure_hands_the_error_a_tail`.
-  """
   fake = FakeSubprocess(docker)
   monkeypatch.setattr(kelso.lib.docker, "subprocess", fake)
   monkeypatch.setattr(kelso.lib.lifecycle.rootfs, "subprocess", fake)
@@ -256,17 +227,6 @@ def block_real_docker(
   tmp_path_factory: pytest.TempPathFactory,
   monkeypatch: pytest.MonkeyPatch,
 ):
-  """Shadow the real `docker` binary for every test that has not opted in.
-
-  Autouse so this holds even for tests that never touch `kelso_env`. Two
-  things happen: the call is refused, so a developer's own containers are never
-  read or disturbed, and it is recorded, so the test fails even when kelso
-  swallows the error. Tests marked `docker` want the real thing and are left
-  alone.
-
-  Yields the invocation log. A test that means to trip the guard should depend
-  on `expect_docker_calls` instead of using this directly.
-  """
   if "docker" in request.keywords:
     yield None
     return
@@ -293,20 +253,17 @@ def block_real_docker(
 
 @pytest.fixture(autouse=True)
 def addresses_are_on_host(monkeypatch: pytest.MonkeyPatch) -> None:
-  """Test configs name addresses like 10.0.0.5 that this machine does not have."""
   monkeypatch.setattr("kelso.lib.run_layout.address_on_host", lambda address: True)
 
 
 @pytest.fixture(autouse=True)
 def block_real_systemd(tmp_path_factory: pytest.TempPathFactory, monkeypatch):
-  """No test writes a real user unit or asks the real systemd to run one."""
   monkeypatch.setattr("kelso.lib.service.has_systemd", lambda: False)
   monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
 
 
 @pytest.fixture
 def expect_docker_calls(block_real_docker: Path):
-  """For tests that deliberately trip the guard, so it does not fail them."""
   yield block_real_docker
   block_real_docker.unlink(missing_ok=True)
 
@@ -366,9 +323,6 @@ def kelso_env(
 
 
 class TickingClock:
-  """Ten minutes later at every reading, from the real now: no two backups
-  ever share a second, as they never do outside a test."""
-
   def __init__(self) -> None:
     from datetime import UTC, datetime
 
@@ -386,7 +340,6 @@ class TickingClock:
 
 @pytest.fixture(autouse=True)
 def backup_clock(monkeypatch: pytest.MonkeyPatch) -> TickingClock:
-  """The clock backups and the fake restic read."""
   import kelso.lib.backup
 
   from . import fakerestic

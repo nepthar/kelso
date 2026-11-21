@@ -1,9 +1,3 @@
-"""Single-file `.klso.md` bundles.
-
-`load_bundle` parses the markdown into files; loading extracts them so the run
-tree is a plain directory and everything downstream of `load` is unchanged.
-"""
-
 from pathlib import Path
 
 import pytest
@@ -154,7 +148,6 @@ def test_load_md_bundle_by_path_adds_nothing_to_a_repo(kelso_env):
 
 
 def test_two_flavors_of_one_id_make_it_ambiguous(kelso_env):
-  """Both flavors in one repo is the same ambiguity as two repos."""
   # ports-demo.klso (a fixture directory) already owns this id.
   write_md_bundle(kelso_env.local_repo, app_id="ports-demo")
 

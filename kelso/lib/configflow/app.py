@@ -1,11 +1,3 @@
-"""Everything an operator sets on one app, as a ConfigRequest.
-
-That is its `[config]` values, a host volume for each `kind = "host"` volume,
-the providers for each route, whether each bulk volume is backed up, and its
-network mode. Those are named `volume.<name>`, `route.<name>`, `backup.<name>`
-and `network.mode`, so they cannot collide with a config name, which has no dots.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -99,7 +91,6 @@ def _route_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
 
 
 def _primary_route_desc(route_name: str) -> str:
-  """What the first provider picked gives the app: its URL for this route."""
   given = f"${{routes.{route_name}}}"
   if route_name == PRIMARY_ROUTE_NAME:
     given += " and ${klso.domain}"
@@ -107,7 +98,6 @@ def _primary_route_desc(route_name: str) -> str:
 
 
 def _backup_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
-  """Bulk volumes are left out of backups unless turned on, one by one."""
   on = ctx.app_store(spec.app).backed_up_bulk()
   return [
     ConfigField(
@@ -123,7 +113,6 @@ def _backup_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
 
 
 def _network_field(spec: AppSpec, ctx: KelsoCtx) -> ConfigField:
-  """Host networking is the manifest's to choose, so it is the only choice there."""
   host = spec.network_mode == "host"
   return ConfigField(
     name=NETWORK_FIELD,
@@ -137,7 +126,6 @@ def _network_field(spec: AppSpec, ctx: KelsoCtx) -> ConfigField:
 
 
 def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
-  """What `spec` needs from the operator, with what is on file now."""
   return ConfigRequest(
     title=str(spec.app),
     fields=(
@@ -155,11 +143,6 @@ def app_config_request(spec: AppSpec, ctx: KelsoCtx) -> ConfigRequest:
 def apply_app_config(
   spec: AppSpec, response: ConfigResponse, ctx: KelsoCtx
 ) -> list[str]:
-  """Write the values collected for `spec`, returning the names written.
-
-  A value equal to what is already on file is skipped, so a front end may send
-  back every field it showed.
-  """
   from kelso.lib.lifecycle import apply_config_sets, assign_route, bind, set_network
 
   request = app_config_request(spec, ctx)

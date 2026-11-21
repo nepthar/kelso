@@ -1,10 +1,3 @@
-"""Shells: in an app's running container, or on the host. The pages, and the
-websockets they open.
-
-The socket is relayed frame for frame to kelsod, which owns the PTY and the
-protocol (kelso/daemon/shell.py); this side adds only the front door.
-"""
-
 import asyncio
 from urllib.parse import quote, urlencode
 
@@ -70,7 +63,6 @@ async def host_shell_socket(ws: WebSocket):
 
 
 async def _bridge(ws, path):
-  """Admit `ws` through the front door, then relay it to kelsod's `path`."""
   refusal = socket_refusal(ws)
   await ws.accept()
   if refusal:
@@ -88,8 +80,6 @@ async def _bridge(ws, path):
 
 
 async def _relay(ws, upstream):
-  """Pass frames both ways until one side goes; how kelsod closed, if it did."""
-
   async def up():
     while True:
       message = await ws.receive()

@@ -1,9 +1,3 @@
-"""`network_mode = "restrict"`, `ask` and `watch`: the app behind kproxy, from manifest to compose.
-
-The kproxy program has its own tests in kproxy/; these cover what kelso
-generates to run it, and that loading allocates and releases a subnet.
-"""
-
 import dataclasses
 
 import pytest

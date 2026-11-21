@@ -1,5 +1,3 @@
-"""Cron: schedules, the manifest's `[cron]`, listing, and ticks."""
-
 import json
 from datetime import datetime
 
@@ -206,7 +204,6 @@ def test_cron_over_the_api(kelso_env):
 
 
 def still_running(monkeypatch) -> list:
-  """Every command outlasts kelso's watch; the list records how long kelso waited."""
   waited = []
   real = kelso.lib.lifecycle.run.docker_run_command
 

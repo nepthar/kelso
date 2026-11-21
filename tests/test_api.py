@@ -1,5 +1,3 @@
-"""The admin API surface: what it projects, what it refuses, and what it runs."""
-
 import json
 import re
 import socket
@@ -30,7 +28,6 @@ def ctx() -> KelsoCtx:
 
 @pytest.fixture
 def jobs() -> JobRunner:
-  """A runner with no worker thread; tests drain it with `run_pending`."""
   return JobRunner(ctx)
 
 
@@ -40,7 +37,6 @@ def client(jobs: JobRunner) -> TestClient:
 
 
 def read_log(job) -> str:
-  """A finished job's output lives only in the file `log` names."""
   assert job["log"]
   config = load_config()
   assert config is not None
@@ -48,7 +44,6 @@ def read_log(job) -> str:
 
 
 def submit(client: TestClient, jobs: JobRunner, verb: str, args: dict[str, str]):
-  """Submit and run one job, returning its finished record."""
   response = client.post("/jobs", json={"verb": verb, "args": args, "started_by": BY})
   assert response.status_code == 202, response.text
   jobs.run_pending()
@@ -102,8 +97,6 @@ def test_catalog_lists_available_apps_grouped_by_source(kelso_env, client):
 
 
 def test_catalog_reports_loaded_and_manifest_drift(kelso_env, client, jobs):
-  """Loaded-ness is the logtab; drift is the loaded manifest vs the bundle's."""
-
   def entry():
     catalogs = client.get("/catalog").json()["catalogs"]
     return {app["app_id"]: app for app in catalogs[0]["apps"]}[APP]
@@ -186,7 +179,6 @@ def test_catalog_keeps_a_broken_bundle(kelso_env, client):
 
 
 def test_catalog_listing_does_not_create_config_stores(kelso_env, client):
-  """Opening AppStore writes a logtab; a GET must not invent load state."""
   client.get("/catalog")
   assert not kelso_env.app_logtab(APP).exists()
 
@@ -452,8 +444,6 @@ def test_a_failed_job_still_files_activity_with_its_error(kelso_env, client, job
 
 
 def test_a_running_job_tees_output_to_its_log(kelso_env, jobs, monkeypatch):
-  """The UI polls `job.log` while a command runs; the file must already exist
-  and already contain what has been printed."""
   import logging
 
   from kelso.jobs import JOBS, Job
@@ -663,8 +653,6 @@ def test_empty_body_is_refused(kelso_env, client):
 
 
 def test_every_error_has_the_same_shape(kelso_env, client):
-  """One key to read, whether kelso refused, the route is missing, or the
-  body was malformed. Two shapes means a client gets one of them wrong."""
   for response in (
     client.get("/apps/nope"),
     client.get("/nowhere"),
@@ -676,8 +664,6 @@ def test_every_error_has_the_same_shape(kelso_env, client):
 
 
 def test_openapi_documents_the_surface(kelso_env, client):
-  """Free with FastAPI, and the web UI is a separate codebase that has to
-  discover this API somehow."""
   spec = client.get("/openapi.json")
   assert spec.status_code == 200
   paths = spec.json()["paths"]
@@ -697,12 +683,6 @@ def test_openapi_documents_the_surface(kelso_env, client):
   ["nope", "/etc/passwd", "../../etc", "tests/fixtures/apps/ports-demo.klso"],
 )
 def test_verbs_take_ids_of_loaded_apps_and_nothing_else(kelso_env, client, app):
-  """The rule that bounds the blast radius: no path ever reaches a verb.
-
-  A path argument is how a caller defines what an app *is* -- which volumes it
-  binds, which image it runs -- and that is root. `kelso load <path>` stays
-  a CLI-only capability.
-  """
   response = client.post(
     "/jobs", json={"verb": "load", "args": {"app": app}, "started_by": BY}
   )
@@ -815,7 +795,6 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
 
 
 def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
-  """The detail page reads the metric; it never walks the tree per request."""
   assert kelso_env.start(APP, "admin_user=root").returncode == 0
   (kelso_env.volumes_root / "data" / APP / "config" / "db.txt").write_text("xyz")
 
@@ -834,8 +813,6 @@ def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
 
 
 def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
-  """Re-loading drops the link of a volume the manifest stopped declaring and
-  leaves the data. Nothing else would ever tell you it is still on disk."""
   assert kelso_env.start(APP, "admin_user=root").returncode == 0
   assert kelso_env.run("stop", APP).returncode == 0
   assert {v["name"] for v in client.get("/volumes").json()["volumes"]} == {
@@ -919,7 +896,6 @@ def test_setting_config_through_the_api(kelso_env, client):
 
 
 def test_resubmitting_unchanged_values_writes_nothing(kelso_env, client):
-  """The UI sends every field it showed; only real changes may be written."""
   kelso_env.start(APP, "admin_user=root")
   before = client.get(f"/apps/{APP}/config-request").json()["fields"]
 
@@ -971,7 +947,6 @@ def test_route_providers_lists_what_can_be_added_but_not_noop(kelso_env, client)
 
 @pytest.fixture
 def noop_routes(monkeypatch) -> NoopRouteProvider:
-  """One noop provider for every lookup, so a route outlives its request."""
   provider = NoopRouteProvider(domain="kelso.localhost")
   monkeypatch.setattr(NoopRouteProvider, "from_config", lambda *a: provider)
   return provider
@@ -1044,8 +1019,6 @@ def test_config_changes_are_refused_with_a_reason(kelso_env, client):
 
 
 def test_apps_and_catalog_agree_on_state(kelso_env, client, jobs):
-  """One vocabulary across both views: no `loaded`/`loaded` booleans."""
-
   def catalog_entry():
     catalogs = client.get("/catalog").json()["catalogs"]
     return {app["app_id"]: app for app in catalogs[0]["apps"]}[APP]
@@ -1126,7 +1099,6 @@ def test_a_freshly_started_app_has_nothing_pending(kelso_env, client):
 
 
 def test_config_set_after_a_start_is_pending_until_the_next_one(kelso_env, client):
-  """A start reads config, so what is running is behind until it restarts."""
   kelso_env.start(APP, "admin_user=alice")
   kelso_env.run("config", APP, "admin_user=bob")
   assert client.get(f"/apps/{APP}").json()["changes_pending"] is True
@@ -1256,7 +1228,6 @@ def test_host_reports_its_size_and_the_disks_kelso_uses(kelso_env, client):
 
 
 def test_kelso_ui_expects_the_api_version_kelsod_speaks():
-  """Bumping API_VERSION means bumping kelso-ui's NEEDS_API with it."""
   web = (
     Path(__file__).parent.parent / "apps" / "net.klso.kelso-ui.klso" / "ui" / "web.py"
   )

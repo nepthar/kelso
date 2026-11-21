@@ -1,8 +1,3 @@
-"""`kelso deploy`: copy a bundle to another host over ssh and load or update it there.
-
-Everything that changes the app happens on the host, through its own `kelso`.
-"""
-
 import argparse
 import json
 import logging
@@ -103,10 +98,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def _ask_for_missing(host: str, app: str) -> None:
-  """Have the person here fill in what the app still needs on `host`.
-
-  Raises ValueError when there is no one to ask.
-  """
   request = remote_request(host, app)
   missing = request.missing()
   if not missing:
@@ -133,10 +124,6 @@ def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> s
 
 
 def _files(source: Path) -> list[str]:
-  """What the app runs from: its manifest and the bundle paths its `app` volumes name.
-
-  Raises ValueError if the manifest does not parse or a named path is missing.
-  """
   spec = load_bundle(source).app_spec()
   if not source.is_dir():
     return []
@@ -155,6 +142,5 @@ def _files(source: Path) -> list[str]:
 
 
 def _check(done: subprocess.CompletedProcess) -> None:
-  """Exit with a failed step's code; it has already said why on stderr."""
   if done.returncode:
     raise SystemExit(done.returncode)

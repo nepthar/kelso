@@ -1,5 +1,3 @@
-"""`kelso help` and `kelso help advanced` between them list every command once."""
-
 import argparse
 import re
 

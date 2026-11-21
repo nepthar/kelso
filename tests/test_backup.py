@@ -1,11 +1,3 @@
-"""Backups: what one holds, putting an app back from one, and what is kept.
-
-Restic runs in a container; the fake docker hands those runs to a fake restic
-that keeps each backup as plain files (tests/fakerestic.py), so what these
-tests pin down is what kelso asks of restic and what survives the round trip.
-Real restic is exercised by the `docker`-marked tests in test_restic.py.
-"""
-
 import json
 import os
 from datetime import datetime, timedelta
@@ -34,14 +26,12 @@ def _backups(kelso_env, app: str | None = None) -> list[Backup]:
 
 
 def _back_up(kelso_env, app: str) -> str:
-  """Back `app` up by hand and return the backup's id."""
   taken = kelso_env.run("backup", "run", app)
   assert taken.returncode == 0, taken.stderr
   return taken.stdout.split("Backup ")[1].split()[0]
 
 
 def _runs(kelso_env, image: str) -> list[list[str]]:
-  """Every `docker run` of `image` the fake recorded, oldest first."""
   return [
     entry["args"]
     for entry in map(json.loads, kelso_env.docker_log.read_text().splitlines())
@@ -440,8 +430,6 @@ def test_a_held_lock_still_refuses_the_update(kelso_env):
 
 
 def _b(name: str, reason: str, time: str) -> Backup:
-  """A backup whose run id sorts by `time`, as real ones do; `name` is kept
-  in the data snapshot id so a test can say which it means."""
   run = time.replace("-", "").replace(":", "").replace("T", "-").rstrip("Z")
   return Backup(None, run, time, reason, "", "", {"data": name})
 
@@ -554,8 +542,6 @@ def test_a_scheduled_run_resets_the_clock(kelso_env):
 
 
 def test_a_colon_in_a_path_is_refused(tmp_path):
-  """`-v host:guest` is colon-delimited, so a colon would silently bind
-  something other than what was asked for."""
   odd = tmp_path / "we:ird"
   odd.mkdir()
   with pytest.raises(ValueError) as raised:

@@ -1,8 +1,3 @@
-"""kelso-ui against a fake kelsod, signed in for real.
-
-Run from ui/:  uv run pytest
-"""
-
 import os
 import sys
 import tempfile

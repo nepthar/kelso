@@ -1,5 +1,3 @@
-"""`kelso agent-help`: task instructions for an agent, shipped with this install."""
-
 import argparse
 from pathlib import Path
 

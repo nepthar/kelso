@@ -1,8 +1,3 @@
-"""`kelso unload` and `kelso rm`, which differ only in how much they take: an
-app's loaded copy under `var/run/`, its volumes by kind, and its config and
-routes.
-"""
-
 import argparse
 
 from kelso.cli.confirm import confirm
@@ -105,7 +100,6 @@ _ASKED: dict[RemovalMode, str] = {
 
 
 def _confirmed(plan: RemovalPlan) -> bool:
-  """Say what the operator is deciding, and nothing else."""
   if plan.mode == UNLOAD:
     print(
       f"Configuration and volume data will be kept. Use `kelso rm {plan.app_id}` "
@@ -117,7 +111,6 @@ def _confirmed(plan: RemovalPlan) -> bool:
 
 
 def _describe_removal(plan: RemovalPlan) -> None:
-  """Describe an rm, naming the volumes it deletes or empties."""
   verb = "empties" if plan.empties else "deletes"
   print(f"This {verb} {plan.app_id}'s volumes:")
   for line in _volume_lines(plan):
@@ -132,7 +125,6 @@ def _describe_removal(plan: RemovalPlan) -> None:
 
 
 def _volume_lines(plan: RemovalPlan) -> list[str]:
-  """One line per volume, which is how the manifest names them."""
   lines: list[str] = []
   for path in plan.volume_paths:
     volumes = sorted(p for p in path.iterdir() if p.is_dir()) if path.is_dir() else []

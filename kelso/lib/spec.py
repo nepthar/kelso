@@ -66,12 +66,10 @@ class AppVolume:
 
   @property
   def run_rel_path(self) -> str:
-    """Where the run dir links this volume, relative to the compose file."""
     return f"./volumes/{self.kind}/{self.name}"
 
   @property
   def in_bundle(self) -> str:
-    """An `app` volume's file or folder in the bundle, shown as `$app/<src>`."""
     return f"$app/{self.src or self.name}"
 
 
@@ -140,11 +138,6 @@ class AppRunUnit:
 
 @dataclass(frozen=True)
 class ComposeWarning:
-  """One run unit's `[run.<unit>.compose]` keys that kelso does not model.
-
-  Not an error: kelso runs them, and shows the operator what was asked for.
-  """
-
   run_unit: str
   options: Mapping[str, Any]
 
@@ -156,7 +149,6 @@ class ComposeWarning:
     )
 
   def option_lines(self) -> tuple[str, ...]:
-    """The offending keys as `key = value`, values rendered as written."""
     return tuple(
       f"{key} = {json.dumps(value, default=str)}" for key, value in self.options.items()
     )
@@ -172,8 +164,6 @@ class AppCommand:
 
 @dataclass(frozen=True)
 class AppSpec:
-  """An immutable app definition, independent of any loaded copy."""
-
   app: AppID
   manifest: Manifest
   run_units: Mapping[str, AppRunUnit]
@@ -186,12 +176,10 @@ class AppSpec:
 
   @classmethod
   def from_bytes(cls, data: bytes, app_id: AppID, source: Path) -> "AppSpec":
-    """Build from raw manifest.toml bytes; `source` only names them in errors."""
     return _build(parse_manifest(data, app_id, source), app_id)
 
   @classmethod
   def from_file(cls, manifest_path: Path, app_id: AppID) -> "AppSpec":
-    """Build from a manifest.toml on disk."""
     try:
       data = manifest_path.read_bytes()
     except OSError as e:
@@ -200,12 +188,10 @@ class AppSpec:
 
   @property
   def one_shots(self) -> frozenset[str]:
-    """Run units meant to exit: the ones docker is told not to restart."""
     return frozenset(n for n, unit in self.run_units.items() if unit.restart == "no")
 
   @property
   def compose_warnings(self) -> tuple[ComposeWarning, ...]:
-    """Every off-allowlist compose key this manifest passes through."""
     warnings = []
     for unit_name, unit in self.run_units.items():
       options = unlisted_compose_options(unit.compose_extra)

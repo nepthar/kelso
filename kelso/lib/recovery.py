@@ -1,16 +1,3 @@
-"""The recovery phrase: twelve words every key kelso uses is derived from.
-
-The phrase encodes 128 random bits (BIP39's English wordlist and checksum). It
-is the one thing to keep off the machine: from it, a fresh install derives the
-same master key, so a backup of this root can be restored anywhere.
-
-`conf/master.key` keeps the phrase's entropy as `seed`, and the master key is
-derived from it. A rekey appends a new `seed`; the file's history is the record
-of every key this root has had, so something written under an older one -- a
-backup's secrets -- is read with the seed that was current when it was
-written (`master_key_at`).
-"""
-
 import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -45,8 +32,6 @@ def phrase(entropy: bytes) -> list[str]:
 
 
 def entropy_from_phrase(words: Iterable[str]) -> bytes:
-  """The entropy twelve words encode. Raises ValueError on a word not in the
-  list, the wrong count, or a failed checksum (a word mistyped as another)."""
   cleaned = [w.strip().lower() for w in words if w.strip()]
   if len(cleaned) != WORDS:
     raise ValueError(f"A recovery phrase is {WORDS} words; got {len(cleaned)}")
@@ -62,32 +47,26 @@ def entropy_from_phrase(words: Iterable[str]) -> bytes:
 
 
 def derive(entropy: bytes, label: str) -> bytes:
-  """A 32-byte key for one purpose, named by `label`."""
   return HKDF(
     algorithm=hashes.SHA256(), length=32, salt=None, info=label.encode()
   ).derive(entropy)
 
 
 def backup_password_from(entropy: bytes) -> str:
-  """The password kelso's backup repository is encrypted with."""
   return derive(entropy, BACKUP_LABEL).hex()
 
 
 def master_key_from(entropy: bytes) -> str:
-  """The master key string the crypto engine takes, for this entropy."""
   return derive(entropy, SECRETS_LABEL).hex()
 
 
 @dataclass(frozen=True)
 class KeyFile:
-  """What `conf/master.key` holds."""
-
   master_key: str
   seed: bytes | None
 
 
 def read_keyfile(path: Path, at: str | None = None) -> KeyFile:
-  """The key file now, or as it stood at timestamp `at`."""
   if not path.is_file():
     return KeyFile("", None)
   table = LogTab(path).load(at=at)
@@ -98,18 +77,15 @@ def read_keyfile(path: Path, at: str | None = None) -> KeyFile:
 
 
 def master_key_at(path: Path, at: str) -> str:
-  """The master key that was current at timestamp `at`; empty if none was."""
   return read_keyfile(path, at=at).master_key
 
 
 def write_seed(path: Path, entropy: bytes, *, title: str = "Kelso Master Key") -> None:
-  """Make `entropy` the master key's seed. Older seeds stay in the history."""
   LogTab(path, title=title).write(SEED_KEY, entropy.hex())
   path.chmod(0o600)
 
 
 def format_phrase(words: list[str]) -> str:
-  """Twelve numbered words in three columns, read down."""
   rows = WORDS // 3
   lines = []
   for r in range(rows):

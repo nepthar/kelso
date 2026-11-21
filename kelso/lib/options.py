@@ -1,10 +1,3 @@
-"""App options: config every app has, defined here rather than in a manifest.
-
-They share the config namespace. A manifest that declares one of these names in
-`[config]` or `[adv_config]` takes over its default, description, and whether it
-is required, but the value is still checked by the option's validator.
-"""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -22,7 +15,6 @@ class AppOption:
   labels: tuple[str, ...] = ()
 
   def validate(self, value: str) -> None:
-    """Raise ValueError naming the option if `value` is not acceptable."""
     try:
       self.check(value)
     except ValueError as error:
@@ -58,7 +50,6 @@ START_GROUPS = {
 
 
 def start_group_name(order: int) -> str:
-  """The group as shown: its number, then its name if it has one."""
   name = START_GROUPS.get(order)
   return f"{order}: {name}" if name else str(order)
 
@@ -85,7 +76,6 @@ APP_OPTIONS: dict[str, AppOption] = {
 
 
 def validate_option(name: str, value: str) -> None:
-  """Check `value` if `name` is an app option; anything else passes."""
   option = APP_OPTIONS.get(name)
   if option is not None:
     option.validate(value)

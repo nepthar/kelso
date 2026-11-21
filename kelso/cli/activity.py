@@ -34,7 +34,6 @@ def register(subparsers) -> None:
 
 
 def _resolve(query: str | None, ctx: KelsoCtx) -> str | None:
-  """Full id for a stem, or the query as given."""
   if not query or query == activity.KELSO_DIR:
     return query
   try:

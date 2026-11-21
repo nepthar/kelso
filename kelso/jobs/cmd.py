@@ -12,10 +12,6 @@ class CmdJob(Job):
   optional_args = ("args",)
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    """`command` names an entry the app's manifest already declares.
-
-    A caller holding an argv list must build `args` with `shlex.join`.
-    """
     app = ctx.resolve_app_id(kwargs["app"])
     extra = []
     raw = kwargs.get("args", "")

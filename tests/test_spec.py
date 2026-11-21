@@ -1,9 +1,3 @@
-"""Manifest bytes in, `AppSpec` out.
-
-`app_spec` is the whole path: parse the TOML, validate it against the app id,
-resolve it into a definition independent of any loaded copy.
-"""
-
 import pytest
 from pydantic import ValidationError
 
@@ -63,12 +57,6 @@ image = "alpine:latest"
 
 
 def test_config_stays_as_placeholders_on_the_spec(tmp_path):
-  """A spec is independent of any loaded copy; compose rewrites config later.
-
-  `${admin_user}` survives until `make_compose_dict`, which turns it into
-  `${__KELSO_CONFIG__admin_user}` so the value (and secrets) never land in
-  compose.yml.
-  """
   spec = spec_of(
     tmp_path,
     """\
@@ -111,7 +99,6 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
 
 
 def test_adv_config_declares_the_same_values_but_marked_advanced(tmp_path):
-  """The section is the only difference: one namespace, one `section` field."""
   spec = spec_of(
     tmp_path,
     """\

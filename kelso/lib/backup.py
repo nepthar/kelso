@@ -1,22 +1,3 @@
-"""Backups: every app's data, configuration and bundle, and kelso's own state,
-in one restic repository at `backups/` in the kelso root.
-
-A run backs up each app on its own -- stopped for the moment its data is read,
-so what is saved is a point the app could start from -- then kelso's state.
-Each backup is a restic snapshot tagged with what it is; an app's bulk
-volumes, read without stopping it, are a second snapshot from the same run.
-
-Inside the repository every path is fixed, whatever this machine's layout:
-
-    /kelso/app/<id>/data/<volume>   a data volume
-    /kelso/app/<id>/bulk/<volume>   a bulk volume you turned on
-    /kelso/app/<id>/app_bundle      the bundle it was loaded from
-    /kelso/app/<id>/config.logtab   its config, secrets still encrypted
-    /kelso/state/...                config.toml, kelsodb, every app's config,
-                                    the local repo, and links.toml: where
-                                    each volume root and backups/ pointed
-"""
-
 import shutil
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
@@ -56,8 +37,6 @@ STATE_ROOT = "/kelso/state"
 
 @dataclass(frozen=True)
 class Backup:
-  """One app's backup from one run: its data snapshot, and bulk if it has one."""
-
   # None for kelso's own state.
   app: AppID | None
   run: str
@@ -70,7 +49,6 @@ class Backup:
 
   @property
   def id(self) -> str:
-    """What a person names it by: the run, which is also when it began."""
     return self.run
 
 
@@ -85,8 +63,6 @@ class RunResult:
 
 
 def destination_problem(ctx: KelsoCtx) -> str | None:
-  """Why backups cannot go where they should right now, or None. Changes
-  nothing, so doctor can ask."""
   root = ctx.config.backups_root
   if root.is_symlink() and not root.exists():
     return (
@@ -103,7 +79,6 @@ def destination_problem(ctx: KelsoCtx) -> str | None:
 
 
 def shares_kelso_disk(ctx: KelsoCtx) -> bool:
-  """Whether backups land on the kelso root's own filesystem."""
   root = ctx.config.backups_root
   where = root if root.exists() else root.parent
   kelso_device = ctx.config.kelso_root.resolve().stat().st_dev
@@ -111,11 +86,7 @@ def shares_kelso_disk(ctx: KelsoCtx) -> bool:
 
 
 def destination(ctx: KelsoCtx) -> Path:
-  """Where backups go, once it is known to be there. Raises ValueError if not.
-
-  `backups/` is usually a link to another disk. A link to nothing means that
-  disk is missing, and writing here then would fill the kelso root instead.
-  """
+  # A dangling backups/ link means its disk is gone; writing would fill the root.
   problem = destination_problem(ctx)
   if problem:
     raise ValueError(problem)
@@ -125,7 +96,6 @@ def destination(ctx: KelsoCtx) -> Path:
 
 
 def repository(ctx: KelsoCtx) -> Restic:
-  """The backup repository, opened with the password the phrase derives."""
   seed = read_keyfile(ctx.config.master_keyfile).seed
   if seed is None:
     raise ValueError(
@@ -140,7 +110,6 @@ def repository(ctx: KelsoCtx) -> Restic:
 
 
 def create_repository(ctx: KelsoCtx, restic: Restic) -> bool:
-  """Create the repository unless it exists. True when it was created."""
   # Two inits racing on one folder each write a key; restic then reads some
   # snapshots with the wrong one.
   with ctx.kelso_lock("create the backup repository"):
@@ -152,7 +121,6 @@ def free_bytes(path: Path) -> int:
 
 
 def refuse_without_space(restic: Restic, sources: dict[Path, str], what: str) -> None:
-  """Raise if backing up `sources` would add more than the destination has free."""
   needed = restic.added_by(sources)
   free = free_bytes(restic.repo)
   if needed > free:
@@ -164,9 +132,6 @@ def refuse_without_space(restic: Restic, sources: dict[Path, str], what: str) ->
 
 
 def backup_due(ctx: KelsoCtx, *, since: datetime, now: datetime) -> bool:
-  """Whether the [backup] schedule has come round since the last scheduled run,
-  or since `since` when there has not been one. Local time, as cron is. Never,
-  without a schedule."""
   if ctx.config.backup.schedule is None:
     return False
   last = ctx.kelso_db.last_backup_run(SCHEDULED)
@@ -178,18 +143,14 @@ def backup_due(ctx: KelsoCtx, *, since: datetime, now: datetime) -> bool:
 
 
 def now() -> datetime:
-  """The one clock backups read. A test that needs time to pass patches this."""
   return datetime.now(UTC)
 
 
 def run_id() -> str:
-  """When a run began, to the second: what a backup is named by."""
   return now().strftime("%Y%m%d-%H%M%S")
 
 
 def refuse_same_second(restic: Restic, run: str, app: AppID | None = None) -> None:
-  """Raise if a backup named `run` exists already. Two in one second is not
-  something that happens on purpose, so the second does nothing."""
   if not restic.exists():
     return
   tags = {"run": run, **({"app": str(app)} if app is not None else {})}
@@ -203,7 +164,6 @@ def refuse_same_second(restic: Restic, run: str, app: AppID | None = None) -> No
 
 
 def backed_up_apps(ctx: KelsoCtx) -> list[AppID]:
-  """Every app kelso holds anything for: loaded, or unloaded with data kept."""
   ids = set(ctx.config.app_config_ids())
   data_root = ctx.config.volume_roots[DATA]
   if data_root.is_dir():
@@ -223,7 +183,6 @@ def _volume_dirs(ctx: KelsoCtx, app: AppID, kind: str) -> dict[str, Path]:
 
 
 def app_sources(ctx: KelsoCtx, app: AppID) -> dict[Path, str]:
-  """What an app's data snapshot holds: host path to path in the backup."""
   base = f"{APP_ROOT}/{app}"
   sources = {
     path: f"{base}/{DATA}/{name}" for name, path in _volume_dirs(ctx, app, DATA).items()
@@ -238,7 +197,6 @@ def app_sources(ctx: KelsoCtx, app: AppID) -> dict[Path, str]:
 
 
 def bulk_sources(ctx: KelsoCtx, app: AppID) -> dict[Path, str]:
-  """The bulk volumes the operator turned on, as host path to backup path."""
   if not ctx.config.app_config_path(app).is_file():
     return {}
   wanted = ctx.app_store(app).backed_up_bulk()
@@ -253,9 +211,6 @@ LINKS_FILE = f"{STATE_ROOT}/links.toml"
 
 
 def root_links(ctx: KelsoCtx) -> dict[str, str]:
-  """Where each volume root and backups/ points, and any other link at the top
-  of the kelso root: path under the root to its link target, or "" for a plain
-  directory there."""
   root = ctx.config.kelso_root
   named = [f"volumes/{kind}" for kind in ctx.config.volume_roots]
   named.append("backups")
@@ -272,7 +227,6 @@ def root_links(ctx: KelsoCtx) -> dict[str, str]:
 
 
 def links_toml(ctx: KelsoCtx) -> str:
-  """`root_links` as the file a state backup carries."""
   lines = [
     "# Where the kelso root's links pointed when this backup was taken.",
     '# "" is a plain directory in the root.',
@@ -313,11 +267,6 @@ def _version(ctx: KelsoCtx, app: AppID) -> str:
 def backup_app(
   app: AppID, ctx: KelsoCtx, restic: Restic, *, reason: str, run: str
 ) -> Backup:
-  """Back up one app, stopping it for the moment its data is read.
-
-  Takes the app's lock itself. A running app is started again even when the
-  backup fails.
-  """
   # Imported here: lifecycle imports this module for update and restore.
   from kelso.lib.lifecycle.run import start, stop
 
@@ -386,11 +335,6 @@ def backup_state(ctx: KelsoCtx, restic: Restic, *, reason: str, run: str) -> str
 def run_backups(
   ctx: KelsoCtx, *, reason: str, apps: Iterable[AppID] | None = None
 ) -> RunResult:
-  """Back up `apps` (every app, and kelso's state, when None), then forget
-  what the keep policy no longer wants.
-
-  An app that fails is recorded and skipped; the rest still run.
-  """
   restic = repository(ctx)
   run = run_id()
   refuse_same_second(restic, run)
@@ -439,7 +383,6 @@ def run_backups(
 
 
 def backups(restic: Restic, app: AppID | None = None) -> list[Backup]:
-  """Every app backup in the repository, or one app's, oldest first."""
   found: dict[tuple[str, str], Backup] = {}
   tags = {"app": str(app)} if app is not None else None
   for snap in restic.snapshots(tags):
@@ -463,7 +406,6 @@ def backups(restic: Restic, app: AppID | None = None) -> list[Backup]:
 
 
 def delete(restic: Restic, backup: Backup) -> None:
-  """Forget every snapshot of `backup` and free the space only it held."""
   restic.forget(backup.snapshots.values(), what=f"delete backup {backup.id}")
   restic.prune()
 
@@ -473,12 +415,6 @@ def state_backups(restic: Restic) -> list[Snapshot]:
 
 
 def expired(backups_: list[Backup], keep: BackupKeep) -> list[Backup]:
-  """The backups of one app or of kelso's state that `keep` no longer wants.
-
-  Scheduled ones are kept as restic's `--keep-daily` and friends would: the
-  newest of each of the last `daily` days that have one, and likewise for
-  weeks and months. The rest are kept by count, each reason on its own.
-  """
   newest_first = sorted(backups_, key=lambda b: b.run, reverse=True)
   kept: set[str] = set()
 
@@ -506,12 +442,6 @@ def expired(backups_: list[Backup], keep: BackupKeep) -> list[Backup]:
 
 
 def forget_expired(ctx: KelsoCtx, restic: Restic, *, prune: bool = True) -> int:
-  """Forget every backup the keep policy no longer wants.
-
-  With `prune`, also free the space they held. Pruning rewrites part of the
-  repository, so the backups taken around an update or a restore skip it and
-  leave it to the next scheduled run.
-  """
   keep = ctx.config.backup.keep
   by_owner: dict[str, list[Backup]] = {}
   for backup in backups(restic):

@@ -1,9 +1,3 @@
-"""Fill in a ConfigRequest at the terminal.
-
-`collect` picks the full-screen form on a terminal and the line-by-line wizard
-otherwise, so piped input and tests still work.
-"""
-
 import sys
 from getpass import getpass
 
@@ -21,7 +15,6 @@ REVIEW = "'s' to submit, a name or number to change, 'q' to cancel"
 
 
 def _ask(entry: ConfigField, edits: dict[str, str]) -> None:
-  """Prompt for one field; empty input keeps whatever is already there."""
   current = edits.get(entry.name) or entry.display()
   shown = "(set)" if entry.secret and entry.name in edits else current
   prompt = f"{entry.name} [{shown}]: "
@@ -72,7 +65,6 @@ def _pick(request: ConfigRequest, choice: str) -> ConfigField | None:
 
 
 def run_form(request: ConfigRequest) -> ConfigResponse:
-  """Walk the fields, then review; EMPTY_CONFIG_RESPONSE on cancel or no change."""
   edits: dict[str, str] = {}
   missing = request.missing()
 
@@ -115,10 +107,6 @@ def run_form(request: ConfigRequest) -> ConfigResponse:
 
 
 def collect(request: ConfigRequest, instead: str) -> ConfigResponse:
-  """Collect a response; EMPTY_CONFIG_RESPONSE when there is nothing to apply.
-
-  Raises Refused, saying to do `instead`, when there is no terminal to ask on.
-  """
   if not sys.stdin.isatty():
     missing = ", ".join(request.missing())
     needs = f" needs {missing}, and" if missing else ":"

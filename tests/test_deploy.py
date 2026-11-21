@@ -1,5 +1,3 @@
-"""`kelso deploy`: the commands it runs on the box, with ssh and rsync faked."""
-
 import json
 import subprocess
 from types import SimpleNamespace
@@ -21,7 +19,6 @@ ROOT = "/srv/kelso"
 
 @pytest.fixture
 def remote(kelso_env, monkeypatch):
-  """Records each command; `source` is the bundle the box has the app loaded from."""
   box = SimpleNamespace(calls=[], cwds=[], inputs=[], source="", fields=[])
 
   def run(argv, **kwargs):

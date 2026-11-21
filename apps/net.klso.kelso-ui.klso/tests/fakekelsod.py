@@ -1,12 +1,3 @@
-"""A stand-in kelsod: canned JSON over real HTTP, so the UI's client is exercised.
-
-The fixtures are shaped after a live kelsod's responses and bent to hit every
-branch the pages have -- an app that is running, one that is unloaded, one
-with issues; a mirrored repo and one that is not; a secret that is set and one
-that is not. `EVIL` is planted in every free-text field: if it ever reaches a
-page unescaped, a test fails.
-"""
-
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -741,12 +732,6 @@ GET = {
 
 
 class FakeKelsod:
-  """Serve `GET` on a free port. `posts` records what the UI sent.
-
-  `fail` set to a message makes every request answer 500 with it -- kelsod
-  refusing, as the UI sees it.
-  """
-
   def __init__(self):
     self.posts = []
     self.fail = None
@@ -801,14 +786,6 @@ class FakeKelsod:
 
 
 class FakeShell:
-  """kelsod's shell socket: echoes, and closes the way kelsod would.
-
-  Bytes come back as sent and text comes back as `ctl:<text>`; typing `exit`
-  ends it with "exited 0". Any app but kelso-ui is refused, as a stopped one is.
-  kelsod speaks websocket where FakeKelsod speaks plain HTTP, so this listens
-  on its own port and a test points the UI at it.
-  """
-
   def __init__(self):
     self.paths = []
     fake = self

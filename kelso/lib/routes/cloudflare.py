@@ -26,14 +26,6 @@ LOOPBACK_ADDRESSES = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
 
 
 class CloudflareTunnelRouteProvider(RouteProvider):
-  """Publish kelso app routes through a remotely-managed Cloudflare Tunnel.
-
-  Two records make one route: an ingress rule on the tunnel's configuration,
-  which tells cloudflared where to send a hostname, and a proxied CNAME in the
-  zone, which points that hostname at the tunnel. Ownership is marked in the
-  DNS record's comment, the only field Cloudflare lets us write on either side.
-  """
-
   KIND = "cloudflare_tunnel"
   REQUIRED_ARGS = ("account_id", "tunnel_id", "api_token_secret")
 
@@ -117,7 +109,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     return f"Cloudflare {method} {path} returned {resp.status_code}: {detail}"
 
   def _request(self, method: str, path: str, **kwargs) -> Any:
-    """Call the v4 API and unwrap Cloudflare's response envelope."""
     if not self._api_token:
       raise RouteProviderError("A Cloudflare API token is required to authenticate")
 
@@ -145,7 +136,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
   # ── zone ──────────────────────────────────────────────────────────────
 
   def zone_id(self) -> str:
-    """The zone carrying the kelso domain, looked up once by name."""
     if self._zone_id is None:
       zones = self._request("GET", "/zones", params={"name": self.kelso_domain}) or []
       if not zones:
@@ -159,7 +149,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
   # ── tunnel ingress ────────────────────────────────────────────────────
 
   def _config(self) -> dict:
-    """The tunnel's remote configuration, as Cloudflare stores it."""
     result = (
       self._request(
         "GET",
@@ -178,7 +167,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
 
   @staticmethod
   def _rules(config: dict) -> list[dict]:
-    """Ingress rules with the catch-all dropped; it is re-added on write."""
     return [rule for rule in config.get("ingress") or [] if rule.get("hostname")]
 
   def _write_rules(self, config: dict, rules: list[dict]) -> None:
@@ -276,7 +264,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Route hostname -> route_address:port, over the tunnel."""
     hostname = self._hostname(subdomain, domain)
 
     record = self._dns_record(hostname)
@@ -308,7 +295,6 @@ class CloudflareTunnelRouteProvider(RouteProvider):
     self._request("DELETE", f"/zones/{self.zone_id()}/dns_records/{record['id']}")
 
   def _kelso_rules(self) -> list[tuple[str, dict]]:
-    """Yield (subdomain, rule) for single-label hostnames under the kelso domain."""
     suffix = f".{self.kelso_domain}"
     out: list[tuple[str, dict]] = []
     for rule in self._rules(self._config()):

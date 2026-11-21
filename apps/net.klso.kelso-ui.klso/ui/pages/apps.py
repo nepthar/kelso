@@ -1,5 +1,3 @@
-"""One loaded app: its page, its config form, and its container logs."""
-
 from urllib.parse import quote
 
 from api import ApiError, api
@@ -14,13 +12,11 @@ PROXIED = ("restrict", "ask", "watch")
 
 @router.get("/apps")
 def apps_list():
-  """The list lives in the Host window; old links land there rather than 404."""
   return see("/host")
 
 
 @router.get("/logs")
 def logs_index(page: PageDep):
-  """The Logs icon: every loaded app, each a way into its logs."""
   apps = [a for a in api("/apps").get("apps", []) if a.get("state") == "loaded"]
   return page.render("pages/logs.html", "Logs", apps=apps)
 
@@ -54,7 +50,6 @@ def detail(page: PageDep, app_id: str):
 
 @router.get("/apps/{app_id}/manifest")
 def manifest(page: PageDep, app_id: str):
-  """The manifest the app was loaded from, as a dialog over its page."""
   page.title = app_id
   app = api(f"/apps/{quote(app_id)}")
   title = f"{app.get('display_name') or app_id} manifest"
@@ -66,7 +61,6 @@ def manifest(page: PageDep, app_id: str):
 
 @router.post("/apps/{app_id}")
 async def post_config(app_id: str, request: Request):
-  """The config form; lifecycle verbs go through the job window."""
   form = await request.form()
   here = f"/apps/{quote(app_id)}"
   if field(form, "action") != "config":
@@ -80,7 +74,6 @@ async def post_config(app_id: str, request: Request):
 
 @router.get("/apps/{app_id}/logs")
 def logs(page: PageDep, app_id: str):
-  """The last lines of an app's container logs, refreshed on a timer."""
   page.title = app_id
   app = api(f"/apps/{quote(app_id)}")
   tail = api(f"/apps/{quote(app_id)}/logs")
@@ -90,7 +83,6 @@ def logs(page: PageDep, app_id: str):
 
 @router.get("/apps/{app_id}/logs.json")
 def logs_json(app_id: str):
-  """What the logs page polls. Straight through; kelsod does the tailing."""
   try:
     return JSONResponse(api(f"/apps/{quote(app_id)}/logs"), headers=NO_STORE)
   except ApiError as e:
@@ -99,7 +91,6 @@ def logs_json(app_id: str):
 
 @router.get("/apps/{app_id}/net.json")
 def net_json(app_id: str):
-  """What the Network group polls: the app's domains, live or from its last run."""
   try:
     return JSONResponse(api(f"/apps/{quote(app_id)}/net"), headers=NO_STORE)
   except ApiError as e:
@@ -108,7 +99,6 @@ def net_json(app_id: str):
 
 @router.post("/apps/{app_id}/net.json")
 async def net_decide(app_id: str, request: Request):
-  """Save the Network group's decisions: domain -> allow, deny, or null to forget."""
   try:
     body = await request.json()
   except ValueError:

@@ -1,8 +1,3 @@
-"""JSON projections of kelso state.
-
-Note that secrets should never be rendered to the user through this module.
-"""
-
 import difflib
 import os
 import time
@@ -43,10 +38,6 @@ from kelso.lib.store import AppStore
 
 
 def apps_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every loaded app, in the shape a dashboard list wants.
-
-  Unloaded apps belong to the catalog listing, which reports their state.
-  """
   return [
     _summary(observation, ctx)
     for observation in ctx.observations()
@@ -55,7 +46,6 @@ def apps_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
-  """Gauge history for keys starting `gauge/{prefix}` over the last `hours` hours."""
   until = int(datetime.now(UTC).timestamp())
   since = until - hours * 60 * 60
   metrics: dict[str, list[dict[str, int | float]]] = {}
@@ -67,7 +57,6 @@ def metrics_view(ctx: KelsoCtx, prefix: str, hours: int) -> dict[str, Any]:
 
 
 def catalog_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every configured repo, with the bundles currently in it."""
   catalog = ctx.inventory.catalog
   return [
     {"name": name, "apps": [_catalog_app(e, ctx) for e in catalog if e.repo == name]}
@@ -103,7 +92,6 @@ def _catalog_app(entry: CatalogEntry, ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def compose_warnings_view(spec: AppSpec) -> list[dict[str, Any]]:
-  """`[run.<unit>.compose]` keys kelso does not model, for the UI to show."""
   return [
     {
       "run_unit": w.run_unit,
@@ -126,7 +114,6 @@ def _manifest_diff(current: str, remote: str) -> str:
 
 
 def _catalog_manifest_stale(entry: CatalogEntry, manifest: str, ctx: KelsoCtx) -> bool:
-  """Whether the catalog's manifest has moved on from the loaded copy."""
   loaded = ctx.loaded_paths(entry.app_id).manifest_path
   if not manifest or not loaded.is_file():
     return False
@@ -137,7 +124,6 @@ def _catalog_manifest_stale(entry: CatalogEntry, manifest: str, ctx: KelsoCtx) -
 
 
 def config_status(spec: AppSpec, store: AppStore | None) -> str:
-  """ "ready" when every config key is set or will be filled, else "missing"."""
   for name, cfg in spec.config.items():
     if cfg.default is not None:
       continue
@@ -148,7 +134,6 @@ def config_status(spec: AppSpec, store: AppStore | None) -> str:
 
 
 def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every configured repo: what it is, and what it last mirrored."""
   catalog = ctx.inventory.catalog
   out = []
   for name, repo in ctx.config.repos.items():
@@ -172,12 +157,10 @@ def repos_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def contested_view(ctx: KelsoCtx) -> dict[str, list[str]]:
-  """App ids more than one repo carries, and which repos those are."""
   return {app_id: sorted(repos) for app_id, repos in ctx.inventory.contested().items()}
 
 
 def _catalog_spec(entry: CatalogEntry) -> tuple[AppSpec | None, str | None]:
-  """The bundle's spec, or None and why when the bundle on disk does not parse."""
   try:
     return load_bundle(entry.path).app_spec(), None
   except (ValueError, RuntimeError) as e:
@@ -195,7 +178,6 @@ def _gauge_bytes(gauges: dict[str, Any], name: str) -> int | None:
 
 
 def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Every kelso-managed volume on disk, whatever declared it."""
   gauges = ctx.read_gauges("volume_size_bytes/")
   return [
     {
@@ -211,7 +193,6 @@ def volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def host_volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """The `[host_volume]` entries config.toml declares, in tag order."""
   gauges = ctx.read_gauges("volume_size_bytes//host/")
   return [
     {
@@ -227,12 +208,10 @@ def host_volumes_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def config_request_view(request: ConfigRequest) -> dict[str, Any]:
-  """A ConfigRequest as JSON. Fields never carry a secret's value to begin with."""
   return {**asdict(request), "missing": request.missing()}
 
 
 def route_providers_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Configured route providers in tag order, less the built-in no-op."""
   return [
     {"tag": tag, "kind": entry.kind, "domain": entry.domain}
     for tag, entry in sorted(ctx.config.route_providers.items())
@@ -241,7 +220,6 @@ def route_providers_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def published_routes_view(ctx: KelsoCtx, tag: str) -> list[dict[str, Any]]:
-  """What the provider `tag` publishes under its domain; `app` None if not kelso's."""
   provider = get_route_provider(ctx, tag)
   domain = ctx.config.provider_domain(tag)
   owners = provider.route_owners()
@@ -257,10 +235,6 @@ def published_routes_view(ctx: KelsoCtx, tag: str) -> list[dict[str, Any]]:
 
 
 def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Kelso's own directories, as last recorded by volume-metrics.
-
-  `bytes` is None until volume-metrics has run over a directory.
-  """
   return [
     {
       "name": entry.name,
@@ -272,10 +246,6 @@ def kelso_dirs_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
 
 
 def host_view(ctx: KelsoCtx) -> dict[str, Any]:
-  """The host's size and use now, and the disks kelso keeps things on.
-
-  Each disk's `gauge` names its usage history under GET /metrics.
-  """
   memory = psutil.virtual_memory()
   disks = []
   for disk in kelso_disks(ctx):
@@ -301,11 +271,6 @@ def host_view(ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def volume_roots_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Each volume root's size, summed from its volumes', and the filesystem it shares.
-
-  A root holding volumes with no live reading, as while kelsod is down, has
-  size None.
-  """
   totals: dict[str, int] = {}
   for key, entry in ctx.read_gauges("volume_size_bytes/").items():
     _, _, app_id, kind, name = key.split("/", 4)
@@ -347,8 +312,6 @@ def _holds_volumes(root: Path) -> bool:
 
 
 def backups_view(ctx: KelsoCtx) -> dict[str, Any]:
-  """Where backups go, how the last run went, and every app backup, newest
-  first. Lists the repository, which starts restic: not for a status line."""
   config = ctx.config
   view: dict[str, Any] = {
     "kelso_id": ctx.kelso_db.kelso_id(),
@@ -381,7 +344,6 @@ def backups_view(ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def cron_view(ctx: KelsoCtx) -> list[dict[str, Any]]:
-  """Each cron job's next run, soonest first."""
   return [
     {
       "app_id": str(run.app_id),
@@ -402,16 +364,10 @@ def activity_view(
   verb: str | None = None,
   limit: int = 20,
 ) -> list[dict[str, Any]]:
-  """Recorded unattended runs, newest first; see `lib/activity.py`."""
   return activity.list_runs(ctx, app=app, verb=verb, limit=limit)
 
 
 def activity_log_view(ctx: KelsoCtx, filename: str) -> dict[str, Any]:
-  """One run's output file, as `list_runs` named it in `log`.
-
-  `state` is how it ended, "running", or "killed" for a run whose process
-  died without saying.
-  """
   text = activity.read_run_log(ctx, filename)
   middle = filename.removesuffix(".log").split(".")[1:-1]
   return {
@@ -423,7 +379,6 @@ def activity_log_view(ctx: KelsoCtx, filename: str) -> dict[str, Any]:
 
 
 def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
-  """One app's container logs as of now; poll it again for live output."""
   return {
     "app_id": str(app_id),
     "tail": tail,
@@ -432,7 +387,6 @@ def app_logs_view(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> dict[str, Any]:
 
 
 def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
-  """One app in full: what `kelso status APP` shows, as data."""
   observation = observe(app_id, ctx)
   try:
     spec = ctx.loaded_spec(app_id)
@@ -512,7 +466,6 @@ def _summary(
 def _configured(
   observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx
 ) -> str | None:
-  """ "ready", "missing", or None when the app has no config store yet."""
   if not observation.config_exists or spec is None:
     return None
   return "missing" if load_run_data(spec, ctx).start_blockers else "ready"
@@ -521,7 +474,6 @@ def _configured(
 def _units(
   spec: AppSpec, observation: AppObservation, run_data: AppRunData
 ) -> list[dict[str, Any]]:
-  """Declared run units joined to whatever containers are actually up."""
   containers = {c.run_unit: c for c in observation.containers}
   units = []
   for name, unit in spec.run_units.items():
@@ -555,7 +507,6 @@ def _units(
 
 
 def _unit_state(container: KelsoRunUnitStatus | None) -> str | None:
-  """docker's state, except that a clean exit reads as `finished`."""
   if container is None:
     return None
   return "finished" if container.finished else container.state
@@ -610,8 +561,6 @@ def _ports(spec: AppSpec, run_data: AppRunData) -> list[dict[str, Any]]:
 def security_notes(
   spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> list[dict[str, str]]:
-  """What the app can reach or change beyond itself, worst first: each a `level`
-  (danger, caution or ok) and a sentence."""
   danger, caution, ok = [], [], []
   for name, conn in spec.connections.items():
     if isinstance(conn, MountConnection):

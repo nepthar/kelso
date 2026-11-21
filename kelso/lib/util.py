@@ -26,7 +26,6 @@ def ts_to_seconds(ts: str) -> int:
 
 
 def refuse_root(who: str) -> None:
-  """Refuse to keep going when the effective uid is 0."""
   if os.geteuid() == 0:
     raise RuntimeError(
       f"{who} refuses to run as root: it would leave root-owned files in the "
@@ -36,7 +35,6 @@ def refuse_root(who: str) -> None:
 
 
 def validate_identifier(value: str) -> str:
-  """Validate a short, unscoped name and return it unchanged."""
   if (
     not value
     or len(value) > _IDENTIFIER_MAX_LEN
@@ -50,7 +48,6 @@ def validate_identifier(value: str) -> str:
 
 
 def validate_github_segment(value: str, kind: str) -> str:
-  """Validate a GitHub user or repo name and return it unchanged."""
   pattern = _GITHUB_REPO_RE if kind == "repo" else _GITHUB_USER_RE
   if (
     not value
@@ -79,17 +76,12 @@ PUBLIC_ROUTE_SCHEME = "https"
 
 
 class EnvTemplate(string.Template):
-  """`[run.<unit>.env]` placeholders against a flat substitution keyspace."""
-
   # Up to two dots, for `conn.<name>.<property>`.
   idpattern = r"(?a:[_a-z][_a-z0-9-]*(?:\.[_a-z0-9-]+){0,2})"
 
 
 def same_path(a: Path, b: Path) -> bool:
-  """Whether two paths name the same file on disk; by spelling if either is gone.
-
-  `resolve()` keeps case, and macOS filesystems ignore it.
-  """
+  # resolve() keeps case, and macOS filesystems ignore it.
   try:
     return a.samefile(b)
   except OSError:
@@ -105,8 +97,6 @@ def fmt_size(n: float) -> str:
 
 
 def path_size(path: Path) -> int:
-  """Total bytes under `path`. Walks every file, so callers building a list
-  should think twice before calling it per row."""
   if not path.exists():
     return 0
   if path.is_file():

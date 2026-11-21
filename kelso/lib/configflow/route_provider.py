@@ -1,10 +1,3 @@
-"""A route provider's settings as a ConfigRequest.
-
-Answers land in two places: secrets in the kelso db, everything else in
-`[route_provider.<tag>]` in config.toml. The `<name>_secret` indirection in the
-block is generated here, so an operator is only ever asked for the secret itself.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -34,17 +27,12 @@ def secret_ref(tag: str, name: str) -> str:
 
 
 def configurable_kinds() -> list[str]:
-  """Kinds an operator can add; `noop` publishes nothing, so it is not one."""
   return sorted(kind for kind in PROVIDERS if kind != "noop")
 
 
 def resolve_route_provider(
   tag: str, ctx: KelsoCtx, kind: str = ""
 ) -> type[RouteProvider]:
-  """The provider class `tag` is, or is about to become.
-
-  An existing tag takes its kind from config.toml; a new one needs `kind`.
-  """
   if tag == NONE_ROUTE_PROVIDER_TAG:
     raise ValueError(f"{tag!r} is the built-in no-op provider; pick another tag")
   existing = ctx.config.route_providers.get(tag)
@@ -69,7 +57,6 @@ def resolve_route_provider(
 def route_provider_config_request(
   tag: str, provider: type[RouteProvider], ctx: KelsoCtx
 ) -> ConfigRequest:
-  """What `provider` needs to publish routes, filled in from `tag` if it exists."""
   existing = ctx.config.route_providers.get(tag)
   fields = []
   for declared in (DOMAIN_FIELD, ADDRESS_FIELD, *provider.config_fields()):
@@ -108,7 +95,6 @@ def route_provider_config_request(
 def apply_route_provider_config(
   tag: str, provider: type[RouteProvider], response: ConfigResponse, ctx: KelsoCtx
 ) -> list[str]:
-  """Store secrets and write `[route_provider.<tag>]`, returning the names written."""
   request = route_provider_config_request(tag, provider, ctx)
   errors = request.validate(response.values)
   if errors:

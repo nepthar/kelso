@@ -1,9 +1,3 @@
-"""kelso-ui's own settings: one JSON file in its `settings` volume.
-
-The theme and the desktop background. Without a saved choice the background
-is drawn from the install's id, so each machine running kelso looks its own.
-"""
-
 import colorsys
 import json
 import os
@@ -20,7 +14,6 @@ THEMES = {"light": "Light", "dark": "Dark"}
 
 
 def load():
-  """The saved settings. Raises RuntimeError naming the fix if the file is bad."""
   try:
     values = json.loads(PATH.read_text())
   except FileNotFoundError:
@@ -35,7 +28,6 @@ def load():
 
 
 def save(values):
-  """Replace the file with `values`. Raises OSError naming the fix."""
   temp = PATH.with_suffix(".tmp")
   try:
     temp.write_text(json.dumps(values, indent=2))
@@ -47,7 +39,6 @@ def save(values):
 
 
 def theme():
-  """The saved theme's id, or the first when none is saved or the file is bad."""
   try:
     chosen = load().get("theme")
   except RuntimeError:
@@ -60,7 +51,6 @@ def _hex(r, g, b):
 
 
 def id_colors(instance_id):
-  """Top and bottom of a gradient that only this id draws; calm enough for white labels."""
   if not instance_id:
     return PLAIN
   digest = blake2s(instance_id.encode(), digest_size=2).digest()
@@ -72,10 +62,6 @@ def id_colors(instance_id):
 
 
 def background(instance_id):
-  """The desktop's (top, bottom) colors: the saved custom pair, or the id's.
-
-  A bad settings file paints the id's colors; the Settings window says why.
-  """
   try:
     chosen = load().get("background") or {}
   except RuntimeError:

@@ -12,8 +12,6 @@ logger = logging.getLogger("kelso.logtab")
 
 
 class LogTab:
-  """An append-only key-value table that keeps every write."""
-
   @dataclass(frozen=True, slots=True)
   class Entry:
     ts: str
@@ -112,7 +110,6 @@ class LogTab:
       logger.error(errmsg)
 
   def _records(self) -> Iterator[list[str]]:
-    """Yield valid rows as a split."""
     with open(self.path) as f:
       for line_number, line in enumerate(f, start=1):
         if line.startswith("#") or not line.strip():
@@ -132,11 +129,6 @@ class LogTab:
         yield split
 
   def load(self, at: str | None = None) -> dict[str, Entry]:
-    """Materialize the table into a dictionary of Entries.
-
-    With `at`, as it stood at that timestamp: records written after it are
-    left out.
-    """
     until = datetime.fromisoformat(at) if at is not None else None
     results: dict[str, LogTab.Entry] = {}
     for ts, operation, key, value in self._records():
@@ -158,36 +150,29 @@ class LogTab:
       self.compact(self._compact_history)
 
   def write(self, key: str, value: str):
-    """Write a single value to the table"""
     LogTab.write_entry(self.path, key, "set", value)
     self._maybe_compact()
 
   def read(self, key: str) -> Entry | None:
-    """Read a single entry by exact match. This performs a full file scan."""
     return self.load().get(key)
 
   def clear(self, prefix: str, comment: str = "") -> None:
-    """Clear all values matching the given prefix."""
     LogTab.write_entry(self.path, prefix, "clr", comment)
     self._maybe_compact()
 
   def delete(self, key: str, comment: str = "") -> None:
-    """Delete a single key by exact match."""
     if self.strict and key not in self.load():
       raise ValueError(f"Key {key} not found in logtab {self.path} for deletion")
     LogTab.write_entry(self.path, key, "del", comment)
     self._maybe_compact()
 
   def last_ts(self) -> str | None:
-    """Timestamp of the newest record, or None when the table has none."""
     newest = None
     for ts, *_ in self._records():
       newest = ts
     return newest
 
   def history(self, prefix: str = "", suffix: str = "") -> list[tuple[str, Entry]]:
-    """Every `set` record matching, oldest first, without collapsing by key."""
-
     if prefix:
       LogTab.validate_key(prefix)
     if suffix:
@@ -202,10 +187,6 @@ class LogTab:
     return records
 
   def compact(self, history: int = 0) -> None:
-    """Rewrite the table with only the entries still in effect.
-
-    The caller must keep writers off the file.
-    """
     if history < 0:
       raise ValueError(f"history must be >= 0, got {history}")
 
@@ -259,7 +240,6 @@ class LogTab:
     compact_path.unlink(missing_ok=True)
 
   def scan(self, prefix: str = "", suffix: str = "") -> dict[str, Entry]:
-    """Entries matching a prefix and suffix; both empty is `load()`."""
     if prefix:
       LogTab.validate_key(prefix)
     if suffix:

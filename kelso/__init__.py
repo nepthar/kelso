@@ -1,11 +1,8 @@
-"""Kelso — app runtime and tooling."""
-
 import json
 from importlib.metadata import distribution
 
 
 def _version() -> str:
-  """pyproject.toml's version, with the git commit this install was made from."""
   dist = distribution("kelso")
   source = json.loads(dist.read_text("direct_url.json") or "{}")
   commit = source.get("vcs_info", {}).get("commit_id")

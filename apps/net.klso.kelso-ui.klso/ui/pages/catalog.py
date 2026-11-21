@@ -1,5 +1,3 @@
-"""The App Repos page: the repos apps come from, and the bundles in each of them."""
-
 from api import api
 from fastapi import APIRouter
 from web import PageDep
@@ -9,7 +7,6 @@ router = APIRouter()
 
 @router.get("/catalog")
 def catalog(page: PageDep, app: str = ""):
-  """Every repo and its bundles. `app` opens that bundle's card on arrival."""
   body = api("/catalog")
   repos = api("/repos").get("repos", [])
   catalogs = body.get("catalogs", [])

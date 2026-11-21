@@ -1,16 +1,3 @@
-"""A shell in one of an app's running containers.
-
-`shell_command` resolves what to run and refuses what cannot be; `kelso
-shell` hands it the operator's own terminal and kelsod runs it on a PTY.
-`ShellRecord` puts each session in the activity log -- that it happened, not
-what was typed.
-
-docker has no way to end an exec: killing the client leaves its shell running
-in the container. So a session kelsod abandons announces its shell's pid
-(`PID_MARKER`, an escape sequence no terminal draws), and `hangup_args` kills
-it from inside.
-"""
-
 import os
 import pwd
 import re
@@ -25,6 +12,7 @@ from kelso.lib.lifecycle.run import compose_env
 from kelso.lib.run_layout import unit_commands
 from kelso.lib.spec import AppCommand
 
+# docker cannot end an exec: killing the client leaves its shell running.
 PID_MARKER = re.compile(rb"\x1b\]697;kelso-pid=(\d+)\x07")
 
 
@@ -46,7 +34,6 @@ def shell_command(
   *,
   announce_pid: bool = False,
 ) -> ShellCommand:
-  """The `docker compose exec` that opens a shell in `unit`. Raises if it isn't running."""
   app_id = ctx.resolve_app_id(app, prefer_loaded=True)
   state = ctx.run_state(app_id)
   if not state.compose_exists:
@@ -81,19 +68,15 @@ def shell_command(
 
 
 def hangup_args(cmd: ShellCommand, pid: int) -> list[str]:
-  """Docker args that hang up the shell `PID_MARKER` named, and its foreground job."""
   return ["compose", "exec", "-T", cmd.unit, *cmd.unit_shell, f"kill -HUP {pid}"]
 
 
 def host_shell() -> tuple[list[str], Path]:
-  """A login shell for the user kelso runs as, and the home it starts in."""
   user = pwd.getpwuid(os.getuid())
   return [user.pw_shell or "/bin/sh", "-l"], Path(user.pw_dir)
 
 
 class ShellRecord:
-  """One session in the activity log, filed when it opens and closed by `close`."""
-
   def __init__(
     self,
     ctx: KelsoCtx,

@@ -23,8 +23,6 @@ from kelso.lib.util import same_path
 
 @dataclass(frozen=True)
 class DevPlan:
-  """A validated foreground run of a loaded app against its source bundle."""
-
   app_id: AppID
   run_path: Path
   source: Path
@@ -40,7 +38,6 @@ class DevPlan:
 
 
 def refuse_other_origin(app: AppID, source: Path, ctx: KelsoCtx) -> None:
-  """Refuse an app id whose config and data belong to a bundle other than `source`."""
   origin = ctx.loaded_origin(app)
   if origin is not None and not same_path(origin, source):
     raise ValueError(
@@ -53,10 +50,6 @@ def refuse_other_origin(app: AppID, source: Path, ctx: KelsoCtx) -> None:
 def dev_plan(
   app: AppID, source: Path, ctx: KelsoCtx, *, publish_routes: bool = False
 ) -> DevPlan:
-  """Work out what a dev run of the loaded `app` would mount from `source`.
-
-  Assumes `app` was just loaded from `source`; refuses if it cannot run.
-  """
   paths = ctx.loaded_paths(app)
   spec = AppSpec.from_file(paths.manifest_path, app)
 
@@ -98,7 +91,6 @@ def dev_plan(
 
 @contextmanager
 def source_volume_links(plan: DevPlan) -> Iterator[None]:
-  """Point `volumes/app/*` at the source bundle, then put them back."""
   saved: list[tuple[Path, Path, Path]] = []
   for name, target in plan.mounts.items():
     link = plan.run_path / plan.spec.volumes[name].run_rel_path
@@ -122,7 +114,6 @@ def source_volume_links(plan: DevPlan) -> Iterator[None]:
 
 
 def _compose_down(plan: DevPlan) -> None:
-  """Best effort: the links go back whether or not teardown succeeds."""
   try:
     docker_run_command(
       ["compose", "down"],
@@ -136,7 +127,6 @@ def _compose_down(plan: DevPlan) -> None:
 
 
 def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
-  """Run the app in this terminal with its bundle mounted from source."""
   app = plan.app_id
   if plan.published:
     try:

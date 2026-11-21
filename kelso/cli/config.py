@@ -153,7 +153,6 @@ def _get(request: ConfigRequest, name: str) -> None:
 
 
 def _read_typed(app: AppID, items: list[str]) -> dict[str, str]:
-  """The NAME=- values, read from a prompt or stdin."""
   typed = [item.partition("=")[0] for item in items if item.endswith(f"={FROM_STDIN}")]
   if len(typed) > 1:
     raise ValueError(
@@ -226,7 +225,6 @@ def _remote_args(args: argparse.Namespace) -> list[str]:
 
 
 def _report(written: list[str], spec: AppSpec, ctx: KelsoCtx) -> None:
-  """What was set, and what the app still needs before it can start."""
   print(f"Set {', '.join(written)}" if written else "No changes")
   request = app_config_request(spec, ctx)
   missing = [
@@ -241,7 +239,6 @@ def _report(written: list[str], spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
-  """The manifest this command reads its schema from."""
   paths = ctx.loaded_paths(app)
   if paths.exists():
     return ctx.require_loaded_spec(app)
@@ -250,7 +247,6 @@ def _config_spec(app: AppID, ctx: KelsoCtx) -> AppSpec:
 
 
 def _what_applies_it(app: AppID, ctx: KelsoCtx) -> None:
-  """The next start applies a change; say so only when one is not coming."""
   if ctx.is_loaded(app) and observe(app, ctx).running_count:
     logger.info(f"Takes effect on restart: kelso restart {app}")
 

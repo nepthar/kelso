@@ -1,5 +1,3 @@
-"""The shell: its page, and the websocket relayed to kelsod behind the front door."""
-
 import json
 import re
 
@@ -26,7 +24,6 @@ def kelsod(monkeypatch):
 
 
 def drain(ws):
-  """Everything the terminal was sent, and how the socket closed."""
   out = b""
   with pytest.raises(WebSocketDisconnect) as closed:
     while True:

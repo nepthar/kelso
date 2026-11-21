@@ -1,8 +1,3 @@
-"""The desktop: the one page that is not a window. Everything else opens in one.
-
-Which icons there are is decided here; how windows behave is js/desktop.js.
-"""
-
 from urllib.parse import quote, urlencode
 
 from api import ApiError, api, where
@@ -22,17 +17,12 @@ router = APIRouter()
 
 
 def _state(app):
-  """How the icon reads: healthy, troubled or switched off."""
   if not (app.get("containers") or {}).get("running"):
     return "off"
   return "ok" if app.get("status") in ("healthy", "ok", "finished") else "bad"
 
 
 def _links(app, detail):
-  """An app's reachable routes, each by its primary URL.
-
-  A route with no http(s) URL has nothing a window could open.
-  """
   name = app.get("display_name") or app["app_id"]
   found = []
   for route in detail.get("routes", []):
@@ -52,7 +42,6 @@ def _links(app, detail):
 
 
 def _apps():
-  """Loaded apps, each with what its start menu folder lists."""
   found = []
   for app in api("/apps").get("apps", []):
     if app.get("state") != "loaded":
@@ -84,7 +73,6 @@ def _uptime(seconds):
 
 
 def _status(apps):
-  """The status group: which apps run or fail, and how busy the host is."""
   host = api("/host")
   return {
     "host": brand(known_hostname() or api("/version").get("hostname", "")),
@@ -123,7 +111,6 @@ def desktop(page: PageDep):
 
 @router.get("/done")
 def done(page: PageDep, then: str = "/host", ok: str = ""):
-  """Where a dialog lands once it has done its work; desktop.js closes it."""
   target = local_path(then) or "/host"
   if ok:
     target += ("&" if "?" in target else "?") + urlencode({"ok": ok})
@@ -132,6 +119,5 @@ def done(page: PageDep, then: str = "/host", ok: str = ""):
 
 @router.get("/desktop/icons")
 def icons():
-  """The icons alone: what the desktop re-reads to follow the apps."""
   html = templates.get_template("_desk_icons.html").render(**_icons())
   return HTMLResponse(html, headers=NO_STORE)

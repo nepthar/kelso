@@ -1,5 +1,3 @@
-"""Job: parse first, then file a run log, then do the work."""
-
 import io
 
 import pytest

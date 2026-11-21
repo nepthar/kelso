@@ -13,8 +13,6 @@ from kelso.lib.run_layout import AppRunData, AssignedRoute, loaded_routes
 def assigned_routes(
   run_data: AppRunData, ctx: KelsoCtx
 ) -> list[tuple[str, AssignedRoute, str]]:
-  """One (name, route, provider_tag) per provider each route was loaded with,
-  primary first."""
   out: list[tuple[str, AssignedRoute, str]] = []
   for route_name, route in run_data.routes.items():
     if not route.providers:
@@ -28,7 +26,6 @@ def _published_tags(route: AssignedRoute) -> list[str]:
 
 
 def preflight_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
-  """Sanity check that assigned routes can be satisfied by their providers."""
   routes = assigned_routes(run_data, ctx)
   if not routes:
     return
@@ -76,8 +73,6 @@ def register_app_routes(run_data: AppRunData, ctx: KelsoCtx) -> None:
 
 
 def take_down_routes(app: AppID, ctx: KelsoCtx) -> None:
-  """Unpublish an app's routes, best effort: a provider that will not answer
-  must not stop a reload or a removal."""
   try:
     unregister_app_routes(app, ctx)
   except Exception as e:
@@ -85,8 +80,6 @@ def take_down_routes(app: AppID, ctx: KelsoCtx) -> None:
 
 
 def unregister_app_routes(app: AppID, ctx: KelsoCtx) -> None:
-  """Unpublish what kelsodb records for `app`, skipping what the provider no
-  longer has or what belongs to someone else."""
   owners: dict[str, dict[str, str | None]] = {}
   try:
     routes = loaded_routes(app, ctx)
@@ -141,11 +134,6 @@ def unregister_app_routes(app: AppID, ctx: KelsoCtx) -> None:
 
 
 def remove_published_route(tag: str, subdomain: str, ctx: KelsoCtx) -> None:
-  """Unpublish one route kelso published, whichever app it was for.
-
-  Raises ValueError for a route the provider does not have, or one that is not
-  kelso's to remove.
-  """
   provider = get_route_provider(ctx, tag)
   domain = ctx.config.provider_domain(tag)
   owners = provider.route_owners()

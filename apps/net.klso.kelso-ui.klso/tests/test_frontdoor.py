@@ -1,5 +1,3 @@
-"""Rate limits, the origin check, the session, and the headers on the way out."""
-
 import pytest
 from conftest import ORIGIN, PASSWORD
 from frontdoor import same_origin

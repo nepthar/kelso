@@ -20,7 +20,6 @@ LABEL_WIDTH = len("Containers:")
 def published_route_urls(
   spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> dict[str, list[str]]:
-  """Route name -> its public URLs, primary first, for routes loaded with a provider."""
   published: dict[str, list[str]] = {}
   for name in spec.routes:
     loaded = run_data.routes.get(name)
@@ -33,7 +32,6 @@ def published_route_urls(
 
 
 def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:
-  """URLs for routes assigned to a provider, in declaration order, primary first."""
   return [
     url for urls in published_route_urls(spec, run_data, ctx).values() for url in urls
   ]
@@ -42,7 +40,6 @@ def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[s
 def host_url(
   spec: AppSpec, run_data: AppRunData | None, name: str, host: str
 ) -> str | None:
-  """Where a route answers on the host itself, or None with no port allocated."""
   route = spec.routes[name]
   assigned = run_data.routes.get(name) if run_data else None
   if assigned is not None and assigned.host_port > 0:
@@ -61,7 +58,6 @@ def route_lines(
   *,
   host: str = "localhost",
 ) -> list[str]:
-  """Every declared route, read right to left: where you reach it, then what answers."""
   lines: list[str] = []
   for name, route in spec.routes.items():
     where = host_url(spec, run_data, name, host) or "(no host port allocated)"
@@ -78,7 +74,6 @@ def route_lines(
 def port_lines(
   spec: AppSpec, run_data: AppRunData | None, *, host: str = "localhost"
 ) -> list[str]:
-  """Every declared port, read right to left like `route_lines`."""
   lines: list[str] = []
   for name, port in spec.ports.items():
     assigned = run_data.ports.get(name) if run_data else None
@@ -97,7 +92,6 @@ def port_lines(
 def route_receipt_lines(
   spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
 ) -> list[str]:
-  """The `Routes:` block of a receipt; empty for an app with no routes."""
   reach = route_lines(
     spec,
     run_data,
@@ -117,7 +111,6 @@ _NETWORK_HEADS = {
 
 
 def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
-  """What an app behind kproxy may reach, or that an open one's connections don't."""
   network = network_connections(spec.connections)
   mode = spec.network_mode if run_data is None else run_data.network_mode
   if mode in _NETWORK_HEADS:
@@ -145,7 +138,6 @@ def network_lines(spec: AppSpec, run_data: AppRunData | None) -> list[str]:
 
 
 def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
-  """Per-key config status, same wording as `kelso config`."""
   if not spec.config:
     return []
   store = None
@@ -178,7 +170,6 @@ def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
 def _volume_paths(
   spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
 ) -> list[tuple[str, str, str]]:
-  """`(name, kind, where)` for each volume with a place on the host."""
   paths: list[tuple[str, str, str]] = []
   for name, volume in spec.volumes.items():
     kind = f"{volume.kind}, read-only" if volume.readonly else volume.kind
@@ -198,7 +189,6 @@ def _volume_paths(
 def volume_lines(
   spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
 ) -> list[str]:
-  """Managed volume dirs and host-volume bind paths, each with its kind."""
   return [
     f"{name} ({kind}): {where}"
     for name, kind, where in _volume_paths(spec, run_data, ctx)
@@ -206,7 +196,6 @@ def volume_lines(
 
 
 def volume_root_lines(config: Config) -> list[str]:
-  """Where each volume kind lives, following an operator's symlink."""
   lines = []
   for kind, root in config.volume_roots.items():
     line = f"{kind + ':':<6} {root}"
@@ -225,7 +214,6 @@ def location_receipt(
   *,
   heading: str | None = None,
 ) -> str:
-  """Post-up location block (Routes, Ports, Data, Logs)."""
   app_id = spec.app
   title = heading if heading is not None else f"Running {app_id}"
   rows: list[tuple[str, str]] = []
@@ -262,7 +250,6 @@ def capability_receipt(
   last_action: str | None = None,
   show_logs: bool = False,
 ) -> str:
-  """Bundle card for `kelso status APP` / first-run up."""
   app_id = spec.app
   lines: list[str] = [f"{app_id}"]
 

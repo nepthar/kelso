@@ -1,12 +1,3 @@
-"""What has to be configured, as data, and the functions that fill it in.
-
-A `ConfigRequest` describes the fields one thing needs -- an app's `[config]`,
-a route provider's `args` -- with each field's current value, so any front end
-can render the same question. A front end hands back a `ConfigResponse`. The
-`app` and `route_provider` modules build requests and apply responses; this one
-owns the shapes and the validation.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -44,8 +35,6 @@ class ConfigField:
   choice_urls: tuple[str, ...] = ()
 
   def picked(self, value: str) -> list[str]:
-    """The choices a value names: itself, or each comma-separated item if multi.
-    The empty value names none."""
     if not self.multi:
       return [value]
     if value == self.empty_value:
@@ -68,8 +57,6 @@ class ConfigField:
 
 @dataclass(frozen=True)
 class ConfigRequest:
-  """The fields one thing needs, and what each holds now."""
-
   title: str
   fields: tuple[ConfigField, ...] = ()
   note: str = ""
@@ -77,7 +64,6 @@ class ConfigRequest:
   config_title: str = "Configuration"
 
   def groups(self) -> list[tuple[str, tuple[ConfigField, ...]]]:
-    """(title, fields) for each section that has fields, in display order."""
     titles = {
       "config": self.config_title,
       "advanced": "Advanced config",
@@ -97,14 +83,11 @@ class ConfigRequest:
     return None
 
   def missing(self) -> list[str]:
-    """Required fields with nothing on file and no default."""
     return [
       f.name for f in self.fields if f.required and not f.is_set and f.default is None
     ]
 
   def validate(self, values: dict[str, str]) -> list[str]:
-    """Errors that make a response unapplicable. A required field left unset is
-    not one: `start` is what refuses an under-configured app."""
     errors = []
     for name, value in values.items():
       entry = self.field(name)
@@ -122,7 +105,6 @@ class ConfigRequest:
     return errors
 
   def response(self, values: dict[str, str]) -> ConfigResponse:
-    """Build a response for this request, refusing one that cannot apply."""
     errors = self.validate(values)
     if errors:
       raise ValueError("; ".join(errors))
@@ -131,13 +113,10 @@ class ConfigRequest:
 
 @dataclass(frozen=True)
 class ConfigResponse:
-  """What a front end collected, ready for the source to apply."""
-
   values: dict[str, str] = field(default_factory=dict)
 
 
 def request_from_view(view: dict) -> ConfigRequest:
-  """A ConfigRequest back from the JSON `views.config_request_view` made of it."""
   fields = tuple(
     ConfigField(
       **{

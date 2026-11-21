@@ -1,5 +1,3 @@
-"""Fill in a ConfigRequest in a compact inline form, with every field on one screen."""
-
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -14,8 +12,6 @@ from kelso.lib.configflow import (
 
 
 class ConfigApp(App[ConfigResponse]):
-  """Exits with the collected response, or EMPTY_CONFIG_RESPONSE."""
-
   ENABLE_COMMAND_PALETTE = False
 
   CSS = """
@@ -143,7 +139,6 @@ class ConfigApp(App[ConfigResponse]):
     return self.query_one("#form").has_class("unfolded")
 
   def values(self) -> dict[str, str]:
-    """What the operator changed; an empty or untouched field keeps what is on file."""
     edits = {}
     for entry in self.request.fields:
       control = self.control(entry.name)

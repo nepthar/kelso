@@ -18,7 +18,7 @@ _DEFAULT_HEX_LENGTH = 16
 
 
 class SecretGenerationError(ValueError):
-  """Pattern cannot be satisfied or is not generate-able."""
+  pass
 
 
 def generate_secret(pattern: str) -> str:

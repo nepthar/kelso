@@ -1,5 +1,3 @@
-"""The Volumes page: host-volume declarations and kelso-managed storage."""
-
 from urllib.parse import quote
 
 from api import ApiError, api
@@ -31,13 +29,11 @@ def volumes(page: PageDep):
 
 @router.get("/volumes/new")
 def new_host_volume(page: PageDep):
-  """The New host volume dialog."""
   return page.render("pages/volume_new.html", "New host volume")
 
 
 @router.post("/volumes")
 async def post_volumes(request: Request):
-  """Declare a host volume, drop one, or delete an orphaned app volume."""
   form = await request.form()
   action, tag = field(form, "action"), field(form, "tag")
   if action == "create":

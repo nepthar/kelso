@@ -32,7 +32,6 @@ INCOMING = ".app_bundle.incoming"
 
 
 def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
-  """Whether any managed volume holds something an app could depend on."""
   for app_dir in managed_volume_dirs(app_id, ctx):
     if not app_dir.is_dir():
       continue
@@ -42,7 +41,6 @@ def _has_volume_data(app_id: AppID, ctx: KelsoCtx) -> bool:
 
 
 def _load_incoming(source: Path, run_path: Path) -> Path:
-  """Extract the bundle into ``var/run/<id>/.app_bundle.incoming`` (not yet live)."""
   bundle = load_bundle(source)
   incoming = run_path / INCOMING
   if incoming.exists():
@@ -53,7 +51,6 @@ def _load_incoming(source: Path, run_path: Path) -> Path:
 
 
 def _commit_incoming(paths: LoadedAppPaths, incoming: Path) -> None:
-  """Promote a validated incoming copy to ``app_bundle/``."""
   loaded = paths.bundle_path_in_run
   if loaded.is_dir():
     _sync_into(incoming, loaded)
@@ -70,7 +67,6 @@ def _remove(path: Path) -> None:
 
 
 def _sync_into(src: Path, dst: Path) -> None:
-  """Make `dst` match `src`, keeping the inode of every entry that survives."""
   # Docker Desktop's VM caches lookups of bind sources by name. Replacing a
   # folder or file under app_bundle/ leaves that cache pointing at the deleted
   # one, and the next bind fails with "bind source path does not exist".
@@ -92,7 +88,6 @@ def _sync_into(src: Path, dst: Path) -> None:
 
 
 def _discard_incoming(run_path: Path) -> None:
-  """Drop a failed incoming copy; remove an empty run dir left behind."""
   incoming = run_path / INCOMING
   if incoming.exists():
     shutil.rmtree(incoming)
@@ -101,7 +96,6 @@ def _discard_incoming(run_path: Path) -> None:
 
 
 def _generate_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Fill in defaults and generate secrets for all keys possible"""
   store = ctx.app_store(spec.app)
   for config_name, config in spec.config.items():
     if config.default is None or store.has_config(config_name):
@@ -114,7 +108,6 @@ def _generate_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Claim pinned host ports and allocate free ones in kelsodb, routes and ports."""
   hdb = ctx.kelso_db
   hdb.clear_routes(spec.app)
   hdb.clear_ports(spec.app)
@@ -153,7 +146,6 @@ def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Write default_route_provider for non-admin routes with no assignment yet."""
   store = ctx.app_store(spec.app)
   default = ctx.config.default_route_provider
   for route_name, route in spec.routes.items():
@@ -166,7 +158,6 @@ def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _existing_volume_kinds(volumes_root: Path) -> dict[str, str]:
-  """volume name -> kind, read back from the links a previous load left."""
   found: dict[str, str] = {}
   if not volumes_root.is_dir():
     return found
@@ -184,11 +175,6 @@ def _make_link(destination: Path, target: Path) -> None:
 
 
 def _rebuild_volume_links(spec: AppSpec, run_data: AppRunData) -> tuple[str, ...]:
-  """Point `volumes/<kind>/<name>` at the current manifest's volumes.
-
-  host/ volumes are linked at run time instead: they can change between load
-  and start.
-  """
   volumes_root = run_data.run_path / "volumes"
   existing = _existing_volume_kinds(volumes_root)
 
@@ -226,7 +212,6 @@ SHARED_DIR_MODE = 0o1777
 
 
 def _make_shared_dirs(root: Path, path: Path) -> None:
-  """Create `path`; each directory created below `root` gets `SHARED_DIR_MODE`."""
   root.mkdir(parents=True, exist_ok=True)
   for part in reversed((path, *path.parents)[: len(path.relative_to(root).parts)]):
     if not part.exists():
@@ -235,10 +220,7 @@ def _make_shared_dirs(root: Path, path: Path) -> None:
 
 
 def _make_nested_mountpoints(spec: AppSpec, run_data: AppRunData) -> None:
-  """Create each mount target that lies inside another of the unit's volumes.
-
-  Docker creates a missing one as root, which the app then cannot write beside.
-  """
+  # Docker creates a missing mount target as root, and the app can't write there.
   for unit in spec.run_units.values():
     mounts = sorted(
       ((PurePosixPath(b.guest_path), name) for name, b in unit.volumes.items()),
@@ -256,7 +238,6 @@ def _make_nested_mountpoints(spec: AppSpec, run_data: AppRunData) -> None:
 
 
 def link_host_volumes(spec: AppSpec, run_data: AppRunData) -> None:
-  """Build `volumes/host/` from the binds on file. Clobber existing links."""
   unlink_host_volumes(run_data.run_path)
   for volume_name, link in run_data.volume_links.items():
     if spec.volumes[volume_name].kind != "host":
@@ -266,7 +247,6 @@ def link_host_volumes(spec: AppSpec, run_data: AppRunData) -> None:
 
 
 def unlink_host_volumes(run_path: Path) -> None:
-  """Drop `volumes/host/`. Only links are in there."""
   host_root = run_path / "volumes" / "host"
   if host_root.exists():
     shutil.rmtree(host_root)
@@ -280,7 +260,6 @@ class LoadResult:
 
 
 def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ...]]:
-  """Rebuild everything derived from the loaded copy in the run dir."""
   _clear_and_reallocate_ports(spec, ctx)
   _allocate_subnet(spec, ctx)
 
@@ -302,7 +281,6 @@ def materialize(spec: AppSpec, ctx: KelsoCtx) -> tuple[AppRunData, tuple[str, ..
 
 
 def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """An app behind kproxy keeps its subnet across loads; any other app has none."""
   db = ctx.kelso_db
   if network_mode(spec, ctx) not in PROXIED_MODES:
     db.clear_subnet(spec.app)
@@ -311,15 +289,12 @@ def _allocate_subnet(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _rebuild_kproxy_dir(spec: AppSpec, run_data: AppRunData) -> None:
-  """`kproxy/` and kproxy's rules file, for an app behind kproxy."""
   if run_data.restricted is None:
     shutil.rmtree(run_data.run_path / kproxy.KPROXY_RUN_DIR, ignore_errors=True)
   write_kproxy_rules(run_data)
 
 
 def write_kproxy_rules(run_data: AppRunData) -> None:
-  """Write kproxy's rules from current config. Start does this too, since a
-  forward's config may have changed since the load."""
   if run_data.restricted is None:
     return
   root = run_data.run_path / kproxy.KPROXY_RUN_DIR
@@ -329,8 +304,6 @@ def write_kproxy_rules(run_data: AppRunData) -> None:
 
 @dataclass(frozen=True)
 class LoadTarget:
-  """What a `load`/`start` argument named, and where it came from."""
-
   app_id: AppID
   # None when no bundle is on disk; a loaded app then starts from its run copy.
   bundle: Path | None
@@ -338,15 +311,12 @@ class LoadTarget:
   repo: str | None
 
   def require_bundle(self) -> Path:
-    """The bundle to load from. Raises ValueError if there is none."""
     if self.bundle is None:
       raise ValueError(no_bundle_message(self.app_id))
     return self.bundle
 
 
 def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
-  """Where a load reads `bundle` from, to say so: its repo (and, for a mirror,
-  the remote and commit) and the path itself."""
   repo = ctx.config.repos.get(target.repo) if target.repo else None
   if repo is None:
     return str(bundle)
@@ -359,11 +329,6 @@ def load_source(target: LoadTarget, bundle: Path, ctx: KelsoCtx) -> str:
 
 
 def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarget:
-  """Resolve a load/start argument -- a path, `<id>@<repo>`, or a bare id.
-
-  Raises ValueError if the target is ambiguous, or if it would load over an
-  id already bound to another source and `force` is not set.
-  """
   if is_pathlike(target):
     bundle = Path(target).expanduser().resolve()
     resolved = LoadTarget(app_id_from_path(bundle), bundle, None)
@@ -380,7 +345,6 @@ def load_target(ctx: KelsoCtx, target: str, *, force: bool = False) -> LoadTarge
 
 
 def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
-  """Refuse an id whose surviving config and secrets were made for another bundle."""
   was = ctx.loaded_origin(target.app_id)
   now = target.bundle
   if force or was is None or now is None or same_path(was, now):
@@ -398,7 +362,6 @@ def _check_binding(ctx: KelsoCtx, target: LoadTarget, *, force: bool) -> None:
 def apply_config_sets(
   spec: AppSpec, sets: list[tuple[str, str]], ctx: KelsoCtx
 ) -> None:
-  """Validate and store config values. A loaded app reads them at its next start."""
   store = ctx.app_store(spec.app)
   for name, value in sets:
     config = spec.config.get(name)
@@ -414,8 +377,6 @@ def apply_config_sets(
 
 
 def assign_route(spec: AppSpec, route_name: str, raw: str, ctx: KelsoCtx) -> list[str]:
-  """Record which providers publish a route, from `a,b` with the primary first.
-  `start` registers it with each. Returns the tags recorded."""
   app = spec.app
   if route_name not in spec.routes:
     known = ", ".join(sorted(spec.routes)) or "(none)"
@@ -442,10 +403,6 @@ def assign_route(spec: AppSpec, route_name: str, raw: str, ctx: KelsoCtx) -> lis
 
 
 def set_network(spec: AppSpec, mode: str | None, ctx: KelsoCtx) -> None:
-  """Record the operator's network mode over the manifest's; None clears it.
-
-  Raises ValueError for an unknown mode, or for host mode on either side.
-  """
   if mode is not None and mode not in NETWORK_MODES:
     choices = ", ".join(m for m in NETWORK_MODES if m != "host")
     raise ValueError(f"network mode {mode!r} is not one of {choices}, or default")
@@ -458,7 +415,6 @@ def set_network(spec: AppSpec, mode: str | None, ctx: KelsoCtx) -> None:
 
 
 def bind(spec: AppSpec, volname: str, host_volume_tag: str, ctx: KelsoCtx) -> None:
-  """Record a host-volume bind against the loaded bundle."""
   app = spec.app
 
   if volname not in spec.volumes:
@@ -518,10 +474,6 @@ def _refuse_version_change(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def check_same_version(app: AppID, bundle: Path, ctx: KelsoCtx) -> None:
-  """Raise ValueError if loading `bundle` would change the app's version.
-
-  A bundle that does not parse passes: `load` reports that better.
-  """
   try:
     spec = load_bundle(bundle).app_spec()
   except ValueError:
@@ -536,11 +488,6 @@ def load(
   *,
   version_change: bool = False,
 ) -> LoadResult:
-  """Load `bundle` into `var/run/<id>/` without starting it, binding the app to it.
-
-  Raises ValueError if the app is loaded at another version, unless
-  `version_change`.
-  """
   paths = ctx.loaded_paths(app)
   was_loaded = paths.exists()
 

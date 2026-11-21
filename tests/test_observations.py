@@ -1,5 +1,3 @@
-"""Where an app stands, and whether what is running is current."""
-
 import pytest
 
 from kelso.lib.apps import AppID
@@ -44,8 +42,6 @@ def _observed(**kwargs) -> AppObservation:
 
 
 def _log(tmp_path, *keys: str, rekeyed: tuple[str, ...] = ()):
-  """A store with these keys written in order; those in `rekeyed` as a rekey
-  writes them."""
   path = tmp_path / "app.logtab"
   table = LogTab(path)
   for key in keys:
@@ -62,7 +58,6 @@ def test_config_written_after_the_load_is_pending(tmp_path):
 
 
 def test_config_written_during_the_load_is_applied(tmp_path):
-  """Load writes generated secrets and route defaults before `loaded_at`."""
   path = _log(tmp_path, "config/a", "routes/main", "meta/loaded_at", "meta/x")
   assert changes_since_start(path) == PendingChanges()
 

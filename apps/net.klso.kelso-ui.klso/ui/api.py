@@ -16,8 +16,6 @@ STARTED_BY = "kelso_ui"
 
 
 class UnixHTTPConnection(http.client.HTTPConnection):
-  """http.client over AF_UNIX. The Host header is a formality here."""
-
   def __init__(self, path, timeout=10):
     super().__init__("localhost", timeout=timeout)
     self._unix_path = path
@@ -30,11 +28,10 @@ class UnixHTTPConnection(http.client.HTTPConnection):
 
 
 class ApiError(Exception):
-  """kelsod could not be reached, or refused. Rendered, never raised at a user."""
+  pass
 
 
 def where():
-  """Human-readable name for whichever transport is in play."""
   return API if API else SOCKET
 
 
@@ -53,7 +50,6 @@ def connect(timeout=10):
 
 
 def open_socket(path):
-  """A websocket to kelsod at `path`, for `async with`."""
   if not API:
     return ws_unix_connect(SOCKET, f"ws://localhost{path}", compression=None)
   host, port = _tcp_address()

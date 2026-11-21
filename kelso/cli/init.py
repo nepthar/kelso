@@ -175,7 +175,6 @@ you see that it starts at boot on its own."""
 
 
 def lan_address() -> str | None:
-  """This machine's address on the network its default route leaves by."""
   # A UDP connect sends nothing; it only makes the kernel pick a source address.
   with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
     try:
@@ -218,7 +217,6 @@ are where new ones should go too, {root}/backups. Then:
 
 
 def _read_phrase() -> bytes:
-  """Twelve words from stdin, checked before init makes anything."""
   try:
     entered = input(f"Recovery phrase ({recovery.WORDS} words): ")
   except EOFError:
@@ -227,13 +225,6 @@ def _read_phrase() -> bytes:
 
 
 def _mirror_default_repos(config) -> None:
-  """Fetch the repos the template ships with, so day one is not an empty store.
-
-  Best-effort on purpose: `init` otherwise touches nothing but the filesystem,
-  and an install on a plane should still produce a working kelso root. A repo
-  that does not mirror now is still configured, and `kelso repo update` picks
-  it up later.
-  """
   from kelso.lib import repo as repo_lib
 
   remotes = [r for r in config.repos.values() if r.mirrored]

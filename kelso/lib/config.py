@@ -39,7 +39,6 @@ SECRET_ARG_SUFFIX = "_secret"
 
 
 def parse_route_providers(route_name: str, raw: str) -> list[str]:
-  """`a,b` -> ["a", "b"], primary first; `none` alone -> [] (published nowhere)."""
   tags = [tag.strip() for tag in raw.split(",")]
   if tags == [NONE_ROUTE_PROVIDER_TAG]:
     return []
@@ -57,7 +56,6 @@ def parse_route_providers(route_name: str, raw: str) -> list[str]:
 
 
 def format_route_providers(tags: list[str]) -> str:
-  """What `parse_route_providers` reads back as `tags`."""
   return ",".join(tags) or NONE_ROUTE_PROVIDER_TAG
 
 
@@ -86,8 +84,6 @@ def _expand_path(
 
 
 class RepoEntry(BaseModel):
-  """One `[repo.<name>]` table: a local directory, or a GitHub folder."""
-
   model_config = ConfigDict(extra="forbid")
 
   path: str | None = None
@@ -95,8 +91,6 @@ class RepoEntry(BaseModel):
 
 
 class RouteProviderEntry(BaseModel):
-  """One `[route_provider.<tag>]` table."""
-
   model_config = ConfigDict(extra="forbid")
 
   kind: RouteProviderKind
@@ -105,8 +99,6 @@ class RouteProviderEntry(BaseModel):
 
 
 class HostVolumeEntry(BaseModel):
-  """One `[host_volume.<tag>]` table (path still a string; expanded later)."""
-
   model_config = ConfigDict(extra="forbid")
 
   path: str
@@ -115,9 +107,6 @@ class HostVolumeEntry(BaseModel):
 
 
 class BackupKeep(BaseModel):
-  """How many backups of each app to keep. Small on purpose: backups share a
-  disk with something, and nobody notices a drive filling until it is full."""
-
   model_config = ConfigDict(extra="forbid")
 
   # Scheduled backups: the newest of each of the last n days, weeks and months.
@@ -130,8 +119,6 @@ class BackupKeep(BaseModel):
 
 
 class BackupEntry(BaseModel):
-  """The `[backup]` table."""
-
   model_config = ConfigDict(extra="forbid")
 
   # When kelsod backs everything up, as a cron schedule in local time. None,
@@ -145,8 +132,6 @@ class BackupEntry(BaseModel):
 
 
 class ConfigFile(BaseModel):
-  """Shape of config.toml. Cross-cutting checks live in `_validate_config`."""
-
   model_config = ConfigDict(extra="forbid")
 
   port_base: int = 41000
@@ -161,8 +146,6 @@ class ConfigFile(BaseModel):
 
 @dataclass(frozen=True)
 class HostVolume:
-  """A tagged host path apps may bind a `kind = "host"` volume to."""
-
   tag: str
   path: Path
   readonly: bool = False
@@ -242,11 +225,9 @@ class Config:
 
   @property
   def volume_roots(self) -> dict[str, Path]:
-    """Where each volume kind lives. Each may be a symlink the operator made."""
     return {kind: self.kelso_root / "volumes" / kind for kind in VOLUME_KINDS}
 
   def dangling_volume_root(self, kind: str) -> Path | None:
-    """Where `volumes/<kind>` points, when it is a link to nothing."""
     root = self.volume_roots[kind]
     if root.is_symlink() and not root.exists():
       return root.readlink()
@@ -254,8 +235,6 @@ class Config:
 
   @property
   def backups_root(self) -> Path:
-    """The backup repository. Usually a link to another disk, like a volume
-    root, and a dangling link means that disk is not there."""
     return self.kelso_root / "backups"
 
   @property
@@ -284,7 +263,6 @@ class Config:
 
   @property
   def activity_root(self) -> Path:
-    """Where kelso's own run output lives: one plain file per unattended run."""
     return self.var_root / "logs"
 
   def app_run_path(self, app_id: AppID) -> Path:
@@ -292,7 +270,6 @@ class Config:
 
   @property
   def conn_root(self) -> Path:
-    """Where kelsod's sockets live. One path to mount for admin access."""
     return self.var_root / "conn"
 
   @property
@@ -307,7 +284,6 @@ class Config:
     return self.app_config_root / f"{app_id}.logtab"
 
   def app_config_ids(self) -> set[str]:
-    """App ids that have a config logtab under ``conf/apps/``."""
     root = self.app_config_root
     if not root.is_dir():
       return set()
@@ -324,7 +300,6 @@ class Config:
     return found
 
   def provider_domain(self, tag: str) -> str:
-    """Domain for a route-provider tag; placeholder when unassigned/none."""
     if not tag or tag == NONE_ROUTE_PROVIDER_TAG:
       return PLACEHOLDER_DOMAIN
     conf = self.route_providers.get(tag)
@@ -333,9 +308,6 @@ class Config:
     return conf.domain
 
   def secret_references(self) -> dict[str, list[str]]:
-    """Host secret name -> each config.toml key that names it, e.g.
-    `route_provider.web.args.password_secret`. A route provider's `<arg>_secret`
-    arg is the only thing that refers to one."""
     refs: dict[str, list[str]] = {}
     for tag, entry in sorted(self.route_providers.items()):
       for arg, name in sorted(entry.args.items()):
@@ -436,7 +408,6 @@ def _fmt_validation_error(e: ValidationError, source: Path) -> str:
 
 
 def _validate_config(parsed: ConfigFile) -> list[str]:
-  """Cross-cutting checks the per-section models cannot make alone."""
   errors: list[str] = []
 
   if NONE_ROUTE_PROVIDER_TAG in parsed.route_provider:
@@ -496,11 +467,6 @@ def _validate_config(parsed: ConfigFile) -> list[str]:
 
 
 def _resolve_repos(entries: Any, repos_root: Path, ep) -> dict[str, Repo]:
-  """Resolve the `[repo.<name>]` tables; two may not name one location.
-
-  Errors soft-fail: a typo here must not stop every kelso command.
-  """
-
   def refuse(problem: str) -> dict[str, Repo]:
     logger.error("%s. Ignoring every [repo] until config.toml is fixed", problem)
     return {}
@@ -569,10 +535,6 @@ ROOT_LOCATIONS = [Path("~/kelso"), Path("~/.local/kelso"), Path("/kelso")]
 
 
 def load_config() -> Config | None:
-  """Load `$KELSO_ROOT/config.toml`, or the first of `ROOT_LOCATIONS` that has one.
-
-  Raises RuntimeError if KELSO_ROOT is set and holds no config.
-  """
   if os.environ.get("KELSO_ROOT"):
     path = (Path(os.environ["KELSO_ROOT"]).expanduser() / "config.toml").resolve()
     if not path.is_file():

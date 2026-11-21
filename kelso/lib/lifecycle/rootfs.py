@@ -1,10 +1,3 @@
-"""Read and write root-owned volume files without any host privilege.
-
-Containers write their volume files as root, so the host process cannot copy,
-archive, or delete them. A throwaway container with the right binds does that
-work instead.
-"""
-
 import subprocess
 from collections.abc import Iterable
 from logging import getLogger
@@ -26,11 +19,6 @@ def run_as_root(
   *,
   stdout: IO[bytes] | None = None,
 ) -> None:
-  """Run `sh -c script` in a throwaway container over the given host paths.
-
-  Each mount is bound at its own absolute host path, so mounts must already be
-  resolved. `what` completes "Unable to ..." in the error raised on failure.
-  """
   # dict, not set: docker rejects the same path bound twice, and the argument
   # order has to be stable for a test to assert on the command.
   resolved = dict.fromkeys(str(mount.resolve()) for mount in mounts)

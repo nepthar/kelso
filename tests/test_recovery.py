@@ -1,5 +1,3 @@
-"""The recovery phrase, the keys derived from it, and rekeying onto one."""
-
 import base64
 import hashlib
 import json
@@ -29,7 +27,6 @@ def _ctx(kelso_env) -> KelsoCtx:
 
 
 def _secret_blobs(path) -> list[str]:
-  """Every secret ciphertext in an app logtab, history included."""
   blobs = []
   for _key, entry in LogTab(path).history(prefix="config/"):
     value = json.loads(entry.value)
@@ -39,7 +36,6 @@ def _secret_blobs(path) -> list[str]:
 
 
 def _fix_phrase(monkeypatch, seed: bytes) -> None:
-  """Make the next new phrase this one."""
   monkeypatch.setattr(recovery, "new_entropy", lambda: seed)
 
 
@@ -214,7 +210,6 @@ def test_rekey_on_a_root_without_a_seed_gives_it_one(kelso_env, monkeypatch):
 
 
 def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
-  """The plaintext did not change, so there is nothing to restart for."""
   assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   _fix_phrase(monkeypatch, NEW_SEED)
   assert kelso_env.run("secret", "rekey").returncode == 0

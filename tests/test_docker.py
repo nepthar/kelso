@@ -41,13 +41,6 @@ def test_kelso_env_prefers_the_working_fake(kelso_env):
 def test_a_refused_call_is_recorded_even_though_kelso_swallows_it(
   expect_docker_calls,
 ):
-  """The reason the guard logs instead of only exiting non-zero.
-
-  `load_kelso_run_unit_status` passes check=False, so a refusal comes back as
-  an empty mapping -- identical to a successful call on a machine with nothing
-  running. Asserting on the return value therefore proves nothing. The log is
-  what distinguishes "we were blocked" from "there was nothing to see".
-  """
   from kelso.lib.docker import load_kelso_run_unit_status
 
   assert load_kelso_run_unit_status() == {}  # the swallowed failure
@@ -55,7 +48,6 @@ def test_a_refused_call_is_recorded_even_though_kelso_swallows_it(
 
 
 def test_streamed_output_goes_to_the_sink_not_stdout(kelso_env, capsys):
-  """`sink_output` is how a job captures compose output no terminal will see."""
   import io
 
   from kelso.lib.docker import docker_run_command, sink_output
@@ -75,14 +67,6 @@ def test_streamed_output_goes_to_the_sink_not_stdout(kelso_env, capsys):
 
 
 def test_a_streamed_failure_hands_the_error_a_tail(kelso_env, monkeypatch):
-  """With a sink set, `see the docker output above` points at nothing, so the
-  error carries the captured tail instead.
-
-  The one test in the suite where docker is a real child process: everywhere
-  else `use_fake_docker` answers in-process. This keeps kelso's own streaming
-  -- the pipe read into the sink, and the exit code after -- honest
-  against a process that actually writes and exits.
-  """
   import io
 
   import kelso.lib.docker

@@ -1,5 +1,3 @@
-"""Volume-size and host/app resource gauges, written through `record_gauge`."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +13,6 @@ CPU_SAMPLE_S = 0.2
 
 @dataclass(frozen=True)
 class KelsoDir:
-  """One of kelso's own directories, as gauged and as shown to an operator."""
-
   name: str
   description: str
   root: Callable[[KelsoCtx], Path]
@@ -46,7 +42,6 @@ KELSO_DIRS = (
 
 
 def record_volume_sizes(ctx: KelsoCtx) -> int:
-  """Walk volumes, host volumes, and the kelso directories. Returns how many."""
   n = 0
   for kind, root in ctx.config.volume_roots.items():
     if not root.is_dir():
@@ -94,7 +89,6 @@ def record_volume_sizes(ctx: KelsoCtx) -> int:
 
 
 def record_host_stats(ctx: KelsoCtx) -> int:
-  """CPU, memory, disks, and per-running-app docker stats. Returns how many."""
   n = 0
   cpu = cpu_used_ratio()
   if cpu is not None:
@@ -137,8 +131,6 @@ def swap_used_ratio() -> float | None:
 
 @dataclass(frozen=True)
 class KelsoDisk:
-  """A filesystem kelso keeps something on, and what of kelso is there."""
-
   device: str
   mountpoint: Path
   # Volume kinds, kelso's own directories, and host volumes as `<tag> (host)`.
@@ -150,7 +142,6 @@ class KelsoDisk:
 
 
 def kelso_disks(ctx: KelsoCtx) -> list[KelsoDisk]:
-  """The filesystems under kelso's volume roots, own directories and host volumes."""
   places = [
     *sorted(ctx.config.volume_roots.items()),
     *((entry.name, entry.root(ctx)) for entry in KELSO_DIRS),
@@ -168,7 +159,6 @@ def kelso_disks(ctx: KelsoCtx) -> list[KelsoDisk]:
 
 
 def filesystem_of(path: Path) -> tuple[str, Path] | None:
-  """`(device, mountpoint)` of the filesystem holding `path`, or None if missing."""
   try:
     device = path.stat().st_dev
   except OSError:
@@ -200,7 +190,6 @@ def drive_used_ratio(mount: Path) -> float | None:
 
 
 def record_app_stats(ctx: KelsoCtx) -> int:
-  """Per-running-app CPU and memory from `docker stats`. Returns how many."""
   by_id = _container_stats()
   if not by_id:
     return 0

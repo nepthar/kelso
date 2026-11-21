@@ -1,11 +1,3 @@
-"""What every request passes before it reaches a page, in order: the rate
-limits, the origin check, the session. And the headers every response leaves
-with.
-
-The middleware only sees HTTP. A websocket route must call `socket_refusal`
-before anything else.
-"""
-
 import time
 from urllib.parse import quote, urlsplit
 
@@ -70,13 +62,6 @@ def auth_hint(seconds):
 
 
 class Bucket:
-  """A fixed window: `limit` through it, then nothing until it turns over.
-
-  The window is anchored to the first request after an idle gap, not to the
-  wall clock, and a refusal does not move it -- so a flood costs the rest of
-  the current window and nothing beyond it.
-  """
-
   def __init__(self, limit, window):
     self.limit = limit
     self.window = window
@@ -92,7 +77,6 @@ class Bucket:
     return self.count <= self.limit
 
   def retry_after(self):
-    """Seconds left in the open window. Only meaningful just after a refusal."""
     return max(1, int(self.reset_at + self.window - time.monotonic()) + 1)
 
 
@@ -106,7 +90,6 @@ signin = Bucket(10, 3600.0)
 
 
 def _authority(value):
-  """host[:port], lowercased, without the port a scheme implies."""
   value = value.strip().lower()
   for default in (":443", ":80"):
     value = value.removesuffix(default)
@@ -114,15 +97,7 @@ def _authority(value):
 
 
 def same_origin(headers):
-  """Whether a request came from a page this server served.
-
-  SameSite=Lax on the session cookie is not enough here. Kelso publishes every
-  app on a subdomain beside this one, and sibling subdomains are the same
-  *site*, so any loaded app's pages could POST a kelso verb with the cookie
-  attached. The Origin header names the exact origin and no page can set it.
-  A proxy may rename the host; X-Forwarded-Host is not something a page can
-  send cross-origin either, so it is trusted as a second name.
-  """
+  # SameSite=Lax is not enough: sibling app subdomains are the same site.
   source = headers.get("origin") or headers.get("referer")
   if not source:
     return False
@@ -191,7 +166,6 @@ async def _admit(request, call_next):
 
 
 async def front_door(request, call_next):
-  """Rate limit, origin, session. Everything reaches a page through here."""
   response = await _admit(request, call_next)
   for name, value in SECURITY_HEADERS.items():
     response.headers.setdefault(name, value)
@@ -199,7 +173,6 @@ async def front_door(request, call_next):
 
 
 def socket_refusal(ws):
-  """Why this websocket may not open, or None. Origin is checked on every one."""
   if not general.check():
     return RATE_LIMITED
   if not same_origin(ws.headers):

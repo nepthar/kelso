@@ -12,7 +12,6 @@ def parse_kv(raw: str, flag: str) -> tuple[str, str]:
 
 
 def read_secret(name: str) -> str:
-  """The value, asked for without echo on a terminal, else all of stdin."""
   if sys.stdin.isatty():
     return getpass(f"Value for {name} (hidden): ").strip()
   return sys.stdin.read().rstrip("\r\n")

@@ -26,8 +26,6 @@ logger = logging.getLogger("kelso.routes")
 
 
 class NginxProxyManagerRouteProvider(RouteProvider):
-  """Register kelso app routes as proxy hosts in Nginx Proxy Manager."""
-
   KIND = "nginx_proxy_manager"
   REQUIRED_ARGS = ("endpoint", "email", "password_secret")
 
@@ -94,7 +92,6 @@ class NginxProxyManagerRouteProvider(RouteProvider):
 
   # ── auth ──────────────────────────────────────────────────────────────
   def _fetch_token(self) -> str:
-    """Return a valid bearer token, logging in (and caching) if needed."""
     if self._token and self._token_expire - self.TOKEN_REFRESH_LEEWAY > time():
       return self._token
 
@@ -129,7 +126,6 @@ class NginxProxyManagerRouteProvider(RouteProvider):
 
   @staticmethod
   def _parse_expiry(expires: str) -> float:
-    """NPM returns an ISO-8601 timestamp (e.g. ...Z); store it as epoch seconds."""
     return datetime.fromisoformat(expires.replace("Z", "+00:00")).timestamp()
 
   def _cache_token(self) -> None:
@@ -159,7 +155,6 @@ class NginxProxyManagerRouteProvider(RouteProvider):
   # ── certificates ──────────────────────────────────────────────────────
 
   def _wildcard_certificate_id(self) -> int | None:
-    """Return the id of a cert covering ``*.kelso_domain``, if one exists."""
     wildcard = f"*.{self.kelso_domain}"
     for cert in self._request("GET", "/api/nginx/certificates") or []:
       if wildcard in cert.get("domain_names", []):
@@ -201,7 +196,6 @@ class NginxProxyManagerRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Create (or update) a proxy host pointing domain -> route_address:port."""
     domain_name = self._domain_name(subdomain, domain)
     cert_id = self._wildcard_certificate_id()
     if cert_id is None:
@@ -258,7 +252,6 @@ class NginxProxyManagerRouteProvider(RouteProvider):
       self._request("DELETE", f"/api/nginx/proxy-hosts/{existing['id']}")
 
   def _kelso_proxy_hosts(self) -> list[tuple[str, dict]]:
-    """Yield (subdomain, host) for single-label hosts under the kelso domain."""
     suffix = f".{self.kelso_domain}"
     out: list[tuple[str, dict]] = []
     for host in self._request("GET", "/api/nginx/proxy-hosts") or []:

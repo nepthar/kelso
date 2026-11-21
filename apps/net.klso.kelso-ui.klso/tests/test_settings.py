@@ -1,5 +1,3 @@
-"""The Settings window and the desktop colors it sets."""
-
 import json
 import re
 

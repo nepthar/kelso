@@ -1,5 +1,3 @@
-"""An app's icon is found on its route, served from here, and kept for a while."""
-
 import datetime
 import http.server
 import ssl
@@ -24,8 +22,6 @@ def _drawn(name):
 
 
 class Site:
-  """A web server on a loopback port that answers with what it was given."""
-
   def __init__(self, files, tls=None):
     self.files = files
     self.hits = []
@@ -77,7 +73,6 @@ def site():
 
 
 def _self_signed(directory):
-  """(certificate file, key file) of a certificate nobody vouches for."""
   key = ec.generate_private_key(ec.SECP256R1())
   name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "icons.test")])
   now = datetime.datetime.now(datetime.UTC)

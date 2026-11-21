@@ -60,7 +60,6 @@ def run_tick(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def in_words(seconds: float) -> str:
-  """`in 3 hours`, or `due` for a time that has come."""
   if seconds <= 0:
     return "due"
   name, size = _UNITS[0]

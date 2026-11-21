@@ -1,5 +1,3 @@
-"""`kelso repo` -- the sources the catalog is built from."""
-
 import argparse
 import logging
 from datetime import datetime
@@ -117,7 +115,6 @@ def _list(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def _version(entry: CatalogEntry) -> str:
-  """The bundle's version, or `invalid` when its manifest does not parse."""
   try:
     return load_bundle(entry.path).app_spec().version
   except ValueError:
@@ -134,7 +131,6 @@ def _status(
   origins: dict[str, Path | None],
   actions: dict[str, tuple[datetime, str]],
 ) -> str:
-  """The last thing kelso did with this bundle, or how it stands if nothing yet."""
   if entry.app_id not in loaded:
     return "-"
 

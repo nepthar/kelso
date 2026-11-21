@@ -1,5 +1,3 @@
-"""Putting an app back as one of its backups holds it."""
-
 import shlex
 import shutil
 from dataclasses import dataclass
@@ -32,8 +30,6 @@ logger = getLogger("kelso.lifecycle.restore")
 
 @dataclass(frozen=True)
 class RestorePlan:
-  """What `kelso restore <app> <backup>` will overwrite, and with which backup."""
-
   app_id: AppID
   backup: Backup
   run_path: Path
@@ -44,7 +40,6 @@ class RestorePlan:
 
 
 def find_backup(app: AppID, backup_id: str, restic: Restic) -> Backup:
-  """One app's backup by id. Raises ValueError naming the ones there are."""
   available = backups(restic, app)
   for backup in available:
     if backup.id == backup_id:
@@ -58,7 +53,6 @@ def find_backup(app: AppID, backup_id: str, restic: Restic) -> Backup:
 def restore_plan(
   app: AppID, backup_id: str, ctx: KelsoCtx, restic: Restic
 ) -> RestorePlan:
-  """Work out what restoring would overwrite, without overwriting it."""
   backup = find_backup(app, backup_id, restic)
 
   # Clobbering files and data volumes out from under live containers is how a
@@ -84,7 +78,6 @@ def restore_plan(
 
 
 def _remove_as_root(path: Path) -> None:
-  """Restic restores as root, so what it wrote can only be removed as root."""
   if path.exists():
     run_as_root(
       f"remove {path}", f"rm -rf -- {shlex.quote(str(path.resolve()))}", [path.parent]
@@ -92,7 +85,6 @@ def _remove_as_root(path: Path) -> None:
 
 
 def _replace_volumes(app: AppID, kind: str, restored: Path, ctx: KelsoCtx) -> None:
-  """Put each volume of `kind` the backup holds over the live one."""
   if not restored.is_dir():
     return
   names = sorted(entry.name for entry in restored.iterdir() if entry.is_dir())
@@ -117,11 +109,6 @@ def _replace_volumes(app: AppID, kind: str, restored: Path, ctx: KelsoCtx) -> No
 def restore(
   plan: RestorePlan, ctx: KelsoCtx, restic: Restic, *, backup_first: bool = True
 ) -> AppRunData | None:
-  """Replace an app's data, config and loaded copy with a backup's.
-
-  The caller holds the app and kelso locks. Returns the run data of the app as
-  restored, or None when the backup was of an app that was not loaded.
-  """
   app = plan.app_id
   backup = plan.backup
   scratch = ctx.config.temp_root / "restore" / str(app)

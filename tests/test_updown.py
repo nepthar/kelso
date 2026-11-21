@@ -1,5 +1,3 @@
-"""`kelso up` and `kelso down`: the whole box, by start_group."""
-
 import json
 from pathlib import Path
 
@@ -18,7 +16,6 @@ def no_settle(monkeypatch):
 
 
 def _compose(kelso_env, verb: str) -> list[str]:
-  """App ids in the order `compose <verb>` ran for them."""
   calls = [json.loads(line) for line in kelso_env.docker_log.read_text().splitlines()]
   return [Path(c["cwd"]).name for c in calls if c["args"][:2] == ["compose", verb]]
 

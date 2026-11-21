@@ -1,5 +1,3 @@
-"""Restic in its pinned container, against a real docker daemon."""
-
 import os
 
 import pytest

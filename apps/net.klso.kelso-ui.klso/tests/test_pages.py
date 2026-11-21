@@ -1,5 +1,3 @@
-"""Every page renders, escapes what kelsod sends, and loads only what exists."""
-
 import json
 import re
 
@@ -50,7 +48,6 @@ def test_page_renders_escaped(client, fake, path):
 
 @pytest.mark.parametrize("path", PAGES)
 def test_no_inline_script(client, fake, path):
-  """CSP allows 'self' scripts only; inline code would silently not run."""
   for tag in re.findall(r"<script\b[^>]*>", client.get(path).text):
     assert "src=" in tag or 'type="application/json"' in tag, tag
 
@@ -65,7 +62,6 @@ def test_every_asset_is_served(client, fake, path):
 
 @pytest.mark.parametrize("path", PAGES)
 def test_nothing_loads_from_off_the_box(client, fake, path):
-  """kelso-ui may run with no internet: everything it needs is under /static."""
   text = client.get(path).text
   for url in re.findall(r'<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"', text):
     assert url.startswith(("/static/", "data:")), url
@@ -76,7 +72,6 @@ def test_a_klso_md_card_shows_as_markdown(client, fake):
 
 
 def test_routes_page_lists_published_routes(client, fake):
-  """One provider answers and one does not; the page shows both."""
   text = client.get("/routes").text
   assert "https://mealie.example.test" in text
   assert text.count('name="subdomain"') == 1
@@ -200,7 +195,6 @@ def test_a_route_that_is_not_http_gets_no_icon(client, fake, monkeypatch):
 
 
 def test_an_app_kelsod_cannot_describe_keeps_its_folder(client, fake):
-  """immich has a list entry and no detail fixture: its routes are just absent."""
   text = client.get("/desktop/icons").text
   assert 'data-src="/apps/immich"' in text
   assert "<html" not in text

@@ -1,11 +1,3 @@
-"""kelsod — the kelso admin API over a unix socket.
-
-kelsod is a second front door, not a layer under the CLI. Both call the same
-`kelso.lib` functions and serialize against each other with the same lock
-file, so neither is a client of the other and `kelso` keeps working whether
-or not this is running.
-"""
-
 import argparse
 import logging
 import os
@@ -49,7 +41,6 @@ LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 def _claim_socket_path(path: Path) -> None:
-  """Make `path` free to bind, or refuse and say who has it."""
   if len(str(path).encode()) > MAX_SOCKET_PATH:
     raise RuntimeError(
       f"Socket path is {len(str(path).encode())} bytes, over the "
@@ -80,8 +71,7 @@ def _claim_socket_path(path: Path) -> None:
 
 
 def _bind_unix(path: Path) -> socket.socket:
-  """Bind the admin socket ourselves so it is never briefly world-writable --
-  uvicorn's own `uds` handling chmods it to 0666."""
+  # uvicorn's own uds handling chmods the socket to 0666.
   _claim_socket_path(path)
   sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
   sock.bind(str(path))

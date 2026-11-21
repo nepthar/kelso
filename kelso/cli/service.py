@@ -1,5 +1,3 @@
-"""`kelso system service` -- kelsod as a systemd user service."""
-
 import argparse
 from pathlib import Path
 
@@ -20,7 +18,6 @@ def register(subparsers) -> None:
 
 
 def install_service(root: Path) -> None:
-  """Write and start the unit. Raises RuntimeError naming what is left to do."""
   if not service.has_systemd():
     raise RuntimeError(NO_SYSTEMD)
   unit = service.write_unit(root)

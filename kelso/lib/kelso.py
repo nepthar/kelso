@@ -43,7 +43,6 @@ LIVE_METRIC_CUTOFF_AGE_SECONDS = 60 * 60 * 2
 
 
 def lock_timeout() -> float:
-  """The acquire timeout, overridable via `KELSO_LOCK_TIMEOUT`."""
   return float(os.environ.get("KELSO_LOCK_TIMEOUT", LOCK_TIMEOUT))
 
 
@@ -52,8 +51,7 @@ def _lock_now() -> str:
 
 
 def write_lock_holder(path: Path, by: str) -> None:
-  """Overwrite the lockfile with who holds it. Call after acquire; filelock
-  truncates on acquire, so this is what a waiter reads on timeout."""
+  # filelock truncates on acquire, so call this after acquiring.
   path.write_text(
     json.dumps(
       {"by": by, "pid": os.getpid(), "at": _lock_now()},
@@ -63,7 +61,6 @@ def write_lock_holder(path: Path, by: str) -> None:
 
 
 def lock_holder_hint(path: Path) -> str:
-  """What the lockfile says, for a timed-out acquire."""
   try:
     record = json.loads(path.read_text())
   except (OSError, json.JSONDecodeError, ValueError):
@@ -142,21 +139,18 @@ class KelsoCtx:
 
   @contextmanager
   def kelso_lock(self, by: str) -> Iterator[None]:
-    """Hold the kelso-wide lock. Reentrant. Library code assumes this is held
-    whenever it mutates kelso-wide state (routes, kelsodb, config.toml)."""
     with self._acquire(self._kelso_lock, self.config.kelso_lockfile_path, by, "kelso"):
       yield
 
+  # Always acquire before the kelso lock.
   @contextmanager
   def app_lock(self, app: AppID | str, by: str) -> Iterator[None]:
-    """Hold one app's lock. Reentrant. Acquire before the kelso lock."""
     path = self.config.app_lockfile_path(app)
     with self._acquire(self._app_filelock(app), path, by, f"app {app}"):
       yield
 
   @contextmanager
   def locked(self, by: str, app: AppID | str | None = None) -> Iterator[None]:
-    """App lock (if an app) then kelso lock. The usual lifecycle nest."""
     if app is None:
       with self.kelso_lock(by):
         yield
@@ -179,22 +173,15 @@ class KelsoCtx:
 
   @cached_property
   def inventory(self) -> Inventory:
-    """Loaded apps, apps with kept config, and repo bundles, read on first use.
-
-    A snapshot: a command that loads or removes an app and then looks again
-    needs a new KelsoCtx.
-    """
     return build_inventory(self)
 
   def resolve_app_id(self, name: str, *, prefer_loaded: bool = False) -> AppID:
-    """The app `<id>` or `<stem>` names; a loaded one first, if `prefer_loaded`."""
     return self.inventory.app_id(name, prefer_loaded=prefer_loaded)
 
   def is_loaded(self, app: AppID | str) -> bool:
     return self.loaded_paths(app).exists()
 
   def app_option(self, app: AppID | str, name: str) -> str:
-    """An app option: as configured, else the manifest's default, else kelso's."""
     _, value = self.app_store(app).get_config(name)
     if value is None:
       try:
@@ -206,10 +193,6 @@ class KelsoCtx:
     return value or APP_OPTIONS[name].default(AppID(app))
 
   def loaded_spec(self, app: AppID | str) -> "AppSpec | None":
-    """The loaded app's spec, or None when it is not loaded.
-
-    Raises ValueError naming the fix when the loaded manifest no longer parses.
-    """
     paths = self.loaded_paths(app)
     if not paths.manifest_path.is_file():
       return None
@@ -222,14 +205,12 @@ class KelsoCtx:
       ) from e
 
   def require_loaded_spec(self, app: AppID | str) -> "AppSpec":
-    """The loaded app's spec. Raises ValueError naming the fix if there is none."""
     spec = self.loaded_spec(app)
     if spec is None:
       raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
     return spec
 
   def app_state(self, app: AppID | str) -> str:
-    """Where one app stands, from the filesystem alone."""
     app_id = str(app)
     return app_state(
       run_dir_exists=self.loaded_paths(app_id).run_path.is_dir(),
@@ -240,30 +221,23 @@ class KelsoCtx:
     )
 
   def bundle_spec(self, app: AppID) -> "AppSpec":
-    """The spec of the bundle `app` loads from.
-
-    Raises ValueError if it has none, several, or one that does not parse.
-    """
     entry = self.inventory.bundle(app)
     if entry is None:
       raise ValueError(no_bundle_message(app))
     return load_bundle(entry.path).app_spec()
 
   def app_store(self, app: AppID | str) -> AppStore:
-    """The app's own config store at ``conf/apps/<app_id>.logtab``."""
     return AppStore.from_path(
       self.config.app_config_path(app), crypto_from_config(self.config)
     )
 
   def loaded_origin(self, app: AppID | str) -> Path | None:
-    """The bundle a loaded app was loaded from, as `load` recorded it."""
     if not self.config.app_config_path(app).is_file():
       return None
     origin = self.app_store(app).get_meta("origin")
     return Path(origin) if origin else None
 
   def manifest_stale(self, app: AppID | str) -> bool:
-    """Whether the source bundle's manifest no longer matches the loaded copy."""
     paths = self.loaded_paths(app)
     origin = self.loaded_origin(app)
     if origin is None or not paths.manifest_path.is_file():
@@ -274,7 +248,6 @@ class KelsoCtx:
     return source.read_bytes() != paths.manifest_path.read_bytes()
 
   def run_state(self, app_id: AppID | str) -> RunState:
-    """ "Light" run-state of an app"""
     resolved = AppID(app_id)
     paths = self.loaded_paths(resolved)
     return RunState(
@@ -290,12 +263,10 @@ class KelsoCtx:
     return tuple(collected[key] for key in sorted(collected))
 
   def record_gauge(self, name: str, reading: int | float) -> None:
-    """Record a gauge reading at the current time."""
     key = "gauge/" + name
     self.metrics_log.write(key, str(reading))
 
   def read_gauges(self, prefix: str) -> dict[str, LogTab.Entry]:
-    """Fetch the current values of all current gauges with the given prefix"""
     prefix = "gauge/" + prefix
     abs_cutoff = int(datetime.now(UTC).timestamp()) - LIVE_METRIC_CUTOFF_AGE_SECONDS
     all_found = self.metrics_log.scan(prefix)
@@ -304,7 +275,6 @@ class KelsoCtx:
     }
 
   def history_gauges(self, prefix: str, since: int) -> dict[str, list[LogTab.Entry]]:
-    """Gauge history matching `prefix`, from `since` (unix seconds) onward."""
     prefix = "gauge/" + prefix
     all_found = self.metrics_log.history(prefix)
     by_key: dict[str, list[LogTab.Entry]] = defaultdict(list)

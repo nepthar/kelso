@@ -23,8 +23,6 @@ logger = logging.getLogger("kelso.routes")
 
 
 class PangolinRouteProvider(RouteProvider):
-  """Register kelso app routes as public HTTP resources in Pangolin."""
-
   KIND = "pangolin"
   REQUIRED_ARGS = ("endpoint", "org_id", "site", "api_key_secret")
 
@@ -94,7 +92,6 @@ class PangolinRouteProvider(RouteProvider):
 
   @staticmethod
   def _https_endpoint(endpoint: str) -> str:
-    """Refuse anything but https, rather than quietly upgrading to it."""
     endpoint = endpoint.rstrip("/")
     if not endpoint.lower().startswith("https://"):
       raise RouteProviderError(
@@ -109,7 +106,6 @@ class PangolinRouteProvider(RouteProvider):
   def _failure(
     self, method: str, path: str, resp: requests.Response, action: str
   ) -> str:
-    """Explain a failed call, telling apart "API said no" from "not the API"."""
     try:
       body = resp.json()
     except ValueError:
@@ -139,7 +135,6 @@ class PangolinRouteProvider(RouteProvider):
     return f"Pangolin {method} {path} returned {resp.status_code}: {message}"
 
   def _request(self, method: str, path: str, action: str, **kwargs):
-    """Call the integration API and unwrap Pangolin's response envelope."""
     if not self._api_key:
       raise RouteProviderError("A Pangolin API key is required to authenticate")
 
@@ -162,7 +157,6 @@ class PangolinRouteProvider(RouteProvider):
   # ── sites ─────────────────────────────────────────────────────────────
 
   def _site_id(self) -> int:
-    """The numeric siteId behind the configured niceId."""
     if self._resolved_site_id is None:
       data = (
         self._request("GET", f"/org/{self.org_id}/site/{self.site}", "getSite") or {}
@@ -179,7 +173,6 @@ class PangolinRouteProvider(RouteProvider):
   # ── shared policies ───────────────────────────────────────────────────
 
   def _policy_id(self) -> int | None:
-    """The numeric resourcePolicyId behind the configured niceId."""
     if not self.shared_policy:
       return None
     if self._resolved_policy_id is None:
@@ -205,7 +198,6 @@ class PangolinRouteProvider(RouteProvider):
     return self._resolved_policy_id
 
   def _apply_shared_policy(self, resource: dict) -> None:
-    """Attach the configured policy, unconditionally."""
     policy_id = self._policy_id()
     if policy_id is None:
       return
@@ -220,7 +212,6 @@ class PangolinRouteProvider(RouteProvider):
   # ── domains ───────────────────────────────────────────────────────────
 
   def _domain(self) -> dict | None:
-    """Return the org domain entry whose base domain is the kelso domain."""
     data = self._request("GET", f"/org/{self.org_id}/domains", "listOrgDomains") or {}
     for domain in data.get("domains", []):
       if domain.get("baseDomain") == self.kelso_domain:
@@ -262,7 +253,6 @@ class PangolinRouteProvider(RouteProvider):
     return name[len(self.NAME_PREFIX) :] if name.startswith(self.NAME_PREFIX) else None
 
   def _targets(self, resource: dict) -> list[dict]:
-    """Targets under a resource, using the copy the list endpoint embeds."""
     embedded = resource.get("targets")
     if embedded is not None:
       return embedded
@@ -271,7 +261,6 @@ class PangolinRouteProvider(RouteProvider):
     return data.get("targets", [])
 
   def _set_target(self, resource: dict, port: int, scheme: str) -> None:
-    """Point the resource at ``route_address:port``, replacing any targets."""
     rid = resource["resourceId"]
     for target in self._targets(resource):
       self._request("DELETE", f"/target/{target['targetId']}", "deleteTarget")
@@ -328,7 +317,6 @@ class PangolinRouteProvider(RouteProvider):
     domain: str,
     scheme: str = "http",
   ):
-    """Create (or update) a resource routing domain -> route_address:port."""
     # Resolve first so a missing policy refuses before we create a resource.
     self._policy_id()
     domain_name = self._domain_name(subdomain, domain)
@@ -383,7 +371,6 @@ class PangolinRouteProvider(RouteProvider):
       )
 
   def _kelso_resources(self) -> list[tuple[str, dict]]:
-    """Yield (subdomain, resource) for single-label names under the kelso domain."""
     suffix = f".{self.kelso_domain}"
     out: list[tuple[str, dict]] = []
     for resource in self._resources():

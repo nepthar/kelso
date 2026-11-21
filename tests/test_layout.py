@@ -1,9 +1,3 @@
-"""The `run/<app_id>/` layout and the load / start / stop / rm lifecycle.
-
-Everything here goes through the CLI against the `kelso_env` fixture, whose
-fake docker is the only docker these tests are allowed to see.
-"""
-
 import json
 import shutil
 from pathlib import Path
@@ -19,7 +13,6 @@ BASIC = "net.klso.basic-features"
 
 
 def _write_bundle(kelso_env, app_id: str, manifest: str) -> Path:
-  """Create (or overwrite) a catalog entry with the given manifest."""
   bundle = kelso_env.local_repo / f"{app_id}.klso"
   bundle.mkdir(parents=True, exist_ok=True)
   (bundle / "manifest.toml").write_text(manifest)
@@ -49,7 +42,6 @@ volumes = {{ }}
 
 
 def test_load_copies_the_bundle_into_the_run_dir(kelso_env):
-  """What is loaded is a fact on disk, not a pointer to something else."""
   app_id = "ports-demo"
   loaded = kelso_env.run("load", app_id)
   assert loaded.returncode == 0, loaded.stderr
@@ -80,7 +72,6 @@ def test_editing_the_catalog_then_reloading_recopies(kelso_env):
 
 
 def test_editing_the_run_copy_is_lost_on_the_next_load(kelso_env):
-  """The run copy is kelso's output, never its input: apps/ is the source."""
   app_id = "ports-demo"
   assert kelso_env.run("load", app_id).returncode == 0
 
@@ -94,7 +85,6 @@ def test_editing_the_run_copy_is_lost_on_the_next_load(kelso_env):
 
 
 def test_reloading_updates_the_run_copy_in_place(kelso_env):
-  """Docker Desktop keeps binding a replaced folder's old inode; keep them."""
   app_id = "ports-demo"
   catalog = kelso_env.local_repo / f"{app_id}.klso"
   (catalog / "ui").mkdir()
@@ -143,7 +133,6 @@ def test_load_by_path_adds_nothing_to_a_repo(kelso_env):
 
 
 def test_load_by_path_refuses_to_take_over_another_bundles_id(kelso_env):
-  """An id loaded from one bundle is not silently taken over by another."""
   app_id = "ports-demo"
   other = kelso_env.root / "checkout" / f"{app_id}.klso"
   other.parent.mkdir()
@@ -170,11 +159,6 @@ def test_load_refuses_while_containers_are_running(kelso_env):
 
 
 def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
-  """Deleting the config logtab by hand must not silently regenerate secrets.
-
-  Fresh `auto` secrets against data that expects the old ones produce an app
-  that fails to authenticate for reasons nothing in the error explains.
-  """
   assert kelso_env.run("load", BASIC).returncode == 0
   (kelso_env.volumes_root / "data" / BASIC / "config" / "db").write_text("rows")
   kelso_env.app_logtab(BASIC).unlink()
@@ -186,7 +170,6 @@ def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
 
 
 def test_reloading_after_a_deleted_run_dir_reuses_config(kelso_env):
-  """Config lives in config/, so wiping the run dir does not lose secrets."""
   assert kelso_env.run("load", BASIC).returncode == 0
   minted = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   shutil.rmtree(kelso_env.run_root / BASIC)
@@ -200,7 +183,6 @@ def test_reloading_after_a_deleted_run_dir_reuses_config(kelso_env):
 
 
 def test_app_links_are_relative_and_managed_links_are_absolute(kelso_env):
-  """Relative app links survive a moved run dir; managed roots may be elsewhere."""
   assert kelso_env.run("load", BASIC).returncode == 0
   volumes = kelso_env.run_root / BASIC / "volumes"
 
@@ -264,7 +246,6 @@ def test_app_volumes_are_mounted_read_only(kelso_env):
 
 
 def test_readonly_false_on_an_app_volume_is_a_manifest_error(kelso_env):
-  """An author who wrote it meant something, so say it is impossible."""
   _write_bundle(
     kelso_env,
     "bad-app-volume",
@@ -325,7 +306,6 @@ def test_a_new_volume_is_writable_by_any_user(kelso_env):
 
 
 def test_a_mount_inside_another_volume_is_created_by_kelso(kelso_env):
-  """Docker would create config/data as root, and a non-root app couldn't use it."""
   app_id = "vol-nested"
   manifest = _volumes_manifest(
     'config = { kind = "data" }\ntrickplay = { kind = "temp" }'
@@ -342,7 +322,6 @@ def test_a_mount_inside_another_volume_is_created_by_kelso(kelso_env):
 
 
 def test_changing_a_volumes_kind_is_refused(kelso_env):
-  """The bytes live under the old kind's root; moving them silently is worse."""
   app_id = "vol-churn"
   _write_bundle(kelso_env, app_id, _volumes_manifest('one = { kind = "data" }'))
   assert kelso_env.run("load", app_id).returncode == 0
@@ -386,11 +365,6 @@ def test_an_unloaded_app_can_be_configured_then_started(kelso_env):
 
 
 def test_reloading_does_not_regenerate_an_existing_auto_secret(kelso_env):
-  """The worst possible bug here: a new secret against data expecting the old.
-
-  `admin_pass` is `{ secret = true, default = "auto" }`, so it is minted on the
-  first load and must survive every one after it.
-  """
   assert kelso_env.run("load", BASIC).returncode == 0
   first = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   assert first
@@ -414,7 +388,6 @@ def _bundle(kelso_env, app_id: str = BASIC) -> str:
 
 
 def _configured_for_dev(kelso_env) -> Path:
-  """Load BASIC with its required config set, and return the source bundle."""
   assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
   return kelso_env.local_repo / f"{BASIC}.klso"
@@ -438,7 +411,6 @@ def _write_md_bundle(kelso_env, app_id: str) -> Path:
 
 
 def test_dev_runs_in_the_foreground_against_the_source(kelso_env):
-  """The point of the command: `up` without `-d`, app links on the source."""
   source = _configured_for_dev(kelso_env)
 
   result = kelso_env.run("dev", str(source))
@@ -503,7 +475,6 @@ def test_dev_puts_the_app_links_back_when_it_is_over(kelso_env):
 
 
 def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
-  """The links are borrowed for the run; an exception is not a way to keep them."""
   source = _configured_for_dev(kelso_env).resolve()
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   plan = dev_plan(ctx.resolve_app_id(BASIC), source, ctx)
@@ -518,7 +489,6 @@ def test_dev_puts_the_app_links_back_after_a_failure(kelso_env):
 
 
 def test_dev_leaves_the_loaded_bundle_copy_alone(kelso_env):
-  """Only the links move. `app_bundle/` is still what `load` put there."""
   source = _configured_for_dev(kelso_env)
   copied = (kelso_env.run_root / BASIC / "app_bundle" / "bin" / "hello.sh").read_text()
 
@@ -562,7 +532,6 @@ def test_dev_refuses_an_app_loaded_from_another_bundle(kelso_env):
 
 
 def _respelled(path: Path) -> Path:
-  """`path` with its parent's name in the other case; skip where that is not it."""
   other = path.parent.parent / path.parent.name.swapcase() / path.name
   if not other.exists():
     pytest.skip("filesystem is case-sensitive")
@@ -604,7 +573,6 @@ def test_dev_refuses_a_running_app(kelso_env):
 
 
 def test_dev_runs_a_markdown_bundle_from_its_fresh_load(kelso_env):
-  """There is no folder to mount, so the links stay on the loaded copy."""
   bundle = _write_md_bundle(kelso_env, "md-demo")
 
   result = kelso_env.run("dev", str(bundle))
@@ -616,7 +584,6 @@ def test_dev_runs_a_markdown_bundle_from_its_fresh_load(kelso_env):
 
 
 def test_dev_with_no_app_volumes_is_just_an_interactive_run(kelso_env):
-  """A folder app with nothing to mount still runs: it is `compose up` here."""
   app_id = "no-app-volumes"
   bundle = _write_bundle(
     kelso_env, app_id, _volumes_manifest('one = { kind = "data" }')

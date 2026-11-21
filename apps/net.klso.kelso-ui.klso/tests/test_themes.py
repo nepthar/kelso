@@ -1,9 +1,3 @@
-"""The color tokens: every theme is one complete, legible set.
-
-The contrast floors are WCAG's: 4.5:1 for text, 3:1 for accents that mark
-rather than carry reading.
-"""
-
 import re
 from pathlib import Path
 
@@ -45,7 +39,6 @@ TOKENS = (
 
 
 def _theme(name):
-  """A theme file's one rule as {property: value}."""
   text = (STATIC / "themes" / f"{name}.css").read_text()
   text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
   rules = re.findall(r"([^{}]+)\{([^{}]*)\}", text)
@@ -114,8 +107,6 @@ def test_a_theme_is_legible(name):
 
 @each_theme
 def test_a_themes_terminal_is_legible(name):
-  """The six colors are text, and their bright halves emphasis. Black and
-  white are text against the well's other end, and exempt at its own."""
   t = _theme(name)
   own = {7, 15} if _luminance(t["--void"]) > 0.5 else {0}
   low = {}
@@ -128,7 +119,6 @@ def test_a_themes_terminal_is_legible(name):
 
 
 def test_the_layout_stylesheet_has_no_colors_of_its_own():
-  """kelso.css is layout over the tokens; the palette is a theme's."""
   css = re.sub(r"/\*.*?\*/", "", (STATIC / "kelso.css").read_text(), flags=re.S)
   assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", css)
 

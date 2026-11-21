@@ -39,7 +39,6 @@ from kelso.lib.util import now_ts
 
 
 def recovery_lines(app_id: AppID, issues: tuple[ConfigIssue, ...]) -> list[str]:
-  """Turn start blockers into what is wrong and how to fix it."""
   lines = [f"{app_id} cannot start:"]
   for issue in issues:
     lines.append(f"  - {issue.problem}")
@@ -53,12 +52,6 @@ def start(
   bundle: Path,
   ctx: KelsoCtx,
 ) -> LoadResult:
-  """Load if needed, then bring the app up and register assigned routes.
-
-  Config is read here, so every value on file is what the containers get. The
-  routes are derived at load; if the subdomain or an assignment changed since,
-  they are derived again first, so a start applies everything.
-  """
   paths = ctx.loaded_paths(app)
 
   if not ctx.is_loaded(app):
@@ -148,11 +141,6 @@ def start(
 
 
 def restart(app: AppID, ctx: KelsoCtx) -> LoadResult:
-  """Stop a loaded app if it is running, then start it from its run copy.
-
-  The caller holds the app lock. This is how a change to a running app's
-  config takes effect: a load is not needed, the run copy is kept.
-  """
   if not ctx.is_loaded(app):
     raise ValueError(f"App {app} is not loaded; run `kelso start {app}` instead")
   if ctx.run_state(app).running_count:
@@ -161,8 +149,6 @@ def restart(app: AppID, ctx: KelsoCtx) -> LoadResult:
 
 
 def compose_env(app_id: AppID, ctx: KelsoCtx) -> dict[str, str]:
-  """What compose.yml interpolates: every placeholder in it, set from config where
-  config still has a value for it."""
   paths = ctx.loaded_paths(app_id)
   env = blank_env(paths.run_path)
   try:
@@ -180,10 +166,6 @@ _PLACEHOLDER = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def blank_env(run_path: Path) -> dict[str, str]:
-  """Every placeholder in the run dir's compose.yml, empty.
-
-  Every compose command interpolates the whole file and warns about each unset one.
-  """
   try:
     text = (run_path / "compose.yml").read_text()
   except FileNotFoundError:
@@ -192,7 +174,6 @@ def blank_env(run_path: Path) -> dict[str, str]:
 
 
 def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
-  """Stream ``docker compose logs`` for a loaded app."""
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
@@ -207,10 +188,6 @@ def logs(app_id: AppID, extra_args: list[str], ctx: KelsoCtx) -> None:
 
 
 def logs_text(app_id: AppID, ctx: KelsoCtx, *, tail: int) -> str:
-  """The last `tail` lines of an app's container logs, as text.
-
-  Never follows, and returns docker's failure text rather than raising on one.
-  """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
@@ -233,11 +210,6 @@ def run_command(
   args: list[str],
   ctx: KelsoCtx,
 ) -> int:
-  """Run a manifest `[commands]` entry in its target unit.
-
-  Raises `Detached` if it is still running after `WATCH_SECONDS`: kelso stops
-  waiting, and the command runs on in its container.
-  """
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     raise ValueError(f"App {app_id} is not loaded; run `kelso load {app_id}` first")
@@ -289,8 +261,6 @@ def run_command(
 
 @dataclass(frozen=True)
 class ReloadResult:
-  """What a reload did, so a caller can say so without re-deriving it."""
-
   load: LoadResult
   # Whether the app was running when the reload began, and so was started
   # again at the end. A reload never starts an app that was not running.
@@ -302,10 +272,6 @@ def reload_app(
   bundle: Path,
   ctx: KelsoCtx,
 ) -> ReloadResult:
-  """Stop if running, re-load from the bundle, and start again if it was.
-
-  The caller holds the app lock, so nothing changes the app in between.
-  """
   try:
     running = bool(ctx.run_state(app).running_count)
   except ValueError:
@@ -322,13 +288,7 @@ def reload_app(
 
 
 def stop(app_id: AppID, ctx: KelsoCtx, *, action: str = "stopped") -> None:
-  """Bring an app's containers down. Its routes stay published: only a reload
-  or a removal takes them down.
-
-  `action` is what the app's last action becomes; `up` skips an app whose last
-  action is "stopped", so anything that expects `up` to restart it says
-  otherwise.
-  """
+  # Routes stay published; `up` skips an app whose last action is "stopped".
   state = ctx.run_state(app_id)
   if not state.compose_exists:
     if state.containers:
