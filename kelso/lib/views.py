@@ -16,6 +16,7 @@ from kelso.lib.bundle import KLSO_MD_SUFFIX, bundle_text, load_bundle, manifest_
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import ConfigRequest
 from kelso.lib.connections import MountConnection
+from kelso.lib.describe import AppDescription, describe
 from kelso.lib.docker import KelsoRunUnitStatus
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.cron import cron_runs
@@ -23,13 +24,11 @@ from kelso.lib.lifecycle.run import logs_text
 from kelso.lib.lifecycle.volumes import volumes_on_disk
 from kelso.lib.metric import KELSO_DIRS, filesystem_of, kelso_disks
 from kelso.lib.observations import AppObservation, observe
-from kelso.lib.receipt import host_url
 from kelso.lib.repo import LOCAL_REPO, bound_apps
 from kelso.lib.routes import get_route_provider
 from kelso.lib.run_layout import (
   AppRunData,
   load_run_data,
-  provider_route_urls,
   resolved_subdomain,
   shown_environment,
 )
@@ -398,7 +397,8 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
     return view
 
   run_data = load_run_data(spec, ctx)
-  volumes = _volumes(spec, run_data, ctx)
+  description = describe(spec, run_data, ctx)
+  volumes = _volumes(spec, description, ctx)
   view.update(
     {
       "description": spec.description,
@@ -411,8 +411,8 @@ def app_view(app_id: AppID, ctx: KelsoCtx) -> dict[str, Any]:
       "manifest_stale": ctx.manifest_stale(app_id),
       "manifest_text": ctx.loaded_paths(app_id).manifest_path.read_text(),
       "units": _units(spec, observation, run_data),
-      "routes": _routes(spec, run_data, ctx),
-      "ports": _ports(spec, run_data),
+      "routes": _routes(description),
+      "ports": _ports(description),
       "volumes": volumes,
       "volume_bytes": sum(v["bytes"] for v in volumes if v["bytes"] is not None),
       "commands": [
@@ -512,50 +512,37 @@ def _unit_state(container: KelsoRunUnitStatus | None) -> str | None:
   return "finished" if container.finished else container.state
 
 
-def _routes(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[dict[str, Any]]:
-  routes = []
-  for name, route in spec.routes.items():
-    assigned = run_data.routes.get(name)
-    # Primary first: the one `published_url` and `${routes.<name>}` name.
-    providers = [
-      {"tag": tag, "url": url}
-      for tag, url in (
-        provider_route_urls(assigned, ctx.config) if assigned else {}
-      ).items()
-    ]
-    routes.append(
-      {
-        "name": name,
-        "unit": route.run_unit_name,
-        "desc": route.desc,
-        "admin": route.admin,
-        "scheme": route.scheme,
-        "container_port": route.container_port,
-        "host_port": assigned.host_port if assigned else None,
-        "url": run_data.route_urls.get(name),
-        "published_url": providers[0]["url"] if providers else None,
-        "host_url": host_url(spec, run_data, name, ctx.config.link_address),
-        "providers": providers,
-      }
-    )
-  return routes
+def _routes(description: AppDescription) -> list[dict[str, Any]]:
+  return [
+    {
+      "name": route.name,
+      "unit": route.unit,
+      "desc": route.desc,
+      "admin": route.admin,
+      "scheme": route.scheme,
+      "container_port": route.container_port,
+      "host_port": route.host_port,
+      "url": route.url,
+      "published_url": route.providers[0][1] if route.providers else None,
+      "host_url": route.host_url,
+      "providers": [{"tag": tag, "url": url} for tag, url in route.providers],
+    }
+    for route in description.routes
+  ]
 
 
-def _ports(spec: AppSpec, run_data: AppRunData) -> list[dict[str, Any]]:
-  ports = []
-  for name, port in spec.ports.items():
-    assigned = run_data.ports.get(name)
-    ports.append(
-      {
-        "name": name,
-        "unit": port.run_unit_name,
-        "desc": port.desc,
-        "proto": port.proto,
-        "container_port": port.container_port,
-        "host_port": assigned.host_port if assigned else None,
-      }
-    )
-  return ports
+def _ports(description: AppDescription) -> list[dict[str, Any]]:
+  return [
+    {
+      "name": port.name,
+      "unit": port.unit,
+      "desc": port.desc,
+      "proto": port.proto,
+      "container_port": port.container_port,
+      "host_port": port.host_port,
+    }
+    for port in description.ports
+  ]
 
 
 def security_notes(
@@ -602,37 +589,29 @@ def security_notes(
 
 
 def _volumes(
-  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
+  spec: AppSpec, description: AppDescription, ctx: KelsoCtx
 ) -> list[dict[str, Any]]:
-  binds = ctx.app_store(spec.app).list_binds()
-  # One read for every volume on this page. Sizes come from the gauges
-  # volume-metrics records, never from walking the tree here: a `bulk` volume
-  # or a bound media library is unbounded, and this runs on every page load.
+  # Sizes come from the gauges volume-metrics records, never from walking the
+  # tree here: a `bulk` volume or a bound media library is unbounded, and this
+  # runs on every page load.
   gauges = ctx.read_gauges("volume_size_bytes/")
   volumes = []
-  for name, volume in spec.volumes.items():
-    link = run_data.volume_links.get(name)
-    if volume.kind == "app":
-      path = volume.in_bundle
-    else:
-      path = str(link.source) if link else None
+  for volume in description.volumes:
     # Host volumes are gauged under the tag they are bound to, since two apps
     # binding one host volume are looking at the same directory.
     if volume.kind == "host":
-      tag = binds.get(name)
-      key = f"volume_size_bytes//host/{tag}" if tag else None
+      key = f"volume_size_bytes//host/{volume.bind}" if volume.bind else None
     else:
-      key = f"volume_size_bytes/{spec.app}/{volume.kind}/{name}"
+      key = f"volume_size_bytes/{spec.app}/{volume.kind}/{volume.name}"
     volumes.append(
       {
-        "name": name,
+        "name": volume.name,
         "kind": volume.kind,
         "readonly": volume.readonly,
-        "path": path,
+        "path": volume.path,
         # None until volume-metrics has run over this volume at least once.
         "bytes": _gauge_bytes(gauges, key) if key else None,
-        # Only `host` volumes are bindable; the rest are kelso's to place.
-        "bind": binds.get(name) if volume.kind == "host" else None,
+        "bind": volume.bind,
       }
     )
   return volumes

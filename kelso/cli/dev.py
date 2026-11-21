@@ -9,6 +9,7 @@ from kelso.cli.net import summary
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, is_pathlike
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE
 from kelso.lib.configflow.app import app_config_request, apply_app_config
+from kelso.lib.describe import describe
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   DevPlan,
@@ -119,20 +120,12 @@ def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
     rows.append(("", "(no app volumes: nothing is mounted from it)"))
 
   # The same block `kelso start` prints; only what is published differs.
-  for i, line in enumerate(
-    route_lines(
-      plan.spec,
-      plan.run_data,
-      plan.published,
-      host=ctx.config.link_address,
-    )
-  ):
+  description = describe(plan.spec, plan.run_data, ctx)
+  for i, line in enumerate(route_lines(description.routes, plan.published)):
     rows.append(("Routes:" if i == 0 else "", line))
   if not plan.published:
     rows.append(("", "routes are not published; publish them with --routes"))
-  for i, line in enumerate(
-    port_lines(plan.spec, plan.run_data, host=ctx.config.link_address)
-  ):
+  for i, line in enumerate(port_lines(description.ports, ctx.config.link_address)):
     rows.append(("Ports:" if i == 0 else "", line))
 
   mode = plan.run_data.network_mode

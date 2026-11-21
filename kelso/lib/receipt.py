@@ -7,8 +7,9 @@ from kelso.lib.connections import (
   WebConnection,
   network_connections,
 )
+from kelso.lib.describe import PortFact, RouteFact, VolumeFact, describe
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.run_layout import AppRunData, provider_route_urls, resolved_subdomain
+from kelso.lib.run_layout import AppRunData, resolved_subdomain
 from kelso.lib.spec import AppSpec
 from kelso.lib.util import EnvTemplate
 
@@ -17,89 +18,47 @@ from kelso.lib.util import EnvTemplate
 LABEL_WIDTH = len("Containers:")
 
 
-def published_route_urls(
-  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
-) -> dict[str, list[str]]:
-  published: dict[str, list[str]] = {}
-  for name in spec.routes:
-    loaded = run_data.routes.get(name)
-    if loaded is None:
-      continue
-    urls = list(provider_route_urls(loaded, ctx.config).values())
-    if urls:
-      published[name] = urls
-  return published
-
-
 def published_urls(spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx) -> list[str]:
-  return [
-    url for urls in published_route_urls(spec, run_data, ctx).values() for url in urls
-  ]
-
-
-def host_url(
-  spec: AppSpec, run_data: AppRunData | None, name: str, host: str
-) -> str | None:
-  route = spec.routes[name]
-  assigned = run_data.routes.get(name) if run_data else None
-  if assigned is not None and assigned.host_port > 0:
-    return f"{route.scheme}://{host}:{assigned.host_port}"
-  if spec.network_mode == "host":
-    # Host networking maps nothing, so the container port is the host port
-    # and kelso never allocated one.
-    return f"{route.scheme}://{host}:{route.container_port}"
-  return None
+  routes = describe(spec, run_data, ctx).routes
+  return [url for route in routes for _, url in route.providers]
 
 
 def route_lines(
-  spec: AppSpec,
-  run_data: AppRunData | None,
-  published: Mapping[str, Sequence[str]],
-  *,
-  host: str = "localhost",
+  routes: Sequence[RouteFact], published: Mapping[str, Sequence[str]] | None = None
 ) -> list[str]:
   lines: list[str] = []
-  for name, route in spec.routes.items():
-    where = host_url(spec, run_data, name, host) or "(no host port allocated)"
-
-    line = f"{name}: {route.run_unit_name}:{route.container_port} <- {where}"
-    if published.get(name):
-      line += f" <- {', '.join(published[name])}"
+  for route in routes:
+    where = route.host_url or "(no host port allocated)"
+    line = f"{route.name}: {route.unit}:{route.container_port} <- {where}"
+    if published is None:
+      urls: Sequence[str] = [url for _, url in route.providers]
+    else:
+      urls = published.get(route.name, ())
+    if urls:
+      line += f" <- {', '.join(urls)}"
     if route.admin:
       line += " (admin)"
     lines.append(line)
   return lines
 
 
-def port_lines(
-  spec: AppSpec, run_data: AppRunData | None, *, host: str = "localhost"
-) -> list[str]:
+def port_lines(ports: Sequence[PortFact], host: str) -> list[str]:
   lines: list[str] = []
-  for name, port in spec.ports.items():
-    assigned = run_data.ports.get(name) if run_data else None
-    if assigned is not None:
-      where = f"{host}:{assigned.host_port}"
-    elif not port.needs_allocation:
-      where = f"{host}:{port.host_port}"
-    else:
-      where = "(no host port allocated)"
+  for port in ports:
+    host_port = (
+      port.host_port if port.host_port is not None else port.declared_host_port
+    )
+    where = "(no host port allocated)" if host_port is None else f"{host}:{host_port}"
     lines.append(
-      f"{name}: {port.run_unit_name}:{port.container_port}/{port.proto} <- {where}"
+      f"{port.name}: {port.unit}:{port.container_port}/{port.proto} <- {where}"
     )
   return lines
 
 
-def route_receipt_lines(
-  spec: AppSpec, run_data: AppRunData, ctx: KelsoCtx
-) -> list[str]:
-  reach = route_lines(
-    spec,
-    run_data,
-    published_route_urls(spec, run_data, ctx),
-    host=ctx.config.link_address,
-  )
+def route_receipt_lines(routes: Sequence[RouteFact]) -> list[str]:
   return [
-    _labeled_line("Routes:" if i == 0 else "", line) for i, line in enumerate(reach)
+    _labeled_line("Routes:" if i == 0 else "", line)
+    for i, line in enumerate(route_lines(routes))
   ]
 
 
@@ -167,32 +126,19 @@ def config_lines(spec: AppSpec, ctx: KelsoCtx, *, loaded: bool) -> list[str]:
   return lines
 
 
-def _volume_paths(
-  spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
-) -> list[tuple[str, str, str]]:
-  paths: list[tuple[str, str, str]] = []
-  for name, volume in spec.volumes.items():
+def _volume_where(volume: VolumeFact) -> str | None:
+  if volume.path is not None:
+    return volume.path
+  return "(unbound)" if volume.kind == "host" else volume.default_path
+
+
+def volume_lines(volumes: Sequence[VolumeFact]) -> list[str]:
+  lines = []
+  for volume in volumes:
     kind = f"{volume.kind}, read-only" if volume.readonly else volume.kind
-    if volume.kind == "app":
-      paths.append((name, kind, volume.in_bundle))
-    elif run_data is not None and name in run_data.volume_links:
-      paths.append((name, kind, str(run_data.volume_links[name].source)))
-    elif volume.kind == "host":
-      paths.append((name, kind, "(unbound)"))
-    else:
-      root = ctx.config.volume_roots.get(volume.kind)
-      if root is not None:
-        paths.append((name, kind, str(root / spec.app / name)))
-  return paths
-
-
-def volume_lines(
-  spec: AppSpec, run_data: AppRunData | None, ctx: KelsoCtx
-) -> list[str]:
-  return [
-    f"{name} ({kind}): {where}"
-    for name, kind, where in _volume_paths(spec, run_data, ctx)
-  ]
+    if (where := _volume_where(volume)) is not None:
+      lines.append(f"{volume.name} ({kind}): {where}")
+  return lines
 
 
 def volume_root_lines(config: Config) -> list[str]:
@@ -218,20 +164,14 @@ def location_receipt(
   title = heading if heading is not None else f"Running {app_id}"
   rows: list[tuple[str, str]] = []
 
-  routes = route_lines(
-    spec,
-    run_data,
-    published_route_urls(spec, run_data, ctx),
-    host=ctx.config.link_address,
-  )
-  for i, line in enumerate(routes):
+  description = describe(spec, run_data, ctx)
+  for i, line in enumerate(route_lines(description.routes)):
     rows.append(("Routes:" if i == 0 else "", line))
-  for i, line in enumerate(port_lines(spec, run_data, host=ctx.config.link_address)):
+  for i, line in enumerate(port_lines(description.ports, ctx.config.link_address)):
     rows.append(("Ports:" if i == 0 else "", line))
-
-  for name, kind, where in _volume_paths(spec, run_data, ctx):
-    if kind == "data":
-      rows.append(("Data:", f"{name}: {where}"))
+  for volume in description.volumes:
+    if volume.kind == "data" and not volume.readonly:
+      rows.append(("Data:", f"{volume.name}: {_volume_where(volume)}"))
 
   rows.append(("Logs:", f"kelso logs -f {app_id}"))
 
@@ -277,16 +217,17 @@ def capability_receipt(
     lines.append(_labeled_line("Network:" if i == 0 else "", line))
 
   if not compact:
+    description = describe(spec, run_data, ctx)
     if run_data is not None:
-      lines += route_receipt_lines(spec, run_data, ctx)
+      lines += route_receipt_lines(description.routes)
     elif spec.routes and (subdomain := resolved_subdomain(spec, ctx)):
       lines.append(_labeled_line("Routes:", f"subdomain={subdomain}"))
 
-    ports = port_lines(spec, run_data, host=ctx.config.link_address)
+    ports = port_lines(description.ports, ctx.config.link_address)
     for i, line in enumerate(ports):
       lines.append(_labeled_line("Ports:" if i == 0 else "", line))
 
-    vols = volume_lines(spec, run_data, ctx)
+    vols = volume_lines(description.volumes)
     if vols:
       lines.append(_labeled_line("Volumes:", vols[0]))
       for extra in vols[1:]:
@@ -362,7 +303,6 @@ __all__ = [
   "danger_callouts",
   "location_receipt",
   "port_lines",
-  "published_route_urls",
   "published_urls",
   "route_lines",
   "volume_lines",
