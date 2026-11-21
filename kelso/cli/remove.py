@@ -62,8 +62,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     print("Nothing removed.")
     return
 
-  with ctx.locked(f"{plan.mode} {plan.app_id}", plan.app_id):
-    rm(plan, ctx)
+  rm(plan, ctx)
   print(_DONE[plan.mode].format(app=plan.app_id))
   if plan.mode == UNLOAD:
     if _has_source(plan.app_id, ctx):

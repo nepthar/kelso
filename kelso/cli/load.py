@@ -48,8 +48,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if not args.allow_compose and not confirm_compose_warnings(app, bundle):
     print("Nothing loaded.")
     return
-  with ctx.locked(f"load {app}", app):
-    result = reload_app(app, bundle, ctx)
+  result = reload_app(app, bundle, ctx)
   load = result.load
   for name in load.dropped_volumes:
     logger.warning(

@@ -215,8 +215,7 @@ def recover(ctx: KelsoCtx, path: Path) -> RecoverResult:
   for app, backup in sorted(newest.items()):
     try:
       plan = restore_plan(app, backup.id, ctx, restic)
-      with ctx.locked(f"restore {app}", app):
-        restore(plan, ctx, restic, backup_first=False)
+      restore(plan, ctx, restic, backup_first=False)
       result.restored.append(str(app))
     except Exception as e:
       logger.error("could not restore %s: %s", app, e)

@@ -15,6 +15,5 @@ class StopJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.locked(f"stop {app}", app):
-      lifecycle.stop(app, ctx)
+    lifecycle.stop(app, ctx)
     logger.info("Stopped %s", app)

@@ -38,20 +38,14 @@ def register(subparsers) -> None:
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   target = load_target(ctx, args.app, force=args.force)
   app = target.app_id
-  loading = not ctx.is_loaded(app)
-  if loading:
+  if not ctx.is_loaded(app):
     bundle = target.require_bundle()
-  else:
-    # Catalog may be gone; start will use the run copy as-is.
-    bundle = ctx.config.app_run_path(app)
-  if loading and not args.allow_compose and not confirm_compose_warnings(app, bundle):
-    print("Nothing started.")
-    return
+    if not args.allow_compose and not confirm_compose_warnings(app, bundle):
+      print("Nothing started.")
+      return
 
-  with ctx.locked(f"start {app}", app):
-    result = start(target.app_id, bundle, ctx)
-
-    compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
-    if compact.strip():
-      print(compact)
-    print(location_receipt(result.spec, result.run_data, ctx))
+  result = start(app, ctx, target.bundle)
+  compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
+  if compact.strip():
+    print(compact)
+  print(location_receipt(result.spec, result.run_data, ctx))

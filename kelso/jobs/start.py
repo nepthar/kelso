@@ -17,15 +17,7 @@ class StartJob(Job):
 
   def run(self, ctx: KelsoCtx) -> None:
     app = self.app_id
-    with ctx.locked(f"start {app}", app):
-      # Prefer the run copy once loaded, so an app whose catalog entry has
-      # since been deleted still starts.
-      bundle = (
-        ctx.config.app_run_path(app)
-        if ctx.is_loaded(app)
-        else self.target.require_bundle()
-      )
-      result = start(app, bundle, ctx)
-      lines = [f"Started {app}"]
-      lines += [f"  {url}" for url in published_urls(result.spec, result.run_data, ctx)]
-      logger.info("\n".join(lines))
+    result = start(app, ctx, self.target.bundle)
+    lines = [f"Started {app}"]
+    lines += [f"  {url}" for url in published_urls(result.spec, result.run_data, ctx)]
+    logger.info("\n".join(lines))

@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+import pytest
 from filelock import FileLock
 
 from kelso.lib.config import load_config_file
@@ -184,3 +185,51 @@ def test_a_backup_releases_kelso_while_restic_reads(kelso_env, monkeypatch):
   taken = kelso_env.run("backup", "run", "ports-demo")
   assert taken.returncode == 0, taken.stderr
   assert checked == ["ports-demo"]
+
+
+def test_a_restore_releases_kelso_while_restic_works(kelso_env, monkeypatch):
+  from kelso.lib.restic import Restic
+
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  taken = kelso_env.run("backup", "run", "ports-demo")
+  assert taken.returncode == 0, taken.stderr
+  backup_id = taken.stdout.split("Backup ")[1].split()[0]
+  free = []
+
+  def unlocked(original, name):
+    def during(self, *args, **kwargs):
+      lock = FileLock(kelso_env.kelso_lockfile_path)
+      lock.acquire(timeout=0)
+      lock.release()
+      free.append(name)
+      return original(self, *args, **kwargs)
+
+    return during
+
+  monkeypatch.setattr(Restic, "backup", unlocked(Restic.backup, "backup"))
+  monkeypatch.setattr(Restic, "restore", unlocked(Restic.restore, "restore"))
+  restored = kelso_env.run("restore", "ports-demo", backup_id, "-y")
+  assert restored.returncode == 0, restored.stderr
+  assert free == ["restore", "backup"]
+
+
+def test_a_lifecycle_verb_takes_the_app_lock_itself(kelso_env):
+  from kelso.lib import lifecycle
+
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  holder = KelsoCtx(load_config_file(kelso_env.config))
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app_id("ports-demo")
+  with holder.app_lock(app, f"cmd {app}"), pytest.raises(ValueError) as refused:
+    lifecycle.stop(app, ctx)
+  assert f"Another process has locked app {app}" in str(refused.value)
+  assert f"`kelso cmd {app}`" in str(refused.value)
+
+
+def test_a_nested_acquire_keeps_the_outer_holder(kelso_env):
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app_lockfile = ctx.config.app_lockfile_path("ports-demo")
+  with ctx.locked("down ports-demo", "ports-demo"):
+    with ctx.locked("stop ports-demo", "ports-demo"):
+      assert _holder(app_lockfile)["by"] == "down ports-demo"
+      assert _holder(ctx.config.kelso_lockfile_path)["by"] == "down ports-demo"
