@@ -14,7 +14,9 @@ from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG, format_route_providers
 from kelso.lib.configflow import ConfigField, ConfigRequest, ConfigResponse
 from kelso.lib.manifest import NETWORK_MODES
 from kelso.lib.options import APP_OPTIONS
+from kelso.lib.run_layout import resolved_subdomain
 from kelso.lib.spec import PRIMARY_ROUTE_NAME, AppSpec
+from kelso.lib.util import PUBLIC_ROUTE_SCHEME
 
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
@@ -67,25 +69,32 @@ def _bind_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
 
 def _route_fields(spec: AppSpec, ctx: KelsoCtx) -> list[ConfigField]:
   assignments = ctx.app_store(spec.app).list_route_assignments()
+  tags = tuple(
+    tag for tag in sorted(ctx.config.route_providers) if tag != NONE_ROUTE_PROVIDER_TAG
+  )
+  app_subdomain = resolved_subdomain(spec, ctx)
   return [
     ConfigField(
       name=f"{ROUTE_PREFIX}{name}",
-      value=None if tags is None else format_route_providers(tags),
-      desc=route.desc
-      or f"Route providers that publish {name}; the first gives its URL",
-      # Unassigned is a valid state: a private route stays on its host port.
+      value=None if picked is None else format_route_providers(picked),
+      desc=route.desc + (" (admin: not published by default)" if route.admin else ""),
+      # Unassigned is a valid state: the route stays on its host port.
       required=False,
-      choices=tuple(
-        tag
-        for tag in sorted(ctx.config.route_providers)
-        if tag != NONE_ROUTE_PROVIDER_TAG
-      ),
+      section="route",
+      choices=tags,
       multi=True,
       empty_value=NONE_ROUTE_PROVIDER_TAG,
       primary_desc=_primary_route_desc(name),
+      choice_urls=tuple(
+        f"{PUBLIC_ROUTE_SCHEME}://{route.subdomain(app_subdomain)}."
+        f"{ctx.config.provider_domain(tag)}"
+        for tag in tags
+      )
+      if app_subdomain
+      else (),
     )
     for name, route in spec.routes.items()
-    for tags in [assignments.get(name)]
+    for picked in [assignments.get(name)]
   ]
 
 
@@ -120,7 +129,7 @@ def _network_field(spec: AppSpec, ctx: KelsoCtx) -> ConfigField:
     name=NETWORK_FIELD,
     value=ctx.app_store(spec.app).get_network_mode() or spec.network_mode,
     default=spec.network_mode,
-    desc=f"Override the app's defualt network mode of ${spec.network_mode}",
+    desc=f"Override the manifest's network mode, {spec.network_mode}",
     section="option",
     required=False,
     choices=("host",) if host else tuple(m for m in NETWORK_MODES if m != "host"),

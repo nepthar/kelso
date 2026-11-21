@@ -54,7 +54,7 @@ def test_update_keeps_one_update_backup(kelso_env):
   assert kelso_env.run("load", APP).returncode == 0
   for version in ("1.1", "1.2"):
     write_bundle(kelso_env, version)
-    assert kelso_env.run("update", APP, "-y").returncode == 0
+    assert kelso_env.run("update", APP).returncode == 0
   listed = kelso_env.run("backup", "list", APP).stdout.splitlines()
   assert [line.split()[2] for line in listed[2:]] == ["1.1"]
 
@@ -63,7 +63,7 @@ def test_update_no_backup_skips_it(kelso_env):
   write_bundle(kelso_env, "1.0")
   assert kelso_env.run("load", APP).returncode == 0
   write_bundle(kelso_env, "1.1")
-  updated = kelso_env.run("update", APP, "-y", "--no-backup")
+  updated = kelso_env.run("update", APP, "--no-backup")
   assert updated.returncode == 0, updated.stderr
   assert "holds the version" not in updated.stdout
 
@@ -85,6 +85,6 @@ def test_an_update_to_the_same_version_says_it_reloaded(kelso_env):
   write_bundle(kelso_env, "1.0")
   assert kelso_env.run("load", APP).returncode == 0
   write_bundle(kelso_env, "1.0", tag="3.20")
-  updated = kelso_env.run("update", APP, "-y")
+  updated = kelso_env.run("update", APP)
   assert updated.returncode == 0, updated.stderr
   assert "Reloaded upd-app at 1.0: its source changed without a new" in updated.stdout

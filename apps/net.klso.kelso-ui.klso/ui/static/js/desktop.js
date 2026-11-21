@@ -84,6 +84,8 @@
     },
     // A job has ended: the window that asked for it reloads, or goes to `then`.
     refresh: function (from, then) {
+      // A job can load, remove or start an app, which the icons and start menu show.
+      refreshIcons();
       var win = windowOf(from);
       var opener = win && windows.indexOf(win.opener) >= 0 ? win.opener : null;
       if (!opener) return;
@@ -419,6 +421,7 @@
       var title = picked && picked.dataset.title;
       icons.innerHTML = lastIcons = html;
       paint();
+      if (!startMenu.hidden && !startApps.querySelector(".has-sub.open")) fillStartApps();
       if (title) select(icons.querySelector('[data-title="' + CSS.escape(title) + '"]'));
     }).catch(function () {
       trayDot.classList.add("bad");
@@ -472,6 +475,11 @@
     startButton.setAttribute("aria-expanded", String(on));
     startButton.classList.toggle("active", on);
     if (!on) return;
+    fillStartApps();
+    refreshIcons();
+  }
+
+  function fillStartApps() {
     startApps.textContent = "";
     startApps.appendChild(icons.querySelector(".start-apps-tpl").content.cloneNode(true));
   }

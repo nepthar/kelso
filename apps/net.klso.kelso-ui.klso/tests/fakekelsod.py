@@ -31,6 +31,7 @@ def _field(name, **kw):
     "multi": False,
     "empty_value": None,
     "primary_desc": "",
+    "choice_urls": [],
   }
   base.update(kw)
   return base
@@ -148,6 +149,27 @@ APP_DETAIL = {
       "host_url": None,
       "providers": [],
     },
+    {
+      "name": "console",
+      "unit": "main",
+      "admin": True,
+      "container_port": 9443,
+      "host_port": 10002,
+      "url": None,
+      "published_url": None,
+      "host_url": "https://10.0.0.5:10002",
+      "providers": [],
+    },
+  ],
+  "ports": [
+    {
+      "name": "stun",
+      "unit": "main",
+      "desc": f"STUN {EVIL}",
+      "proto": "udp",
+      "container_port": 3478,
+      "host_port": 3478,
+    },
   ],
   "volumes": [
     {
@@ -215,14 +237,31 @@ APP_CONFIG = {
     _field("token", secret=True, secret_set=True),
     _field("subdomain", value="kelso", default="kelso", section="option"),
     _field("volume.conn", value="kelso_conn", choices=["kelso_conn", EVIL]),
-    _field("route.none", choices=[], multi=True, empty_value="none"),
     _field(
       "route.main",
+      section="route",
       value="web,lan",
       choices=["lan", "web", EVIL],
       multi=True,
       empty_value="none",
       primary_desc=f"Primary route: passed to the app as {EVIL}",
+      choice_urls=[
+        "https://kelso.lan.test",
+        "https://kelso.example.test",
+        f"https://kelso.{EVIL}",
+      ],
+    ),
+    _field(
+      "route.console",
+      section="route",
+      choices=["lan", "web", EVIL],
+      multi=True,
+      empty_value="none",
+      choice_urls=[
+        "https://console-kelso.lan.test",
+        "https://console-kelso.example.test",
+        f"https://console-kelso.{EVIL}",
+      ],
     ),
     _field("backup.movies", value="on", choices=["on", "off"]),
     _field("tuning", section="advanced"),

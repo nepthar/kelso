@@ -1,14 +1,14 @@
 # Routes Demo
 
 Three routes: `main` (the bare subdomain), `sub1` (`sub1-<subdomain>.<domain>`
-when assigned), and `host_only` (host port until the operator assigns a
-provider).
+when assigned), and `host_only`, an admin route (host port until the operator
+assigns a provider).
 
 ```toml klso_path="manifest.toml"
 [app]
 version      = "0.1.0"
 display_name = "Routes Demo"
-description  = "Publishes primary, secondary, and host-only routes"
+description  = "Publishes primary, secondary, and admin routes"
 
 [volumes]
 # Ship the nginx config alongside the manifest and mount it read-only.
@@ -23,12 +23,12 @@ healthcheck = "wget -q -O /dev/null http://localhost:8081/ || exit 1"
 env    = { KLSO_DOMAIN = "${klso.domain}" }
 
 [run.main.routes]
-# "main" is the bare subdomain; non-private routes auto-assign to default_route_provider
+# "main" is the bare subdomain; non-admin routes auto-assign to default_route_provider
 main     = { port = "8081" }
 # "sub1" will be "sub1-<subdomain>.<provider_domain>" when assigned
 sub1     = { port = "8082" }
-# private: available to publish, but not auto-assigned
-host_only = { port = "8083", private = true }
+# admin: available to publish, but not auto-assigned
+host_only = { port = "8083", admin = true }
 ```
 
 One nginx server per route. The nginx image runs envsubst over `*.template`

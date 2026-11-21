@@ -301,15 +301,23 @@ def _repo_warnings(ctx: KelsoCtx) -> list[Finding]:
 
 def _app_problems(observation: AppObservation, ctx: KelsoCtx) -> list[str]:
   notes = []
-  manifest = ctx.loaded_paths(observation.app_id).manifest_path
+  app = observation.app_id
+  manifest = ctx.loaded_paths(app).manifest_path
   if observation.run_dir_exists and manifest.is_file():
     try:
-      AppSpec.from_file(manifest, observation.app_id)
+      spec = AppSpec.from_file(manifest, app)
     except ValueError as e:
       notes.append(
         f"its loaded manifest no longer parses; `kelso load "
-        f"{observation.app_id}` from a bundle that does. {e}"
+        f"{app}` from a bundle that does. {e}"
       )
+    else:
+      if (
+        set(spec.run_units) - spec.one_shots
+        and observation.last_action in ("started", "start-failed")
+        and not observation.running_count
+      ):
+        notes.append(f"should be running but is not; `kelso start {app}` says why")
   # A route entry alone is the orphaned allocation warned about, not this.
   if observation.bundle_path is None and (
     observation.run_dir_exists or observation.containers

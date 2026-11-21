@@ -330,27 +330,58 @@ def test_config_form(client, fake):
   assert '<span class="sub">secret</span>' not in form
   assert '<button type="button" class="cfg-cancel">Cancel</button>' in form
   assert '<option value="kelso_conn" selected>' in basic
-  # A pick-several field: no text box, only a tag per choice, the picks
-  # pressed, the first marked primary, and the comma list in a hidden input.
-  assert (
-    '<input type="hidden" name="set.route.main" value="web,lan" data-tag-pick '
-    'data-empty="none" data-primary-desc="Primary route: passed to the app as '
-    "&lt;i" in basic
-  )
-  picks = basic.split('name="set.route.main"')[1].split("</div>")[0]
-  tags = re.findall(r'<button type="button" class="tag" data-tag="([^"]*)"', picks)
-  assert tags[:2] == ["lan", "web"]
-  assert 'data-tag="none"' not in picks
-  assert 'data-tag="lan" aria-pressed="true">lan<' in picks
-  assert (
-    'data-tag="web" aria-pressed="true" data-primary '
-    'title="Primary route: passed to the app as &lt;i' in picks
-  )
-  assert picks.count("data-primary ") == 1
-  assert 'aria-pressed="false">&lt;i' in picks
-  none_defined = basic.split('name="set.route.none"')[1].split("</td>")[0]
-  assert '<span class="muted">none defined yet</span>' in none_defined
+  # A select with something picked offers no blank; an unpicked one shows a
+  # placeholder that can't be picked back.
+  start_group = options.split('name="set.start_group"')[1].split("</select>")[0]
+  assert '<option value=""' not in start_group
+  conn = basic.split('name="set.volume.conn"')[1].split("</select>")[0]
+  assert '<option value=""' not in conn
+  assert 'name="set.route.main"' not in basic
   assert '<input type="hidden" name="action" value="config">' in form
+
+
+def test_routes_tab_picks_providers_and_a_primary_url(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  routes = text.split('id="cfg-routes"')[1].split('role="tabpanel"')[0]
+  assert "<th>Providers</th><th>Primary URL</th>" in routes
+  row = routes.split('<td class="key">main</td>')[1].split("</tr>")[0]
+  assert (
+    "route.main" not in routes.split("<tbody>")[1].split('name="set.route.main"')[0]
+  )
+  # The comma list posts, primary first; the controls that set it post nothing.
+  assert (
+    '<input type="hidden" name="set.route.main" value="web,lan" data-route-value '
+    'data-empty="none">' in row
+  )
+  boxes = re.findall(r'<input type="checkbox" value="([^"]*)" data-ui( checked)?>', row)
+  assert boxes[:2] == [("lan", " checked"), ("web", " checked")]
+  assert boxes[2][1] == ""
+  assert "name=" not in row.split("data-route-value")[1]
+  primary = row.split("<select")[1].split("</select>")[0]
+  assert 'title="Primary route: passed to the app as &lt;i' in primary
+  assert '<option value="web" title="https://kelso.example.test">' in primary
+  assert "&lt;i" in primary
+
+
+def test_routes_tab_with_no_providers_says_so(client, fake, monkeypatch):
+  fields = [
+    {**f, "choices": [], "choice_urls": []} if f["name"].startswith("route.") else f
+    for f in fakekelsod.APP_CONFIG["fields"]
+  ]
+  monkeypatch.setitem(fakekelsod.APP_CONFIG, "fields", fields)
+  text = client.get("/apps/kelso-ui").text
+  routes = text.split('id="cfg-routes"')[1].split('role="tabpanel"')[0]
+  assert "No route providers are set up" in routes
+  assert "set.route." not in routes
+
+
+def test_app_ports(client, fake):
+  text = client.get("/apps/kelso-ui").text
+  ports = text.split("<legend>Ports</legend>")[1].split("</fieldset>")[0]
+  assert '<td class="mono">3478/udp</td>' in ports
+  assert "&lt;i" in ports
+  info = text.split("<legend>Info</legend>")[1].split("</fieldset>")[0]
+  assert "stun" not in info
 
 
 def test_app_volumes_biggest_first(client, fake):
@@ -442,12 +473,13 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
     for h in re.findall(r"<legend>([^<]+)</legend>", text)
     if h != "Not ready to start"
   ]
-  assert headings[:7] == [
+  assert headings[:8] == [
     "Info",
     "Security",
     "Configuration",
     "Network",
     "Commands",
+    "Ports",
     "Volumes",
     "Run units",
   ]
@@ -467,7 +499,14 @@ def test_app_page_order_and_routes_in_the_info_box(client, fake):
   )
   assert '<span class="tag" title="via lan">lan</span>' in reachable
   # No published address and no host port: nowhere to reach it, so not listed.
-  assert "admin" not in reachable
+  assert '<span class="key">admin:</span>' not in reachable
+  # An unpublished admin route answers on its host port, and says it is one.
+  console = reachable.split('<span class="key">console:</span>')[1].split("</div>")[0]
+  assert '<a href="https://10.0.0.5:10002"' in console
+  assert (
+    '<span class="tag" title="An admin route: not published by default">' in console
+  )
+  assert reachable.count("An admin route") == 1
 
 
 def test_app_environment_shows_the_manifest_and_what_it_resolves_to(client, fake):
@@ -670,3 +709,17 @@ def test_a_run_is_a_page_named_by_its_log(client, fake):
   assert '<h1 id="job-title">x</h1>' in page.text
   titled = client.get("/job/x.log?title=Back+up+Mealie").text
   assert '<h1 id="job-title">Back up Mealie</h1>' in titled
+
+
+def test_an_unpicked_select_has_a_placeholder_it_cannot_go_back_to(
+  client, fake, monkeypatch
+):
+  fields = [
+    *fakekelsod.APP_CONFIG["fields"],
+    fakekelsod._field("flavor", choices=["a", "b"]),
+  ]
+  monkeypatch.setitem(fakekelsod.APP_CONFIG, "fields", fields)
+  text = client.get("/apps/kelso-ui").text
+  flavor = text.split('name="set.flavor"')[1].split("</select>")[0]
+  assert '<option value="" disabled selected hidden>choose one</option>' in flavor
+  assert " selected>" not in flavor.split("</option>", 1)[1]

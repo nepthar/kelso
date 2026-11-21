@@ -17,6 +17,7 @@ from kelso.lib.manifest import NETWORK_MODES, PROXIED_MODES
 from kelso.lib.options import validate_option
 from kelso.lib.run_layout import (
   AppRunData,
+  AssignedPort,
   AssignedRoute,
   load_run_data,
   make_compose_dict,
@@ -113,48 +114,52 @@ def _generate_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _clear_and_reallocate_ports(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Claim pinned host ports and allocate free ones in kelsodb."""
-  if spec.network_mode == "host" or not spec.routes:
+  """Claim pinned host ports and allocate free ones in kelsodb, routes and ports."""
+  hdb = ctx.kelso_db
+  hdb.clear_routes(spec.app)
+  hdb.clear_ports(spec.app)
+  if spec.network_mode == "host":
     return
 
   app_subdomain = resolved_subdomain(spec, ctx)
-  if not app_subdomain:
+  if spec.routes and not app_subdomain:
     raise ValueError(
       f"App {spec.app} needs a subdomain for its routes; "
       f"run `kelso config {spec.app} --set subdomain=<label>`"
     )
 
-  hdb = ctx.kelso_db
   store = ctx.app_store(spec.app)
-  hdb.clear_routes(spec.app)
   for route_name, route in spec.routes.items():
-    if route.needs_allocation:
-      host_port = hdb.next_free_port()
-    else:
-      host_port = route.host_port
-
     assigned = AssignedRoute(
       name=route_name,
       subdomain=route.subdomain(app_subdomain),
       run_unit_name=route.run_unit_name,
-      host_port=host_port,
+      host_port=hdb.next_free_port() if route.needs_allocation else route.host_port,
       container_port=route.container_port,
-      proto=route.proto,
       scheme=route.scheme,
       providers=tuple(store.get_route_assignment(route_name) or ()),
     )
-
     hdb.set_route(spec.app, route_name, assigned.record())
+
+  for port_name, port in spec.ports.items():
+    assigned_port = AssignedPort(
+      name=port_name,
+      run_unit_name=port.run_unit_name,
+      host_port=hdb.next_free_port() if port.needs_allocation else port.host_port,
+      container_port=port.container_port,
+      proto=port.proto,
+    )
+    hdb.set_port(spec.app, port_name, assigned_port.record())
 
 
 def _apply_default_route_assignments(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Write default_route_provider for non-private routes with no assignment yet."""
+  """Write default_route_provider for non-admin routes with no assignment yet."""
   store = ctx.app_store(spec.app)
   default = ctx.config.default_route_provider
   for route_name, route in spec.routes.items():
     if store.has_route_assignment(route_name):
       continue
-    if not route.private:
+    if not route.admin:
       store.set_route_assignment(
         route_name, [] if default == NONE_ROUTE_PROVIDER_TAG else [default]
       )

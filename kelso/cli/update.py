@@ -18,17 +18,21 @@ def register(subparsers) -> None:
     help="Update without backing up first, when the backup disk is not there",
   )
   parser.add_argument(
-    "-y",
-    "--yes",
+    "--allow-compose",
     action="store_true",
-    help="Skip the confirmation for compose keys kelso does not model",
+    help=(
+      "Go ahead although the manifest sets compose keys kelso does not model; "
+      "the operator should review them first"
+    ),
   )
   parser.set_defaults(func=run, activity="update")
 
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = ctx.resolve_app_id(args.app, prefer_loaded=True)
-  if not args.yes and not confirm_compose_warnings(app, update_source(app, ctx)):
+  if not args.allow_compose and not confirm_compose_warnings(
+    app, update_source(app, ctx)
+  ):
     print("Nothing updated.")
     return
   print(update(app, ctx, backup=not args.no_backup).summary(app))

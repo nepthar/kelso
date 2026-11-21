@@ -21,7 +21,6 @@ def _route(
     run_unit_name="main",
     host_port=host_port,
     container_port=container_port,
-    proto="tcp",
     scheme="http",
   ).record()
 

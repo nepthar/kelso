@@ -285,6 +285,12 @@ def block_real_docker(
 
 
 @pytest.fixture(autouse=True)
+def addresses_are_on_host(monkeypatch: pytest.MonkeyPatch) -> None:
+  """Test configs name addresses like 10.0.0.5 that this machine does not have."""
+  monkeypatch.setattr("kelso.lib.run_layout.address_on_host", lambda address: True)
+
+
+@pytest.fixture(autouse=True)
 def block_real_systemd(tmp_path_factory: pytest.TempPathFactory, monkeypatch):
   """No test writes a real user unit or asks the real systemd to run one."""
   monkeypatch.setattr("kelso.lib.service.has_systemd", lambda: False)

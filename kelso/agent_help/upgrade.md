@@ -13,7 +13,7 @@ kelso ps && kelso system doctor
 
 Apps keep running throughout, except those in start group 0, which restart
 with kelsod. Loaded apps stay at the version they were loaded at;
-`kelso update <app> --yes` moves one to what its repo holds now.
+`kelso update <app>` moves one to what its repo holds now.
 
 ## If `kelso ps` refuses the config
 

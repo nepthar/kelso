@@ -2,9 +2,18 @@
 // changed, and go again if every change is undone. Cancel undoes them all.
 (function () {
   document.querySelectorAll(".cfg-form").forEach(function (form) {
-    // A pick-several field's value is a hidden input that js/tagpick.js sets.
+    // A redirect with no fragment keeps the request's, so the page comes back
+    // on the tab that was saved. Not `form.action`: the hidden input named
+    // "action" shadows it.
+    form.addEventListener("submit", function () {
+      var tab = form.querySelector('li[aria-selected="true"] a');
+      var action = (form.getAttribute("action") || "").split("#")[0];
+      if (tab) form.setAttribute("action", action + tab.getAttribute("href"));
+    });
+    // A route's value is a hidden input that js/routepick.js sets from its
+    // `data-ui` controls, which post nothing themselves.
     var controls = form.querySelectorAll(
-      "input:not([type=hidden]), input[data-tag-pick], select"
+      "input:not([type=hidden]):not([data-ui]), input[data-route-value], select:not([data-ui])"
     );
     var save = form.querySelector(".cfg-save");
     if (!controls.length || !save || save.closest(".dialog-buttons")) return;
@@ -28,7 +37,7 @@
         controls.forEach(function (c, i) {
           if (c.type === "checkbox") c.checked = initial[i] === "true";
           else c.value = initial[i];
-          // tagpick.js redraws its tags from the hidden list on change.
+          // routepick.js redraws a route's controls from its hidden list on change.
           c.dispatchEvent(new Event("change", { bubbles: true }));
         });
       });

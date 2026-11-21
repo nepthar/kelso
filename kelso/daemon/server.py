@@ -11,6 +11,8 @@ import logging
 import os
 import socket
 import sys
+import threading
+import time
 from pathlib import Path
 
 import uvicorn
@@ -37,6 +39,10 @@ SOCKET_MODE = 0o660
 MAX_SOCKET_PATH = 104
 
 BACKLOG = 128
+
+# How long kelsod waits before starting apps, so the network an app's routes
+# are published on can come up first at boot.
+BOOT_DELAY = 30
 
 # Addresses that only a process on this machine can reach.
 LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -117,15 +123,22 @@ def serve(
       raise RuntimeError("Kelso is not initialized; run `kelso init` first")
     return KelsoCtx(loaded)
 
-  # Group 0 lives and dies with kelsod, started without waiting so nothing
-  # holds up the socket. Containers restart on failure but not at boot, so
-  # bringing back whatever else was running is kelsod's job too.
+  # Group 0 lives and dies with kelsod. Containers restart on failure but not
+  # at boot, so bringing back whatever else was running is kelsod's job too.
   updown.logger.setLevel(logging.INFO)
   ctx = ctx_factory()
-  updown.start_kelsod_group(ctx)
   jobs = JobRunner(ctx_factory)
   jobs.start()
-  jobs.submit("start_group", {"group": "9", "resume": "yes"}, ctx, started_by=BY_KELSOD)
+
+  def start_apps() -> None:
+    logger.warning("kelsod starting apps in %ds", BOOT_DELAY)
+    time.sleep(BOOT_DELAY)
+    updown.start_kelsod_group(ctx)
+    jobs.submit(
+      "start_group", {"group": "9", "resume": "yes"}, ctx, started_by=BY_KELSOD
+    )
+
+  threading.Thread(target=start_apps, name="kelsod-boot", daemon=True).start()
 
   sockets = [_bind_unix(socket_path)]
   logger.warning("kelsod %s listening on %s", VERSION, socket_path)

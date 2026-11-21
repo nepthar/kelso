@@ -14,6 +14,9 @@ kelso that is installed here; prefer them to anything on the web.
 - **Kelso never waits for an answer you cannot give.** A command that would ask
   `[y/N]` refuses with exit 2 when there is no terminal. Pass `--yes` once you
   have read what it is about to do.
+- **Never pass `--allow-compose` on your own.** It loads a manifest that sets
+  compose keys kelso does not model, such as `privileged` or `devices`. Show
+  the operator the warning and pass it only once they say to.
 - **An error names its fix.** Read the whole message before trying something
   else. Do not reach for `--force` or `rm --purge` unless the message offers it
   and you understand why: `--purge` deletes the app's data.

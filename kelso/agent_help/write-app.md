@@ -26,7 +26,9 @@
    ````
 
    `kelso agent-help manifest` is the full reference. Pin image tags to a
-   version; `latest` is whatever the box pulled last.
+   version; `latest` is whatever the box pulled last. A route is HTTP or HTTPS;
+   anything else (UDP, discovery, a raw TCP protocol) goes under
+   `[run.main.ports]`.
 
 2. **Check it without running it:** `kelso inspect <path>` prints what the
    manifest resolves to, or every parse error with the key that caused it.
@@ -38,7 +40,7 @@
    with `kill <pid>`: that stops the containers and cleans up, as Ctrl-C does.
    Fetch the route's URL to see that the app answers.
 
-4. **Deploy it:** `kelso deploy <path> <host> --yes` copies the bundle into
+4. **Deploy it:** `kelso deploy <path> <host>` copies the bundle into
    the box's `repos/local`, then loads and starts it there, or updates it if
    that box already runs it from the same place.
 

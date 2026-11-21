@@ -1,4 +1,6 @@
+import ipaddress
 import re
+import socket
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from logging import getLogger
@@ -70,12 +72,34 @@ def _env_kvpair(key: str, val: str) -> str:
   return f"{key}:{val}"
 
 
-def _port_string(host_port: int, container_port: int, proto: str) -> str:
+def _port_string(
+  host_port: int, container_port: int, proto: str = "tcp", host_ip: str | None = None
+) -> str:
+  published = f"{host_port}:{container_port}"
   if proto == "udp":
-    return f"{host_port}:{container_port}/udp"
-  if proto in ("tcp", "all"):
-    return f"{host_port}:{container_port}"
-  return f"{host_port}:{container_port}/{proto}"
+    published += "/udp"
+  if host_ip is None:
+    return published
+  return f"[{host_ip}]:{published}" if ":" in host_ip else f"{host_ip}:{published}"
+
+
+def route_bind_address(route_address: str) -> str | None:
+  """The IP route ports are published on: route_address if it is one, else None
+  for every interface."""
+  try:
+    return str(ipaddress.ip_address(route_address))
+  except ValueError:
+    return None
+
+
+def address_on_host(address: str) -> bool:
+  family = socket.AF_INET6 if ":" in address else socket.AF_INET
+  with socket.socket(family, socket.SOCK_STREAM) as probe:
+    try:
+      probe.bind((address, 0))
+    except OSError:
+      return False
+  return True
 
 
 @dataclass(frozen=True)
@@ -134,7 +158,6 @@ class AssignedRoute:
   run_unit_name: str
   host_port: int
   container_port: int
-  proto: str
   scheme: Literal["http", "https"]
   # The route provider tags it was loaded with, primary first: what start
   # publishes to and what a reload or removal unpublishes from, whatever the
@@ -164,7 +187,22 @@ class AssignedRoute:
     if not isinstance(providers, (list, tuple)):
       raise TypeError(f"route providers must be a list, not {providers!r}")
     fields["providers"] = tuple(providers)
-    return cls(**fields)
+    # A route loaded before ports were split out still records `proto`; read
+    # past it so its reload can unpublish it.
+    return cls(**{k: v for k, v in fields.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass(frozen=True)
+class AssignedPort:
+  name: str
+  run_unit_name: str
+  host_port: int
+  container_port: int
+  proto: Literal["tcp", "udp"]
+
+  def record(self) -> dict[str, Any]:
+    """What kelsodb holds for this port; `AssignedPort(**record)` reads it back."""
+    return dict(self.__dict__)
 
 
 @dataclass(frozen=True)
@@ -193,11 +231,14 @@ class AppRunData:
   route_urls: Mapping[str, str]
   host_mounts: tuple[dict[str, Any], ...]
   issues: tuple[ConfigIssue, ...]
+  ports: Mapping[str, AssignedPort] = field(default_factory=dict)
   connections: Mapping[str, ResolvedConnection] = field(default_factory=dict)
   # The manifest's network_mode, or the operator's `--network` over it.
   network_mode: str = "open"
   # None for an app that isn't behind kproxy, or one that can't be yet: see `issues`.
   restricted: "Restricted | None" = None
+  # Where route ports are published; None for every interface.
+  route_bind: str | None = None
 
   @property
   def load_blockers(self) -> tuple[ConfigIssue, ...]:
@@ -414,8 +455,6 @@ def _compare_route(
       mismatch("host port", spec_route.host_port, conf_route.host_port)
   if spec_route.container_port != conf_route.container_port:
     mismatch("container port", spec_route.container_port, conf_route.container_port)
-  if spec_route.proto != conf_route.proto:
-    mismatch("proto", spec_route.proto, conf_route.proto)
   if spec_route.scheme != conf_route.scheme:
     mismatch("scheme", spec_route.scheme, conf_route.scheme)
 
@@ -463,6 +502,37 @@ def _load_routes(
     _compare_route(issues, from_spec, configd)
     loaded[name] = configd
 
+  return loaded
+
+
+def _load_ports(
+  spec: AppSpec, issues: list[ConfigIssue], ctx: KelsoCtx
+) -> dict[str, AssignedPort]:
+  found = {
+    name: AssignedPort(**entry)
+    for name, entry in ctx.kelso_db.list_ports(str(spec.app)).items()
+  }
+  loaded = {}
+  for name in sorted(set(spec.ports) | set(found)):
+    declared, assigned = spec.ports.get(name), found.get(name)
+    if (
+      declared is None
+      or assigned is None
+      or (
+        (declared.run_unit_name, declared.container_port, declared.proto)
+        != (assigned.run_unit_name, assigned.container_port, assigned.proto)
+        or (not declared.needs_allocation and declared.host_port != assigned.host_port)
+      )
+    ):
+      issues.append(
+        ConfigIssue(
+          f"port {name}: the manifest and what was loaded differ",
+          f"Reload it with `kelso load {spec.app}`",
+          self_healing=True,
+        )
+      )
+      continue
+    loaded[name] = assigned
   return loaded
 
 
@@ -527,6 +597,9 @@ def _env_substitutions(
   routes = ",".join(
     _env_kvpair(name, str(data.routes[name].container_port)) for name in run_unit.routes
   )
+  ports = ",".join(
+    _env_kvpair(name, str(data.ports[name].container_port)) for name in run_unit.ports
+  )
   connections = {
     f"{CONN_KEY_PREFIX}{name}.{prop}": value
     for name in run_unit.connections
@@ -541,6 +614,7 @@ def _env_substitutions(
     f"{KLSO_KEY_PREFIX}volumes": volumes,
     f"{KLSO_KEY_PREFIX}cmd": cmd,
     f"{KLSO_KEY_PREFIX}routes": routes,
+    f"{KLSO_KEY_PREFIX}ports": ports,
   }
 
 
@@ -548,6 +622,10 @@ def _env_substitutions(
 HEALTHCHECK_TIMING = {"interval": "60s", "start_period": "2m", "start_interval": "5s"}
 
 SECRET_SHOWN = "<secret>"
+
+# Blocks setuid escalation inside a container; images that sudo at runtime need
+# `security_opt` of their own in [run.<unit>.compose].
+SECURITY_OPT = ["no-new-privileges:true"]
 
 
 def shown_environment(
@@ -617,6 +695,7 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       "driver": "json-file",
       "options": {"max-size": "10m", "max-file": "3"},
     }
+    service["security_opt"] = list(SECURITY_OPT)
 
     mounts = [
       _mount(bound.volume.run_rel_path, bound.guest_path, readonly=bound.readonly)
@@ -635,17 +714,24 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
       service["command"] = [arg.replace("$", "$$") for arg in run_unit.command]
 
     if restricted:
-      # Routes are published on kproxy, which relays them in.
+      # Routes and ports are published on kproxy, which relays them in.
       service["networks"] = [kproxy.INTERNAL_NETWORK]
       service["dns"] = [kproxy.proxy_address(restricted.subnet)]
-    elif run_unit.routes:
+    elif run_unit.routes or run_unit.ports:
       service["ports"] = [
         _port_string(
           data.routes[name].host_port,
           data.routes[name].container_port,
-          data.routes[name].proto,
+          host_ip=data.route_bind,
         )
         for name in run_unit.routes
+      ] + [
+        _port_string(
+          data.ports[name].host_port,
+          data.ports[name].container_port,
+          data.ports[name].proto,
+        )
+        for name in run_unit.ports
       ]
 
     if spec.network_mode == "host":
@@ -669,14 +755,23 @@ def make_compose_dict(spec: AppSpec, data: AppRunData) -> dict[str, Any]:
     "services": services,
   }
   if restricted:
+    route_ports = {route.host_port for route in data.routes.values()}
     services[kproxy.KPROXY_SERVICE] = kproxy.compose_service(
       source=restricted.source,
       subnet=restricted.subnet,
       ports=[
-        _port_string(host_port, kproxy.ingress_port(i), proto)
-        for i, (_, host_port, _, _, proto) in enumerate(_ingress(data.routes))
+        _port_string(
+          host_port,
+          kproxy.ingress_port(i),
+          proto,
+          host_ip=data.route_bind if host_port in route_ports else None,
+        )
+        for i, (_, host_port, _, _, proto) in enumerate(
+          _ingress(data.routes, data.ports)
+        )
       ],
     )
+    services[kproxy.KPROXY_SERVICE]["security_opt"] = list(SECURITY_OPT)
     compose["networks"] = kproxy.compose_networks(restricted.subnet)
   return compose
 
@@ -686,10 +781,20 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
   run_path = ctx.loaded_paths(spec.app).run_path
   config_values = _load_config_values(spec, issues, ctx)
   routes = _load_routes(spec, issues, ctx)
+  ports = _load_ports(spec, issues, ctx)
   vol_links = _load_volume_links(spec, issues, ctx)
   mode = network_mode(spec, ctx)
   addresses = _http_addresses(spec, issues, config_values)
-  restricted = _load_restricted(spec, mode, issues, ctx, addresses, routes)
+  restricted = _load_restricted(spec, mode, issues, ctx, addresses, routes, ports)
+  route_bind = route_bind_address(ctx.config.route_address)
+  if routes and route_bind and not address_on_host(route_bind):
+    issues.append(
+      ConfigIssue(
+        f"route_address {route_bind} is not an address on this host, so its "
+        f"routes cannot be published",
+        "Fix route_address in config.toml, or bring up the network it is on",
+      )
+    )
   return AppRunData(
     app=spec.app,
     run_path=run_path,
@@ -700,11 +805,13 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     route_urls=_route_urls(
       routes, ctx.config, host_network=spec.network_mode == "host"
     ),
+    ports=ports,
     host_mounts=_host_mounts(),
     connections=_load_connections(spec, mode, addresses, issues, ctx),
     issues=tuple(issues),
     network_mode=mode,
     restricted=restricted,
+    route_bind=route_bind,
   )
 
 
@@ -714,13 +821,20 @@ def network_mode(spec: AppSpec, ctx: KelsoCtx) -> str:
 
 
 def _ingress(
-  routes: Mapping[str, AssignedRoute],
+  routes: Mapping[str, AssignedRoute], ports: Mapping[str, AssignedPort]
 ) -> list[tuple[str, int, str, int, str]]:
-  """Routes as kproxy takes them, in the one order its rules and ports share."""
-  return [
-    (name, route.host_port, route.run_unit_name, route.container_port, route.proto)
-    for name, route in sorted(routes.items())
-  ]
+  """Routes and ports as kproxy takes them, in the one order its rules and ports
+  share."""
+  return sorted(
+    [
+      (name, route.host_port, route.run_unit_name, route.container_port, "tcp")
+      for name, route in routes.items()
+    ]
+    + [
+      (name, port.host_port, port.run_unit_name, port.container_port, port.proto)
+      for name, port in ports.items()
+    ]
+  )
 
 
 def _http_addresses(
@@ -761,6 +875,7 @@ def _load_restricted(
   ctx: KelsoCtx,
   forwards: Mapping[str, str],
   routes: Mapping[str, AssignedRoute],
+  ports: Mapping[str, AssignedPort],
 ) -> Restricted | None:
   if mode not in PROXIED_MODES:
     return None
@@ -795,7 +910,7 @@ def _load_restricted(
   rules = kproxy.rules_text(
     hosts,
     forwards,
-    _ingress(routes),
+    _ingress(routes, ports),
     default=PROXIED_MODES[mode],
     denied=[name for name, verdict in decided.items() if verdict == "deny"],
   )

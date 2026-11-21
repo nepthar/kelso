@@ -384,7 +384,7 @@ def test_update_without_a_backup_disk_changes_nothing_unless_told(kelso_env, tmp
   if backups.exists():
     backups.rmdir()
   backups.symlink_to(tmp_path / "gone")
-  refused = kelso_env.run("update", BASIC, "-y")
+  refused = kelso_env.run("update", BASIC)
   assert refused.returncode == 1
   assert "--no-backup" in refused.stderr
 
@@ -403,7 +403,7 @@ def test_update_refuses_when_the_repository_fails_its_check(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   _back_up(kelso_env, BASIC)
   (kelso_env.root / "backups" / "corrupt").touch()
-  refused = kelso_env.run("update", BASIC, "-y")
+  refused = kelso_env.run("update", BASIC)
   assert refused.returncode == 1
   assert "Nothing changed" in refused.stderr
   assert "repository contains errors" in refused.stderr
@@ -414,14 +414,14 @@ def test_a_stale_lock_is_cleared_and_the_update_goes_ahead(kelso_env):
   _back_up(kelso_env, BASIC)
   lock = kelso_env.root / "backups" / "lock"
   lock.write_text("stale")
-  assert kelso_env.run("update", BASIC, "-y").returncode == 0
+  assert kelso_env.run("update", BASIC).returncode == 0
   assert not lock.exists()
 
 
 def test_update_replaces_a_loaded_manifest_that_no_longer_parses(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").write_text("x = [")
-  updated = kelso_env.run("update", BASIC, "-y")
+  updated = kelso_env.run("update", BASIC)
   assert updated.returncode == 0, updated.stderr
   assert "broken manifest" not in kelso_env.run("ps").stdout
 
@@ -430,7 +430,7 @@ def test_a_held_lock_still_refuses_the_update(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   _back_up(kelso_env, BASIC)
   (kelso_env.root / "backups" / "lock").write_text("held")
-  refused = kelso_env.run("update", BASIC, "-y")
+  refused = kelso_env.run("update", BASIC)
   assert refused.returncode == 1
   assert "Nothing changed" in refused.stderr
   assert "already locked" in refused.stderr

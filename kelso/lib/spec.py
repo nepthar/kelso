@@ -91,14 +91,27 @@ class AppRoute:
   run_unit_name: str
   host_port: int
   container_port: int
-  proto: str
-  private: bool
+  admin: bool
   scheme: Literal["http", "https"]
   desc: str = ""
 
   def subdomain(self, app_subdomain: str) -> str:
     prefix = "" if self.route_name == PRIMARY_ROUTE_NAME else f"{self.route_name}-"
     return f"{prefix}{app_subdomain}"
+
+  @property
+  def needs_allocation(self) -> bool:
+    return self.host_port == -1
+
+
+@dataclass(frozen=True)
+class AppPort:
+  name: str
+  run_unit_name: str
+  host_port: int
+  container_port: int
+  proto: Literal["tcp", "udp"]
+  desc: str = ""
 
   @property
   def needs_allocation(self) -> bool:
@@ -113,6 +126,7 @@ class AppRunUnit:
   environment: Mapping[str, str]
   volumes: Mapping[str, BoundVolume]
   routes: Mapping[str, AppRoute]
+  ports: Mapping[str, AppPort]
   labels: Mapping[str, str]
   restart: str
   shell: tuple[str, ...]
@@ -164,6 +178,7 @@ class AppSpec:
   manifest: Manifest
   run_units: Mapping[str, AppRunUnit]
   routes: Mapping[str, AppRoute]
+  ports: Mapping[str, AppPort]
   config: Mapping[str, AppConfig]
   volumes: Mapping[str, AppVolume]
   commands: Mapping[str, AppCommand]
@@ -268,10 +283,13 @@ def _build(manifest: Manifest, app: AppID) -> AppSpec:
     app=app,
     manifest=manifest,
     run_units=run_units,
-    # Route names are unique across units -- `_validate_routes` rejected
-    # anything else before we got here.
+    # Route and port names are unique across units -- `_validate_routes`
+    # rejected anything else before we got here.
     routes={
       name: route for unit in run_units.values() for name, route in unit.routes.items()
+    },
+    ports={
+      name: port for unit in run_units.values() for name, port in unit.ports.items()
     },
     config=config,
     volumes=volumes,
@@ -323,12 +341,22 @@ def _resolve_run_units(
           run_unit_name=run_unit_name,
           host_port=route.port_spec.host_port,
           container_port=route.port_spec.container_port,
-          proto=route.port_spec.proto,
-          private=route.private,
+          admin=route.admin,
           scheme=route.scheme,
           desc=route.desc,
         )
         for name, route in run_entry.routes.items()
+      },
+      ports={
+        name: AppPort(
+          name=name,
+          run_unit_name=run_unit_name,
+          host_port=port.port_spec.host_port,
+          container_port=port.port_spec.container_port,
+          proto=port.port_spec.proto,
+          desc=port.desc,
+        )
+        for name, port in run_entry.ports.items()
       },
       labels={
         KELSO_APP_ID_LABEL: app,

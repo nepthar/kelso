@@ -8,30 +8,16 @@
     the last value is the one read. -#}
   <input type="hidden" name="set.{{ f.name }}" value="off">
   <input type="checkbox" name="set.{{ f.name }}" value="on"{% if f.get('value') == 'on' %} checked{% endif %}>
-{%- elif f.get('multi') %}
-  {#- Picked by toggling the tags, in the order clicked; js/tagpick.js keeps
-    the hidden comma list in step. Where order matters (`primary_desc`), the
-    first pick is the primary and says so on hover; drop it and the next one
-    up takes its place. Deselecting every one sends the field's empty value;
-    an untouched blank sends nothing, like a blank select. -#}
-  {%- set on = (f.get('value') or '').split(',')|map('trim')|list %}
-  {%- set primary_desc = f.get('primary_desc') or '' %}
-  <input type="hidden" name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" data-tag-pick data-empty="{{ f.get('empty_value') or '' }}" data-primary-desc="{{ primary_desc }}">
-  {%- if f.choices %}
-  <div class="tag-picks">
-    {%- for c in f.choices %}<button type="button" class="tag" data-tag="{{ c }}" aria-pressed="{{ 'true' if c in on else 'false' }}"{% if primary_desc and c == on[0] %} data-primary title="{{ primary_desc }}"{% endif %}>{{ c }}</button>{% endfor -%}
-  </div>
-  {%- else %}
-  <span class="muted">none defined yet</span>
-  {%- endif %}
 {%- elif f.get('choices') is not none %}
-  {#- The blank option submits nothing, which leaves what is on file alone. An
-    unset field shows its default picked; kelsod keeps it unset when that comes
-    back. -#}
+  {#- An unset field shows its default picked; kelsod keeps it unset when that
+    comes back. With nothing to show, a placeholder that can't be picked back,
+    and that submits nothing, which leaves what is on file alone. -#}
   {%- set current = f.get('value') if f.get('value') is not none else f.get('default') %}
   {%- set labels = f.get('labels') or f.choices %}
   <select name="set.{{ f.name }}"{% if not f.choices %} disabled{% endif %}>
-    <option value="">{{ 'choose one' if f.choices else 'none defined yet' }}</option>
+    {%- if current not in f.choices %}
+    <option value="" disabled selected hidden>{{ 'choose one' if f.choices else 'none defined yet' }}</option>
+    {%- endif %}
     {%- for c in f.choices %}<option value="{{ c }}"{% if c == current %} selected{% endif %}>{{ labels[loop.index0] }}</option>{% endfor -%}
   </select>
 {%- elif f.secret %}
@@ -53,6 +39,39 @@
 </tbody></table></div>
 {%- endmacro %}
 
+{#- The routes tab: which providers publish each route, and which of their URLs
+  is the primary. js/routepick.js writes both into the hidden comma list the
+  field posts, primary first. Picking none sends the field's empty value; an
+  untouched blank sends nothing. The checkboxes and the primary select are
+  unnamed, `data-ui`, and post nothing of their own. -#}
+{% macro _routes_table(fields) -%}
+{% if not fields[0].choices %}
+<p class="empty">No route providers are set up. Add one in the Routes window.</p>
+{% else %}
+<div class="scroll"><table class="kv routes-pick"><thead><tr><th>Route</th><th>Providers</th><th>Primary URL</th><th>Description</th></tr></thead><tbody>
+{% for f in fields %}
+{%- set on = (f.get('value') or '').split(',')|map('trim')|list %}
+{%- set urls = f.get('choice_urls') or [] %}
+<tr data-route-pick>
+  <td class="key">{{ f.name.removeprefix('route.') }}</td>
+  <td class="field">
+    <input type="hidden" name="set.{{ f.name }}" value="{{ f.get('value') or '' }}" data-route-value data-empty="{{ f.get('empty_value') or '' }}">
+    <details class="multi-pick">
+      <summary></summary>
+      <div class="multi-pick-menu">
+        {%- for c in f.choices %}<label><input type="checkbox" value="{{ c }}" data-ui{% if c in on %} checked{% endif %}>{{ c }}</label>{% endfor -%}
+      </div>
+    </details>
+  </td>
+  <td class="field"><select data-ui data-route-primary title="{{ f.get('primary_desc') or '' }}">
+    {%- for c in f.choices %}<option value="{{ c }}" title="{{ urls[loop.index0] if urls else c }}">{{ urls[loop.index0] if urls else c }}</option>{% endfor -%}
+  </select></td>
+  <td class="muted wrap">{{ f.get('desc') or '' }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+{%- endmacro %}
+
 {#- `dialog`: the form is a dialog window's, so Save and Cancel are always
   there and Save is live from the start. -#}
 {% macro config_form(request, action, hidden={}, dialog=false) -%}
@@ -61,17 +80,17 @@
 <p class="empty">Nothing to configure.</p>
 {% else %}
 {% set missing = request.get('missing') or [] %}
-{#- Params, options and advanced config are tabs; a missing field is always
-  on the first. -#}
-{% set basic = [] %}{% set advanced = [] %}{% set options = [] %}
+{#- Params, options, routes and advanced config are tabs; a missing field is
+  always on the first. -#}
+{% set basic = [] %}{% set advanced = [] %}{% set options = [] %}{% set routes = [] %}
 {% for f in fields %}
   {%- set section = f.get('section') or 'config' -%}
-  {% do (basic if section == 'config' or f.name in missing else advanced if section == 'advanced' else options).append(f) %}
+  {% do (basic if section == 'config' or f.name in missing else advanced if section == 'advanced' else routes if section == 'route' else options).append(f) %}
 {%- endfor %}
 <form method="post" action="{{ action }}" class="cfg-form">
   {% for k, v in hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   {% set panels = [] %}
-  {% for id, label, group in [('params', 'Params', basic), ('options', 'Options', options), ('advanced', 'Advanced', advanced)] if group %}
+  {% for id, label, group in [('params', 'Params', basic), ('options', 'Options', options), ('routes', 'Routes', routes), ('advanced', 'Advanced', advanced)] if group %}
   {% do panels.append((id, label, group)) %}
   {% endfor %}
   {% if not panels %}
@@ -81,8 +100,10 @@
     {%- for id, label, group in panels %}<li role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}"><a href="#cfg-{{ id }}">{{ label }}</a></li>{% endfor -%}
   </menu>
   {% for id, label, group in panels %}
-  <div class="pane tabpanel" role="tabpanel" id="cfg-{{ id }}"{% if not loop.first %} hidden{% endif %}>{{ _table(group, missing) }}</div>
+  <div class="pane tabpanel" role="tabpanel" id="cfg-{{ id }}"{% if not loop.first %} hidden{% endif %}>{{ _routes_table(group) if id == 'routes' else _table(group, missing) }}</div>
   {% endfor %}
+  {% elif panels[0][0] == 'routes' %}
+  {{ _routes_table(panels[0][2]) }}
   {% else %}
   {{ _table(panels[0][2], missing) }}
   {% endif %}

@@ -81,7 +81,7 @@ def test_start_ps_stop_tracks_docker_reality(kelso_env):
   assert started.returncode == 0, started.stderr
   assert "Running ports-demo" in started.stdout
   assert "Containers:  main, image=alpine:latest" in started.stdout
-  assert "main:8080/tcp <- http://localhost:41000" in started.stdout
+  assert "main:8080 <- http://localhost:41000" in started.stdout
   assert "kelso logs -f ports-demo" in started.stdout
 
   concise = kelso_env.run("ps")
@@ -135,6 +135,19 @@ def test_start_receipt_uses_route_address_for_local_urls(kelso_env):
   assert "http://localhost:41000" not in started.stdout
 
 
+def test_start_refuses_when_route_address_is_not_on_this_host(kelso_env, monkeypatch):
+  monkeypatch.setattr("kelso.lib.run_layout.address_on_host", lambda address: False)
+  kelso_env.config.write_text(
+    kelso_env.config.read_text().replace(
+      "port_base = 41000\n",
+      'port_base = 41000\nroute_address = "100.64.1.2"\n',
+    )
+  )
+  refused = kelso_env.run("start", "ports-demo")
+  assert refused.returncode == 1
+  assert "route_address 100.64.1.2 is not an address on this host" in refused.stderr
+
+
 def test_start_receipt_prefers_link_address_for_local_urls(kelso_env):
   kelso_env.config.write_text(
     kelso_env.config.read_text().replace(
@@ -185,7 +198,7 @@ def test_inspect_shows_live_state_for_an_loaded_app(kelso_env):
   assert inspected.returncode == 0, inspected.stderr
   assert "running" in inspected.stdout
   assert "Containers:  main, image=alpine:latest" in inspected.stdout
-  assert "main:8080/tcp <- http://localhost:41000" in inspected.stdout
+  assert "main:8080 <- http://localhost:41000" in inspected.stdout
   assert "kelso logs -f ports-demo" in inspected.stdout
   assert "Last action:" in inspected.stdout
   assert "subdomain: ports" in inspected.stdout
@@ -303,7 +316,11 @@ compose = { privileged = true }
   assert "Nothing started." in declined.stdout
   assert not (kelso_env.run_root / "privileged-demo").exists()
 
-  started = kelso_env.run("start", "privileged-demo", "-y")
+  refused = kelso_env.run("start", "privileged-demo")
+  assert refused.returncode == 2
+  assert "--allow-compose" in refused.stderr
+
+  started = kelso_env.run("start", "privileged-demo", "--allow-compose")
   assert started.returncode == 0, started.stderr
 
 
@@ -1549,6 +1566,20 @@ def test_doctor_exposes_mixed_container_states(kelso_env):
   prognosis = _diagnose(kelso_env)
   assert Finding(app_id, "mixed container states") in prognosis.warnings
   assert Finding(app_id, "mixed container states") not in prognosis.problems
+
+
+def test_doctor_reports_a_started_app_with_nothing_running(kelso_env):
+  assert kelso_env.run("start", "ports-demo").returncode == 0
+  assert not _diagnose(kelso_env).problems
+  kelso_env.set_containers([])
+
+  prognosis = _diagnose(kelso_env)
+  assert (
+    Finding(
+      "ports-demo", "should be running but is not; `kelso start ports-demo` says why"
+    )
+    in prognosis.problems
+  )
 
 
 def test_doctor_lists_problems_then_warnings(kelso_env):

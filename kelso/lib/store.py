@@ -120,9 +120,21 @@ class KelsoStore:
   def clear_routes(self, app_id: str) -> None:
     self._store.clear(f"routes/{app_id}/")
 
+  def list_ports(self, app_id: str) -> dict[str, dict[str, Any]]:
+    return self._store.scan(f"ports/{app_id}/")
+
+  def set_port(self, app_id: str, port_name: str, entry: Mapping[str, Any]) -> None:
+    self._store.write(f"ports/{app_id}/{port_name}", dict(entry))
+
+  def clear_ports(self, app_id: str) -> None:
+    self._store.clear(f"ports/{app_id}/")
+
   def next_free_port(self) -> int:
-    rout_entries = self._store.scan(prefix="routes/")
-    occupied = set(int(entry["host_port"]) for entry in rout_entries.values())
+    entries = [
+      *self._store.scan(prefix="routes/").values(),
+      *self._store.scan(prefix="ports/").values(),
+    ]
+    occupied = set(int(entry["host_port"]) for entry in entries)
     port = self._port_base
     max_port = self._port_base + PORT_RANGE_SIZE
     while port in occupied:
@@ -254,13 +266,17 @@ class KelsoStore:
   def app_ids(self) -> list[str]:
     """Every app kelsodb still holds *load* state for: routes or a subnet."""
     routes = {key.split("/")[0] for key in self._store.scan("routes/")}
-    return sorted(routes | set(self._store.scan("subnets/")))
+    ports = {key.split("/")[0] for key in self._store.scan("ports/")}
+    return sorted(routes | ports | set(self._store.scan("subnets/")))
 
   def purge_app(self, app_id: str) -> bool:
-    had = bool(self._store.scan(f"routes/{app_id}/")) or (
-      self.get_subnet(app_id) is not None
+    had = (
+      bool(self._store.scan(f"routes/{app_id}/"))
+      or bool(self._store.scan(f"ports/{app_id}/"))
+      or self.get_subnet(app_id) is not None
     )
     self.clear_routes(app_id)
+    self.clear_ports(app_id)
     self.clear_subnet(app_id)
     return had
 

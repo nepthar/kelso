@@ -68,7 +68,7 @@ Identifier = Annotated[str, AfterValidator(validate_identifier)]
 # `klso.domain`) but the keyspace itself is flat — see EnvTemplate.
 ROUTE_KEY_PREFIX = "routes."
 KLSO_KEY_PREFIX = "klso."
-KLSO_KEYS = frozenset({"domain", "volumes", "cmd", "routes"})
+KLSO_KEYS = frozenset({"domain", "volumes", "cmd", "routes", "ports"})
 
 # Reserved for kelso's future use: manifests may not mount anything there.
 KELSO_GUEST_DIR = "/kelso"

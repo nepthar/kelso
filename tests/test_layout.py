@@ -649,8 +649,8 @@ def test_dev_lists_every_route_and_where_to_reach_it(kelso_env):
   assert "Routes:" in result.stdout
   assert "Host:" not in result.stdout
   # web is auto-allocated from port_base; admin is pinned at 9000:80.
-  assert "main:8080/tcp <- http://localhost:41000" in result.stdout
-  assert "main:80/tcp <- http://localhost:9000" in result.stdout
+  assert "main:8080 <- http://localhost:41000" in result.stdout
+  assert "main:80 <- http://localhost:9000" in result.stdout
   # Unpublished: the local port is the whole story, and the receipt says why.
   assert "kelso.localhost" not in result.stdout
   assert "publish them with --routes" in result.stdout
@@ -668,7 +668,25 @@ def test_dev_lists_an_https_route_with_its_scheme(kelso_env):
 
   result = kelso_env.run("dev", str(bundle))
   assert result.returncode == 0, result.stderr
-  assert "main:8443/tcp <- https://localhost:" in result.stdout
+  assert "main:8443 <- https://localhost:" in result.stdout
+
+
+def test_dev_lists_a_port_apart_from_routes(kelso_env):
+  bundle = _write_bundle(
+    kelso_env,
+    "stun-demo",
+    '[app]\nversion = "1"\n\n'
+    "[run.main]\n"
+    'image = "alpine:latest"\n'
+    'routes = { main = { port = "8080" } }\n'
+    'ports  = { stun = { port = "3478:3478/udp" } }\n',
+  )
+
+  result = kelso_env.run("dev", str(bundle))
+  assert result.returncode == 0, result.stderr
+  assert "Ports:" in result.stdout
+  assert "stun: main:3478/udp <- localhost:3478" in result.stdout
+  assert "stun:" not in result.stdout.split("Ports:")[0]
 
 
 def test_dev_routes_publishes_for_the_length_of_the_run(kelso_env):
@@ -677,11 +695,11 @@ def test_dev_routes_publishes_for_the_length_of_the_run(kelso_env):
 
   # Neither route is named `main`, so both subdomains are prefixed.
   assert (
-    "main:8080/tcp <- http://localhost:41000 <- https://web-ports.kelso.localhost"
+    "main:8080 <- http://localhost:41000 <- https://web-ports.kelso.localhost"
     in result.stdout
   )
   assert (
-    "main:80/tcp <- http://localhost:9000 <- https://admin-ports.kelso.localhost"
+    "main:80 <- http://localhost:9000 <- https://admin-ports.kelso.localhost"
     in result.stdout
   )
   assert "publish them with --routes" not in result.stdout

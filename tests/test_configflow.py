@@ -305,7 +305,7 @@ def test_a_host_volume_is_a_choice_of_the_declared_host_volumes(kelso_env):
   assert "volume.hostvol1" in request.missing()
 
 
-def test_every_route_is_a_choice_of_providers_private_ones_included(kelso_env):
+def test_every_route_is_a_choice_of_providers_admin_ones_included(kelso_env):
   _, _, request = _app_request(kelso_env, "routes-demo")
 
   routes = {f.name: f for f in request.fields if f.name.startswith("route.")}
@@ -322,6 +322,11 @@ def test_every_route_is_a_choice_of_providers_private_ones_included(kelso_env):
     "Primary route: passed to the app as ${routes.main} and ${klso.domain}"
   )
   assert all(not field.required for field in routes.values())
+  # Where each provider would publish it, so a front end can offer the primary by URL.
+  (admin_url,) = routes["route.admin"].choice_urls
+  (main_url,) = routes["route.main"].choice_urls
+  assert admin_url.startswith("https://admin-photos.")
+  assert main_url.startswith("https://photos.")
   assert not request.validate({"route.admin": "none"})
   assert request.validate({"route.admin": "web,none"})
 
