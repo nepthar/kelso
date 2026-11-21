@@ -66,9 +66,13 @@ def route_lines(
   for name, route in spec.routes.items():
     where = host_url(spec, run_data, name, host) or "(no host port allocated)"
 
-    line = f"{route.run_unit_name}:{route.container_port}/{route.proto} <- {where}"
+    line = (
+      f"{name}: {route.run_unit_name}:{route.container_port}/{route.proto} <- {where}"
+    )
     if published.get(name):
       line += f" <- {', '.join(published[name])}"
+    if route.private:
+      line += " (private)"
     lines.append(line)
   return lines
 
@@ -218,9 +222,9 @@ def location_receipt(
   for i, line in enumerate(routes):
     rows.append(("Routes:" if i == 0 else "", line))
 
-  places = {name: where for name, _, where in _volume_paths(spec, run_data, ctx)}
-  if places:
-    rows.append(("Data:", places.get("data", next(iter(places.values())))))
+  for name, kind, where in _volume_paths(spec, run_data, ctx):
+    if kind == "data":
+      rows.append(("Data:", f"{name}: {where}"))
 
   rows.append(("Logs:", f"kelso logs -f {app_id}"))
 

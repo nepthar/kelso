@@ -73,7 +73,10 @@ def run_add_provider(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.kelso_lock("routes add-provider"):
     provider = resolve_route_provider(args.tag, ctx, args.kind)
     request = route_provider_config_request(args.tag, provider, ctx)
-    response = collect(request)
+    response = collect(
+      request,
+      f"have a person run `kelso route add-provider {args.tag}` in a terminal",
+    )
     if response == EMPTY_CONFIG_RESPONSE:
       print("No changes")
       return

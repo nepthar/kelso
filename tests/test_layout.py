@@ -462,7 +462,9 @@ def test_dev_runs_in_the_foreground_against_the_source(kelso_env):
 def test_dev_loads_a_new_bundle_and_asks_for_missing_config(kelso_env):
   # admin_pass keeps its generated secret, admin_user is asked for, the
   # advanced config and app options are skipped, then the form is submitted.
-  result = kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n")
+  result = kelso_env.run(
+    "dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n", tty=True
+  )
   assert result.returncode == 0, result.stderr
   assert (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").is_file()
   assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]
@@ -473,7 +475,10 @@ def test_dev_loads_a_new_bundle_and_asks_for_missing_config(kelso_env):
 
 def test_dev_config_carries_over_to_the_next_run(kelso_env):
   assert (
-    kelso_env.run("dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n").returncode == 0
+    kelso_env.run(
+      "dev", _bundle(kelso_env), input="\nalice\nn\nn\ns\n", tty=True
+    ).returncode
+    == 0
   )
   secret = kelso_env.run(
     "config", BASIC, "--get", "admin_pass", "--show-secret"
@@ -492,8 +497,9 @@ def test_dev_config_carries_over_to_the_next_run(kelso_env):
 
 def test_dev_refuses_when_config_is_still_missing(kelso_env):
   refused = kelso_env.run("dev", _bundle(kelso_env))
-  assert refused.returncode == 1
+  assert refused.returncode == 2
   assert "admin_user" in refused.stderr
+  assert "--set NAME=VALUE" in refused.stderr
   assert ["compose", "up"] not in [c["args"] for c in _docker_calls(kelso_env)]
 
 
@@ -751,3 +757,9 @@ def test_rm_then_start_is_a_clean_reload(kelso_env):
     "config", BASIC, "--get", "admin_pass", "--show-secret"
   ).stdout.strip()
   assert fresh and fresh != minted
+
+
+def test_dev_takes_what_the_app_needs_from_set(kelso_env):
+  done = kelso_env.run("dev", _bundle(kelso_env), "--set", "admin_user=alice")
+  assert done.returncode == 0, done.stderr
+  assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]

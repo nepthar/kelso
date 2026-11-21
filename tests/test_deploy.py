@@ -65,7 +65,7 @@ def test_first_deploy_copies_then_loads_and_starts(kelso_env, remote):
   assert remote.cwds[2] == remote.bundle
   assert remote.calls[1][-1] == f"kelso app which --loaded {APP}"
   assert remote.calls[3][-1] == f"kelso config {APP} --json"
-  assert remote.calls[4][-1] == (f"kelso load {APP}@local --yes && kelso start {APP}")
+  assert remote.calls[4][-1] == f"kelso start {APP}@local --yes"
   assert len(remote.calls) == 5
 
 
@@ -102,7 +102,7 @@ def test_deploy_answers_what_the_app_needs_from_set(kelso_env, remote):
   assert json.loads(remote.inputs[-2]) == {
     "values": {"admin_pass": "hunter2", "volume.media": "nas"}
   }
-  assert remote.calls[-1][-1].endswith(f"kelso start {APP}")
+  assert remote.calls[-1][-1] == f"kelso start {APP}@local --yes"
 
 
 def test_deploy_refuses_an_answer_the_box_cannot_take(kelso_env, remote):

@@ -29,7 +29,7 @@ settings = { kind = "data", desc = "the desktop's settings" }
 admin = { kind = "kelso.admin", desc = "kelsod's admin API, which this app is a face for" }
 
 [run.main]
-image   = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
+image   = "ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim"
 cmd     = ["/app/start.sh"]
 volumes = { ui = "/app", venv = "/venv", tls = "/tls", settings = "/settings" }
 routes  = { main = { port = "8080", scheme = "https" } }

@@ -473,10 +473,17 @@ def _host_mounts() -> tuple[dict[str, Any], ...]:
   return (_mount(LOCALTIME_PATH, LOCALTIME_PATH, readonly=True),)
 
 
-def _route_urls(routes: Mapping[str, AssignedRoute], config: Config) -> dict[str, str]:
-  """Where each route answers: primary provider domain, or kelso.localhost placeholder."""
+def _route_urls(
+  routes: Mapping[str, AssignedRoute], config: Config, *, host_network: bool = False
+) -> dict[str, str]:
+  """Where each route answers: through its primary provider, or, published
+  nowhere, on the host itself."""
   urls: dict[str, str] = {}
   for name, route in routes.items():
+    port = route.container_port if host_network else route.host_port
+    if not route.providers and port > 0:
+      urls[name] = f"{route.scheme}://{config.link_address}:{port}"
+      continue
     if not route.subdomain:
       continue
     domain = config.provider_domain(route.primary_provider)
@@ -690,7 +697,9 @@ def load_run_data(spec: AppSpec, ctx: KelsoCtx) -> AppRunData:
     volume_links=vol_links,
     config_values=config_values,
     routes=routes,
-    route_urls=_route_urls(routes, ctx.config),
+    route_urls=_route_urls(
+      routes, ctx.config, host_network=spec.network_mode == "host"
+    ),
     host_mounts=_host_mounts(),
     connections=_load_connections(spec, mode, addresses, issues, ctx),
     issues=tuple(issues),

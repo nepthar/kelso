@@ -9,6 +9,7 @@ from getpass import getpass
 
 from tabulate import tabulate
 
+from kelso.cli.confirm import Refused
 from kelso.lib.configflow import (
   EMPTY_CONFIG_RESPONSE,
   ConfigField,
@@ -111,9 +112,16 @@ def run_form(request: ConfigRequest) -> ConfigResponse:
     return EMPTY_CONFIG_RESPONSE
 
 
-def collect(request: ConfigRequest) -> ConfigResponse:
-  """Collect a response; EMPTY_CONFIG_RESPONSE when there is nothing to apply."""
-  if sys.stdin.isatty() and sys.stdout.isatty():
+def collect(request: ConfigRequest, instead: str) -> ConfigResponse:
+  """Collect a response; EMPTY_CONFIG_RESPONSE when there is nothing to apply.
+
+  Raises Refused, saying to do `instead`, when there is no terminal to ask on.
+  """
+  if not sys.stdin.isatty():
+    missing = ", ".join(request.missing())
+    needs = f" needs {missing}, and" if missing else ":"
+    raise Refused(f"{request.title}{needs} there is no terminal to ask on; {instead}")
+  if sys.stdout.isatty():
     from kelso.cli.configtui import run_tui
 
     return run_tui(request)

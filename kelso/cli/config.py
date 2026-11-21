@@ -166,7 +166,9 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
     print(f"App {app} declares no config")
     return
 
-  response = collect(request)
+  response = collect(
+    request, f"set values with `kelso config {app} --set NAME=VALUE` (see --help)"
+  )
   if response == EMPTY_CONFIG_RESPONSE:
     print("No changes")
     return

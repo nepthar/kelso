@@ -86,7 +86,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
   was = loaded.stdout.strip().partition(" ")[2]
   if not was:
-    command = f"kelso load {app}@{LOCAL_REPO} --yes && kelso start {app}"
+    command = f"kelso start {app}@{LOCAL_REPO} --yes"
   elif was == dest:
     command = f"kelso update {app} --yes"
     if args.no_backup:
@@ -138,7 +138,7 @@ def _answers(host: str, app: str, sets: list[str]) -> dict[str, str]:
   if not missing:
     return answers
   if sys.stdin.isatty() and sys.stdout.isatty():
-    return {**collect(request).values, **answers}
+    return {**collect(request, "pass --set NAME=VALUE").values, **answers}
   raise ValueError(_needs(host, app, request, missing))
 
 

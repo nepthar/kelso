@@ -21,6 +21,10 @@ uv tool install "git+https://github.com/nepthar/kelso@v1.0.1"
 kelso init --yes
 sudo reboot
 ```
+`@v1.0.1` is a release tag. Name a branch or a commit there instead to install
+that: `@main` is the newest kelso, and `kelso --version` shows the commit you
+got.
+
 The install carries two commands: `kelso`, the CLI, and `kelsod`, the daemon
 that starts apps at boot, runs their cron jobs, records metrics, and serves the
 admin API the web UI talks to.

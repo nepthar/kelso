@@ -167,6 +167,6 @@ def dev(plan: DevPlan, ctx: KelsoCtx) -> int:
         _compose_down(plan)
   finally:
     unlink_host_volumes(plan.run_path)
+    record_app_action("dev-stopped", app, ctx)
 
-  record_app_action("dev-stopped", app, ctx)
   return result.returncode

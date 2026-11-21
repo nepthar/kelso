@@ -200,6 +200,19 @@ def test_assigned_routes_yields_each_provider_primary_first():
   assert pairs == [("main", "pangolin"), ("main", "npm")]
 
 
+def test_a_route_published_nowhere_gives_its_address_on_the_host():
+  spec = _spec(ROUTES)
+  config = SimpleNamespace(link_address="10.0.0.5")
+  route = _assigned(spec, "main", providers=())
+  on_host = f"{route.scheme}://10.0.0.5:{route.host_port}"
+  assert route.host_port > 0
+  assert _route_urls({"main": route}, config) == {"main": on_host}
+  in_host_mode = f"{route.scheme}://10.0.0.5:{route.container_port}"
+  assert _route_urls({"main": route}, config, host_network=True) == {
+    "main": in_host_mode
+  }
+
+
 def test_the_first_provider_gives_a_route_its_url():
   spec = _spec(ROUTES)
   domains = {"pangolin": "example.com", "npm": "home.lan"}
@@ -1323,7 +1336,8 @@ def _run_data(
   config = SimpleNamespace(
     provider_domain=lambda tag: (
       "home.example" if tag and tag != "none" else PLACEHOLDER_DOMAIN
-    )
+    ),
+    link_address="localhost",
   )
   return AppRunData(
     app=spec.app,
