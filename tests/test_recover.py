@@ -35,7 +35,7 @@ def _init_with(kelso_env, root, words: str):
 
 def _backed_up_root(kelso_env):
   """An old machine: two apps, data, a secret, and a full backup of it all."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("rows")
   assert kelso_env.run("load", "ports-demo").returncode == 0
   taken = kelso_env.run("backup", "run")

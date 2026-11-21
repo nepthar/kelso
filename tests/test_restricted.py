@@ -245,9 +245,7 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
   # Unset config leaves the connection out; the missing value blocks start already.
   assert "http nas" not in _run_data("restricted-demo").restricted.rules
 
-  set_ok = kelso_env.run(
-    "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
-  )
+  set_ok = kelso_env.run("config", "restricted-demo", "nas_address=10.0.0.5:5000")
   assert set_ok.returncode == 0
   data = _run_data("restricted-demo")
   assert "http nas 10.0.0.5:5000" in data.restricted.rules
@@ -262,10 +260,7 @@ def test_a_forward_follows_its_config_and_a_bad_value_blocks_start(kelso_env):
     data.restricted.rules
   )
 
-  assert (
-    kelso_env.run("config", "restricted-demo", "--set", "nas_address=nope").returncode
-    == 0
-  )
+  assert kelso_env.run("config", "restricted-demo", "nas_address=nope").returncode == 0
   blockers = [i.problem for i in _run_data("restricted-demo").start_blockers]
   assert any(p.startswith("connection nas: address 'nope'") for p in blockers)
 
@@ -372,9 +367,7 @@ def test_an_open_app_reaches_an_http_connection_at_its_address(kelso_env):
   _write(kelso_env, FORWARD.replace('network_mode = "restrict"', ""))
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert (
-    kelso_env.run(
-      "config", "restricted-demo", "--set", "nas_address=10.0.0.5:5000"
-    ).returncode
+    kelso_env.run("config", "restricted-demo", "nas_address=10.0.0.5:5000").returncode
     == 0
   )
   data = _run_data("restricted-demo")
@@ -393,9 +386,9 @@ def test_the_operator_can_put_an_open_app_behind_kproxy(kelso_env, mode, policy)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
   assert _subnet("restricted-demo") is None
 
-  set_mode = kelso_env.run("config", "restricted-demo", "--network", mode)
+  set_mode = kelso_env.run("config", "restricted-demo", f"network.mode={mode}")
   assert set_mode.returncode == 0, set_mode.stderr
-  assert f"network: {mode} (set by you; the manifest says open)" in set_mode.stdout
+  assert set_mode.stdout.startswith("Set network.mode\n")
 
   started = kelso_env.run("start", "restricted-demo")
   assert started.returncode == 0, started.stderr
@@ -405,7 +398,7 @@ def test_the_operator_can_put_an_open_app_behind_kproxy(kelso_env, mode, policy)
   assert rules.startswith(f"default {policy}\n")
 
   assert (
-    kelso_env.run("config", "restricted-demo", "--network", "default").returncode == 0
+    kelso_env.run("config", "restricted-demo", "network.mode=default").returncode == 0
   )
   assert kelso_env.run("restart", "restricted-demo").returncode == 0
   assert _subnet("restricted-demo") is None
@@ -414,7 +407,7 @@ def test_the_operator_can_put_an_open_app_behind_kproxy(kelso_env, mode, policy)
 def test_the_operator_can_open_a_restrict_app(kelso_env):
   _write(kelso_env, RESTRICTED)
   assert kelso_env.run("load", "restricted-demo").returncode == 0
-  assert kelso_env.run("config", "restricted-demo", "--network", "open").returncode == 0
+  assert kelso_env.run("config", "restricted-demo", "network.mode=open").returncode == 0
   assert kelso_env.run("start", "restricted-demo").returncode == 0
   compose = yaml.safe_load(
     (kelso_env.run_root / "restricted-demo" / "compose.yml").read_text()
@@ -425,6 +418,6 @@ def test_the_operator_can_open_a_restrict_app(kelso_env):
 @pytest.mark.parametrize("mode", ["host", "nope"])
 def test_host_and_unknown_modes_are_refused(kelso_env, mode):
   _write(kelso_env, RESTRICTED)
-  refused = kelso_env.run("config", "restricted-demo", "--network", mode)
+  refused = kelso_env.run("config", "restricted-demo", f"network.mode={mode}")
   assert refused.returncode != 0
-  assert ("host networking" if mode == "host" else "is not one of") in refused.stderr
+  assert "network.mode must be one of: open, restrict, ask, watch" in refused.stderr

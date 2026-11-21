@@ -61,7 +61,7 @@ Manifests are small enough to be digested in a few seconds. For a full, function
 - **Backups.** Nightly, deduplicated and encrypted, into `backups/` or wherever you link it. Each app is backed up at a coherent point in time and restored the same way; only your recovery phrase can read them. See [volumes](docs/volumes.md) for what is included.
 - **Cron.** Scheduled commands inside an app, run by kelsod.
 - **Routes.** Expose an app's ports through Cloudflare Tunnel, Nginx Proxy Manager or Pangolin.
-- **Restricted networking.** An app in `restrict` mode reaches only the internet domains and addresses on your network that its manifest lists, through a proxy kelso runs beside it. `ask` holds anything else until you decide, and `watch` logs every host it reaches. You can put any app in one of these modes with `kelso config <app> --network`. Needs docker 27 or newer.
+- **Restricted networking.** An app in `restrict` mode reaches only the internet domains and addresses on your network that its manifest lists, through a proxy kelso runs beside it. `ask` holds anything else until you decide, and `watch` logs every host it reaches. You can put any app in one of these modes with `kelso config <app> network.mode=<mode>`. Needs docker 27 or newer.
 - **App repos.** A repo is a folder of bundles pushed to git. `kelso repo add` makes every app in it a `kelso start` away.
 
 The full list of what a manifest can say is in the [manifest](docs/manifest.md) docs.
@@ -92,7 +92,8 @@ sudo reboot
 ```
 `init --yes` sets kelso up in `~/kelso`, fetches its repo of apps, and runs `kelsod` as a systemd user service. For the web UI, choose its admin password and start it; it prints the address to open:
 ```bash
-kelso start kelso-ui --set admin_pass=<password>
+kelso config kelso-ui admin_pass=-   # asks for it, hidden
+kelso start kelso-ui
 ```
 
 The [install guide](docs/install.md) has the prerequisites for a fresh Ubuntu Server, why the reboot matters, a tour of the demo apps, and how to upgrade, uninstall, and move volumes onto other disks.

@@ -1,12 +1,11 @@
 import argparse
 import sys
-from getpass import getpass
 
 from tabulate import tabulate
 
 from kelso.cli import activity, decrypt, doctor, phrase, service, volumes
 from kelso.cli.confirm import Refused
-from kelso.cli.kv import parse_kv
+from kelso.cli.kv import parse_kv, read_secret
 from kelso.lib import recovery
 from kelso.lib.config_edit import add_host_volume, remove_host_volume, set_host_volume
 from kelso.lib.kelso import KelsoCtx
@@ -149,7 +148,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   # Asked for before the lock, which nothing else should wait on while you type.
   name = args.name or args.stdin_key
   if name:
-    sets.insert(0, (name, _read_secret(name)))
+    sets.insert(0, (name, read_secret(name)))
   for set_name, value in sets:
     if not value:
       raise ValueError(f"No value given for {set_name!r}; nothing was stored")
@@ -174,13 +173,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
     if not sets and not args.unsets:
       _list_secrets(sorted(stored), ctx)
-
-
-def _read_secret(name: str) -> str:
-  """The value, asked for without echo on a terminal, else all of stdin."""
-  if sys.stdin.isatty():
-    return getpass(f"Value for {name} (hidden): ").strip()
-  return sys.stdin.read().rstrip("\r\n")
 
 
 def _list_secrets(stored: list[str], ctx: KelsoCtx) -> None:

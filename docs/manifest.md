@@ -104,7 +104,7 @@ A `host` volume is not a path — it is a *request*. Kelso will not start the
 app until the operator binds it to one of the host volumes they declared:
 
 ```
-kelso config <app> --bind media=photos
+kelso config <app> volume.media=photos
 ```
 
 ## `[connections.<name>]`
@@ -200,7 +200,7 @@ NAS_URL = "${conn.nas.url}"
 
 The app calls `http://nas`, and kproxy connects it to whatever `nas_address`
 says. The host is a name or an IPv4 address, and the port is required. Kelso
-fills `address` in on every start, so `kelso config --set` takes effect at the next
+fills `address` in on every start, so `kelso config` takes effect at the next
 start, and a value that isn't `host:port` stops the app from starting, naming
 the fix.
 
@@ -229,7 +229,7 @@ app-wide: every unit gets the same.
 | `host` | Anything, on the host's own network, with no port isolation. Called out as dangerous. | Refused: the app binds the host's ports itself. |
 
 The manifest's mode is the author's. You can run any app but a `host` one in
-another mode with `kelso config <app> --network <mode>`, and go back to the
+another mode with `kelso config <app> network.mode=<mode>`, and go back to the
 manifest's with `--network default`. It takes effect at the next start, and
 receipts say when the mode is yours rather than the manifest's.
 
@@ -309,7 +309,7 @@ timezone    = { desc = "IANA timezone", default = "UTC" }
 mongo_pass  = { secret = true, default = "auto" }
 ```
 
-Set them with `kelso config <app> --set timezone=America/Denver`, or from the
+Set them with `kelso config <app> timezone=America/Denver`, or from the
 app's page in the web UI.
 
 A change to a loaded app takes effect the next time it starts. That goes for
@@ -365,7 +365,7 @@ manifest's. A route can go through several at once — say, Pangolin for the
 internet and Nginx Proxy Manager for the LAN:
 
 ```sh
-kelso config immich --route main=pangolin,npm
+kelso config immich route.main=pangolin,npm
 ```
 
 The first one listed is the primary: its domain is the one `${routes.<name>}`

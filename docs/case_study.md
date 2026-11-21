@@ -215,7 +215,7 @@ Lower down, they also provide information on what all of the ports are for. This
 Three choices are worth explaining:
 
 - **Pinned host ports.** Access points find the controller on fixed ports (8080 for device communication, 3478/udp for STUN, 10001/udp for discovery), so we pin them with `"host:container"` rather than letting kelso pick a port.
-- **Ports for the devices, one `admin` route.** STUN, discovery and device communication aren't web pages, so they are `ports`: reachable on this machine's address, never published. The web UI is a route marked `admin = true`, so it isn't handed to the default route provider and nothing is published to the internet by accident. If you want it at `https://admin-unifi.<your domain>`, publish it with `kelso config unifi-network-application --route admin=<provider>`.
+- **Ports for the devices, one `admin` route.** STUN, discovery and device communication aren't web pages, so they are `ports`: reachable on this machine's address, never published. The web UI is a route marked `admin = true`, so it isn't handed to the default route provider and nothing is published to the internet by accident. If you want it at `https://admin-unifi.<your domain>`, publish it with `kelso config unifi-network-application route.admin=<provider>`.
 - **Logs get their own volume.** Linuxserver keeps everything under `/config`, logs included. Mounting `/config/logs` as a `logs` volume keeps them out of backups, which only capture `data` volumes.
 
 Using that information, we can complete our `manifest`:

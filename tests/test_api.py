@@ -192,10 +192,7 @@ def test_catalog_listing_does_not_create_config_stores(kelso_env, client):
 
 
 def test_catalog_config_turns_ready_once_required_values_are_set(kelso_env, client):
-  assert (
-    kelso_env.run("config", "basic-features", "--set", "admin_user=root").returncode
-    == 0
-  )
+  assert kelso_env.run("config", "basic-features", "admin_user=root").returncode == 0
   apps = {
     app["app_id"]: app for app in client.get("/catalog").json()["catalogs"][0]["apps"]
   }
@@ -221,7 +218,7 @@ def test_apps_lists_only_loaded(kelso_env, client):
 
 
 def test_apps_reflects_running_containers(kelso_env, client):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
 
   app = client.get("/apps").json()["apps"][0]
   assert app["status"] == "ok"
@@ -263,7 +260,7 @@ def test_app_detail(kelso_env, client):
 
 
 def test_app_logs_returns_a_tail(kelso_env, client):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
 
   body = client.get(f"/apps/{APP}/logs").json()
   assert body["app_id"] == APP
@@ -297,7 +294,7 @@ def test_app_config_request_describes_every_field(kelso_env, client):
 
 
 def test_app_config_request_never_projects_a_secret(kelso_env, client):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
 
   body = client.get(f"/apps/{APP}/config-request").json()
   config = {f["name"]: f for f in body["fields"]}
@@ -327,7 +324,7 @@ def test_method_not_allowed(kelso_env, client):
 
 
 def test_stop_runs_as_a_job(kelso_env, client, jobs):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
   assert client.get("/apps").json()["apps"][0]["status"] == "ok"
 
   job = submit(client, jobs, "stop", {"app": "basic-features"})
@@ -350,8 +347,8 @@ def _compose_calls(kelso_env) -> list[list[str]]:
 
 
 def test_restart_runs_as_a_job(kelso_env, client, jobs):
-  kelso_env.run("start", APP, "--set", "admin_user=root")
-  kelso_env.run("config", APP, "--set", "admin_user=alice")
+  kelso_env.start(APP, "admin_user=root")
+  kelso_env.run("config", APP, "admin_user=alice")
   assert client.get(f"/apps/{APP}").json()["changes_pending"] is True
 
   job = submit(client, jobs, "restart", {"app": APP})
@@ -363,7 +360,7 @@ def test_restart_runs_as_a_job(kelso_env, client, jobs):
 
 
 def test_load_stops_reloads_and_starts_a_running_app(kelso_env, client, jobs):
-  kelso_env.run("start", APP, "--set", "admin_user=root")
+  kelso_env.start(APP, "admin_user=root")
   manifest = kelso_env.local_repo / f"{APP}.klso" / "manifest.toml"
   manifest.write_text(manifest.read_text().replace("Basic Features", "Renamed"))
 
@@ -558,7 +555,7 @@ def test_cmd_verb_requires_a_command_argument(kelso_env, client):
 
 
 def test_cmd_verb_reports_an_unknown_command(kelso_env, client):
-  kelso_env.run("start", "basic-features", "--set", "admin_user=root")
+  kelso_env.start("basic-features", "admin_user=root")
   response = client.post(
     "/jobs",
     json={
@@ -781,7 +778,7 @@ def test_host_volume_refusals_keep_config_intact(kelso_env, client):
 
 
 def test_volumes_view_reports_ownership_and_use(kelso_env, client):
-  assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.start(APP, "admin_user=root").returncode == 0
   (kelso_env.volumes_root / "data" / APP / "config" / "db.txt").write_text("xy")
 
   body = client.get("/volumes").json()
@@ -819,7 +816,7 @@ def test_volumes_view_reports_ownership_and_use(kelso_env, client):
 
 def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
   """The detail page reads the metric; it never walks the tree per request."""
-  assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.start(APP, "admin_user=root").returncode == 0
   (kelso_env.volumes_root / "data" / APP / "config" / "db.txt").write_text("xyz")
 
   # Before volume-metrics has run there is no gauge, and no size is invented.
@@ -839,7 +836,7 @@ def test_app_detail_volume_sizes_come_from_gauges(kelso_env, client):
 def test_volume_data_outliving_its_manifest_still_shows_up(kelso_env, client):
   """Re-loading drops the link of a volume the manifest stopped declaring and
   leaves the data. Nothing else would ever tell you it is still on disk."""
-  assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.start(APP, "admin_user=root").returncode == 0
   assert kelso_env.run("stop", APP).returncode == 0
   assert {v["name"] for v in client.get("/volumes").json()["volumes"]} == {
     "config",
@@ -902,7 +899,7 @@ def test_app_view_carries_what_a_detail_page_needs(kelso_env, client):
 
 
 def test_app_view_never_leaks_a_secret_through_the_environment(kelso_env, client):
-  assert kelso_env.run("start", APP, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.start(APP, "admin_user=root").returncode == 0
   _, secret = ctx().app_store(APP).get_config("admin_pass")
   assert secret
   assert secret not in json.dumps(client.get(f"/apps/{APP}/config-request").json())
@@ -923,7 +920,7 @@ def test_setting_config_through_the_api(kelso_env, client):
 
 def test_resubmitting_unchanged_values_writes_nothing(kelso_env, client):
   """The UI sends every field it showed; only real changes may be written."""
-  kelso_env.run("start", APP, "--set", "admin_user=root")
+  kelso_env.start(APP, "admin_user=root")
   before = client.get(f"/apps/{APP}/config-request").json()["fields"]
 
   again = client.post(
@@ -1076,7 +1073,7 @@ def test_apps_and_catalog_agree_on_state(kelso_env, client, jobs):
 
 
 def test_unload_verb_keeps_data_and_config(kelso_env, client, jobs):
-  kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.start(APP, "admin_user=alice")
   data = kelso_env.volumes_root / "data" / APP / "config"
   (data / "app.db").write_text("rows")
 
@@ -1088,7 +1085,7 @@ def test_unload_verb_keeps_data_and_config(kelso_env, client, jobs):
 
 
 def test_rm_purge_takes_everything(kelso_env, client, jobs):
-  kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.start(APP, "admin_user=alice")
   kelso_env.run("stop", APP)
   job = submit(client, jobs, "rm", {"app": APP, "tier": "purge"})
   assert job["state"] == "done", job["error"]
@@ -1097,7 +1094,7 @@ def test_rm_purge_takes_everything(kelso_env, client, jobs):
 
 
 def test_rm_verb_takes_a_tier(kelso_env, client, jobs):
-  kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.start(APP, "admin_user=alice")
   kelso_env.run("stop", APP)
   data = kelso_env.volumes_root / "data" / APP / "config"
   (data / "app.db").write_text("rows")
@@ -1123,14 +1120,14 @@ def test_removal_verbs_refuse_an_unknown_app(kelso_env, client):
 
 
 def test_a_freshly_started_app_has_nothing_pending(kelso_env, client):
-  kelso_env.run("start", APP, "--set", "admin_user=alice")
+  kelso_env.start(APP, "admin_user=alice")
   assert client.get(f"/apps/{APP}").json()["changes_pending"] is False
 
 
 def test_config_set_after_a_start_is_pending_until_the_next_one(kelso_env, client):
   """A start reads config, so what is running is behind until it restarts."""
-  kelso_env.run("start", APP, "--set", "admin_user=alice")
-  kelso_env.run("config", APP, "--set", "admin_user=bob")
+  kelso_env.start(APP, "admin_user=alice")
+  kelso_env.run("config", APP, "admin_user=bob")
   assert client.get(f"/apps/{APP}").json()["changes_pending"] is True
   kelso_env.run("restart", APP)
   assert client.get(f"/apps/{APP}").json()["changes_pending"] is False
@@ -1140,7 +1137,7 @@ def test_a_subdomain_change_is_pending_until_a_start_rederives_routes(
   kelso_env, client
 ):
   kelso_env.run("load", "routes-demo")
-  kelso_env.run("config", "routes-demo", "--set", "subdomain=pics")
+  kelso_env.run("config", "routes-demo", "subdomain=pics")
   assert client.get("/apps/routes-demo").json()["changes_pending"] is True
   kelso_env.run("start", "routes-demo")
   assert client.get("/apps/routes-demo").json()["changes_pending"] is False
@@ -1227,7 +1224,7 @@ def test_app_routes_say_where_they_answer_on_the_host(kelso_env, client):
 
 def test_app_view_resolves_the_environment_but_never_a_secret(kelso_env, client):
   assert kelso_env.run("load", APP).returncode == 0
-  assert kelso_env.run("config", APP, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", APP, "admin_user=alice").returncode == 0
   _, secret = ctx().app_store(APP).get_config("admin_pass")
   body = client.get(f"/apps/{APP}").json()
 

@@ -62,7 +62,7 @@ def _show(spec: AppSpec, ctx: KelsoCtx) -> None:
   if data.network_mode not in PROXIED_MODES:
     print(
       f"\nNot behind kproxy, so nothing is counted. To see what it reaches: "
-      f"kelso config {spec.app} --network watch"
+      f"kelso config {spec.app} network.mode=watch"
     )
     if decided:
       print("\nYour decisions apply once it is:")
@@ -114,7 +114,7 @@ def summary(
   if mode == "restrict":
     lines.append(
       "In restrict, a name not listed fails at its DNS lookup and isn't counted. "
-      f"To see those: kelso config {spec.app} --network watch"
+      f"To see those: kelso config {spec.app} network.mode=watch"
     )
   return "\n".join(lines)
 

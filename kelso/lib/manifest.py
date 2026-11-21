@@ -410,7 +410,7 @@ def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
 
 
 # Compose keys kelso sets for an app behind kproxy. Any app but a host one can be
-# put behind it with `kelso config --network`, so they are reserved for all of them.
+# put behind it with `kelso config <app> network.mode=...`, so they are reserved for all of them.
 _PROXIED_COMPOSE_KEYS = frozenset({"dns", "networks"})
 
 

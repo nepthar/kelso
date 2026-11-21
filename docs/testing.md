@@ -140,7 +140,7 @@ large bundle. The fake serves the two endpoints kelso uses and nothing else.
 **Apps behind kproxy.** `test_restricted.py` and `test_net.py` check the compose
 file, rules and admin calls kelso makes, not what docker or kproxy do with them. On a Linux host with docker 27 or
 newer, and once on Docker Desktop: kproxy's own `kproxy/itest/run.sh`, then
-`kelso start demo-network --set lan_address=<host:port>` and
+`kelso config demo-network lan_address=<host:port>`, `kelso start demo-network` and
 `kelso cmd demo-network probe`, which exits non-zero on any unexpected result.
 Also check that the app can't reach the host itself (its sshd, `docker0`, and on
 Docker Desktop `host.docker.internal`), that a `web` host resolving to a private

@@ -37,7 +37,7 @@ elif TESTING_NO_PASSWORD:
 elif not PASSWORD:
   raise RuntimeError(
     "ADMIN_PASSWORD is empty. Set it with: "
-    "kelso config kelso-ui --set admin_pass=<password>"
+    "kelso config kelso-ui admin_pass=-"
   )
 
 _KEY = hmac.new(b"kelso-ui/session/v1", PASSWORD.encode(), hashlib.sha256).digest()

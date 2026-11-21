@@ -200,7 +200,7 @@ def test_a_root_without_a_seed_is_told_to_rekey(kelso_env):
   assert "kelso system rekey" in doctor.stdout + doctor.stderr
 
   # Secrets are refused rather than stored in the clear.
-  refused = kelso_env.run("config", BASIC, "--set", "admin_pass=x")
+  refused = kelso_env.run("config", BASIC, "admin_pass=-", input="x")
   assert refused.returncode != 0
   assert "No recovery phrase" in refused.stderr
 
@@ -215,7 +215,7 @@ def test_rekey_on_a_root_without_a_seed_gives_it_one(kelso_env, monkeypatch):
 
 def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
   """The plaintext did not change, so there is nothing to restart for."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   _fix_phrase(monkeypatch, NEW_SEED)
   assert kelso_env.run("system", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout
@@ -224,8 +224,8 @@ def test_rekey_leaves_a_running_app_current(kelso_env, monkeypatch):
 
 
 def test_rekey_keeps_a_change_that_was_already_pending(kelso_env, monkeypatch):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=bob").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=bob").returncode == 0
   _fix_phrase(monkeypatch, NEW_SEED)
   assert kelso_env.run("system", "rekey").returncode == 0
   ps = kelso_env.run("ps").stdout

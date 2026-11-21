@@ -34,9 +34,9 @@
    manifest resolves to, or every parse error with the key that caused it.
 
 3. **Run it:** `kelso dev <path>` loads the bundle and runs it in the
-   foreground, printing its routes. If the app needs config, pass
-   `--set NAME=VALUE` for each; with no terminal, dev refuses and names what
-   is missing. It holds the terminal, so run it in the background and stop it
+   foreground, printing its routes. If the app needs config, dev asks for it
+   on a terminal; with none, it refuses and names what is missing. Set each
+   with `kelso config <app> NAME=VALUE`, then run dev again. It holds the terminal, so run it in the background and stop it
    with `kill <pid>`: that stops the containers and cleans up, as Ctrl-C does.
    Fetch the route's URL to see that the app answers.
 
@@ -48,10 +48,10 @@
 
 - **The app needs config or a host volume.** Deploy copies the bundle, then
   stops and lists what the app needs on that box, with the choices for each.
-  Run it again with `--set NAME=VALUE` for each: a config name, or
-  `volume.<name>` for a host volume. A host volume tag must exist in that
-  box's `config.toml` first. A secret is for a person to set:
-  `ssh <host>` then `kelso config <app> --edit`.
+  Set each with `ssh <host> kelso config <app> NAME=VALUE`: a config name,
+  or `volume.<name>` for a host volume, whose tag must exist in that box's
+  `config.toml` first. Then deploy again. A secret is for a person to set:
+  `kelso config <app> --edit --host <host>`.
 - **The box has the app from somewhere else.** Deploy refuses and copies
   nothing. The message says where it was loaded from.
 

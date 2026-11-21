@@ -163,7 +163,7 @@ def test_start_receipt_prefers_link_address_for_local_urls(kelso_env):
 
 
 def test_rm_removes_run_state_configuration_and_managed_volumes(kelso_env):
-  started = kelso_env.run("start", BASIC, "--set", "admin_user=alice")
+  started = kelso_env.start(BASIC, "admin_user=alice")
   assert started.returncode == 0, started.stderr
   assert (kelso_env.run_root / BASIC).is_dir()
   assert (kelso_env.volumes_root / "data" / BASIC / "config").is_dir()
@@ -227,7 +227,7 @@ def test_status_app_shows_config_status(kelso_env):
   assert "admin_user: (required)" in before.stdout
   assert "admin_pass: (secret)" in before.stdout
 
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
   after = kelso_env.run("status", BASIC)
   assert after.returncode == 0, after.stderr
   assert "admin_user: alice" in after.stdout
@@ -671,10 +671,10 @@ def test_load_names_the_config_a_start_still_needs(kelso_env):
   loaded = kelso_env.run("load", BASIC)
   assert loaded.returncode == 0, loaded.stderr
   last = loaded.stdout.splitlines()[-1]
-  assert last.startswith("Set admin_user, then start it with: ")
-  assert f"kelso start {BASIC} --set admin_user=<admin_user>" in last
+  assert f"kelso config {BASIC} admin_user=<value>" in loaded.stdout
+  assert last == f"Then start it with: kelso start {BASIC}"
 
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
   again = kelso_env.run("load", BASIC)
   assert again.stdout.splitlines()[-1] == f"Start it with: kelso start {BASIC}"
 
@@ -701,11 +701,11 @@ def test_config_before_loading_reads_the_bundle(kelso_env):
   assert listed.returncode == 0, listed.stderr
   assert "admin_user" in listed.stdout
 
-  early = kelso_env.run("config", BASIC, "--set", "admin_user=alice")
+  early = kelso_env.run("config", BASIC, "admin_user=alice")
   assert early.returncode == 0, early.stderr
 
   assert kelso_env.run("load", BASIC).returncode == 0
-  kept = kelso_env.run("config", BASIC, "--get", "admin_user")
+  kept = kelso_env.run("config", BASIC, "admin_user")
   assert kept.stdout.strip() == "alice"
 
 
@@ -717,7 +717,7 @@ def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
 
   assert edited.returncode == 0, edited.stderr
   assert "Set admin_user" in edited.stdout
-  assert kelso_env.run("config", BASIC, "--get", "admin_user").stdout.strip() == "alice"
+  assert kelso_env.run("config", BASIC, "admin_user").stdout.strip() == "alice"
 
 
 def test_config_edit_writes_nothing_when_cancelled(kelso_env):
@@ -727,7 +727,7 @@ def test_config_edit_writes_nothing_when_cancelled(kelso_env):
 
   assert cancelled.returncode == 0, cancelled.stderr
   assert "No changes" in cancelled.stdout
-  assert kelso_env.run("config", BASIC, "--get", "admin_user").returncode == 1
+  assert kelso_env.run("config", BASIC, "admin_user").returncode == 1
 
 
 def test_binding_before_loading_applies_at_the_first_start(kelso_env):
@@ -737,7 +737,7 @@ def test_binding_before_loading_applies_at_the_first_start(kelso_env):
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
 
-  bound = kelso_env.run("config", app_id, "--bind", "hostvol1=media")
+  bound = kelso_env.run("config", app_id, "volume.hostvol1=media")
   assert bound.returncode == 0, bound.stderr
 
   assert kelso_env.run("start", app_id).returncode == 0
@@ -758,9 +758,9 @@ def test_config_of_a_loaded_app_reads_the_run_copy(kelso_env):
   assert "since_loading" in kelso_env.run("status", str(manifest.parent)).stdout
   assert "since_loading" not in kelso_env.run("config", BASIC).stdout
 
-  refused = kelso_env.run("config", BASIC, "--set", "since_loading=x")
+  refused = kelso_env.run("config", BASIC, "since_loading=x")
   assert refused.returncode == 1
-  assert "No config since_loading" in refused.stderr
+  assert "no config named 'since_loading'" in refused.stderr
 
 
 def test_config_refuses_an_app_it_has_no_manifest_for(kelso_env):
@@ -771,9 +771,9 @@ def test_config_refuses_an_app_it_has_no_manifest_for(kelso_env):
 
 def test_assigning_a_route_before_load_is_recorded(kelso_env):
   """The provider is contacted by `start`, so an assignment can be made first."""
-  assigned = kelso_env.run("config", "routes-demo", "--route", "main=web")
+  assigned = kelso_env.run("config", "routes-demo", "route.main=web")
   assert assigned.returncode == 0, assigned.stderr
-  assert "route main -> web" in assigned.stdout
+  assert assigned.stdout.startswith("Set route.main\n")
 
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   assert ctx.app_store("routes-demo").get_route_assignment("main") == ["web"]
@@ -784,9 +784,8 @@ def test_a_route_published_through_two_providers_is_reachable_at_both(kelso_env)
   with open(kelso_env.config, "a") as f:
     f.write('\n[route_provider.lan]\nkind = "noop"\ndomain = "lan.test"\n')
 
-  assigned = kelso_env.run("config", "routes-demo", "--route", "main=lan,web")
+  assigned = kelso_env.run("config", "routes-demo", "route.main=lan,web")
   assert assigned.returncode == 0, assigned.stderr
-  assert "route main -> lan, web" in assigned.stdout
   listed = kelso_env.run("config", "routes-demo")
   assert re.search(r"^main\s+lan, web\b", listed.stdout, re.M), listed.stdout
 
@@ -799,12 +798,12 @@ def test_a_route_published_through_two_providers_is_reachable_at_both(kelso_env)
 @pytest.mark.parametrize(
   "routes, error",
   [
-    (["main=web,none"], "'none' cannot be combined"),
-    (["main=web", "main=web"], "--route main given more than once"),
+    (["main=web,none"], "or none alone"),
+    (["main=web", "main=web"], "route.main given more than once"),
   ],
 )
 def test_a_bad_set_of_route_providers_is_refused(kelso_env, routes, error):
-  args = [arg for route in routes for arg in ("--route", route)]
+  args = [f"route.{route}" for route in routes]
   refused = kelso_env.run("config", "routes-demo", *args)
   assert refused.returncode == 1
   assert error in refused.stderr
@@ -814,21 +813,24 @@ def test_a_bad_set_of_route_providers_is_refused(kelso_env, routes, error):
 
 def test_config_set_secret(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
-
-  missing = kelso_env.run("config", BASIC, "--set", "admin_user")
-  assert missing.returncode == 1
-  assert "KEY=VALUE" in missing.stderr
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
 
   password = "hunter2"
-  stored = kelso_env.run("config", BASIC, "--set", f"admin_pass={password}")
+  inline = kelso_env.run("config", BASIC, f"admin_pass={password}")
+  assert inline.returncode == 1
+  assert "admin_pass=-" in inline.stderr
+  two = kelso_env.run("config", BASIC, "admin_pass=-", "admin_user=-", input="x")
+  assert two.returncode == 1
+  assert "Only one NAME=-" in two.stderr
+
+  stored = kelso_env.run("config", BASIC, "admin_pass=-", input=password)
   assert stored.returncode == 0, stored.stderr
 
-  got = kelso_env.run("config", BASIC, "--get", "admin_pass")
+  got = kelso_env.run("config", BASIC, "admin_pass")
   assert got.returncode == 0, got.stderr
   assert got.stdout.strip() == "set"
 
-  revealed = kelso_env.run("config", BASIC, "--get", "admin_pass", "--show-secret")
+  revealed = kelso_env.run("secret", "reveal", BASIC, "admin_pass")
   assert revealed.returncode == 0, revealed.stderr
   assert revealed.stdout.strip() == password
 
@@ -839,8 +841,8 @@ def test_config_set_secret(kelso_env):
 
 
 def test_config_set_on_a_running_app_says_to_restart(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  result = kelso_env.run("config", BASIC, "--set", "admin_user=bob")
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
+  result = kelso_env.run("config", BASIC, "admin_user=bob")
   assert result.returncode == 0, result.stderr
   assert f"Takes effect on restart: kelso restart {BASIC}" in result.stderr
   assert _ps_row(kelso_env.run("ps").stdout, BASIC)[2] == "restart"
@@ -849,13 +851,13 @@ def test_config_set_on_a_running_app_says_to_restart(kelso_env):
   assert restarted.returncode == 0, restarted.stderr
   assert restarted.stdout.splitlines()[0] == f"Restarted {BASIC}"
   assert _ps_row(kelso_env.run("ps").stdout, BASIC)[2] == "ready"
-  assert kelso_env.run("config", BASIC, "--get", "admin_user").stdout.strip() == "bob"
+  assert kelso_env.run("config", BASIC, "admin_user").stdout.strip() == "bob"
 
 
 def test_config_set_on_a_stopped_app_says_nothing_more(kelso_env):
   """The next start reads it; there is no restart to ask for."""
   assert kelso_env.run("load", BASIC).returncode == 0
-  result = kelso_env.run("config", BASIC, "--set", "admin_user=bob")
+  result = kelso_env.run("config", BASIC, "admin_user=bob")
   assert result.returncode == 0, result.stderr
   assert "restart" not in result.stderr
   assert "kelso load" not in result.stderr
@@ -867,7 +869,7 @@ def test_start_rederives_routes_changed_since_the_load(kelso_env):
   assert kelso_env.run("load", app_id).returncode == 0
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
-  result = kelso_env.run("config", app_id, "--set", "subdomain=lab")
+  result = kelso_env.run("config", app_id, "subdomain=lab")
   assert result.returncode == 0, result.stderr
   assert "kelso load" not in result.stderr
 
@@ -880,7 +882,7 @@ def test_start_rederives_routes_changed_since_the_load(kelso_env):
 
 def test_restart_of_a_stopped_app_just_starts_it(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=bob").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=bob").returncode == 0
   result = kelso_env.run("restart", BASIC)
   assert result.returncode == 0, result.stderr
   assert _ps_row(kelso_env.run("ps").stdout, BASIC)[1] == "running"
@@ -898,12 +900,12 @@ def test_config_set_subdomain_overrides_the_manifest(kelso_env):
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
   # Accepted while running, and applied by the next start, not right away.
-  set_result = kelso_env.run("config", app_id, "--set", "subdomain=lab")
+  set_result = kelso_env.run("config", app_id, "subdomain=lab")
   assert set_result.returncode == 0, set_result.stderr
   assert f"kelso restart {app_id}" in set_result.stderr
   assert kelso_env.read_db()["routes"][app_id]["web"]["subdomain"] == "web-ports"
 
-  got = kelso_env.run("config", app_id, "--get", "subdomain")
+  got = kelso_env.run("config", app_id, "subdomain")
   assert got.stdout.strip() == "lab"
 
   assert kelso_env.run("load", app_id).returncode == 0
@@ -918,7 +920,7 @@ def test_config_set_subdomain_overrides_the_manifest(kelso_env):
 
 def test_config_set_subdomain_rejects_a_dotted_name(kelso_env):
   assert kelso_env.run("load", "ports-demo").returncode == 0
-  result = kelso_env.run("config", "ports-demo", "--set", "subdomain=foo.bar")
+  result = kelso_env.run("config", "ports-demo", "subdomain=foo.bar")
   assert result.returncode == 1
   assert "foo.bar" in result.stderr
   assert "no periods" in result.stderr
@@ -926,10 +928,10 @@ def test_config_set_subdomain_rejects_a_dotted_name(kelso_env):
 
 @pytest.mark.parametrize("value", ["10", "-1", "five"])
 def test_config_set_refuses_a_start_group_out_of_range(kelso_env, value):
-  result = kelso_env.run("config", "ports-demo", "--set", f"start_group={value}")
+  result = kelso_env.run("config", "ports-demo", f"start_group={value}")
   assert result.returncode == 1
-  assert "from 0 to 9" in result.stderr
-  assert kelso_env.run("config", "ports-demo", "--get", "start_group").stdout == "6\n"
+  assert "start_group must be one of: 0, 1" in result.stderr
+  assert kelso_env.run("config", "ports-demo", "start_group").stdout == "6\n"
 
 
 def test_config_lists_app_options_in_their_own_section(kelso_env):
@@ -1113,11 +1115,11 @@ def test_host_bind_one_shot_via_start(kelso_env):
   app_id = "host-volumes"
   blocked = kelso_env.run("start", app_id)
   assert blocked.returncode == 1
-  assert "Bind with `kelso config host-volumes --bind hostvol1=" in blocked.stderr
+  assert "Bind with `kelso config host-volumes volume.hostvol1=" in blocked.stderr
 
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
-  started = kelso_env.run("start", app_id, "--bind", "hostvol1=media")
+  started = kelso_env.start(app_id, "volume.hostvol1=media")
   assert started.returncode == 0, started.stderr
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
   assert link.is_symlink()
@@ -1139,7 +1141,7 @@ def test_host_links_belong_to_the_run_not_the_load(kelso_env):
   assert kelso_env.run("load", app_id).returncode == 0
   assert not host_root.exists(), "loading has no business linking somebody's data"
 
-  bound = kelso_env.run("config", app_id, "--bind", "hostvol1=media")
+  bound = kelso_env.run("config", app_id, "volume.hostvol1=media")
   assert bound.returncode == 0, bound.stderr
   assert not host_root.exists()
 
@@ -1158,7 +1160,7 @@ def test_reloading_leaves_the_binds_alone(kelso_env):
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
-  assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.start(app_id, "volume.hostvol1=media").returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
   assert kelso_env.run("load", app_id).returncode == 0
@@ -1174,10 +1176,10 @@ def test_rebinding_takes_effect_at_the_next_start(kelso_env):
   second = kelso_env.root / "other-data"
   first.mkdir()
   second.mkdir()
-  assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.start(app_id, "volume.hostvol1=media").returncode == 0
 
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
-  rebound = kelso_env.run("config", app_id, "--bind", "hostvol1=other")
+  rebound = kelso_env.run("config", app_id, "volume.hostvol1=other")
   assert rebound.returncode == 0, rebound.stderr
   assert f"kelso restart {app_id}" in rebound.stderr
   assert link.resolve() == first, "a running app's links must not move"
@@ -1199,7 +1201,7 @@ def test_start_replaces_whatever_is_in_the_host_directory(kelso_env):
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
   assert kelso_env.run("load", app_id).returncode == 0
-  assert kelso_env.run("config", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.run("config", app_id, "volume.hostvol1=media").returncode == 0
 
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
   link.mkdir(parents=True)  # what docker left behind
@@ -1227,7 +1229,7 @@ def test_start_refuses_when_a_bound_path_has_gone(kelso_env):
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
-  assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.start(app_id, "volume.hostvol1=media").returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
   shutil.rmtree(host_path)
@@ -1248,7 +1250,7 @@ def test_missing_host_volume_path_blocks_load(kelso_env):
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
-  assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.start(app_id, "volume.hostvol1=media").returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
   shutil.rmtree(host_path)
@@ -1264,7 +1266,7 @@ def test_host_volume_may_be_a_file(kelso_env):
   host_path = kelso_env.root / "external-data"
   host_path.write_text("just a file")
 
-  started = kelso_env.run("start", app_id, "--bind", "hostvol1=media")
+  started = kelso_env.start(app_id, "volume.hostvol1=media")
   assert started.returncode == 0, started.stderr
   link = kelso_env.run_root / app_id / "volumes" / "host" / "hostvol1"
   assert link.is_symlink()
@@ -1280,7 +1282,7 @@ def test_require_mount_refuses_unmounted_path(kelso_env):
   host_path.mkdir()
 
   assert kelso_env.run("load", "host-volumes").returncode == 0
-  refused = kelso_env.run("config", "host-volumes", "--bind", "hostvol1=nfs")
+  refused = kelso_env.run("config", "host-volumes", "volume.hostvol1=nfs")
   assert refused.returncode == 1
   assert "not mounted" in refused.stderr
 
@@ -1294,7 +1296,7 @@ def test_require_mount_blocks_load_when_unmounted(kelso_env):
 
   assert kelso_env.run("load", "host-volumes").returncode == 0
   assert (
-    kelso_env.run("config", "host-volumes", "--bind", "hostvol1=rootfs").returncode == 0
+    kelso_env.run("config", "host-volumes", "volume.hostvol1=rootfs").returncode == 0
   )
 
   # Rewrite the same tag to a non-mount path without clearing the bind.
@@ -1316,7 +1318,7 @@ def test_readonly_host_volume_refuses_writable_app_volume(kelso_env):
   (kelso_env.root / "ro-data").mkdir()
 
   assert kelso_env.run("load", "host-volumes").returncode == 0
-  refused = kelso_env.run("config", "host-volumes", "--bind", "hostvol1=ro_media")
+  refused = kelso_env.run("config", "host-volumes", "volume.hostvol1=ro_media")
   assert refused.returncode == 1
   assert "readonly" in refused.stderr
 
@@ -1344,13 +1346,13 @@ cmd = ["true"]
 
   blocked = kelso_env.run("start", app_id)
   assert blocked.returncode == 1
-  assert "Set with `kelso config`" in blocked.stderr
+  assert "Set with `kelso config needs-secret api_key=-`" in blocked.stderr
   assert (kelso_env.run_root / app_id).is_dir()
 
   needs_config_row = _ps_row(kelso_env.run("ps").stdout, app_id)
   assert needs_config_row[:4] == [app_id, "stopped", "missing", "0"]
 
-  configured = kelso_env.run("config", app_id, "--set", "api_key=sekrit")
+  configured = kelso_env.run("config", app_id, "api_key=-", input="sekrit")
   assert configured.returncode == 0, configured.stderr
   started = kelso_env.run("start", app_id)
   assert started.returncode == 0, started.stderr
@@ -1385,7 +1387,7 @@ cmd = ["true"]
   blocked = kelso_env.run("start", app_id)
   assert blocked.returncode == 1
   assert "hostname is unset and no default specified" in blocked.stderr
-  assert "Set with `kelso config`" in blocked.stderr
+  assert "Set with `kelso config needs-value hostname=<value>`" in blocked.stderr
   # load() materializes before start_blockers are judged, so the run dir
   # exists; what must not have happened is the container starting.
   calls = [
@@ -1396,7 +1398,7 @@ cmd = ["true"]
   row = _ps_row(kelso_env.run("ps").stdout, app_id)
   assert row[:4] == [app_id, "stopped", "missing", "0"]
 
-  assert kelso_env.run("config", app_id, "--set", "hostname=box").returncode == 0
+  assert kelso_env.run("config", app_id, "hostname=box").returncode == 0
   assert kelso_env.run("start", app_id).returncode == 0
 
 
@@ -1414,7 +1416,7 @@ def test_ps_reports_config_readiness_and_volume_count(kelso_env):
   assert row[1:4] == ["stopped", "missing", "3"]
 
   # Complete now; the next start reads it, so nothing is pending while stopped.
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
   row = _ps_row(kelso_env.run("ps").stdout, BASIC)
   assert row[1:4] == ["stopped", "ready", "3"]
 
@@ -1447,7 +1449,7 @@ def test_an_unmet_bind_is_reported_as_missing_config(kelso_env):
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
   assert kelso_env.run("load", app_id).returncode == 0
-  assert kelso_env.run("config", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.run("config", app_id, "volume.hostvol1=media").returncode == 0
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
 
@@ -1881,7 +1883,7 @@ def test_registering_a_route_names_where_it_points(kelso_env, stub_provider):
 
 def test_stop_hands_compose_down_every_config_value_empty(kelso_env, monkeypatch):
   """`down` reads none of them, and an unset one makes compose warn, naming it."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   compose = (kelso_env.run_root / BASIC / "compose.yml").read_text()
   downs = []
   real = kelso.lib.lifecycle.run.docker_run_command
@@ -2179,9 +2181,8 @@ def test_every_shipped_bundle_loads(kelso_env):
       shutil.copy2(source, dest)
     fresh = KelsoCtx(load_config_file(kelso_env.config))
     app = fresh.resolve_app_id(app_id)
-    lifecycle.load(
-      app, fresh.inventory.bundle(app).path, fresh, sets=[("subdomain", app.stem)]
-    )
+    fresh.app_store(app).set_config("subdomain", False, app.stem)
+    lifecycle.load(app, fresh.inventory.bundle(app).path, fresh)
     assert (kelso_env.run_root / app_id / "compose.yml").is_file(), source.name
 
 
@@ -2246,14 +2247,15 @@ def _runs(kelso_env) -> list[dict]:
 
 
 def test_a_cli_write_is_recorded_as_started_by_the_cli(kelso_env):
-  started = kelso_env.run("start", BASIC, "--set", "admin_user=sekrit-name")
+  started = kelso_env.start(BASIC, "admin_user=sekrit-name")
   assert started.returncode == 0, started.stderr
 
-  [run] = _runs(kelso_env)
+  run, configured = _runs(kelso_env)
+  assert configured["verb"] == "config"
   assert (run["verb"], run["app_id"], run["status"]) == ("start", BASIC, "ok")
   assert run["started_by"] == "cli"
-  # Arguments are not recorded: `--set` can carry a secret.
-  assert run["args"] == {}
+  # Arguments are not recorded: a config value can be private.
+  assert configured["args"] == {} and run["args"] == {}
   log = (kelso_env.root / "var" / "logs" / run["log"]).read_text()
   assert "sekrit-name" not in log
 
@@ -2382,7 +2384,7 @@ def test_activity_filters_by_app_stem(kelso_env):
 
 
 def test_unload_keeps_data_and_configuration(kelso_env):
-  started = kelso_env.run("start", BASIC, "--set", "admin_user=alice")
+  started = kelso_env.start(BASIC, "admin_user=alice")
   assert started.returncode == 0, started.stderr
   data = kelso_env.volumes_root / "data" / BASIC / "config"
   (data / "app.db").write_text("rows")
@@ -2417,7 +2419,7 @@ def test_unload_and_rm_keep_an_app_route_allocation(kelso_env):
 
 
 def test_unload_then_load_restores_the_app(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   data = kelso_env.volumes_root / "data" / BASIC / "config"
   (data / "app.db").write_text("rows")
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
@@ -2432,7 +2434,7 @@ def test_unload_then_load_restores_the_app(kelso_env):
 
 def _basic_with_files(kelso_env):
   """BASIC, started then stopped, with a file in its data and its temp volume."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("stop", BASIC).returncode == 0
   data = kelso_env.volumes_root / "data" / BASIC / "config"
   temp = kelso_env.volumes_root / "temp" / BASIC / "cache"
@@ -2489,7 +2491,7 @@ def test_rm_data_empties_every_volume_and_leaves_an_app_that_starts(kelso_env):
 
 
 def test_rm_refuses_a_running_app_and_unload_does_not(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   for argv in (["rm"], ["rm", "--temp"], ["rm", "--data"], ["rm", "--purge"]):
     refused = kelso_env.run(*argv, BASIC, "-y")
     assert refused.returncode == 1, argv
@@ -2498,7 +2500,7 @@ def test_rm_refuses_a_running_app_and_unload_does_not(kelso_env):
 
 
 def test_rm_then_start_starts_afresh_with_the_same_config(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", BASIC, "-y").returncode == 0
 
@@ -2516,14 +2518,14 @@ def test_each_removal_records_what_it_did(kelso_env):
     (["rm"], "removed"),
     (["rm", "--purge"], "purged"),
   ):
-    assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+    assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
     assert kelso_env.run("stop", BASIC).returncode == 0
     assert kelso_env.run(*argv, BASIC, "-y").returncode == 0, argv
     assert read_last_app_action(BASIC, ctx) == action
 
 
 def test_unload_confirmation_says_what_it_keeps(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
 
   declined = kelso_env.run("unload", BASIC, input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
@@ -2566,11 +2568,11 @@ def test_config_edit_without_a_terminal_refuses_and_names_set(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   refused = kelso_env.run("config", BASIC, "--edit")
   assert refused.returncode == 2
-  assert f"kelso config {BASIC} --set NAME=VALUE" in refused.stderr
+  assert f"kelso config {BASIC} NAME=VALUE" in refused.stderr
 
 
 def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
 
   refused = kelso_env.run("unload", BASIC)
   assert refused.returncode == 2
@@ -2580,7 +2582,7 @@ def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):
 
 def test_ps_reports_what_an_unloaded_app_kept(kelso_env):
   """`ps` must not contradict what `unload` said it was keeping."""
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
   assert BASIC not in kelso_env.run("ps").stdout
 
@@ -2595,14 +2597,14 @@ def test_ps_reports_what_an_unloaded_app_kept(kelso_env):
 
 
 def test_ps_forgets_an_app_once_it_is_purged(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", "--purge", BASIC, "-y").returncode == 0
   assert BASIC not in kelso_env.run("ps").stdout
 
 
 def test_rm_purge_takes_everything_but_backups(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("backup", "run", BASIC).returncode == 0
   kelso_env.run("stop", BASIC)
   purged = kelso_env.run("rm", "--purge", BASIC, "-y")
@@ -2616,14 +2618,14 @@ def test_rm_purge_takes_everything_but_backups(kelso_env):
 
 
 def test_unload_says_how_to_load_it_again(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   done = kelso_env.run("unload", BASIC, "-y")
   assert "Configuration and volume data were kept" in done.stdout
   assert f"kelso load {BASIC}" in done.stdout
 
 
 def test_status_app_falls_back_to_the_bundle_when_unloaded(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
 
   inspected = kelso_env.run("status", BASIC)
@@ -2656,7 +2658,7 @@ def test_status_app_says_each_volumes_kind_and_when_nothing_runs(kelso_env):
 
 
 def test_status_shows_each_section(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=root").returncode == 0
+  assert kelso_env.start(BASIC, "admin_user=root").returncode == 0
 
   shown = kelso_env.run("status")
   assert shown.returncode == 0, shown.stderr

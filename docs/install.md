@@ -66,7 +66,8 @@ one above. `kelso repo list` shows every app you can start, and when you are
 done exploring, `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
 For the web UI, choose its admin password and start it; it prints the address
-to open: `kelso start kelso-ui --set admin_pass=<password>`.
+to open: `kelso config kelso-ui admin_pass=-`, which asks for it, then
+`kelso start kelso-ui`.
 
 ## Upgrading kelso
 Install the release you want by its tag, then restart kelsod on it:

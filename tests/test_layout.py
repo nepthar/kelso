@@ -117,14 +117,14 @@ def test_reloading_updates_the_run_copy_in_place(kelso_env):
 
 def test_load_preserves_config_and_volume_contents(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
 
   payload = kelso_env.volumes_root / "data" / BASIC / "config" / "state.txt"
   payload.write_text("precious")
 
   assert kelso_env.run("load", BASIC).returncode == 0
 
-  got = kelso_env.run("config", BASIC, "--get", "admin_user")
+  got = kelso_env.run("config", BASIC, "admin_user")
   assert got.stdout.strip() == "alice"
   assert payload.read_text() == "precious"
 
@@ -188,15 +188,11 @@ def test_load_refuses_when_config_is_gone_but_data_remains(kelso_env):
 def test_reloading_after_a_deleted_run_dir_reuses_config(kelso_env):
   """Config lives in config/, so wiping the run dir does not lose secrets."""
   assert kelso_env.run("load", BASIC).returncode == 0
-  minted = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  minted = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   shutil.rmtree(kelso_env.run_root / BASIC)
 
   assert kelso_env.run("load", BASIC).returncode == 0
-  again = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  again = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   assert again == minted
 
 
@@ -363,7 +359,7 @@ def test_changing_a_volumes_kind_is_refused(kelso_env):
 
 def test_config_round_trips_through_config_dir(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
 
   logtab = kelso_env.app_logtab(BASIC).read_text()
   assert "config/admin_user" in logtab
@@ -377,11 +373,15 @@ def test_config_round_trips_through_config_dir(kelso_env):
   assert BASIC not in kelso_env.read_db().get("apps", {})
 
 
-def test_start_set_is_the_one_shot_for_an_unloaded_app(kelso_env):
-  started = kelso_env.run("start", BASIC, "--set", "admin_user=alice")
+def test_an_unloaded_app_can_be_configured_then_started(kelso_env):
+  refused = kelso_env.run("start", BASIC)
+  assert refused.returncode == 1
+  assert f"kelso config {BASIC} admin_user=<value>" in refused.stderr
+
+  started = kelso_env.start(BASIC, "admin_user=alice")
   assert started.returncode == 0, started.stderr
 
-  got = kelso_env.run("config", BASIC, "--get", "admin_user")
+  got = kelso_env.run("config", BASIC, "admin_user")
   assert got.stdout.strip() == "alice"
 
 
@@ -392,17 +392,13 @@ def test_reloading_does_not_regenerate_an_existing_auto_secret(kelso_env):
   first load and must survive every one after it.
   """
   assert kelso_env.run("load", BASIC).returncode == 0
-  first = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  first = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   assert first
 
   assert kelso_env.run("load", BASIC).returncode == 0
   assert kelso_env.run("load", BASIC).returncode == 0
 
-  again = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  again = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   assert again == first
 
 
@@ -420,7 +416,7 @@ def _bundle(kelso_env, app_id: str = BASIC) -> str:
 def _configured_for_dev(kelso_env) -> Path:
   """Load BASIC with its required config set, and return the source bundle."""
   assert kelso_env.run("load", BASIC).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
   return kelso_env.local_repo / f"{BASIC}.klso"
 
 
@@ -469,7 +465,7 @@ def test_dev_loads_a_new_bundle_and_asks_for_missing_config(kelso_env):
   assert (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").is_file()
   assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]
 
-  got = kelso_env.run("config", BASIC, "--get", "admin_user")
+  got = kelso_env.run("config", BASIC, "admin_user")
   assert got.stdout.strip() == "alice"
 
 
@@ -480,26 +476,19 @@ def test_dev_config_carries_over_to_the_next_run(kelso_env):
     ).returncode
     == 0
   )
-  secret = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  secret = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
 
   again = kelso_env.run("dev", _bundle(kelso_env))
   # No input: a prompt here would read EOF and the run would be refused.
   assert again.returncode == 0, again.stderr
-  assert (
-    kelso_env.run(
-      "config", BASIC, "--get", "admin_pass", "--show-secret"
-    ).stdout.strip()
-    == secret
-  )
+  assert kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip() == secret
 
 
 def test_dev_refuses_when_config_is_still_missing(kelso_env):
   refused = kelso_env.run("dev", _bundle(kelso_env))
   assert refused.returncode == 2
   assert "admin_user" in refused.stderr
-  assert "--set NAME=VALUE" in refused.stderr
+  assert f"kelso config {BASIC} NAME=VALUE" in refused.stderr
   assert ["compose", "up"] not in [c["args"] for c in _docker_calls(kelso_env)]
 
 
@@ -583,7 +572,7 @@ def _respelled(path: Path) -> Path:
 def test_dev_accepts_its_own_bundle_spelled_in_another_case(kelso_env):
   source = kelso_env.local_repo / f"{BASIC}.klso"
   assert kelso_env.run("load", str(_respelled(source))).returncode == 0
-  assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
 
   result = kelso_env.run("dev", str(source))
   assert result.returncode == 0, result.stderr
@@ -748,7 +737,7 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
-  assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
+  assert kelso_env.start(app_id, "volume.hostvol1=media").returncode == 0
 
   kelso_env.run("stop", app_id)
   removed = kelso_env.run("rm", "--purge", app_id, input="y\n", tty=True)
@@ -758,26 +747,27 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
 
 
 def test_rm_then_start_is_a_clean_reload(kelso_env):
-  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
-  minted = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
+  minted = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
 
   kelso_env.run("stop", BASIC)
   assert kelso_env.run("rm", "--purge", BASIC, "-y").returncode == 0
 
-  restarted = kelso_env.run("start", BASIC, "--set", "admin_user=bob")
+  restarted = kelso_env.start(BASIC, "admin_user=bob")
   assert restarted.returncode == 0, restarted.stderr
   assert (kelso_env.run_root / BASIC / "app_bundle" / "manifest.toml").is_file()
 
   # Config and data went together, so a fresh secret is correct here.
-  fresh = kelso_env.run(
-    "config", BASIC, "--get", "admin_pass", "--show-secret"
-  ).stdout.strip()
+  fresh = kelso_env.run("secret", "reveal", BASIC, "admin_pass").stdout.strip()
   assert fresh and fresh != minted
 
 
-def test_dev_takes_what_the_app_needs_from_set(kelso_env):
-  done = kelso_env.run("dev", _bundle(kelso_env), "--set", "admin_user=alice")
+def test_dev_without_a_terminal_names_the_config_to_set(kelso_env):
+  refused = kelso_env.run("dev", _bundle(kelso_env))
+  assert refused.returncode == 2
+  assert f"kelso config {BASIC} NAME=VALUE" in refused.stderr
+
+  assert kelso_env.run("config", BASIC, "admin_user=alice").returncode == 0
+  done = kelso_env.run("dev", _bundle(kelso_env))
   assert done.returncode == 0, done.stderr
   assert ["compose", "up"] in [c["args"] for c in _docker_calls(kelso_env)]

@@ -52,9 +52,6 @@ def start(
   app: AppID,
   bundle: Path,
   ctx: KelsoCtx,
-  *,
-  sets: list[tuple[str, str]] | None = None,
-  binds: list[tuple[str, str]] | None = None,
 ) -> LoadResult:
   """Load if needed, then bring the app up and register assigned routes.
 
@@ -64,8 +61,8 @@ def start(
   """
   paths = ctx.loaded_paths(app)
 
-  if sets or binds or not ctx.is_loaded(app):
-    result = load(app, bundle, ctx, sets=sets, binds=binds)
+  if not ctx.is_loaded(app):
+    result = load(app, bundle, ctx)
   else:
     spec = ctx.require_loaded_spec(app)
     if changes_since_start(ctx.config.app_config_path(app)).routes:

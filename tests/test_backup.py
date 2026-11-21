@@ -175,7 +175,7 @@ def test_bulk_volumes_are_only_backed_up_when_turned_on(kelso_env):
 
   listed = kelso_env.run("config", "bulk-demo")
   assert "movies" in listed.stdout and "off" in listed.stdout
-  turned = kelso_env.run("config", "bulk-demo", "--backup", "movies=on")
+  turned = kelso_env.run("config", "bulk-demo", "backup.movies=on")
   assert turned.returncode == 0, turned.stderr
   # Not something a running app has to pick up.
   assert _ps_row(kelso_env, "bulk-demo")[2] == "ready"
@@ -192,13 +192,13 @@ def test_bulk_volumes_are_only_backed_up_when_turned_on(kelso_env):
 
 def test_only_bulk_volumes_can_be_toggled(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
-  refused = kelso_env.run("config", BASIC, "--backup", "config=off")
+  refused = kelso_env.run("config", BASIC, "backup.config=off")
   assert refused.returncode == 1
   assert "always backed up" in refused.stderr
 
-  missing = kelso_env.run("config", BASIC, "--backup", "nope=on")
+  missing = kelso_env.run("config", BASIC, "backup.nope=on")
   assert missing.returncode == 1
-  assert "No volume nope" in missing.stderr
+  assert "no config named 'backup.nope'" in missing.stderr
 
 
 # --- where backups go ---------------------------------------------------------------
@@ -300,14 +300,14 @@ def test_restore_rebuilds_a_removed_app(kelso_env):
 
 def test_restore_replaces_config_and_backs_up_what_was_there(kelso_env):
   app_id = "routes-demo"
-  assert kelso_env.run("start", app_id, "--set", "subdomain=photos").returncode == 0
+  assert kelso_env.start(app_id, "subdomain=photos").returncode == 0
   backup_id = _back_up(kelso_env, app_id)
   assert kelso_env.run("stop", app_id).returncode == 0
-  assert kelso_env.run("config", app_id, "--set", "subdomain=albums").returncode == 0
+  assert kelso_env.run("config", app_id, "subdomain=albums").returncode == 0
 
   restored = kelso_env.run("restore", app_id, backup_id, "-y")
   assert restored.returncode == 0, restored.stderr
-  shown = kelso_env.run("config", app_id, "--get", "subdomain")
+  shown = kelso_env.run("config", app_id, "subdomain")
   assert shown.stdout.strip() == "photos"
   assert [b.reason for b in _backups(kelso_env, app_id)] == ["manual", "pre-restore"]
 

@@ -92,7 +92,7 @@ schedule = "0 3 * * *"
 # the implementation. Kind-specific settings go under `args`. Store the
 # password with `kelso system secret route_provider.web.password`,
 # then verify with `kelso route check web`. Assign routes with
-# `kelso config <app> --route main=web`.
+# `kelso config <app> route.main=web`.
 #
 # [route_provider.web]
 # kind   = "nginx_proxy_manager"
@@ -134,8 +134,8 @@ schedule = "0 3 * * *"
 # # zone_id is optional; kelso looks the zone up by domain when it is omitted.
 
 # Optional: tagged host paths that apps with kind = "host" volumes can bind to.
-# Paths must exist before `kelso config|start --bind`. Assign with
-# `kelso config <app> --bind media=media`.
+# Paths must exist before an app binds one. Assign with
+# `kelso config <app> volume.media=media`.
 # Set require_mount = true for network shares or external drives so an empty
 # mount-point directory is refused when the share is not mounted.
 #
@@ -159,9 +159,10 @@ feature. Add them as a repo, then start one and run its commands:
 `kelso repo list` shows every app you can start. When you are done exploring,
 `kelso unload demo-cron` and `kelso repo remove demos` tidy up.
 
-For the web UI, choose its admin password and start it; it prints the address
-to open:
-  kelso start kelso-ui --set admin_pass=<password>"""
+For the web UI, choose its admin password (typed at a hidden prompt) and start
+it; it prints the address to open:
+  kelso config kelso-ui admin_pass=-
+  kelso start kelso-ui"""
 
 
 # kelsod runs under systemd's user manager, which keeps the groups it started

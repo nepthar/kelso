@@ -6,8 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
+import kelso.cli.config
 import kelso.cli.deploy
-from kelso.lib.configflow import ConfigField, ConfigRequest, request_from_view
+import kelso.cli.remote
+from kelso.lib.configflow import (
+  ConfigField,
+  ConfigRequest,
+  ConfigResponse,
+  request_from_view,
+)
 from kelso.lib.views import config_request_view
 
 APP = "dep-app"
@@ -36,7 +43,8 @@ def remote(kelso_env, monkeypatch):
       out = json.dumps(config_request_view(request))
     return subprocess.CompletedProcess(argv, code, out, "")
 
-  monkeypatch.setattr(kelso.cli.deploy, "subprocess", SimpleNamespace(run=run))
+  for module in (kelso.cli.deploy, kelso.cli.remote):
+    monkeypatch.setattr(module, "subprocess", SimpleNamespace(run=run))
   bundle = kelso_env.root / f"{APP}.klso"
   bundle.mkdir()
   (bundle / "manifest.toml").write_text(
@@ -83,37 +91,52 @@ def test_deploy_stops_and_lists_what_the_app_needs(kelso_env, remote):
   assert f"{APP} was copied to box but not started. It needs:" in done.stderr
   assert "admin_pass (secret): Password for the admin" in done.stderr
   assert "volume.media: Where the media is One of: media, nas." in done.stderr
-  assert "--set NAME=VALUE" in done.stderr
+  assert f"kelso config {APP} --edit --host box" in done.stderr
+  assert f"ssh box kelso config {APP} NAME=VALUE" in done.stderr
   assert remote.calls[-1][-1] == f"kelso config {APP} --json"
 
 
-def test_deploy_answers_what_the_app_needs_from_set(kelso_env, remote):
+def test_deploy_on_a_terminal_asks_here_and_answers_on_the_box(
+  kelso_env, remote, monkeypatch
+):
   remote.fields = NEEDS
-  done = kelso_env.run(
-    "deploy",
-    str(remote.bundle),
-    "box",
-    "--set",
-    "admin_pass=hunter2",
-    "--set",
-    "volume.media=nas",
+  answers = {"admin_pass": "hunter2", "volume.media": "nas"}
+  monkeypatch.setattr(
+    kelso.cli.deploy, "collect", lambda request, instead: ConfigResponse(answers)
   )
+  done = kelso_env.run("deploy", str(remote.bundle), "box", tty=True)
   assert done.returncode == 0, done.stderr
-  assert remote.calls[-2][-1] == f"kelso config {APP} --response"
-  assert json.loads(remote.inputs[-2]) == {
-    "values": {"admin_pass": "hunter2", "volume.media": "nas"}
-  }
+  assert remote.calls[-2][-1] == f"kelso config {APP} --json-response"
+  assert json.loads(remote.inputs[-2]) == {"values": answers}
   assert remote.calls[-1][-1] == f"kelso start {APP}@local --allow-compose"
 
 
-def test_deploy_refuses_an_answer_the_box_cannot_take(kelso_env, remote):
+def test_config_edit_host_fills_in_the_form_here_for_the_box(
+  kelso_env, remote, monkeypatch
+):
   remote.fields = NEEDS
-  done = kelso_env.run(
-    "deploy", str(remote.bundle), "box", "--set", "volume.media=attic"
-  )
-  assert done.returncode == 1
-  assert "volume.media must be one of: media, nas" in done.stderr
-  assert not any(call[-1].endswith("--response") for call in remote.calls)
+  shown = []
+
+  def collect(request, instead):
+    shown.append([f.name for f in request.fields])
+    return ConfigResponse({"volume.media": "media"})
+
+  monkeypatch.setattr(kelso.cli.config, "collect", collect)
+  done = kelso_env.run("config", APP, "--edit", "--host", "box", tty=True)
+  assert done.returncode == 0, done.stderr
+  assert shown == [["admin_pass", "volume.media"]]
+  assert [c[-1] for c in remote.calls] == [
+    f"kelso config {APP} --json",
+    f"kelso config {APP} --json-response",
+  ]
+  assert json.loads(remote.inputs[-1]) == {"values": {"volume.media": "media"}}
+
+
+def test_config_host_goes_with_edit_alone(kelso_env, remote):
+  refused = kelso_env.run("config", APP, "x=1", "--host", "box")
+  assert refused.returncode == 1
+  assert f"ssh box kelso config {APP} NAME=VALUE" in refused.stderr
+  assert remote.calls == []
 
 
 def test_deploy_to_a_loaded_app_updates_it(kelso_env, remote):
@@ -148,10 +171,15 @@ def test_config_speaks_requests_and_responses_as_json(kelso_env):
   assert request.field("subdomain") is not None
 
   answer = json.dumps({"values": {"subdomain": "elsewhere"}})
-  done = kelso_env.run("config", "ports-demo", "--response", input=answer)
+  done = kelso_env.run("config", "ports-demo", "--json-response", input=answer)
   assert done.returncode == 0, done.stderr
-  assert done.stdout.strip() == "Set subdomain"
-  got = kelso_env.run("config", "ports-demo", "--get", "subdomain")
+  assert done.stdout == "Set subdomain\nAll required config is set\n"
+
+  needs = kelso_env.run(
+    "config", "basic-features", "--json-response", input='{"values": {}}'
+  )
+  assert needs.stdout == "No changes\nStill needs: admin_user\n"
+  got = kelso_env.run("config", "ports-demo", "subdomain")
   assert got.stdout.strip() == "elsewhere"
 
 
