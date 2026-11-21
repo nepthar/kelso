@@ -91,7 +91,6 @@ def _show(spec: AppSpec, ctx: KelsoCtx) -> None:
 def summary(
   spec: AppSpec, last: Mapping[str, Any], decided: Mapping[str, str], mode: str
 ) -> str:
-  """What kproxy saw in its last run, and the `[connections]` lines it suggests."""
   stats = last.get("stats") or {}
   lines = ["Traffic in its last run:", _table(spec, stats, decided)]
   pending = [p["domain"] for p in last.get("pending") or []]

@@ -1,10 +1,3 @@
-"""How a handler answers: templates, the page frame, redirects and form fields.
-
-Markup lives in `templates/`, never in Python. A GET handler takes a `Page`
-and returns `page.render(template, title, **context)`; a POST handler does its
-work and returns `see(...)` so the browser lands back on a GET.
-"""
-
 import os
 from functools import cache
 from hashlib import blake2s
@@ -50,7 +43,6 @@ def remember_hostname(name):
 
 
 def brand(hostname):
-  """The name at the top of the page: the hostname up to its last dot."""
   short = hostname.rsplit(".", 1)[0] if "." in hostname else hostname
   return short or f"Kelso {INSTANCE_ID}".strip()
 
@@ -78,18 +70,12 @@ NAV = (
 
 
 def nav_active(path):
-  """The nav entry a path belongs to, the longest match winning."""
   matches = [i for i in NAV if path == i.href or path.startswith(i.href + "/")]
   return max(matches, key=lambda i: len(i.href), default=None)
 
 
 @cache
 def asset(name):
-  """URL of a file under static/, carrying a digest of its contents.
-
-  Pages are `no-store` but assets are not, so a changed file needs a changed
-  URL or a browser will hold on to the old one.
-  """
   try:
     version = blake2s((STATIC / name).read_bytes(), digest_size=6).hexdigest()
   except OSError:
@@ -145,7 +131,6 @@ templates.filters["brand"] = brand
 
 
 def render(request, template, title, *, status_code=200, headers=None, **context):
-  """A whole page. `ok` / `err` in the query become the notice banner."""
   frame = {
     "title": title,
     "version": "",
@@ -158,14 +143,6 @@ def render(request, template, title, *, status_code=200, headers=None, **context
 
 
 class Page:
-  """What a GET handler renders into.
-
-  `render` asks kelsod for its version, so the frame can name it and warn when
-  the two disagree. `title` is what the error page is called if kelsod fails
-  first -- set it before the handler's first `api()` call when the nav label
-  is not the right name.
-  """
-
   def __init__(self, request: Request):
     self.request = request
     active = nav_active(request.url.path)
@@ -186,16 +163,10 @@ PageDep = Annotated[Page, Depends()]
 
 
 def wants_html(request):
-  """A browser navigating or submitting a form, rather than a page's fetch.
-
-  The method cannot tell these apart -- the sign-in form is a POST too -- and
-  `fetch` asks for `*/*` where a browser names text/html.
-  """
   return "text/html" in request.headers.get("accept", "")
 
 
 def api_error(request, exc: ApiError):
-  """kelsod unreachable or refusing: the error inside the frame, or JSON."""
   if not wants_html(request):
     return JSONResponse({"error": str(exc)}, status_code=502, headers=NO_STORE)
   page = getattr(request.state, "page", None)
@@ -211,11 +182,7 @@ def api_error(request, exc: ApiError):
 
 
 def local_path(value):
-  """`value` if it is a path on this server, else None.
-
-  Browsers drop tabs and newlines from a URL and read `\\` as `/`, so
-  `/<tab>/x` and `/\\x` are other sites as surely as `//x` is.
-  """
+  # Browsers drop tabs and newlines and read \ as /: /<tab>/x and /\x are off-site.
   if not value.startswith("/") or "\\" in value or value[1:2] == "/":
     return None
   if any(ord(c) < 32 or ord(c) == 127 for c in value):
@@ -224,8 +191,6 @@ def local_path(value):
 
 
 def see(location, **params):
-  """Post/redirect/get: the browser lands on a GET, so a refresh re-reads
-  rather than re-submitting. `params` with a None value are left off."""
   query = urlencode({k: v for k, v in params.items() if v is not None})
   return RedirectResponse(f"{location}?{query}" if query else location, 303)
 
@@ -236,11 +201,6 @@ def field(form, name):
 
 
 def submitted_values(form):
-  """The `set.*` fields of a posted config form, minus blanks.
-
-  Blank means "leave it alone": a secret's input is always empty, since the UI
-  never had its value, and kelsod skips anything unchanged.
-  """
   return {
     key.removeprefix("set."): field(form, key)
     for key in form

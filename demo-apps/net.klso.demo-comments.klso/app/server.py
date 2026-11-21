@@ -1,5 +1,3 @@
-"""A page of comments, kept in sqlite on the app's data volume."""
-
 import html
 import sqlite3
 from http.server import BaseHTTPRequestHandler, HTTPServer

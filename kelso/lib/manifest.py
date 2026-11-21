@@ -1,5 +1,3 @@
-"""Pydantic models for kelso TOML (bundle manifests and catalog service definitions)."""
-
 import posixpath
 import shlex
 import tomllib
@@ -47,7 +45,7 @@ VolumeKind = Literal["app", "data", "temp", "bulk", "logs", "host"]
 
 
 class ConfigError(ValueError):
-  """Raised on manifest TOML load or validation failures."""
+  pass
 
 
 class AppSection(BaseModel):
@@ -94,8 +92,6 @@ class VolumeEntry(BaseModel):
 
 
 class ConfigEntry(BaseModel):
-  """A per-app config value declared in [config] or [adv_config]."""
-
   model_config = ConfigDict(extra="forbid")
 
   desc: str = ""
@@ -105,8 +101,6 @@ class ConfigEntry(BaseModel):
 
 @dataclass(frozen=True)
 class PortSpec:
-  """A parsed `port` string. host_port -1 means "assign one"."""
-
   host_port: int
   container_port: int
   proto: Literal["tcp", "udp"]
@@ -138,8 +132,6 @@ def _port_number(value: str, text: str) -> int:
 
 
 class RouteEntry(BaseModel):
-  """An HTTP(S) service a run unit exposes, declared in [run.<unit>.routes]."""
-
   model_config = ConfigDict(extra="forbid")
   port: str
   admin: bool = False
@@ -158,13 +150,10 @@ class RouteEntry(BaseModel):
 
   @property
   def port_spec(self) -> PortSpec:
-    """Always parses: `check_port` rejected anything malformed at load time."""
     return PortSpec.parse(self.port)
 
 
 class PortEntry(BaseModel):
-  """A raw tcp or udp port a run unit exposes, declared in [run.<unit>.ports]."""
-
   model_config = ConfigDict(extra="forbid")
   port: str
   desc: str = ""
@@ -176,7 +165,6 @@ class PortEntry(BaseModel):
 
   @property
   def port_spec(self) -> PortSpec:
-    """Always parses: `check_port` rejected anything malformed at load time."""
     return PortSpec.parse(self.port)
 
 
@@ -242,7 +230,6 @@ _COMPOSE_ALLOWED_KEYS = frozenset(
 
 
 def unlisted_compose_options(compose: Mapping[str, Any]) -> dict[str, Any]:
-  """The entries of a `[run.<unit>.compose]` table that are not on the allowlist."""
   return {k: compose[k] for k in sorted(compose) if k not in _COMPOSE_ALLOWED_KEYS}
 
 
@@ -334,8 +321,6 @@ class CronEntry(BaseModel):
 
 
 class Manifest(BaseModel):
-  """Parsed kelso TOML for a bundle or catalog service definition."""
-
   model_config = ConfigDict(extra="forbid")
 
   app: AppSection
@@ -350,7 +335,6 @@ class Manifest(BaseModel):
 
 
 def parse_manifest(data: bytes, app: AppID, source: Path) -> Manifest:
-  """Load manifest TOML and check that it is a valid manifest for `app`."""
   try:
     manifest = Manifest.model_validate(tomllib.loads(data.decode()))
   except UnicodeDecodeError as e:
@@ -380,7 +364,6 @@ def _fmt_validation_error(e: ValidationError, source: Path) -> str:
 
 
 def _validate_manifest(app: AppID, manifest: Manifest) -> list[str]:
-  """Checks that span sections, which the per-section models cannot make."""
   errors: list[str] = []
 
   if manifest.app.app_id is not None and manifest.app.app_id != app:
@@ -487,11 +470,6 @@ def _http_errors(name: str, entry: HttpEntry, manifest: Manifest) -> list[str]:
 
 
 def _validate_config(manifest: Manifest) -> list[str]:
-  """[config] and [adv_config] share one namespace, so a name may only be in one.
-
-  A name that shadows an app option may not be secret, and its default must be
-  a value the option accepts.
-  """
   errors = [
     f"[adv_config]: {name} is already declared in [config]; "
     f"move it to one section or the other"
@@ -544,8 +522,6 @@ def _validate_cron(manifest: Manifest) -> list[str]:
 
 
 def unit_connections(manifest: Manifest, run_entry: RunEntry) -> tuple[str, ...]:
-  """The connections a unit lists or its env references. This decides only which
-  units a mounted kind is mounted into: a network kind is app-wide."""
   found = set(run_entry.connections) | {
     ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
     for value in run_entry.env.values()
@@ -556,7 +532,6 @@ def unit_connections(manifest: Manifest, run_entry: RunEntry) -> tuple[str, ...]
 
 
 def _validate_env_refs(manifest: Manifest) -> list[str]:
-  """Every `${…}` in [run.*.env] must name a key in the flat substitution map."""
   known = set(manifest.config) | set(manifest.adv_config) | set(APP_OPTIONS)
   known.update(
     f"{ROUTE_KEY_PREFIX}{name}"
@@ -587,7 +562,6 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
 
 
 def _validate_volumes(manifest: Manifest) -> list[str]:
-  """`app` volumes are the bundle's own files: input, never state."""
   errors: list[str] = []
   for name, volume in manifest.volumes.items():
     if (
@@ -621,7 +595,6 @@ def _validate_run_volumes(manifest: Manifest) -> list[str]:
 
 
 def _validate_routes(manifest: Manifest) -> list[str]:
-  """Structural checks for [run.*.routes] and [run.*.ports]."""
   errors: list[str] = []
 
   # Route and port names are app-level identifiers, unique across run units and

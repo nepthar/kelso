@@ -1,10 +1,3 @@
-"""Tests for the config flow: the request/response model and the terminal form.
-
-A ConfigRequest is what a front end renders; a ConfigResponse is what it hands
-back. These pin down which fields a request exposes, what makes a response
-invalid, and how the terminal form drives both.
-"""
-
 import pytest
 
 from kelso.cli.configform import run_form
@@ -26,7 +19,6 @@ from kelso.lib.routes import PROVIDERS, CloudflareTunnelRouteProvider
 
 
 def _answers(monkeypatch, *script: str) -> None:
-  """Make `input` replay `script`; anything past the end is EOF."""
   queue = list(script)
 
   def scripted(prompt: str = "") -> str:
@@ -80,7 +72,6 @@ def test_validate_refuses_unknown_names_and_empty_values():
 
 
 def test_a_partial_answer_is_valid():
-  """`start` refuses an under-configured app; the form should not also refuse."""
   assert _request().validate({"admin_email": "a@b.c"}) == []
 
 
@@ -185,7 +176,6 @@ CF_ANSWERS = {
 
 
 def ctx_for(kelso_env) -> KelsoCtx:
-  """A fresh ctx per call: config.toml is re-read after every write."""
   return KelsoCtx(load_config_file(kelso_env.config))
 
 
@@ -196,10 +186,6 @@ def _configure_cf(kelso_env, values: dict[str, str]) -> list[str]:
 
 
 def test_provider_fields_cover_required_args():
-  """config_fields is what an operator is asked; REQUIRED_ARGS is what the block
-  needs. A secret field named X becomes `X_secret` in args, so the two have to
-  line up or the flow would write a block its own provider then refuses.
-  """
   for kind, provider in PROVIDERS.items():
     offered = {
       f"{f.name}_secret" if f.secret else f.name

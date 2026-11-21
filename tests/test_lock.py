@@ -1,14 +1,3 @@
-"""CLI commands take a kelso lock, and app commands take an app lock first.
-
-`logs` / `activity` / `decrypt` take neither: they stream or read.
-`cmd` holds the app lock while the command runs, not the kelso lock.
-`init` runs before there is a config to lock.
-
-Most of these run in-process -- `filelock` blocks a second acquire from the
-same process just as it does across processes. The one test that would be
-vacuous that way spawns a real child.
-"""
-
 import json
 import os
 import time
@@ -25,7 +14,6 @@ def _holder(path) -> dict:
 
 
 def test_the_lock_is_recorded_in_the_lockfile(kelso_env):
-  """A held lock overwrites the lockfile; release leaves the last holder."""
   ctx = KelsoCtx(load_config_file(kelso_env.config))
   assert (
     ctx.config.kelso_lockfile_path == kelso_env.root / "var" / "lock" / "kelso.lock"
@@ -44,7 +32,6 @@ def test_the_lock_is_recorded_in_the_lockfile(kelso_env):
 
 
 def test_the_lock_timeout_message_names_the_holder(kelso_env):
-  """The whole point of the record: explain a wait instead of just failing."""
   with FileLock(kelso_env.kelso_lockfile_path):
     kelso_env.kelso_lockfile_path.write_text(
       json.dumps(
@@ -59,7 +46,6 @@ def test_the_lock_timeout_message_names_the_holder(kelso_env):
 
 
 def test_the_recorded_holder_is_the_command_not_the_argv(kelso_env):
-  """`config k=-` must never put the secret in the lockfile."""
   app_id = "net.klso.basic-features"
   assert kelso_env.run("load", app_id).returncode == 0
   assert (
@@ -72,8 +58,6 @@ def test_the_recorded_holder_is_the_command_not_the_argv(kelso_env):
 
 
 def test_a_held_lock_makes_a_command_give_up_with_a_reason(kelso_env):
-  """Kelso must wait rather than run concurrently -- and then give up, rather
-  than hang forever with nothing on screen to explain why."""
   lock = FileLock(kelso_env.kelso_lockfile_path)
 
   # Free when nothing is running.
@@ -96,11 +80,6 @@ def test_a_held_lock_makes_a_command_give_up_with_a_reason(kelso_env):
 
 
 def test_a_second_kelso_process_waits_on_the_first(kelso_env):
-  """The cross-process claim the in-process tests stand in for.
-
-  Everything else here would still pass if the lock were a plain in-memory
-  flag, so this one pays for a real interpreter.
-  """
   with FileLock(kelso_env.kelso_lockfile_path):
     result = kelso_env.run_subprocess("ps", timeout=30)
 
@@ -109,7 +88,6 @@ def test_a_second_kelso_process_waits_on_the_first(kelso_env):
 
 
 def test_cmd_does_not_hold_the_kelso_lock(kelso_env):
-  """A long-running command must not lock other apps out of kelso."""
   _load_cmd_demo(kelso_env)
 
   with FileLock(kelso_env.kelso_lockfile_path):
@@ -123,7 +101,6 @@ def test_cmd_does_not_hold_the_kelso_lock(kelso_env):
 
 
 def test_cmd_holds_the_app_lock(kelso_env):
-  """The same app cannot be started while a command is running; others can."""
   _load_cmd_demo(kelso_env)
   assert kelso_env.run("load", "routes-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("cmd-demo"))
@@ -156,11 +133,6 @@ cmd = "echo pong"
 
 
 def test_logs_does_not_hold_the_kelso_lock(kelso_env):
-  """`logs -f` streams until interrupted.
-
-  Holding the lock for that long would lock the operator out of kelso for as
-  long as they watch logs, so this command runs unlocked.
-  """
   assert kelso_env.run("start", "ports-demo").returncode == 0
 
   with FileLock(kelso_env.kelso_lockfile_path):
@@ -175,7 +147,6 @@ def test_logs_does_not_hold_the_kelso_lock(kelso_env):
 
 
 def test_an_app_lock_does_not_block_another_app(kelso_env):
-  """The point of per-app locks: backing up A must not stall start B."""
   assert kelso_env.run("load", "ports-demo").returncode == 0
   lock = FileLock(kelso_env.app_lockfile_path("ports-demo"))
   with lock:
@@ -188,7 +159,6 @@ def test_an_app_lock_does_not_block_another_app(kelso_env):
 
 
 def test_ps_does_not_need_the_app_lock(kelso_env):
-  """A kelso-wide read proceeds while one app is locked for a long copy."""
   with FileLock(kelso_env.app_lockfile_path("ports-demo")):
     listed = kelso_env.run("ps")
 
@@ -197,7 +167,6 @@ def test_ps_does_not_need_the_app_lock(kelso_env):
 
 
 def test_a_backup_releases_kelso_while_restic_reads(kelso_env, monkeypatch):
-  """Other apps can take the kelso lock while one app's volumes are read."""
   from kelso.lib.restic import Restic
 
   assert kelso_env.run("load", "ports-demo").returncode == 0

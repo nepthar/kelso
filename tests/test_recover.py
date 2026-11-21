@@ -1,6 +1,3 @@
-"""Recovering a whole kelso: `init --with-phrase`, `system purge`, and
-`restore <backups directory>`."""
-
 import os
 
 from kelso.lib import recovery
@@ -14,7 +11,6 @@ OTHER_WORDS = " ".join(recovery.phrase(bytes(range(50, 66))))
 
 
 def run_at(kelso_env, root, *args, **kwargs):
-  """Run one kelso command with KELSO_ROOT pointing at `root`."""
   saved = os.environ["KELSO_ROOT"]
   os.environ["KELSO_ROOT"] = str(root)
   try:
@@ -34,7 +30,6 @@ def _init_with(kelso_env, root, words: str):
 
 
 def _backed_up_root(kelso_env):
-  """An old machine: two apps, data, a secret, and a full backup of it all."""
   assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("rows")
   assert kelso_env.run("load", "ports-demo").returncode == 0

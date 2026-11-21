@@ -1,5 +1,3 @@
-"""The Settings window: what kelso-ui itself looks like."""
-
 import settings
 from fastapi import APIRouter, Request
 from web import INSTANCE_ID, PageDep, field, see

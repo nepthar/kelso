@@ -1,10 +1,3 @@
-"""Tests for application repos: addressing, mirroring, and what a mirror holds.
-
-The remote is a real git repository in the test's tmp dir, fetched over
-file://, so the suite never touches the network. `GithubFolder.clone_url` is
-the only seam needed for that.
-"""
-
 from __future__ import annotations
 
 import subprocess
@@ -76,8 +69,6 @@ restart = "no"
 
 
 class Remote:
-  """A git repository standing in for github.com/nepthar/kelso."""
-
   def __init__(self, root: Path) -> None:
     self.root = root
     root.mkdir()
@@ -423,7 +414,6 @@ def test_repo_add_job_mirrors_the_folder(github, ctx, kelso_env):
   "url", ["/etc", "~/bundles", "./apps", "apps", "https://github.com/a/b"]
 )
 def test_repo_add_job_takes_a_url_and_never_a_path(ctx, url):
-  """Local repos are CLI-only; see the note above `runner.JOBS`."""
   with pytest.raises(ValueError, match="takes a github:// url"):
     RepoAddJob.prepare({"url": url}, ctx, started_by="test")
 
@@ -479,7 +469,6 @@ def test_repo_jobs_are_recorded_as_activity(github, ctx):
 
 
 def test_a_duplicate_name_never_reaches_the_config_file(github, ctx, kelso_env):
-  """The name is a table key, so a second write would overwrite the first."""
   github.hello_world()
   repo_lib.add(ctx, URL)
   written = kelso_env.config.read_text()

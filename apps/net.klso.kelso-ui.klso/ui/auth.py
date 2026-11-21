@@ -48,7 +48,6 @@ def _sign(payload):
 
 
 def check_password(candidate):
-  """True if this is the admin password. Guessing is the rate limiter's problem."""
   return hmac.compare_digest(
     hashlib.sha256(candidate.encode()).digest(),
     hashlib.sha256(PASSWORD.encode()).digest(),
@@ -56,7 +55,6 @@ def check_password(candidate):
 
 
 def issue():
-  """A fresh cookie value and how many seconds it is good for."""
   expiry = int(time.time()) + SESSION_SECONDS
   return f"{expiry}.{_sign(str(expiry))}", SESSION_SECONDS
 
@@ -73,5 +71,4 @@ def valid(cookie):
 
 
 def is_open(path):
-  """Paths served without a session: the login form and its stylesheet."""
   return path == "/login" or path.startswith("/static/")

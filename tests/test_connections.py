@@ -1,5 +1,3 @@
-"""Connections: `[connections]`, given to the units that reference them, and `${conn.*}`."""
-
 import shutil
 
 import pytest

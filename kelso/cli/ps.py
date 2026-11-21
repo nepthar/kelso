@@ -74,8 +74,6 @@ def _bundle_spec(app: AppID, ctx: KelsoCtx) -> AppSpec | None:
 
 
 def _status(observation: AppObservation, spec: AppSpec | None) -> str:
-  """`running`, `running (healthy)`, `running (degraded)`, `finished`,
-  `stopped`, or the state of an app that is not loaded."""
   if not observation.loaded:
     return observation.state
   status = observation.status(*((spec.run_units, spec.one_shots) if spec else ()))
@@ -85,7 +83,6 @@ def _status(observation: AppObservation, spec: AppSpec | None) -> str:
 
 
 def _config(observation: AppObservation, spec: AppSpec | None, ctx: KelsoCtx) -> str:
-  """Whether this app's settings are complete -- kept config included."""
   if not observation.config_exists:
     return EMPTY
   if observation.state == UNLOADED:

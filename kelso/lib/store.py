@@ -32,8 +32,6 @@ ROUTES_UNPUBLISHED = "routes_unpublished"
 
 
 class ConfigStore(Protocol):
-  """A flat string-keyed configuration store, suitable for lightweight state storage"""
-
   def write(self, key: str, value: Any) -> None: ...
 
   def read(self, key: str) -> Any: ...
@@ -46,8 +44,6 @@ class ConfigStore(Protocol):
 
 
 class JsonLogtabStore(ConfigStore):
-  """Json-based ConfigStore on top of a Logtab"""
-
   def __init__(self, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     self._table = LogTab(path, auto_compact_size_bytes=STORE_MAX_BYTES)
@@ -80,8 +76,6 @@ def _decrypt_or_none(crypto: CryptoEngine, blob: str) -> str | None:
 
 
 def _route_tags(value: Any) -> list[str] | None:
-  """A stored route assignment as a tag list. Older stores hold one tag, with
-  `none` for published nowhere."""
   if isinstance(value, str):
     return [] if value == NONE_ROUTE_PROVIDER_TAG else [value]
   if isinstance(value, list) and all(isinstance(tag, str) for tag in value):
@@ -90,8 +84,6 @@ def _route_tags(value: Any) -> list[str] | None:
 
 
 class KelsoStore:
-  """Store and manipulate kelso-wide state"""
-
   @classmethod
   def from_config(cls, config: Config) -> "KelsoStore":
     json_store = JsonLogtabStore(config.kelsodb_path)
@@ -166,10 +158,6 @@ class KelsoStore:
     )
 
   def kelso_id(self) -> str:
-    """This kelso's id: 8 hex characters, made once, never changed by kelso.
-
-    Only ever shown, to tell two kelsos apart -- in backup tags, above all.
-    """
     found = self._store.read(KELSO_ID_KEY)
     if isinstance(found, str) and found:
       return found
@@ -178,13 +166,10 @@ class KelsoStore:
     return made
 
   def record_backup_run(self, run: dict[str, Any]) -> None:
-    """How a backup run went, so status and doctor need not ask restic. The
-    last one of each reason is kept."""
     self._store.write(BACKUP_RUN_KEY, run)
     self._store.write(f"{BACKUP_RUN_KEY}/{run['reason']}", run)
 
   def last_backup_run(self, reason: str | None = None) -> dict[str, Any] | None:
-    """The last backup run, or the last one for `reason`."""
     key = BACKUP_RUN_KEY if reason is None else f"{BACKUP_RUN_KEY}/{reason}"
     found = self._store.read(key)
     return found if isinstance(found, dict) else None
@@ -218,8 +203,6 @@ class KelsoStore:
     return self._crypto.decrypt(raw) if raw is not None else None
 
   def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
-    """Append every secret and token again, read with `old` and written with
-    this store's key. Returns how many, and the names `old` could not read."""
     written, unreadable = 0, []
     for name, blob in self._store.scan("system/secrets/").items():
       plain = _decrypt_or_none(old, blob)
@@ -246,7 +229,6 @@ class KelsoStore:
     self._store.delete(f"system/secrets/{name}")
 
   def set_repo_state(self, name: str, *, sha: str, at: str) -> None:
-    """Record the commit a mirrored repo was last brought down at."""
     self._store.write(f"repo/{name}", {"sha": sha, "at": at})
 
   def get_repo_state(self, name: str) -> dict[str, str] | None:
@@ -264,7 +246,6 @@ class KelsoStore:
 
   # App Management
   def app_ids(self) -> list[str]:
-    """Every app kelsodb still holds *load* state for: routes or a subnet."""
     routes = {key.split("/")[0] for key in self._store.scan("routes/")}
     ports = {key.split("/")[0] for key in self._store.scan("ports/")}
     return sorted(routes | ports | set(self._store.scan("subnets/")))
@@ -282,8 +263,6 @@ class KelsoStore:
 
 
 class AppStore:
-  """Store and manipulate per-app state"""
-
   @classmethod
   def from_path(cls, path: Path, crypto: CryptoEngine) -> "AppStore":
     json_store = JsonLogtabStore(path)
@@ -294,7 +273,6 @@ class AppStore:
     self._crypto = crypto
 
   def set_config(self, name: str, secret: bool, value: str) -> None:
-    """Store a value. Setting what is already on file writes nothing."""
     if self._config_is(name, secret, value):
       return
     stored = self._crypto.encrypt(value) if secret else value
@@ -307,7 +285,6 @@ class AppStore:
       return False
 
   def get_config(self, name: str) -> tuple[bool, str] | tuple[None, None]:
-    """Return (secret, plaintext_value), or (None, None) if not set."""
     entry = self._store.read(f"config/{name}")
     if entry is None:
       return (None, None)
@@ -316,9 +293,6 @@ class AppStore:
     return secret, self._crypto.decrypt(raw) if secret else raw
 
   def rekey_secrets(self, old: CryptoEngine) -> tuple[int, list[str]]:
-    """Append every secret again, read with `old` and written with this
-    store's key, marked as a rekey so nothing becomes pending. Returns how
-    many, and the names `old` could not read."""
     written, unreadable = 0, []
     for name, entry in self._store.scan("config/").items():
       if not entry.get("secret"):
@@ -335,22 +309,18 @@ class AppStore:
     return written, unreadable
 
   def has_config(self, name: str) -> bool:
-    """Whether a value is stored, without decrypting it."""
     return self._store.read(f"config/{name}") is not None
 
   def set_bind(self, volume_name: str, host_volume: str) -> None:
-    """Record that app volume ``volume_name`` is bound to host volume tag."""
     if self._store.read(f"binds/{volume_name}") == host_volume:
       return
     self._store.write(f"binds/{volume_name}", host_volume)
 
   def list_binds(self) -> dict[str, str]:
-    """app volume name -> host_volume tag."""
     raw = self._store.scan("binds/")
     return {name: tag for name, tag in raw.items() if isinstance(tag, str)}
 
   def set_network_mode(self, mode: str | None) -> None:
-    """The operator's network mode over the manifest's; None clears it."""
     if self.get_network_mode() == mode:
       return
     # Cleared as a write, not a delete: only writes count as a pending change.
@@ -361,7 +331,6 @@ class AppStore:
     return mode if isinstance(mode, str) else None
 
   def set_host(self, name: str, verdict: str | None) -> None:
-    """Allow or deny domain `name` and its subdomains behind kproxy; None forgets."""
     if verdict is None:
       if self._store.read(f"hosts/{name}") is not None:
         self._store.delete(f"hosts/{name}")
@@ -370,13 +339,10 @@ class AppStore:
       self._store.write(f"hosts/{name}", verdict)
 
   def list_hosts(self) -> dict[str, str]:
-    """domain -> allow or deny, as the operator decided."""
     raw = self._store.scan("hosts/")
     return {name: v for name, v in raw.items() if v in ("allow", "deny")}
 
   def set_route_assignment(self, route_name: str, provider_tags: Sequence[str]) -> None:
-    """Record which route-provider tags publish ``route_name``, primary first.
-    An empty list is an assignment too: published nowhere, on purpose."""
     if isinstance(provider_tags, str):
       raise TypeError(f"provider tags must be a list, not {provider_tags!r}")
     tags = list(provider_tags)
@@ -385,14 +351,12 @@ class AppStore:
     self._store.write(f"routes/{route_name}", tags)
 
   def get_route_assignment(self, route_name: str) -> list[str] | None:
-    """The assigned provider tags, primary first, or None if never set."""
     return _route_tags(self._store.read(f"routes/{route_name}"))
 
   def has_route_assignment(self, route_name: str) -> bool:
     return self._store.read(f"routes/{route_name}") is not None
 
   def list_route_assignments(self) -> dict[str, list[str]]:
-    """route name -> provider tags, primary first, for every assignment on file."""
     raw = self._store.scan("routes/")
     return {
       name: tags
@@ -401,12 +365,9 @@ class AppStore:
     }
 
   def set_backup_bulk(self, volume_name: str, on: bool) -> None:
-    """Whether backups include bulk volume `volume_name`. Start never reads
-    this, so it is not a change for a running app to pick up."""
     self._store.write(f"backup/{volume_name}", on)
 
   def backed_up_bulk(self) -> set[str]:
-    """The bulk volumes backups include."""
     return {name for name, on in self._store.scan("backup/").items() if on is True}
 
   def set_meta(self, name: str, value: Any) -> None:

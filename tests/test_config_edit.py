@@ -1,6 +1,3 @@
-"""Editing config.toml: what survives, what is refused, and what is never left
-half-written."""
-
 import json
 from itertools import pairwise
 
@@ -20,7 +17,6 @@ from kelso.lib.kelso import KelsoCtx
 
 
 def ctx_of(kelso_env) -> KelsoCtx:
-  """A context reading the config as it is on disk right now."""
   config = load_config()
   assert config is not None
   return KelsoCtx(config)
@@ -28,7 +24,6 @@ def ctx_of(kelso_env) -> KelsoCtx:
 
 @pytest.fixture
 def host_dir(kelso_env):
-  """A directory no fixture host_volume already points at."""
   path = kelso_env.root / "extra-data"
   path.mkdir()
   return path
@@ -96,7 +91,6 @@ def test_a_kelso_root_placeholder_resolves(kelso_env):
 
 
 def test_config_toml_is_never_left_invalid(kelso_env):
-  """The whole reason edits go through the real loader before landing."""
   before = kelso_env.config.read_text()
 
   with pytest.raises(ValueError) as raised:
@@ -110,7 +104,6 @@ def test_config_toml_is_never_left_invalid(kelso_env):
 
 
 def test_an_edit_is_recorded_as_a_lock_holder(kelso_env, host_dir):
-  """config.toml is kelso-wide state; two writers would lose an edit."""
   added = kelso_env.run("system", "host-volume", "--add", f"extra={host_dir}")
   assert added.returncode == 0, added.stderr
 
@@ -154,7 +147,6 @@ def test_changing_an_unknown_tag_lists_the_known_ones(kelso_env, host_dir):
 
 
 def test_a_new_host_volume_is_immediately_bindable(kelso_env, host_dir):
-  """The point of the feature: declare it, then bind an app to it."""
   add_host_volume(ctx_of(kelso_env), "fresh", str(host_dir))
   bound = kelso_env.run("config", "host-volumes", "volume.hostvol1=fresh")
   assert bound.returncode == 0, bound.stderr

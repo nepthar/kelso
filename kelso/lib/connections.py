@@ -1,15 +1,3 @@
-"""Connections: what an app asks kelso to reach for it.
-
-A manifest declares connections in `[connections]`, and each tells the manifest
-about itself as `${conn.<name>.<property>}`. It never sets the environment
-itself: the manifest maps properties to whatever names the app reads.
-
-A mounted connection is a host path at `/run/kelso/conn/<name>`, only in the
-units that list or reference it. It hands the app control of something outside
-it, so each is a danger callout. A network connection is what an app behind kproxy
-may reach through kproxy: it is app-wide, not restricted to a single container.
-"""
-
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,23 +52,18 @@ class MountConnection:
 
 @dataclass(frozen=True)
 class WebConnection:
-  """Domains on the internet, each with its subdomains."""
-
   hosts: tuple[str, ...]
   property_names: ClassVar[tuple[str, ...]] = ()
 
 
 @dataclass(frozen=True)
 class HttpConnection:
-  """One address on the operator's own network, reached by the connection's name."""
-
   # host:port, which may hold `${config}` references.
   address: str
   property_names: ClassVar[tuple[str, ...]] = ("host", "url")
 
   @staticmethod
   def properties(host: str) -> dict[str, str]:
-    """`host` is the connection's name behind kproxy, else its address."""
     return {"host": host, "url": f"http://{host}"}
 
 
@@ -99,5 +82,4 @@ def network_connections(
 
 
 def guest_path(name: str) -> str:
-  """Where a mounted connection's host path is in each unit given it."""
   return f"/run/kelso/conn/{name}"

@@ -1,10 +1,3 @@
-"""The app: the front door, then one router per feature, then static files.
-
-Adding a feature means a module under pages/ with its own router, templates
-under templates/pages/, and any script under static/js/ -- nothing here but
-the line that includes it.
-"""
-
 from api import ApiError
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles

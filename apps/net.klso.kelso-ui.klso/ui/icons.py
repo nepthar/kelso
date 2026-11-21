@@ -1,6 +1,3 @@
-"""Material Design Icons, inlined as SVG paths. Add one by pasting its path
-from materialdesignicons.com under the icon's MDI name."""
-
 from urllib.parse import quote
 
 from markupsafe import Markup
@@ -151,7 +148,6 @@ STROKED = {
 
 
 def favicon(name, color):
-  """A stroked icon as a data: URL, for a <link rel="icon">."""
   svg = (
     f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path '
     f'd="{STROKED[name]}" fill="none" stroke="{color}" stroke-width="2" '
@@ -161,7 +157,6 @@ def favicon(name, color):
 
 
 def mdi(name):
-  """The icon as an inline <svg>. An unknown name is a bug, so it raises."""
   if name in STROKED:
     return Markup(
       '<svg class="mdi" viewBox="0 0 24 24" aria-hidden="true"><path d="{}" '

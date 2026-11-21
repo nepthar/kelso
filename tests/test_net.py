@@ -1,5 +1,3 @@
-"""`kelso net`: decisions kelso keeps, and what it reads from a running kproxy."""
-
 import json
 
 from kelso.lib import kproxy

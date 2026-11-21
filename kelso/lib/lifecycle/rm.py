@@ -43,8 +43,6 @@ _ACTIONS: dict[str, str] = {
 
 @dataclass(frozen=True)
 class RemovalPlan:
-  """What a removal will delete, and what it deliberately will not."""
-
   app_id: AppID
   mode: RemovalMode
   # The loaded copy, when this mode unloads.
@@ -64,15 +62,10 @@ class RemovalPlan:
 
   @property
   def empties(self) -> bool:
-    """Volumes are emptied rather than deleted, because the app stays loaded."""
     return self.mode == TEMP
 
 
 def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalPlan:
-  """Work out what a removal would destroy, without destroying it.
-
-  Raises ValueError for anything but unload on a running app.
-  """
   state = ctx.run_state(app_id)
   if state.containers and not state.compose_exists:
     raise ValueError(container_recovery_message(app_id, ctx))
@@ -106,7 +99,6 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
 
 
 def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
-  """Carry out `plan`."""
   app_id = plan.app_id
   if plan.stop_first:
     logger.info("Stopping %s", app_id)
@@ -137,7 +129,6 @@ def rm(plan: RemovalPlan, ctx: KelsoCtx) -> None:
 
 
 def _remove_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:
-  """Delete each app volume dir. Its files may be root's, so a container does it."""
   existing = [path.resolve() for path in paths if path.is_dir()]
   if not existing:
     return
@@ -151,7 +142,6 @@ def _remove_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:
 
 
 def _empty_volumes(app_id: AppID, paths: tuple[Path, ...]) -> None:
-  """Delete what is inside each volume under `paths`, keeping the volume dirs."""
   volumes = [
     volume.resolve()
     for path in paths

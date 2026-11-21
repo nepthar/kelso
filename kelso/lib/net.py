@@ -1,10 +1,3 @@
-"""What an app behind kproxy reaches, and the hosts the operator decided on.
-
-Decisions are kelso's, kept in the app store and written into kproxy's rules at
-every start. Traffic and pending hosts are kproxy's, read live from the running
-proxy, and reset whenever it restarts.
-"""
-
 import json
 import logging
 from collections.abc import Iterable, Mapping
@@ -26,10 +19,6 @@ _ADMIN = ["/kproxy", "admin", "-admin", kproxy.KPROXY_ADMIN_SOCKET]
 
 
 def kproxy_admin(app: AppID, ctx: KelsoCtx, method: str, path: str, body=None) -> Any:
-  """One request to the app's running kproxy; its JSON answer, or None if empty.
-
-  Raises RuntimeError naming the fix when kproxy can't be reached.
-  """
   cmd = ["compose", "exec", "-T", kproxy.KPROXY_SERVICE, *_ADMIN, method, path]
   if body is not None:
     cmd.append(json.dumps(body))
@@ -56,18 +45,12 @@ def is_proxied_and_running(spec: AppSpec, ctx: KelsoCtx) -> bool:
 
 
 def decide(spec: AppSpec, host: str, verdict: str | None, ctx: KelsoCtx) -> str:
-  """Record allow, deny, or (None) forget for `host` and its subdomains, and
-  apply it to a running kproxy at once. Returns the domain as stored."""
   return decide_many(spec, {host: verdict}, ctx)[0]
 
 
 def decide_many(
   spec: AppSpec, decisions: Mapping[str, str | None], ctx: KelsoCtx
 ) -> list[str]:
-  """`decide` for each domain, with one push to a running kproxy.
-
-  Raises ValueError, before anything is written, for a bad domain or verdict.
-  """
   named = {}
   for host, verdict in decisions.items():
     if verdict not in ("allow", "deny", None):
@@ -89,8 +72,6 @@ def domain_rows(
   pending: Iterable[Mapping[str, Any]],
   decided: Mapping[str, str],
 ) -> list[dict[str, Any]]:
-  """One row per domain counted on 80 and 443, waiting, decided, or listed as a
-  web host, sorted by domain."""
   waiting = {p["domain"]: sorted(p.get("hosts") or ()) for p in pending}
   listed = {
     host.lower().rstrip(".")
@@ -136,7 +117,6 @@ def domain_rows(
 
 
 def listed_as(spec: AppSpec, domain: str) -> str | None:
-  """The `[connections]` entry that lets `domain` through, if any."""
   for name, entry in network_connections(spec.connections).items():
     if isinstance(entry, HttpConnection) and domain == name:
       return name
@@ -149,11 +129,6 @@ def listed_as(spec: AppSpec, domain: str) -> str | None:
 
 
 def net_view(spec: AppSpec, ctx: KelsoCtx) -> dict[str, Any]:
-  """The app's network mode and its domains: live from a running kproxy, else
-  from its last run, else only what is decided or listed.
-
-  Raises RuntimeError naming the fix when a running app's kproxy can't be reached.
-  """
   mode = network_mode(spec, ctx)
   decided = ctx.app_store(spec.app).list_hosts()
   stats: Mapping[str, Any] = {}
@@ -176,7 +151,6 @@ def net_view(spec: AppSpec, ctx: KelsoCtx) -> dict[str, Any]:
 
 
 def waiting_note(spec: AppSpec, ctx: KelsoCtx) -> str:
-  """`2 domains waiting` for a running app in ask mode holding connections, else ''."""
   if network_mode(spec, ctx) != "ask" or not ctx.run_state(spec.app).running_count:
     return ""
   try:
@@ -190,7 +164,6 @@ def waiting_note(spec: AppSpec, ctx: KelsoCtx) -> str:
 
 
 def last_run(app: AppID, ctx: KelsoCtx) -> dict[str, Any] | None:
-  """What the app's kproxy saw before it last stopped, or None if nothing was kept."""
   path = ctx.loaded_paths(app).run_path / kproxy.KPROXY_RUN_DIR / kproxy.STATS_FILE
   try:
     return json.loads(path.read_text())
@@ -199,5 +172,4 @@ def last_run(app: AppID, ctx: KelsoCtx) -> dict[str, Any] | None:
 
 
 def covers(rule: str, domain: str) -> bool:
-  """Whether a domain rule, which takes its subdomains with it, covers `domain`."""
   return domain == rule or domain.endswith("." + rule)

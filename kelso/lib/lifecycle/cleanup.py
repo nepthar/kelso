@@ -1,9 +1,3 @@
-"""`kelso cleanup`: what kelso holds that nothing needs any more, planned first.
-
-It never stops an app: a running app's temp volumes are left alone, and an
-image goes only when no loaded app names it and no container uses it.
-"""
-
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,8 +23,6 @@ Kind = Literal["incomplete restore", "image", "temp and logs", "routes"]
 
 @dataclass(frozen=True)
 class Reclaim:
-  """One thing cleanup deletes, and roughly the space that frees."""
-
   kind: Kind
   app: AppID | None
   target: Path | DockerImage | None
@@ -61,7 +53,6 @@ class CleanupPlan:
 def cleanup_plan(
   ctx: KelsoCtx, *, temp: bool = False, app: AppID | None = None
 ) -> CleanupPlan:
-  """What cleanup would delete, without deleting it; only `app`'s, if given."""
   items = _incomplete_restores(ctx)
   skipped: list[AppID] = []
   observations = ctx.observations()
@@ -87,7 +78,6 @@ def cleanup_plan(
 
 
 def cleanup(plan: CleanupPlan, ctx: KelsoCtx) -> None:
-  """Carry out `plan`; an item that is no longer safe to delete is skipped."""
   for item in plan.items:
     try:
       _reclaim(item, ctx)
@@ -130,7 +120,6 @@ def _remove_incomplete(folder: Path) -> None:
 
 
 def _incomplete_restores(ctx: KelsoCtx) -> list[Reclaim]:
-  """What a restore that did not finish left in its scratch space."""
   root = ctx.config.temp_root / "restore"
   if not root.is_dir():
     return []
@@ -142,7 +131,6 @@ def _incomplete_restores(ctx: KelsoCtx) -> list[Reclaim]:
 
 
 def _recorded_temp_sizes(ctx: KelsoCtx) -> dict[str, int]:
-  """Each app's temp and logs volumes, as the metrics job last recorded them."""
   sizes: dict[str, int] = {}
   for key, entry in ctx.metrics_log.scan("gauge/volume_size_bytes/").items():
     _, _, app, kind, _ = key.split("/", 4)
@@ -152,7 +140,6 @@ def _recorded_temp_sizes(ctx: KelsoCtx) -> dict[str, int]:
 
 
 def _unused_images(ctx: KelsoCtx) -> list[DockerImage]:
-  """Images no loaded app names and no container, kelso's or not, was made from."""
   # Kelso's own: the root-filesystem helper and restic, which `image ls`
   # names by tag even though kelso pins restic by digest.
   named = {_normal(ROOTFS_IMAGE), _normal(RESTIC_IMAGE.partition("@")[0])}
@@ -176,7 +163,6 @@ def _unused_images(ctx: KelsoCtx) -> list[DockerImage]:
 
 
 def _normal(ref: str) -> str:
-  """An image reference as `docker image ls` would name it."""
   for prefix in ("docker.io/library/", "docker.io/"):
     ref = ref.removeprefix(prefix)
   if "@" in ref or ":" in ref.rpartition("/")[2]:

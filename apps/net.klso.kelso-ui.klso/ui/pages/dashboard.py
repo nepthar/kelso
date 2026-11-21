@@ -1,5 +1,3 @@
-"""The Host window, after Task Manager: every app, and how busy the host is."""
-
 from api import api, where
 from fastapi import APIRouter
 from web import PageDep, fmt_size, percent
@@ -67,7 +65,6 @@ def dashboard(page: PageDep):
 
 
 def _line(points, since, until):
-  """SVG polyline points for ratios over [since, until]: time across, 0-100% up."""
   span = max(until - since, 1)
   return " ".join(
     f"{(p['t'] - since) / span * GRAPH_W:.1f},{(1 - min(max(p['v'], 0), 1)) * GRAPH_H:.1f}"

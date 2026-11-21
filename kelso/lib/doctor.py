@@ -1,8 +1,3 @@
-"""Checks behind `kelso doctor`: orphaned or inconsistent kelso state.
-
-Diagnosis only reads; the caller holds the kelso lock and renders the result.
-"""
-
 import re
 import socket
 import time
@@ -38,7 +33,6 @@ class DoctorPrognosis:
 
 
 def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
-  """Collect problems and warnings across volumes, the catalog, and every app."""
   problems = [
     *tool_problems(),
     *kelsod_problems(ctx),
@@ -57,7 +51,6 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
 
 
 def _key_problems(ctx: KelsoCtx) -> list[Finding]:
-  """A root with no seed has no key: every secret is out of reach."""
   if read_keyfile(ctx.config.master_keyfile).seed is None:
     return [
       Finding(
@@ -70,8 +63,6 @@ def _key_problems(ctx: KelsoCtx) -> list[Finding]:
 
 
 def _secret_problems(ctx: KelsoCtx) -> list[Finding]:
-  """A secret config.toml names but kelso does not hold: whatever names it
-  fails the first time it is used."""
   stored = set(ctx.kelso_db.list_secrets())
   return [
     Finding(
@@ -90,7 +81,6 @@ MIN_GIT = (2, 25)
 
 
 def tool_problems() -> list[Finding]:
-  """git, docker, and docker compose answering on this host, docker as root."""
   findings = []
   try:
     version = git("--version")
@@ -138,7 +128,6 @@ def tool_problems() -> list[Finding]:
 
 
 def _docker_unreachable(stderr: str) -> str:
-  """Why `docker info` failed, as the fix for it."""
   if "permission denied" in stderr.lower():
     return (
       "this user cannot reach the docker daemon. If you just added it to the "
@@ -152,7 +141,6 @@ def _docker_unreachable(stderr: str) -> str:
 
 
 def _rootless(info: list[dict]) -> bool:
-  """Whether `docker info` describes a rootless daemon."""
   options = (info[0].get("SecurityOptions") or []) if info else []
   return any("name=rootless" in option for option in options)
 
@@ -162,7 +150,6 @@ STALE_METRICS_SECONDS = 15 * 60
 
 
 def kelsod_problems(ctx: KelsoCtx) -> list[Finding]:
-  """kelsod listening on its admin socket, and its scheduler still running."""
   path = ctx.config.admin_socket_path
   if not _listening(path):
     return [
@@ -220,15 +207,12 @@ def _backup_problems(ctx: KelsoCtx) -> list[Finding]:
 
 
 def _docker_warnings() -> list[Finding]:
-  """A note, not a problem: only apps behind kproxy need the newer docker."""
   major = server_major()
   problem = docker_too_old(major) if major is not None else None
   return [Finding("the docker daemon", problem)] if problem else []
 
 
 def _backup_warnings(ctx: KelsoCtx) -> list[Finding]:
-  """A note, not a problem: backups on kelso's own disk are fine until that
-  disk fails. `require_mount` is how to insist on another one."""
   root = ctx.config.backups_root
   if not root.exists() or destination_problem(ctx) or not shares_kelso_disk(ctx):
     return []
@@ -279,7 +263,6 @@ def _catalog_problems(ctx: KelsoCtx) -> list[Finding]:
 
 
 def _repo_warnings(ctx: KelsoCtx) -> list[Finding]:
-  """Local repos with a git repository of their own and changes not committed."""
   findings = []
   for name, repo in ctx.config.repos.items():
     checkout = repo.path.resolve()

@@ -1,11 +1,3 @@
-"""Move every encrypted value kelso holds onto the master key a new seed derives.
-
-Each store re-appends its own secrets: the app stores and kelsodb, as a
-context opened on the new key hands them out, each reading with the old key.
-History is never rewritten. Older records stay as written, and the key they
-were written under is still in the key file's history.
-"""
-
 import logging
 from dataclasses import dataclass, field
 
@@ -28,7 +20,6 @@ class RekeyResult:
 
 
 def _move_backups(ctx: KelsoCtx, entropy: bytes) -> None:
-  """Give the backup repository the password the new phrase derives."""
   root = ctx.config.backups_root
   if not root.is_symlink() and not (root / "config").is_file():
     return  # No repository yet: the first backup makes it with the new one.
@@ -46,11 +37,6 @@ def _move_backups(ctx: KelsoCtx, entropy: bytes) -> None:
 
 
 def rekey(ctx: KelsoCtx, entropy: bytes) -> RekeyResult:
-  """Make `entropy` the seed, then re-encrypt everything under its key.
-
-  Every write is an append, so a rekey that dies part-way is undone by
-  deleting the lines it added to each file, the `seed` record last.
-  """
   old = crypto_from_config(ctx.config)
   with ctx.kelso_lock("rekey"):
     # First, so a backup disk that is not there stops the rekey before

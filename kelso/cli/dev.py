@@ -97,7 +97,6 @@ def _interrupt(signum, frame) -> None:
 
 
 def _fill_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
-  """Ask for what the app cannot start without."""
   request = app_config_request(spec, ctx)
   if not request.missing():
     return
@@ -111,7 +110,6 @@ def _fill_missing_config(spec: AppSpec, ctx: KelsoCtx) -> None:
 
 
 def _receipt(plan: DevPlan, ctx: KelsoCtx) -> str:
-  """What is mounted live, and what a dev run deliberately does not do."""
   rows: list[tuple[str, str]] = [("Source:", str(plan.source))]
   for name, path in plan.mounts.items():
     rows.append((f"  {name}:", str(path)))

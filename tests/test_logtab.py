@@ -1,11 +1,3 @@
-"""Tests for LogTab, the append-only key/value log backing the kelso store.
-
-LogTab is a stable, low-level component; these tests pin down its full contract:
-round-trips, prefix/suffix scans, prefix-clear vs exact-delete, append-only
-persistence across reopens, header handling, key/value validation, and tolerance
-of comment/blank lines.
-"""
-
 import logging
 import os
 

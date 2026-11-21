@@ -1,5 +1,3 @@
-"""The Routes page: route providers, what each publishes, and the form that sets one up."""
-
 from urllib.parse import quote
 
 from api import ApiError, api
@@ -46,10 +44,6 @@ async def post_routes(request: Request):
 
 @router.get("/routes/new")
 def new(page: PageDep, tag: str = "", kind: str = ""):
-  """The New route provider dialog: a name and a kind, then that kind's form.
-
-  The first step is a GET form; its tag belongs in the path, not the query.
-  """
   if tag.strip():
     return see(f"/routes/{quote(tag.strip())}", kind=kind)
   page.title = "New route provider"
@@ -59,7 +53,6 @@ def new(page: PageDep, tag: str = "", kind: str = ""):
 
 @router.get("/routes/{tag}")
 def provider(page: PageDep, tag: str, kind: str = ""):
-  """The config form for `tag`; `kind` only for a provider not configured yet."""
   page.title = tag
   query = f"?kind={quote(kind)}" if kind else ""
   config = api(f"/route-providers/{quote(tag)}/config-request{query}")

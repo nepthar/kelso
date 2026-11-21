@@ -133,8 +133,6 @@ Advanced
 
 
 class _Narration(logging.Formatter):
-  """kelso's own log records as plain lines; warnings and errors say so."""
-
   def format(self, record: logging.LogRecord) -> str:
     message = record.getMessage()
     if record.levelno >= logging.ERROR:
@@ -145,11 +143,6 @@ class _Narration(logging.Formatter):
 
 
 def _configure_logging() -> None:
-  """Narration to stderr, leaving stdout to what a command outputs.
-
-  Called per run against the current `sys.stderr`, so a caller that redirects
-  the stream still sees it.
-  """
   # Everything that is not kelso's own: warnings only, and labelled.
   logging.basicConfig(
     level=logging.WARNING,
@@ -196,17 +189,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _activity(args: argparse.Namespace) -> str | None:
-  """The verb a command that changes something records itself under.
-
-  A command sets `activity` with `set_defaults`: a verb, or a function of its
-  arguments for one that only sometimes writes. Unset, nothing is recorded.
-  """
   activity = getattr(args, "activity", None)
   return activity(args) if callable(activity) else activity
 
 
 def _app_named(args: argparse.Namespace, ctx: KelsoCtx) -> str | None:
-  """The app a command acts on, as the activity log files it."""
   raw = getattr(args, "app", None) or getattr(args, "app_id", None)
   if not raw:
     return None
@@ -262,7 +249,6 @@ def _dispatch(args: argparse.Namespace) -> None:
 
 
 def run(argv: list[str] | None = None) -> int:
-  """Execute one kelso command and return its exit code."""
   _configure_logging()
   parser = build_parser()
   try:

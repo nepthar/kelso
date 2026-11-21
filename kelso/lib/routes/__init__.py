@@ -44,7 +44,6 @@ PROVIDERS: dict[str, type[RouteProvider]] = {
 
 
 def get_route_provider(ctx: KelsoCtx, tag: str) -> RouteProvider:
-  """Build the route provider for ``tag``."""
   if tag == NONE_ROUTE_PROVIDER_TAG:
     return NoopRouteProvider(domain=ctx.config.provider_domain(tag))
 

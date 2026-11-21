@@ -35,8 +35,6 @@ class BackupJob(Job):
 
 
 class ScheduledBackupJob(BackupJob):
-  """The nightly run kelsod starts: everything, kept by the scheduled policy."""
-
   name = "scheduled-backup"
   description = "Back up every app and kelso itself, on the [backup] schedule"
   optional_args = ()
@@ -49,7 +47,6 @@ class DeleteBackupJob(Job):
   required_args = ("app", "backup")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    """Not resolved against the catalog: a removed app's backups can go too."""
     app = AppID(kwargs["app"])
     find_backup(app, kwargs["backup"], repository(ctx))
     self.app = str(app)

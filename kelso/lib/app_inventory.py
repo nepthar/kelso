@@ -1,12 +1,3 @@
-"""Every app kelso knows of, read once, and what a name means among them.
-
-An Inventory is a snapshot: the apps loaded under var/run/, the apps with kept
-config under conf/apps/, and the bundles in each repo. Resolving a name is two
-steps: `app_id` picks the app, `bundle` picks what it loads from. It does not
-see docker or the kelso db, so an app that left only containers or volumes
-behind is not found by name.
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -36,12 +27,6 @@ class Inventory:
   catalog: tuple[CatalogEntry, ...]
 
   def app_id(self, name: str, *, prefer_loaded: bool = False, repo: str = "") -> AppID:
-    """The app an id, or the last part of one, names.
-
-    Looks only at `repo`'s apps if given. With `prefer_loaded`, a name that
-    matches a loaded app means that one. Raises ValueError if nothing matches,
-    or several apps do.
-    """
     known = self.loaded | set(self.origins) | {e.app_id for e in self.catalog}
     if repo:
       known = {e.app_id for e in self.catalog if e.repo == repo}
@@ -71,12 +56,6 @@ class Inventory:
     return f"repo {', '.join(repos)}" if repos else "not loaded"
 
   def bundle(self, app_id: AppID, repo: str = "") -> CatalogEntry | None:
-    """The bundle `app_id` loads from, or None if there is none.
-
-    `repo`'s if given; else the one it was last loaded from, if that is still
-    there; else its only one. Raises ValueError if several are left to choose
-    from, or `repo` does not carry it.
-    """
     entries = [e for e in self.catalog if e.app_id == app_id]
     if repo:
       entries = [e for e in entries if e.repo == repo]
@@ -101,7 +80,6 @@ class Inventory:
     return entries[0] if entries else None
 
   def contested(self) -> dict[AppID, list[str]]:
-    """Ids more than one bundle carries, and which repos those are in."""
     repos: dict[AppID, list[str]] = {}
     for e in self.catalog:
       repos.setdefault(e.app_id, []).append(e.repo)
@@ -113,7 +91,6 @@ def no_bundle_message(app_id: AppID) -> str:
 
 
 def _ids(names) -> list[AppID]:
-  """`names` that are valid app ids, as AppIDs."""
   ids = []
   for name in names:
     try:
@@ -124,7 +101,6 @@ def _ids(names) -> list[AppID]:
 
 
 def build_inventory(ctx: "KelsoCtx") -> Inventory:
-  """Read the loaded apps, the apps with kept config, and every repo's bundles."""
   run_root = ctx.config.run_root
   names = [p.name for p in run_root.iterdir()] if run_root.is_dir() else []
   loaded = frozenset(i for i in _ids(names) if ctx.loaded_paths(i).exists())

@@ -1,9 +1,3 @@
-"""Repo verbs the daemon can be asked for.
-
-`repo-add` takes a `github://` url and never a directory: naming one over the
-wire is the capability `runner.JOBS` refuses. Local repos are CLI-only.
-"""
-
 from kelso.jobs.job import Job, logger
 from kelso.lib import repo as repo_lib
 from kelso.lib.kelso import KelsoCtx
@@ -93,7 +87,6 @@ class RepoRemoveJob(Job):
 
 
 def _contested(ctx: KelsoCtx) -> list[str]:
-  """Ids more than one repo now carries. `ctx.config` predates the change."""
   from kelso.lib.config import load_config_file
 
   fresh = KelsoCtx(load_config_file(ctx.config.config_path))

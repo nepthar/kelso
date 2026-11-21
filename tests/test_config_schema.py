@@ -1,5 +1,3 @@
-"""The [config] manifest schema, and how config values persist in the store."""
-
 from pathlib import Path
 
 import pytest
@@ -92,7 +90,6 @@ def test_app_spec_resolves_config():
 
 
 def test_config_env_var_is_not_rewritten_on_the_spec():
-  """Compose, not the spec, rewrites `${admin_user}` to the kelso env name."""
   spec = _spec_from(MANIFEST)
   env = spec.run_units["main"].environment
   assert env["ADMIN_USER"] == "${admin_user}"

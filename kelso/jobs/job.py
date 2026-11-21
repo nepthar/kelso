@@ -1,11 +1,3 @@
-"""A kelso verb the daemon can be asked for over the wire.
-
-A Job adapts a request -- a verb name and a flat dict of string arguments --
-to the work itself. The recording is not this module's job: `execute` wraps
-`run` in an `Activity`, which owns the log file and the index row. Code that
-wants a run recorded but has no wire to answer to uses `Activity` directly.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -31,11 +23,7 @@ def _now() -> str:
 
 
 def app_target(ctx: KelsoCtx, raw: str, *, force: bool = False) -> LoadTarget:
-  """Resolve a verb's `app` argument: an id, optionally `<id>@<repo>`.
-
-  Never a path -- see `runner.JOBS`. `load_target` accepts one, so the
-  refusal happens here.
-  """
+  # A path defines what an app is, which is root: verbs never take one.
   if is_pathlike(raw):
     raise ValueError(f'No app matching "{raw}" found: verbs name apps, not paths')
   return load_target(ctx, raw, force=force)
@@ -77,7 +65,6 @@ class Job:
 
   @classmethod
   def prepare(cls, args: dict[str, str], ctx: KelsoCtx, *, started_by: str) -> Job:
-    """Construct and parse. Raises ``ValueError`` before any log is filed."""
     job = cls(started_by)
     job.args = dict(args)
     cls._check_args(args)
@@ -93,13 +80,11 @@ class Job:
     started_by: str,
     echo: TextIO | None = None,
   ) -> Job:
-    """Parse, execute, re-raise on failure. Returns the finished job on success."""
     job = cls.prepare(args, ctx, started_by=started_by)
     job.execute(ctx, echo=echo)
     return job
 
   def execute(self, ctx: KelsoCtx, *, echo: TextIO | None = None) -> None:
-    """Run the work, optionally as one recorded Activity, then re-raise."""
     self.state = RUNNING
     self.started_at = _now()
     if not self.record_activity:
@@ -140,17 +125,12 @@ class Job:
       self.finished_at = _now()
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    """Parse arguments that already passed `required_args` / `optional_args`.
-
-    Raises ValueError if they are unusable; `execute` then never runs and no
-    log is written.
-    """
+    pass
 
   def run(self, ctx: KelsoCtx) -> None:
     raise NotImplementedError
 
   def subprocess(self, cmd: list[str], **kwargs: Any) -> Any:
-    """Run ``cmd`` inside this job's Activity. See ``Activity.subprocess``."""
     if self._activity is None:
       raise RuntimeError(
         f"{self.name} subprocess is only available while the job is running"
@@ -159,7 +139,6 @@ class Job:
 
   @classmethod
   def _check_args(cls, args: dict[str, str]) -> None:
-    """Refuse unknown or missing keys against ``required_args`` / ``optional_args``."""
     allowed = set(cls.required_args) | set(cls.optional_args)
     for name in args:
       if name not in allowed:
@@ -173,5 +152,4 @@ class Job:
 
   @staticmethod
   def _bool_arg(kwargs: dict[str, str], name: str) -> bool:
-    """The one truthiness convention for string args: 1, true, or yes."""
     return kwargs.get(name, "") in ("1", "true", "yes")

@@ -1,5 +1,3 @@
-"""Signing in and out. See auth.py for what a session is."""
-
 import auth
 from api import ApiError, api
 from fastapi import APIRouter, Request
@@ -17,15 +15,10 @@ router = APIRouter()
 
 
 def safe_next(value):
-  """A path on this server, or `/`. Keeps `?next=` from becoming a redirector."""
   return local_path(value) or "/"
 
 
 def _hostname():
-  """kelsod's hostname, or "" so signing in never waits on or fails with it.
-
-  Asks kelsod only until it has answered once.
-  """
   if not known_hostname():
     try:
       remember_hostname(api("/version", timeout=2).get("hostname", ""))

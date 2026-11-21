@@ -1,5 +1,3 @@
-"""`kelso agent-help`: the instructions an install ships for agents."""
-
 from kelso.cli.main import run
 
 

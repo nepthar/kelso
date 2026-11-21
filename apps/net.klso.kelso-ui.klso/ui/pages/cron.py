@@ -1,5 +1,3 @@
-"""The Cron page: upcoming runs above a "now" line, finished runs below it."""
-
 from api import api
 from fastapi import APIRouter
 from web import PageDep

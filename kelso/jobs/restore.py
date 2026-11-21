@@ -11,7 +11,6 @@ class RestoreJob(Job):
   required_args = ("app", "backup")
 
   def init(self, ctx: KelsoCtx, kwargs: dict[str, str]) -> None:
-    """Not resolved against the catalog: an app removed since can come back."""
     app = AppID(kwargs["app"])
     find_backup(app, kwargs["backup"], repository(ctx))
     self.app = str(app)

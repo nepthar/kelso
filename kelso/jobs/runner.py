@@ -1,10 +1,3 @@
-"""Serial execution of Jobs, for callers with no terminal.
-
-The queue exists because the useful verbs are slow and an HTTP request that
-waits for them dies long before the work does. Execution is serial by
-construction: each job takes the same locks the CLI does.
-"""
-
 import logging
 import queue
 import threading
@@ -68,7 +61,6 @@ JOBS: dict[str, type[Job]] = {
 
 
 def metric_schedule(submit: Callable[[str], None]) -> schedule.Scheduler:
-  """host-metrics every 5 minutes, volume-metrics every hour. In-process only."""
   sched = schedule.Scheduler()
   sched.every(5).minutes.do(submit, "host-metrics")
   sched.every().hour.do(submit, "volume-metrics")
@@ -76,8 +68,6 @@ def metric_schedule(submit: Callable[[str], None]) -> schedule.Scheduler:
 
 
 class JobRunner:
-  """Holds the job history and runs one at a time."""
-
   def __init__(self, ctx_factory: Callable[[], KelsoCtx]) -> None:
     self._ctx_factory = ctx_factory
     self._jobs: dict[str, Job] = {}
@@ -123,11 +113,6 @@ class JobRunner:
       return [job.as_dict() for job in reversed(list(self._jobs.values()))]
 
   def run_pending(self) -> int:
-    """Run every queued job on this thread; returns how many ran.
-
-    Only for a runner whose worker was never started -- two threads draining one
-    queue would break the serial execution jobs are written against.
-    """
     if self._thread is not None:
       raise RuntimeError("JobRunner has a worker thread; it drains the queue")
     count = 0
@@ -155,11 +140,6 @@ class JobRunner:
       time.sleep(1)
 
   def _backup_if_due(self) -> None:
-    """Submit the scheduled backup once its time has come since the last one.
-
-    A run missed while the machine was off happens at the first check after.
-    With no scheduled run on record, the first is the next one on the clock.
-    """
     try:
       ctx = self._ctx_factory()
       if backup_due(ctx, since=self._started, now=datetime.now()):
@@ -168,7 +148,6 @@ class JobRunner:
       logger.exception("could not check the backup schedule")
 
   def _start_cron_tick(self) -> None:
-    """On its own thread, so a long cron job never holds up queued jobs."""
     if self._cron is not None and self._cron.is_alive():
       return
     self._cron = threading.Thread(
@@ -215,7 +194,6 @@ class JobRunner:
         job.error = job.error or "job failed"
 
   def _trim(self) -> None:
-    """Drop the oldest finished jobs once the history is over budget."""
     if len(self._jobs) <= MAX_HISTORY:
       return
     for job_id in list(self._jobs):

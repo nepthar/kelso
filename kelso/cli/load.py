@@ -68,7 +68,6 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def start_hint(app: AppID, run_data: AppRunData) -> str:
-  """How to start a freshly loaded app, naming the config it still needs."""
   unset = [
     name for name, value in run_data.config_values.items() if value.value is None
   ]
@@ -83,7 +82,6 @@ def start_hint(app: AppID, run_data: AppRunData) -> str:
 
 
 def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
-  """This bundle's off-allowlist compose keys, or none if it does not parse."""
   try:
     return load_bundle(bundle).app_spec().compose_warnings
   except (ValueError, RuntimeError, OSError):
@@ -91,7 +89,6 @@ def _compose_warnings(bundle: Path) -> tuple[ComposeWarning, ...]:
 
 
 def confirm_compose_warnings(app: str, bundle: Path) -> bool:
-  """Ask only when the manifest passes something through unmodelled."""
   warnings = _compose_warnings(bundle)
   if not warnings:
     return True

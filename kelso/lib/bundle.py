@@ -19,8 +19,6 @@ KLSO_MD_FILE_PATTERN = re.compile(r'^```(\w*)\s+klso_path="([^"]+?)(:\+x)?"\s*$'
 
 
 class KelsoApp:
-  """A kelso application bundle on the filesystem"""
-
   SUFFIX = ""
 
   path: Path
@@ -60,8 +58,6 @@ class MdFile:
 
 @dataclass(frozen=True)
 class MdFileList:
-  """What `extract_md_files` saw -- the files plus how the scan ended."""
-
   files: list[MdFile]
   unclosed_block: bool
 
@@ -111,7 +107,6 @@ class BundleTarFile(KelsoApp):
 
 
 def app_id_from_path(path: Path) -> AppID:
-  """The app id a bundle path carries: `<id>.klso` dir or `<id>.klso.md` file."""
   if path.name.endswith(KLSO_MD_SUFFIX):
     if not path.is_file():
       raise ValueError(f"{path} is not a file")
@@ -126,7 +121,6 @@ def app_id_from_path(path: Path) -> AppID:
 
 
 def is_pathlike(raw: str) -> bool:
-  """Determine if an argument looks like a filesystem path of a kelso app."""
   return (
     os.sep in raw
     or raw.startswith(("~", "."))
@@ -147,7 +141,6 @@ def could_be_bundle(path: Path) -> bool:
 
 
 def scan_bundles(path: Path) -> Iterator[tuple[str, Path]]:
-  """Every bundle directly under `path`: (app id, path relative to `path`)."""
   if not path.is_dir():
     return
   for entry in sorted(path.iterdir()):
@@ -162,7 +155,6 @@ def scan_bundles(path: Path) -> Iterator[tuple[str, Path]]:
 
 
 def manifest_text(path: Path) -> str:
-  """A bundle's `manifest.toml` as raw text, parseable or not."""
   if path.is_dir():
     try:
       return (path / "manifest.toml").read_text()
@@ -180,7 +172,6 @@ def manifest_text(path: Path) -> str:
 
 
 def bundle_text(path: Path) -> str:
-  """What a person edits: a .klso.md whole, or a folder's manifest.toml."""
   if path.name.endswith(KLSO_MD_SUFFIX):
     try:
       return path.read_text()
@@ -221,7 +212,6 @@ def load_bundle_folder(path: Path, app_id: AppID) -> BundleFolder:
 
 
 def extract_md_files(content: str) -> MdFileList:
-  """Gather the contents of markdown code blocks that carry a klso_path attribute."""
   files = []
 
   current_path = None
@@ -264,7 +254,6 @@ def load_bundle_md(path: Path, app_id: AppID) -> BundleMdFile:
 
 
 def md_bundle_files(name: str, content: str) -> list[MdFile]:
-  """The files a .klso.md carries, refusing one that `load` would refuse."""
   size_kb = len(content.encode()) / 1024
   if size_kb > KLSO_MD_CUTOFF_KB:
     raise ValueError(

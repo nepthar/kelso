@@ -1,5 +1,3 @@
-"""App volumes as they are on disk, and removing the orphaned ones."""
-
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +28,6 @@ class VolumeOnDisk:
 
 
 def volumes_on_disk(ctx: KelsoCtx) -> list[VolumeOnDisk]:
-  """Every kelso-managed volume directory, whatever declared it."""
   running = {o.app_id for o in ctx.observations() if o.running_count}
   specs: dict[str, AppSpec | None] = {}
   found = []
@@ -67,10 +64,6 @@ def _use(
 
 
 def remove_orphaned_volume(app_id: AppID, name: str, ctx: KelsoCtx) -> None:
-  """Delete every orphaned volume `name` of `app_id`. The caller holds its locks.
-
-  Raises ValueError when there is no such orphaned volume.
-  """
   orphans = [
     v
     for v in volumes_on_disk(ctx)

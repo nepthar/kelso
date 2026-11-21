@@ -1,9 +1,3 @@
-"""The Activity page: what kelso ran unattended, and what each run printed.
-
-Container logs are docker's and stream through `kelso logs`; this page shows
-the other stream, filed under `$kelso/var/logs`.
-"""
-
 from urllib.parse import quote
 
 from api import ApiError, api
@@ -22,7 +16,6 @@ def activity(page: PageDep):
 
 @router.get("/activity/{filename}")
 def log(filename: str):
-  """One run's output and how it ended, for the job window. JSON."""
   try:
     return api(f"/activity/{quote(filename)}")
   except ApiError as e:

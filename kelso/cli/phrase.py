@@ -1,7 +1,3 @@
-"""Showing a recovery phrase. Never through logging: kelso records its log
-lines in the activity log, and the phrase must not land on disk anywhere but
-the key file."""
-
 import sys
 
 from kelso.lib import recovery
@@ -17,5 +13,6 @@ backup cannot be restored, and nobody can recover them for you."""
 
 
 def show(words: list[str]) -> None:
+  # Never through logging: log lines are recorded to the activity log on disk.
   print(SAVE_IT.format(grid=recovery.format_phrase(words)))
   sys.stdout.flush()

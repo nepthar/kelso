@@ -1,5 +1,3 @@
-"""The activity log: kelso's own run output, on disk and indexed."""
-
 import io
 import logging
 import re
@@ -171,7 +169,6 @@ def test_begin_run_is_readable_before_finish(ctx):
 
 
 def test_activity_records_a_free_form_block(ctx):
-  """The context manager, used the way a CLI verb would use it."""
   with activity.Activity(ctx, "refresh", started_by="test", app="demo.app") as act:
     logging.getLogger("kelso.lifecycle").info("stopped")
     act.write("copied 3 volumes\n")
@@ -265,7 +262,6 @@ def test_a_command_exiting_zero_is_a_success(ctx):
 
 
 def test_a_subprocess_streams_each_line_as_it_comes(ctx):
-  """Not once some buffer fills: a slow pull would look hung."""
   seen = []
 
   class Clock(io.StringIO):

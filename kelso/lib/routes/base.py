@@ -15,11 +15,11 @@ logger = logging.getLogger("kelso.routes")
 
 
 class RouteProviderError(RuntimeError):
-  """Raised when a route provider cannot complete an operation."""
+  pass
 
 
 class RouteProviderUnreachable(RouteProviderError):
-  """The provider did not answer; nothing says the route itself is wrong."""
+  pass
 
 
 def refuse_foreign_route(domain_name: str, owner: str | None) -> RouteProviderError:
@@ -38,12 +38,6 @@ class RouteProvider:
 
   @classmethod
   def config_fields(cls) -> tuple[ConfigField, ...]:
-    """What to ask an operator for, in the order asked.
-
-    A secret field named X is stored in the kelso db and referenced from the
-    block as `X_secret`; every other field is an `args` key verbatim, so these
-    have to cover REQUIRED_ARGS.
-    """
     return ()
 
   @classmethod
@@ -53,12 +47,10 @@ class RouteProvider:
     conf: RouteProviderEntry,
     ctx: KelsoCtx,
   ) -> RouteProvider:
-    """Build this provider from its ``[route_provider.<tag>]`` block."""
     raise NotImplementedError
 
   @classmethod
   def _args(cls, tag: str, conf: RouteProviderEntry) -> dict[str, str]:
-    """A copy of the block's args, refusing if any REQUIRED_ARGS are missing."""
     missing = [name for name in cls.REQUIRED_ARGS if not conf.args.get(name)]
     if missing:
       raise RouteProviderError(
@@ -84,29 +76,22 @@ class RouteProvider:
     domain: str,
     scheme: str = "http",
   ):
-    """Register a new route with this provider"""
     raise NotImplementedError
 
   def unregister_route(self, subdomain: str, domain: str):
-    """Unregister a route - no longer route to there"""
     raise NotImplementedError
 
   def list_routes(self) -> list[tuple[str, str]]:
-    """Fetch kelso-domain routes as (subdomain, destination) pairs."""
     raise NotImplementedError
 
   def route_owners(self) -> dict[str, str | None]:
-    """Map subdomain under the kelso domain -> owning kelso app id."""
     raise NotImplementedError
 
   def validate(self) -> list[str]:
-    """Return an empty list if this is valid, or a list of errors"""
     raise NotImplementedError
 
 
 class NoopRouteProvider(RouteProvider):
-  """A route provider that records intent but does not configure any proxy."""
-
   KIND = "noop"
 
   @classmethod

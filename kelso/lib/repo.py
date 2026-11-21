@@ -1,13 +1,3 @@
-"""Application repositories: the directories the catalog scans for bundles.
-
-A `local` repo is a directory the operator keeps; a `github` repo is one kelso
-mirrors into `repos/<name>/`. Nothing below `Repo.path` knows which kind it
-has. `local` is built in at `repos/local`.
-
-This module owns the repo model and the verbs over it. A mirror is a shallow,
-sparse git checkout of one folder; the git commands are `kelso.lib.git`.
-"""
-
 import logging
 import re
 import shutil
@@ -45,8 +35,6 @@ USAGE = (
 
 @dataclass(frozen=True)
 class GithubFolder:
-  """The folder inside a GitHub repository that a repo mirrors."""
-
   user: str
   repo: str
   ref: str
@@ -62,7 +50,6 @@ class GithubFolder:
 
   @property
   def repo_path(self) -> str:
-    """The folder as git addresses it; empty means the repository root."""
     return "/".join(self.path)
 
   def describe(self, sha: str) -> str:
@@ -72,8 +59,6 @@ class GithubFolder:
 
 @dataclass(frozen=True)
 class Repo:
-  """One configured source of bundles."""
-
   name: str
   path: Path
   kind: RepoKind
@@ -90,7 +75,6 @@ class Repo:
 
 
 def parse_github_url(raw: str) -> GithubFolder:
-  """Parse a `github://user/repo/ref[/path]` repo URL."""
   if not raw.startswith(GITHUB_SCHEME):
     raise ValueError(f"Unsupported repo url {raw!r}; expected\n  {USAGE}")
 
@@ -115,7 +99,6 @@ def parse_github_url(raw: str) -> GithubFolder:
 
 
 def check_segment(segment: str, context: str) -> None:
-  """Refuse a path segment that could escape the folder it is listed under."""
   if segment in ("", ".", ".."):
     raise ValueError(f"Malformed path segment {segment!r} in {context}")
   if any(c < " " or c == "\x7f" for c in segment):
@@ -123,7 +106,6 @@ def check_segment(segment: str, context: str) -> None:
 
 
 def name_from_url(raw: str) -> str:
-  """The repo name a url implies: the GitHub repository's own name."""
   name = parse_github_url(raw).repo
   try:
     validate_identifier(name)
@@ -155,11 +137,6 @@ class MirrorResult:
 
 
 def mirror(repo: Repo, ctx) -> MirrorResult:
-  """Bring `repos/<name>` to what the remote holds now, as a sparse git checkout.
-
-  Raises ValueError for a local repo, a folder the remote does not have, or one
-  over the size limits -- whose copy is then removed.
-  """
   if repo.remote is None or repo.checkout is None:
     raise ValueError(
       f"Repo {repo.name!r} is a local directory; there is nothing to update"
@@ -213,10 +190,6 @@ class RemoveResult:
 
 
 def add(ctx, location: str, *, name: str = "") -> AddResult:
-  """Add a `github://` url or a local directory, mirroring a url immediately.
-
-  A local repo needs an explicit `name`; a url takes the repository's own.
-  """
   from kelso.lib.config import load_config_file
   from kelso.lib.config_edit import add_repo
   from kelso.lib.kelso import KelsoCtx
@@ -239,7 +212,6 @@ def add(ctx, location: str, *, name: str = "") -> AddResult:
 
 
 def update(ctx, name: str = "") -> tuple[MirrorResult, ...]:
-  """Mirror one repo, or every mirrored one. Raises if `name` is local."""
   wanted = [get(ctx, name)] if name else list(ctx.config.repos.values())
   mirrored = [repo for repo in wanted if repo.mirrored]
   if name and not mirrored:
@@ -249,7 +221,6 @@ def update(ctx, name: str = "") -> tuple[MirrorResult, ...]:
 
 
 def remove(ctx, name: str) -> RemoveResult:
-  """Drop a repo, and the mirrored copy if it had one."""
   from kelso.lib.config_edit import remove_repo
 
   repo = get(ctx, name)
@@ -274,7 +245,6 @@ def get(ctx, name: str) -> Repo:
 
 
 def bound_apps(ctx, name: str) -> tuple[str, ...]:
-  """Every app whose kept config was made for a bundle in this repo."""
   repo = ctx.config.repos.get(name)
   if repo is None:
     return ()
@@ -288,7 +258,6 @@ def bound_apps(ctx, name: str) -> tuple[str, ...]:
 
 
 def contested_lines(ctx) -> list[str]:
-  """One line per app id that more than one repo carries."""
   return [
     f"{app_id} is in {len(repos)} repos ({', '.join(sorted(repos))}); "
     f"load it as {app_id}@<repo>."

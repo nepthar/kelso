@@ -1,5 +1,3 @@
-"""Host-port claims: next_free_port over AssignedRoute records in kelsodb."""
-
 from pathlib import Path
 
 import pytest

@@ -1,20 +1,3 @@
-"""The docker the test suite talks to, and the guard that stands in for real one.
-
-Two ways in, one behaviour:
-
-- In-process. `FakeSubprocess` replaces the `subprocess` module that
-  `kelso.lib.docker` and `kelso.lib.lifecycle.rootfs` use, so a docker call is
-  a function call. This is what almost every test gets. Everything kelso does
-  around the process -- arguments, streaming into a sink, error tails, JSON
-  parsing -- still runs.
-- As an executable. `kelso_env` also loads `bin/docker`, which calls `main`
-  here, for the few tests that start kelso as a real child process (the lock
-  tests), where no monkeypatch can reach.
-
-Either way a call is appended to the log as JSON and containers persist in the
-state file, so a test reads both the same way regardless of which ran.
-"""
-
 import io
 import json
 import os
@@ -33,8 +16,6 @@ DOCKER = "docker"
 
 
 class FakeDocker:
-  """docker's behaviour, as far as kelso relies on it. `call` is one invocation."""
-
   def __init__(self, state: Path, log: Path):
     self.state = state
     self.log = log
@@ -55,8 +36,6 @@ class FakeDocker:
     return json.loads(path.read_text()) if path.exists() else []
 
   def call(self, args: list[str], cwd: Path, stdout=None, stderr=None, env=None):
-    """Run `docker *args` in `cwd`. Returns (returncode, stdout, stderr) text,
-    except for `docker run`, which returns the real `sh` run's CompletedProcess."""
     # Where the `app` volume links pointed at the moment of the call. `kelso dev`
     # swaps them for the duration of one docker command and puts them back, so
     # this is the only way a test can observe the swap from outside.
@@ -173,16 +152,8 @@ class FakeDocker:
     return 0, "".join(line + "\n" for line in out), ""
 
 
+# Logs each call: with check=False a refusal looks just like "no containers".
 class GuardDocker:
-  """Refuses every call, and records it first.
-
-  Exiting non-zero is not enough on its own: kelso calls docker with
-  check=False in places (see `load_kelso_run_unit_status`), which turns a
-  refusal into an empty result that looks exactly like "no containers are
-  running". The log is what makes an accidental call visible no matter how the
-  caller handles the failure.
-  """
-
   def __init__(self, log: Path):
     self.log = log
 
@@ -198,9 +169,6 @@ class GuardDocker:
 
 
 class _Finished:
-  """What `Popen` hands back, for a process that has already run: its merged
-  output waiting in the pipe."""
-
   def __init__(self, args, returncode: int, output: str):
     self.args = args
     self.returncode: int | None = None
@@ -219,12 +187,6 @@ class _Finished:
 
 
 class FakeSubprocess:
-  """Stands in for the `subprocess` module where kelso starts docker.
-
-  Handles the call shapes `kelso.lib.docker` and `rootfs` use. Anything that
-  is not docker goes to the real module untouched.
-  """
-
   PIPE = subprocess.PIPE
   STDOUT = subprocess.STDOUT
   DEVNULL = subprocess.DEVNULL
@@ -296,7 +258,6 @@ class FakeSubprocess:
 
 
 def main() -> None:
-  """`bin/docker` for tests that run kelso as a child process."""
   docker = FakeDocker(
     Path(os.environ["FAKE_DOCKER_STATE"]), Path(os.environ["FAKE_DOCKER_LOG"])
   )

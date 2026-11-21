@@ -1,5 +1,3 @@
-"""Tests for the full-screen config form, driven headless through Textual's pilot."""
-
 import asyncio
 
 from textual.widgets import Static
@@ -22,8 +20,6 @@ def _request() -> ConfigRequest:
 
 
 def _drive(request: ConfigRequest, steps) -> ConfigApp:
-  """Run `steps(app, pilot)` against a headless app and return it once exited."""
-
   async def run() -> ConfigApp:
     app = ConfigApp(request)
     async with app.run_test() as pilot:

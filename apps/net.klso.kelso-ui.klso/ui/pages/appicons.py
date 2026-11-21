@@ -1,10 +1,3 @@
-"""An app's icon, found on its route and served from here.
-
-The browser asks this server and never the app, so a route the browser cannot
-reach, or an http icon on an https page, still shows. What was found is kept
-for a while; an app with nothing to show costs one lookup a minute.
-"""
-
 import ssl
 import time
 from functools import cache
@@ -42,8 +35,6 @@ _kept = {}
 
 
 class _SameOrigin(HTTPRedirectHandler):
-  """Follows a redirect only to where it already is: an app may move its icon."""
-
   def redirect_request(self, req, fp, code, msg, headers, newurl):
     here, there = urlsplit(req.full_url), urlsplit(newurl)
     if (here.scheme, here.netloc) != (there.scheme, there.netloc):
@@ -60,7 +51,6 @@ def _drawn(name):
 
 
 def _fetch(url):
-  """(content type, bytes) of the image at `url`, or None."""
   try:
     with _opener.open(url, timeout=TIMEOUT) as response:
       kind = response.headers.get_content_type()
@@ -73,7 +63,6 @@ def _fetch(url):
 
 
 def _origin(url, loopback=""):
-  """scheme://host:port of an http(s) `url`, with `loopback` for localhost."""
   try:
     parts = urlsplit(url or "")
     port = f":{parts.port}" if parts.port else ""
@@ -86,11 +75,6 @@ def _origin(url, loopback=""):
 
 
 def _origins(route):
-  """Where to look, in order: the route's published address, then its host's.
-
-  kelso names the host as people click it, usually `localhost`, which from here
-  is this container. Where kelsod is, is where the host is.
-  """
   kelsod = API.split("://", 1)[-1].rsplit(":", 1)[0] if API else ""
   found = []
   for origin in (
@@ -113,7 +97,6 @@ def _search(route):
 @router.get("/icons/{app_id}")
 @router.get("/icons/{app_id}/{route}")
 def icon(app_id: str, route: str = ""):
-  """The app's icon from its `main` route, or the named route's, or the drawn one."""
   drawn = "route" if route else "app"
   hit = _kept.get((app_id, route))
   if hit and hit[0] > time.monotonic():

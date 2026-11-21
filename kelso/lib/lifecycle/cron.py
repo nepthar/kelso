@@ -1,12 +1,3 @@
-"""Cron: running each app's `[cron]` commands on schedule, one at a time.
-
-A job is due once a scheduled time has passed since it last ran or, never
-having run, since its app was loaded; a missed stretch runs once, not once per
-miss. A tick runs the due jobs of running apps in turn and skips the rest,
-which stay due. A tick that finds another still running does nothing, so cron
-is best effort.
-"""
-
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,8 +19,6 @@ SKIP = "skip"
 
 @dataclass(frozen=True)
 class CronRun:
-  """One cron job's next run."""
-
   app_id: AppID
   name: str
   command: str
@@ -46,7 +35,6 @@ class CronRun:
 
 
 def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
-  """Every loaded app's cron jobs, soonest first."""
   last_ran = {
     key.removeprefix("apps/"): entry.value
     for key, entry in ctx.activity_log.scan("apps/").items()
@@ -84,7 +72,6 @@ def cron_runs(ctx: KelsoCtx) -> list[CronRun]:
 def tick(
   ctx: KelsoCtx, *, by: str, started_by: str, echo: TextIO | None = None
 ) -> list[CronRun] | None:
-  """Run every due job of a running app, in turn. None if a tick is already running."""
   path = cron_lock_path(ctx)
   lock = FileLock(path)
   try:
@@ -136,6 +123,5 @@ def _instant(text: str) -> datetime:
 
 
 def _next(schedule: str, since: datetime) -> datetime:
-  """The schedule's next time after `since`, read on the host's local clock."""
   local = since.astimezone().replace(tzinfo=None)
   return CronSchedule.parse(schedule).next_after(local).astimezone()

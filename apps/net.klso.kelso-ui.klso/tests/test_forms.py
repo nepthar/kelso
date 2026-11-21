@@ -1,6 +1,3 @@
-"""Form posts reach kelsod with the right body, and land back on a GET."""
-
-
 def test_app_config_drops_blanks(client, fake):
   response = client.post(
     "/apps/kelso-ui",

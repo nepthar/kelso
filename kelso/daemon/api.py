@@ -1,10 +1,3 @@
-"""The admin API's routes.
-
-Reads do not take the kelso lock; writes go through `JobRunner`, which does.
-Every handler is a plain `def`: `kelso.lib` blocks, and FastAPI runs a
-non-async endpoint in a threadpool. Errors have one shape, `{"error": "..."}`.
-"""
-
 import asyncio
 import socket
 from collections.abc import Callable
@@ -55,8 +48,6 @@ MAX_TAIL = 2000
 
 
 class HostVolumeBody(BaseModel):
-  """A `[host_volume]` entry, as the UI declares one."""
-
   model_config = ConfigDict(extra="forbid")
 
   path: str
@@ -69,24 +60,18 @@ class NewHostVolume(HostVolumeBody):
 
 
 class ConfigValues(BaseModel):
-  """A ConfigResponse: what a front end collected for one ConfigRequest."""
-
   model_config = ConfigDict(extra="forbid")
 
   values: dict[str, str] = Field(default_factory=dict)
 
 
 class NetDecisions(BaseModel):
-  """Domain -> allow, deny, or null to forget, for an app behind kproxy."""
-
   model_config = ConfigDict(extra="forbid")
 
   decisions: dict[str, str | None]
 
 
 class JobSubmission(BaseModel):
-  """What `POST /jobs` accepts. Shape only; `JobRunner.submit` validates."""
-
   model_config = ConfigDict(extra="forbid")
 
   verb: str
@@ -96,7 +81,6 @@ class JobSubmission(BaseModel):
 
 
 def _ctx(request: Request) -> KelsoCtx:
-  """A context per request."""
   return request.app.state.ctx_factory()
 
 
@@ -109,7 +93,6 @@ Jobs = Annotated[JobRunner, Depends(_runner)]
 
 
 def _started_by_refusal(started_by: str) -> str | None:
-  """Why a shell's `started_by` query parameter is unusable, if it is."""
   if not started_by:
     return "started_by is required, e.g. ?started_by=kelso_ui"
   try:
@@ -120,7 +103,6 @@ def _started_by_refusal(started_by: str) -> str | None:
 
 
 def _ctx_again(ctx: KelsoCtx) -> KelsoCtx:
-  """A context reading config.toml as it is *after* an edit."""
   return KelsoCtx(load_config_file(ctx.config.config_path))
 
 
@@ -184,7 +166,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/apps/{app_id}/logs", tags=["apps"])
   def get_app_logs(app_id: str, ctx: Ctx, tail: int = DEFAULT_TAIL) -> dict:
-    """An app's container logs, newest `tail` lines. No lock: this is a read."""
     if not 1 <= tail <= MAX_TAIL:
       raise HTTPException(400, f"tail must be between 1 and {MAX_TAIL}")
     try:
@@ -194,8 +175,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/apps/{app_id}/net", tags=["apps"])
   def get_app_net(app_id: str, ctx: Ctx) -> dict:
-    """The app's network mode, and each domain it reaches, waits on, or has a
-    decision or listing for. No lock: this is a read, and the UI polls it."""
     try:
       spec = ctx.require_loaded_spec(ctx.resolve_app_id(app_id))
     except (ValueError, RuntimeError) as e:
@@ -207,7 +186,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.post("/apps/{app_id}/net", tags=["apps"])
   def post_app_net(app_id: str, body: NetDecisions, ctx: Ctx) -> dict:
-    """Allow, deny or forget domains, applied to a running kproxy at once."""
     try:
       resolved = ctx.resolve_app_id(app_id)
       with ctx.locked(f"net {resolved}", resolved):
@@ -221,7 +199,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   async def app_shell(
     websocket: WebSocket, app_id: str, started_by: str = "", unit: str = "main"
   ):
-    """A shell in one of the app's running units. See kelso/daemon/shell.py."""
     refusal = shell.network_refusal(websocket) or _started_by_refusal(started_by)
     if refusal:
       await shell.refuse(websocket, refusal)
@@ -238,7 +215,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.websocket("/host/shell")
   async def host_shell(websocket: WebSocket, started_by: str = ""):
-    """A login shell on the host, as kelsod's own user."""
     refusal = shell.network_refusal(websocket) or _started_by_refusal(started_by)
     if refusal:
       await shell.refuse(websocket, refusal)
@@ -248,7 +224,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/apps/{app_id}/config-request", tags=["config"])
   def get_app_config_request(app_id: str, ctx: Ctx) -> dict:
-    """The app's `[config]`, with what is on file now."""
     try:
       resolved = ctx.resolve_app_id(app_id)
       spec = ctx.loaded_spec(resolved) or ctx.bundle_spec(resolved)
@@ -258,7 +233,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.post("/apps/{app_id}/config-response", tags=["config"])
   def apply_app_config_response(app_id: str, body: ConfigValues, ctx: Ctx) -> dict:
-    """Write the values collected for the app; unchanged ones are skipped."""
     try:
       resolved = ctx.resolve_app_id(app_id)
       with ctx.locked(f"config {resolved}", resolved):
@@ -277,7 +251,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/route-providers/{tag}/config-request", tags=["config"])
   def get_route_provider_config_request(tag: str, ctx: Ctx, kind: str = "") -> dict:
-    """What the provider needs; `kind` only for a tag not configured yet."""
     try:
       provider = resolve_route_provider(tag, ctx, kind)
     except ValueError as e:
@@ -288,7 +261,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
   def apply_route_provider_config_response(
     tag: str, body: ConfigValues, ctx: Ctx, kind: str = ""
   ) -> dict:
-    """Store its secrets and write `[route_provider.<tag>]` to config.toml."""
     try:
       with ctx.kelso_lock(f"route-provider {tag}"):
         provider = resolve_route_provider(tag, ctx, kind)
@@ -321,12 +293,10 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/host", tags=["host"])
   def get_host(ctx: Ctx) -> dict:
-    """The host's CPUs and memory, and each disk kelso keeps something on."""
     return views.host_view(ctx)
 
   @app.get("/volumes", tags=["volumes"])
   def list_volumes(ctx: Ctx) -> dict:
-    """Kelso-managed volumes, with sizes from the last volume-metrics run."""
     return {
       "volumes": views.volumes_view(ctx),
       "kelso_dirs": views.kelso_dirs_view(ctx),
@@ -335,7 +305,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.delete("/volumes/{app_id}/{name}", tags=["volumes"])
   def delete_orphaned_volume(app_id: str, name: str, ctx: Ctx) -> dict:
-    """Delete a volume the app's manifest no longer names; nothing else."""
     try:
       app = AppID(app_id)
       with ctx.locked(f"volume rm {app} {name}", app):
@@ -397,14 +366,12 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/cron", tags=["cron"])
   def list_cron(ctx: Ctx) -> dict:
-    """Each cron job's next run, soonest first."""
     return {"cron": views.cron_view(ctx)}
 
   @app.get("/activity", tags=["activity"])
   def list_activity(
     ctx: Ctx, app: str | None = None, verb: str | None = None, limit: int = 20
   ) -> dict:
-    """Recorded unattended runs."""
     try:
       return {"activity": views.activity_view(ctx, app=app, verb=verb, limit=limit)}
     except ValueError as e:
@@ -412,7 +379,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/activity/{filename}", tags=["activity"])
   def get_activity_log(filename: str, ctx: Ctx) -> dict:
-    """One run's output file. The name is a validated filename, not a path."""
     try:
       return views.activity_log_view(ctx, filename)
     except ValueError as e:
@@ -420,7 +386,6 @@ def create_app(ctx_factory: CtxFactory, jobs: JobRunner) -> FastAPI:
 
   @app.get("/metrics", tags=["metrics"])
   def get_metrics(ctx: Ctx, prefix: str = "", hours: int = 1) -> dict:
-    """Gauge history. `prefix` is matched after `gauge/`."""
     if hours < 1:
       raise HTTPException(400, "hours must be >= 1")
     try:

@@ -1,5 +1,3 @@
-"""Updating a loaded app from the bundle it was last loaded from."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,7 +47,6 @@ class UpdateResult:
 
 
 def update_source(app: AppID, ctx: KelsoCtx) -> Path:
-  """Where a loaded app was loaded from. Raises ValueError if that is gone."""
   if not ctx.is_loaded(app):
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
   origin = ctx.loaded_origin(app)
@@ -62,11 +59,6 @@ def update_source(app: AppID, ctx: KelsoCtx) -> Path:
 
 
 def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
-  """Pull the new version's images, then stop, back up, load, and start again.
-
-  Takes the app and kelso locks itself. A load that fails after the backup
-  leaves the app stopped, and the error names the backup to restore.
-  """
   source = update_source(app, ctx)
   try:
     spec = load_bundle(source).app_spec()

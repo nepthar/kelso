@@ -1,11 +1,3 @@
-"""The kelso command surface, driven through `cli.main.run` in-process.
-
-Each test asserts on what an operator sees -- exit code, stdout, stderr -- plus
-the state on disk it claims to have changed. Anything that needs a real docker
-daemon, a real route provider, or root-owned volume data is in docs/testing.md
-instead.
-"""
-
 import json
 import os
 import re
@@ -569,11 +561,6 @@ def test_doctor_accepts_an_app_loaded_from_outside_every_repo(kelso_env, tmp_pat
 
 
 def test_removed_app_bundle_remains_runnable_from_the_loaded_copy(kelso_env):
-  """The run copy is what kelso runs, so deleting apps/<id>.klso is survivable.
-
-  It still shows up as a problem in `doctor` -- nothing can re-load the app
-  until the catalog entry is back -- but stop and start keep working.
-  """
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   shutil.rmtree(kelso_env.local_repo / f"{app_id}.klso")
@@ -679,7 +666,6 @@ def test_load_names_the_config_a_start_still_needs(kelso_env):
 
 
 def test_a_reload_of_a_stopped_app_shows_no_routes(kelso_env):
-  """Routes are published on start, so only a restart has any to report."""
   first = kelso_env.run("load", "routes-demo")
   assert first.returncode == 0, first.stderr
   assert "Routes:" not in first.stdout
@@ -694,8 +680,6 @@ def test_a_reload_of_a_stopped_app_shows_no_routes(kelso_env):
 
 
 def test_config_before_loading_reads_the_bundle(kelso_env):
-  """Values can be set before the first load; the source is the only manifest
-  there is, and `load` keeps whatever is already on file."""
   listed = kelso_env.run("config", BASIC)
   assert listed.returncode == 0, listed.stderr
   assert "admin_user" in listed.stdout
@@ -709,7 +693,6 @@ def test_config_before_loading_reads_the_bundle(kelso_env):
 
 
 def test_config_edit_fills_the_form_and_writes_what_was_entered(kelso_env):
-  """`--edit` renders the app's ConfigRequest and applies the response."""
   edited = kelso_env.run(
     "config", BASIC, "--edit", input="\nalice\nn\nn\ns\n", tty=True
   )
@@ -730,8 +713,6 @@ def test_config_edit_writes_nothing_when_cancelled(kelso_env):
 
 
 def test_binding_before_loading_applies_at_the_first_start(kelso_env):
-  """The bind is recorded against the source's manifest, so the very first
-  load already has it -- no start-then-bind-then-reload round trip."""
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -745,8 +726,6 @@ def test_binding_before_loading_applies_at_the_first_start(kelso_env):
 
 
 def test_config_of_a_loaded_app_reads_the_run_copy(kelso_env):
-  """Not the source, which may have moved on since: the run copy is what the
-  app will actually start with."""
   assert kelso_env.run("load", BASIC).returncode == 0
 
   manifest = kelso_env.local_repo / f"{BASIC}.klso" / "manifest.toml"
@@ -769,7 +748,6 @@ def test_config_refuses_an_app_it_has_no_manifest_for(kelso_env):
 
 
 def test_assigning_a_route_before_load_is_recorded(kelso_env):
-  """The provider is contacted by `start`, so an assignment can be made first."""
   assigned = kelso_env.run("config", "routes-demo", "route.main=web")
   assert assigned.returncode == 0, assigned.stderr
   assert assigned.stdout.startswith("Set route.main\n")
@@ -779,7 +757,6 @@ def test_assigning_a_route_before_load_is_recorded(kelso_env):
 
 
 def test_a_route_published_through_two_providers_is_reachable_at_both(kelso_env):
-  """The first provider listed gives the route its URL; each one publishes it."""
   with open(kelso_env.config, "a") as f:
     f.write('\n[route_provider.lan]\nkind = "noop"\ndomain = "lan.test"\n')
 
@@ -854,7 +831,6 @@ def test_config_set_on_a_running_app_says_to_restart(kelso_env):
 
 
 def test_config_set_on_a_stopped_app_says_nothing_more(kelso_env):
-  """The next start reads it; there is no restart to ask for."""
   assert kelso_env.run("load", BASIC).returncode == 0
   result = kelso_env.run("config", BASIC, "admin_user=bob")
   assert result.returncode == 0, result.stderr
@@ -975,13 +951,11 @@ def test_a_host_secret_is_encrypted_listed_revealed_and_unset(kelso_env):
 
 
 def _secret_rows(stdout: str) -> dict[str, str]:
-  """`kelso secret`'s table as name -> status."""
   body = stdout.split("\n\n")[0].splitlines()[2:]
   return {line.split()[0]: line.split()[1] for line in body}
 
 
 def _with_npm_provider(kelso_env) -> str:
-  """Add a route provider whose password is a host secret; returns its name."""
   text = kelso_env.config.read_text()
   kelso_env.config.write_text(
     'route_address = "10.0.0.5"\n' + text + "\n[route_provider.lan]\n"
@@ -1064,11 +1038,6 @@ def test_host_bind_one_shot_via_start(kelso_env):
 
 
 def test_host_links_belong_to_the_run_not_the_load(kelso_env):
-  """`bind` records; `start` links; `stop` unlinks.
-
-  compose mounts `volumes/host/<name>` regardless, so without the link docker
-  creates an empty directory there and the app comes up against that.
-  """
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1093,7 +1062,6 @@ def test_host_links_belong_to_the_run_not_the_load(kelso_env):
 
 
 def test_reloading_leaves_the_binds_alone(kelso_env):
-  """Loading rebuilds the run dir, but a bind survives it and still applies."""
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1107,7 +1075,6 @@ def test_reloading_leaves_the_binds_alone(kelso_env):
 
 
 def test_rebinding_takes_effect_at_the_next_start(kelso_env):
-  """A second bind moves the link; the old target is left alone."""
   app_id = "host-volumes"
   first = kelso_env.root / "external-data"
   second = kelso_env.root / "other-data"
@@ -1128,12 +1095,6 @@ def test_rebinding_takes_effect_at_the_next_start(kelso_env):
 
 
 def test_start_replaces_whatever_is_in_the_host_directory(kelso_env):
-  """`host/` is rebuilt from the binds, so nothing stale can survive a start.
-
-  Both cases at once: the empty directory docker leaves when it mounts a bind
-  source that was not linked, and a link pointing somewhere the bind no longer
-  says.
-  """
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1156,13 +1117,6 @@ def test_start_replaces_whatever_is_in_the_host_directory(kelso_env):
 
 
 def test_start_refuses_when_a_bound_path_has_gone(kelso_env):
-  """A bind whose host path is no longer there must not start the app.
-
-  `bind` checks the path at bind time, so the way to reach this is a share
-  that stopped being mounted -- exactly when starting anyway is worst, since
-  docker would recreate the path as an empty directory and the app would come
-  up against an empty volume instead of failing.
-  """
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1183,7 +1137,6 @@ def test_start_refuses_when_a_bound_path_has_gone(kelso_env):
 
 
 def test_missing_host_volume_path_blocks_load(kelso_env):
-  """A bound host volume whose path is gone must refuse reloading."""
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1198,7 +1151,6 @@ def test_missing_host_volume_path_blocks_load(kelso_env):
 
 
 def test_host_volume_may_be_a_file(kelso_env):
-  """A host volume can point at a single file, not only a directory."""
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.write_text("just a file")
@@ -1212,7 +1164,6 @@ def test_host_volume_may_be_a_file(kelso_env):
 
 
 def test_require_mount_refuses_unmounted_path(kelso_env):
-  """require_mount catches an empty mount-point directory."""
   with open(kelso_env.config, "a") as f:
     f.write('\n[host_volume.nfs]\npath = "external-data"\nrequire_mount = true\n')
   host_path = kelso_env.root / "external-data"
@@ -1225,7 +1176,6 @@ def test_require_mount_refuses_unmounted_path(kelso_env):
 
 
 def test_require_mount_blocks_load_when_unmounted(kelso_env):
-  """A previously bound require_mount volume blocks reloading if unmounted."""
   # Bind against a real mount first (/), then retarget the tag at an ordinary
   # directory so reloading sees require_mount fail through ConfigIssue.
   with open(kelso_env.config, "a") as f:
@@ -1249,7 +1199,6 @@ def test_require_mount_blocks_load_when_unmounted(kelso_env):
 
 
 def test_readonly_host_volume_refuses_writable_app_volume(kelso_env):
-  """A readonly host volume may only be bound by a readonly app volume."""
   with open(kelso_env.config, "a") as f:
     f.write('\n[host_volume.ro_media]\npath = "ro-data"\nreadonly = true\n')
   (kelso_env.root / "ro-data").mkdir()
@@ -1298,12 +1247,6 @@ cmd = ["true"]
 def test_a_required_non_secret_value_blocks_start_and_shows_as_missing_config(
   kelso_env,
 ):
-  """The non-secret counterpart of the missing-secret case.
-
-  A value with no default must be supplied whether or not it is secret. A
-  dedicated bundle whose only config is non-secret and default-less, so the
-  blocker cannot be attributed to some other value.
-  """
   app_id = "needs-value"
   app = kelso_env.local_repo / f"{app_id}.klso"
   app.mkdir()
@@ -1363,7 +1306,6 @@ def test_ps_reports_config_readiness_and_volume_count(kelso_env):
 
 
 def test_unallocated_routes_are_not_reported_as_missing_config(kelso_env):
-  """Unallocated routes are self-healing; CONFIG must stay ready."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1381,7 +1323,6 @@ def test_unallocated_routes_are_not_reported_as_missing_config(kelso_env):
 
 
 def test_an_unmet_bind_is_reported_as_missing_config(kelso_env):
-  """A host volume whose path has gone is the operator's to fix."""
   app_id = "host-volumes"
   host_path = kelso_env.root / "external-data"
   host_path.mkdir()
@@ -1398,7 +1339,6 @@ def test_an_unmet_bind_is_reported_as_missing_config(kelso_env):
 
 
 def test_an_unloadable_app_is_not_reported_as_missing_config(kelso_env):
-  """A loaded bundle that will not parse is named as broken, not unconfigured."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
   assert kelso_env.run("stop", app_id).returncode == 0
@@ -1435,12 +1375,6 @@ def test_doctor_says_only_that_all_is_well(kelso_env):
 
 
 def test_doctor_reports_orphaned_routes(kelso_env):
-  """Routes are the only per-app state kelsodb still holds.
-
-  Config and binds live in conf/apps/<app_id>.logtab, so a kelsodb entry with no
-  run directory can only be a route allocation nothing owns -- which still
-  pins a host port and so is worth reporting.
-  """
   kelso_env.seed_db(
     {
       "routes/io.example.abandoned/web": {
@@ -1728,7 +1662,6 @@ ROUTES_DEMO_PUBLISHED = [
 
 
 def test_stop_leaves_routes_published(kelso_env, monkeypatch, stub_provider):
-  """Only a reload or a removal unpublishes; `compose up` by hand still works."""
   provider, app = _started_routes_demo(monkeypatch, kelso_env, stub_provider)
   lifecycle.stop(app, KelsoCtx(load_config_file(kelso_env.config)))
   assert provider.unregistered == []
@@ -1762,8 +1695,6 @@ def test_unload_uses_loaded_state_when_bundle_is_missing(
 def test_reload_unpublishes_from_the_provider_a_route_was_loaded_with(
   kelso_env, monkeypatch
 ):
-  """Reassigning a route changes where the next load publishes it, not where
-  the current one is unpublished from."""
   kelso_env.config.write_text(
     kelso_env.config.read_text()
     + '\n[route_provider.other]\nkind = "noop"\ndomain = "other.example"\n'
@@ -1819,7 +1750,6 @@ def test_registering_a_route_names_where_it_points(kelso_env, stub_provider):
 
 
 def test_stop_hands_compose_down_every_config_value_empty(kelso_env, monkeypatch):
-  """`down` reads none of them, and an unset one makes compose warn, naming it."""
   assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   compose = (kelso_env.run_root / BASIC / "compose.yml").read_text()
   downs = []
@@ -1846,7 +1776,6 @@ def test_stop_hands_compose_down_every_config_value_empty(kelso_env, monkeypatch
 
 
 def run_at(kelso_env, root, *args, **kwargs):
-  """Run one kelso command with KELSO_ROOT pointing at `root`."""
   saved = os.environ["KELSO_ROOT"]
   os.environ["KELSO_ROOT"] = str(root)
   try:
@@ -1856,7 +1785,6 @@ def run_at(kelso_env, root, *args, **kwargs):
 
 
 def test_init_configures_the_default_repos(kelso_env, tmp_path):
-  """A fresh root is not an empty store: the catalog has somewhere to come from."""
   root = tmp_path / "fresh"
   result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
   assert result.returncode == 0, result.stderr
@@ -1877,7 +1805,6 @@ def test_init_configures_the_default_repos(kelso_env, tmp_path):
 
 
 def test_init_schedules_nightly_backups(kelso_env, tmp_path):
-  """Written into config.toml, not a default: removing it turns them off."""
   root = tmp_path / "fresh"
   result = run_at(kelso_env, root, "init", "--no-mirror", input="\n")
   assert result.returncode == 0, result.stderr
@@ -1903,7 +1830,6 @@ def test_doctor_reports_a_missing_tool(kelso_env, monkeypatch):
 
 
 def rootless_docker(monkeypatch) -> None:
-  """`docker info` as a rootless daemon reports it; everything else as usual."""
   real = kelso.lib.doctor.docker_run_command
 
   def docker(cmd, **kwargs):
@@ -2066,11 +1992,6 @@ def test_init_keeps_a_volume_kind_linked_before_it_ran(kelso_env, tmp_path):
 
 
 def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
-  """`kelso init` runs before any config or lock exists.
-
-  Nothing else in the suite calls it, because every other test starts from a
-  root the fixture builds by hand.
-  """
   root = tmp_path / "fresh"
   # init prompts for the root; an empty line accepts KELSO_ROOT as the default.
   # --no-mirror because the default repos are on GitHub and the suite does not
@@ -2101,7 +2022,6 @@ def test_init_bootstraps_a_usable_root(kelso_env, tmp_path):
 
 
 def test_every_shipped_bundle_loads(kelso_env):
-  """Every bundle this repo ships must parse -- real apps and demos alike."""
   root = Path(__file__).parents[1]
   shipped = [
     (app_id, apps_dir / rel_path)
@@ -2124,13 +2044,6 @@ def test_every_shipped_bundle_loads(kelso_env):
 
 
 def test_readme_quickstart_from_repo_apps(kelso_env):
-  """Getting-started path from a checkout: start an apps/ bundle by path, then ps.
-
-  Deliberately a bundle shipped in the repo rather than a tests/fixtures one:
-  this is the path a reader follows straight from the README, so it should
-  break if the shipped bundles do. `demo-routes` because its `lan_only` route
-  keeps the LAN receipt line under test.
-  """
   bundle = Path(__file__).parents[1] / "demo-apps" / "net.klso.demo-routes.klso.md"
   assert bundle.is_file(), bundle
 
@@ -2148,7 +2061,6 @@ def test_readme_quickstart_from_repo_apps(kelso_env):
 
 
 def test_last_action_is_read_in_one_pass(kelso_env):
-  """`ps` reports every app's action from a single read of the shared log."""
   assert kelso_env.run("start", "ports-demo").returncode == 0
   assert kelso_env.run("start", "routes-demo").returncode == 0
 
@@ -2164,7 +2076,6 @@ def test_last_action_is_read_in_one_pass(kelso_env):
 
 
 def test_removal_is_recorded_when_an_app_is_removed(kelso_env):
-  """The activity log outlives the app, so removal is recorded, not erased."""
   app_id = "ports-demo"
   assert kelso_env.run("start", app_id).returncode == 0
 
@@ -2240,7 +2151,6 @@ def test_refuse_root_names_who_and_what_to_do(monkeypatch):
 
 
 def test_every_command_refuses_to_run_as_root(kelso_env, monkeypatch):
-  """`init` included: it is the command that would create the root-owned tree."""
   monkeypatch.setattr(os, "geteuid", lambda: 0)
   for argv in (["init"], ["ps"], ["backup", "run", BASIC]):
     refused = kelso_env.run(*argv)
@@ -2265,7 +2175,6 @@ def test_kelsod_refuses_to_run_as_root(monkeypatch, capsys):
 
 
 def _seed_activity(kelso_env, **kwargs):
-  """File one activity run straight through the lib, as a job would."""
   from datetime import UTC, datetime, timedelta
 
   from kelso.lib import activity
@@ -2370,7 +2279,6 @@ def test_unload_then_load_restores_the_app(kelso_env):
 
 
 def _basic_with_files(kelso_env):
-  """BASIC, started then stopped, with a file in its data and its temp volume."""
   assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("stop", BASIC).returncode == 0
   data = kelso_env.volumes_root / "data" / BASIC / "config"
@@ -2382,7 +2290,6 @@ def _basic_with_files(kelso_env):
 
 
 def _root_scripts(kelso_env) -> list[str]:
-  """The scripts kelso ran in a throwaway root container, in order."""
   calls = [
     json.loads(line)["args"] for line in kelso_env.docker_log.read_text().splitlines()
   ]
@@ -2522,7 +2429,6 @@ def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):
 
 
 def test_ps_reports_what_an_unloaded_app_kept(kelso_env):
-  """`ps` must not contradict what `unload` said it was keeping."""
   assert kelso_env.start(BASIC, "admin_user=alice").returncode == 0
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
   assert BASIC not in kelso_env.run("ps").stdout

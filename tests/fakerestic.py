@@ -1,11 +1,3 @@
-"""Restic as far as kelso uses it, for the fake docker.
-
-A repository is a plain directory: `config` holds the password, each snapshot
-is `snapshots/<id>.json` beside a copy of what it backed up under
-`trees/<id>/`, laid out at the paths it was backed up at. Real restic is
-exercised by the `docker`-marked tests in test_restic.py.
-"""
-
 import json
 import secrets
 import shutil
@@ -16,12 +8,10 @@ WRONG_PASSWORD = "Fatal: wrong password or no key found\n"
 
 
 def now() -> datetime:
-  """When a snapshot is taken. A test that needs the clock patches this."""
   return datetime.now(UTC)
 
 
 def _parse_docker(args: list[str]) -> tuple[dict[str, str], dict[str, Path], list[str]]:
-  """`run --rm -e K[=V] -v HOST:GUEST:MODE ... IMAGE ARGS` -> env, binds, args."""
   env: dict[str, str] = {}
   binds: dict[str, Path] = {}
   i = 1

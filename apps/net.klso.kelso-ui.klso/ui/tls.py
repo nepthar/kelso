@@ -1,11 +1,3 @@
-"""The self-signed certificate the https listener serves.
-
-This app carries a password to an API that can run every kelso verb, so it
-terminates TLS itself rather than trusting whatever sits in front of it. A
-homelab has no CA, so the certificate is self-signed: a browser warns once,
-and the fingerprint stays put because the key lives in a `data` volume.
-"""
-
 import datetime
 import ipaddress
 import os
@@ -22,13 +14,11 @@ VALID_DAYS = 3650
 
 
 def names():
-  """Every name this server may be reached by, the route's domain first."""
   found = [os.environ.get("TLS_DOMAIN", "").strip(), socket.gethostname(), "localhost"]
   return list(dict.fromkeys(name for name in found if name))
 
 
 def ensure(directory):
-  """Write cert.pem and key.pem into `directory` unless they already fit."""
   folder = Path(directory)
   folder.mkdir(parents=True, exist_ok=True)
   cert, key = folder / "cert.pem", folder / "key.pem"
@@ -40,7 +30,6 @@ def ensure(directory):
 
 
 def _covers(cert, wanted):
-  """Whether an existing certificate still carries every name we want."""
   try:
     loaded = x509.load_pem_x509_certificate(cert.read_bytes())
     san = loaded.extensions.get_extension_for_class(x509.SubjectAlternativeName)

@@ -1,16 +1,3 @@
-"""Bringing a whole kelso back from its backups, and clearing the way for it.
-
-The path back after losing a machine is three steps, with room between them to
-point volume roots at the disks this machine has:
-
-    kelso init --with-phrase      the same recovery phrase, so the same keys
-    (link volumes/<kind>, backups/ where they should go)
-    kelso restore <backups dir>   kelso's state, then every app
-
-Restore only goes onto a root that holds no app; `purge` makes one that does
-into one that does not.
-"""
-
 import shlex
 import shutil
 import tomllib
@@ -41,9 +28,6 @@ logger = getLogger("kelso.lifecycle.recover")
 
 
 def held_apps(ctx: KelsoCtx) -> list[AppID]:
-  """Every app this root holds something of: config, a loaded copy, or data in
-  any volume root. Containers are not asked: on a docker daemon two roots
-  share, some of them are another root's."""
   config = ctx.config
   ids = set(config.app_config_ids())
   if config.run_root.is_dir():
@@ -58,10 +42,6 @@ def held_apps(ctx: KelsoCtx) -> list[AppID]:
 
 
 def purge(ctx: KelsoCtx) -> list[AppID]:
-  """Stop and purge every app: its loaded copy, config, secrets, volumes and
-  routes. Leaves config.toml, the key file, repos, backups/ and the volume
-  roots themselves -- links included -- as they are. Returns what it purged.
-  """
   purged = []
   for app in held_apps(ctx):
     with ctx.locked(f"purge {app}", app):
@@ -100,7 +80,6 @@ class RecoverResult:
 
 
 def open_backups(ctx: KelsoCtx, path: Path) -> Restic:
-  """The repository at `path`, opened with this root's recovery phrase."""
   seed = read_keyfile(ctx.config.master_keyfile).seed
   if seed is None:
     raise ValueError(
@@ -127,9 +106,6 @@ def open_backups(ctx: KelsoCtx, path: Path) -> Restic:
 
 @dataclass(frozen=True)
 class LinkChange:
-  """One path in the kelso root, as the backup recorded it and as it is here.
-  An empty target is a plain directory."""
-
   name: str
   then: str
   now: str
@@ -137,8 +113,6 @@ class LinkChange:
 
 @dataclass(frozen=True)
 class Layout:
-  """The kelso root's links when the newest state backup was taken."""
-
   kelso_root: str
   links: dict[str, str]
   taken: str
@@ -149,8 +123,6 @@ class Layout:
     return [LinkChange(n, self.links.get(n, ""), here.get(n, "")) for n in names]
 
   def differs(self, ctx: KelsoCtx) -> bool:
-    """Whether a volume root here points somewhere else than it did. backups/
-    is left out: restore links it itself."""
     return any(
       change.then != change.now
       for change in self.compared(ctx)
@@ -159,8 +131,6 @@ class Layout:
 
 
 def recorded_layout(ctx: KelsoCtx, path: Path) -> Layout | None:
-  """What the newest state backup at `path` says the root's links were, or
-  None for a backup that predates the record."""
   restic = open_backups(ctx, path)
   states = state_backups(restic)
   if not states:
@@ -178,8 +148,6 @@ def recorded_layout(ctx: KelsoCtx, path: Path) -> Layout | None:
 
 
 def _copy_state(tree: Path, ctx: KelsoCtx) -> KelsoCtx:
-  """Put kelso's state from a restored backup in place; return a context on
-  the config.toml it brought back."""
   config = ctx.config
   shutil.copyfile(tree / "config.toml", config.config_path)
   # Paths come from the config.toml just restored, not the one init wrote.
@@ -203,8 +171,6 @@ def _copy_state(tree: Path, ctx: KelsoCtx) -> KelsoCtx:
 
 
 def _link_backups(ctx: KelsoCtx, source: Path) -> bool:
-  """Point backups/ at where the backups came from, so the next one adds to
-  them. Only over an empty directory: anything else was put there on purpose."""
   root = ctx.config.backups_root
   if root.resolve() == source.resolve():
     return True
@@ -217,10 +183,6 @@ def _link_backups(ctx: KelsoCtx, source: Path) -> bool:
 
 
 def recover(ctx: KelsoCtx, path: Path) -> RecoverResult:
-  """Restore kelso's state and then every app from the backups at `path`.
-
-  Refuses a root that holds any app. Apps come back stopped.
-  """
   held = held_apps(ctx)
   if held:
     raise ValueError(
@@ -264,12 +226,6 @@ def recover(ctx: KelsoCtx, path: Path) -> RecoverResult:
 
 
 def _mirror_repos(ctx: KelsoCtx, result: RecoverResult) -> None:
-  """Fetch each mirrored repo the restored config.toml names.
-
-  A backup holds the local repo, not mirrors: those are git's to fetch again,
-  and what `init` fetched may be another branch than the restored config says.
-  Best effort, as at init: a repo that cannot be fetched now is still configured.
-  """
   from kelso.lib import repo as repo_lib
 
   for repo in ctx.config.repos.values():

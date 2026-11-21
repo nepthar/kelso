@@ -1,7 +1,3 @@
-"""Tests for the [run.<unit>.routes] model: port specs, admin, and the
-route-name -> subdomain mapping (reserved "main" = the bare app subdomain).
-"""
-
 import json
 import tomllib
 from pathlib import Path
@@ -48,7 +44,6 @@ from tests.conftest import TEST_SEED
 
 
 def _model(body: str) -> Manifest:
-  """Schema-parsed only: what the `_validate_*` checks take as input."""
   return Manifest.model_validate(tomllib.loads(body))
 
 
@@ -181,7 +176,6 @@ metrics = { port = "9090" }
 
 # ── assigned-route filtering (lifecycle) ───────────────────────────────────
 def test_assigned_routes_skips_none_and_unassigned():
-  """By the providers each route was loaded with, not the assignment now."""
   spec = _spec(ROUTES)
   run_data = _run_data(spec, providers={"main": ("web",), "api": ()})
   store = SimpleNamespace(list_route_assignments=lambda: {"api": ["web"]})
@@ -316,12 +310,6 @@ dash = { port = "8081" }
 
 
 def test_duplicate_route_name_never_reaches_a_spec():
-  """The app-level uniqueness rule, from the entry point rather than the check.
-
-  `_build` flattens per-unit routes into one app-level mapping, so a duplicate
-  that got past validation would not raise -- the last unit declared would
-  quietly win, and the other unit's port would vanish from the compose file.
-  """
   with pytest.raises(ConfigError, match="declared more than once"):
     _spec(
       """
@@ -479,7 +467,6 @@ admin = { port = "8082" }
 
 
 def test_env_may_reference_a_route_on_another_run_unit():
-  """Routes are app-level, so a unit can name one it does not itself publish."""
   spec = _spec(
     """
 [app]
@@ -601,11 +588,6 @@ def _ctx(
 
 # ── provider dispatch ──────────────────────────────────────────────────────
 def test_every_config_kind_has_a_provider():
-  """The config schema and the dispatch table have to name the same kinds.
-
-  Adding one to `RouteProviderKind` without registering a provider would parse
-  fine and then refuse at start time, which is the wrong place to find out.
-  """
   assert set(get_args(RouteProviderKind)) == set(PROVIDERS)
 
 
@@ -802,11 +784,6 @@ POLICY = "closed-spea-hammondii"
 def _pangolin_provider(
   site: str = SITE, resolved: int | None = 3, shared_policy: str | None = None
 ):
-  """A provider whose site slug is already resolved, unless `resolved` is None.
-
-  Most tests are not about the site lookup, and leaving it unresolved would
-  make every one of them stub that request too.
-  """
   provider = PangolinRouteProvider(
     endpoint="https://pangolin.example:3003",
     api_key="test-key",
@@ -890,7 +867,6 @@ def _response(status: int, *, json_body=None, text: str = "", content_type: str 
 
 
 def test_pangolin_names_the_wrong_endpoint_on_an_html_error():
-  """The dashboard answers /v1 with its own HTML 404, which says nothing."""
   provider = _pangolin_provider()
   resp = _response(
     404,
@@ -933,7 +909,6 @@ def test_pangolin_reports_a_rejected_key_with_its_reason():
 
 
 def test_pangolin_403_names_the_permission_the_key_is_missing():
-  """Pangolin's 403 body never says which action it refused, so kelso must."""
   provider = _pangolin_provider()
   resp = _response(
     403,
@@ -954,7 +929,6 @@ def test_pangolin_403_names_the_permission_the_key_is_missing():
 
 
 def test_pangolin_resolves_the_site_name_once():
-  """Config names the site the only way the dashboard shows it: its URL name."""
   provider = _pangolin_provider(resolved=None)
   provider._request = Mock(return_value={"siteId": 7, "name": "kelso host"})
 
@@ -1058,7 +1032,6 @@ def test_pangolin_config_refuses_plaintext_endpoint(tmp_path):
 
 
 def test_pangolin_config_does_not_touch_the_network(tmp_path):
-  """Construction stays offline; the site lookup waits until a route needs it."""
   provider = get_route_provider(_pangolin_ctx(tmp_path, PANGOLIN_ARGS), "web")
   assert provider._resolved_site_id is None
 
@@ -1448,8 +1421,6 @@ TUNNEL = "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d"
 
 
 class _FakeCloudflare:
-  """Stands in for `_request`, tracking the tunnel config and one DNS record."""
-
   def __init__(self, ingress=None, records=None):
     self.config = {"ingress": [*(ingress or []), {"service": "http_status:404"}]}
     self.records = list(records or [])

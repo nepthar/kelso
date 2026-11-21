@@ -1,13 +1,3 @@
-"""Restic, run in a pinned container: the engine under kelso's backups.
-
-It runs in a throwaway container because the files it reads are root-owned.
-What it backs up is bound at fixed paths inside the container rather than
-where it lives on this machine, so every backup records the same layout --
-`/kelso/app/<id>/data/<volume>` -- however the volume roots are linked. The
-password never appears on a command line: docker passes `RESTIC_PASSWORD`
-through from this process's environment.
-"""
-
 import json
 import os
 import socket
@@ -53,7 +43,6 @@ LOCKED = 11
 
 
 def _first_error(stderr: str) -> str:
-  """Restic's first error as one line, and how many more followed it."""
   errors = []
   for line in stderr.splitlines():
     try:
@@ -90,7 +79,6 @@ class Snapshot:
 
 
 def _moment(raw: str) -> datetime:
-  """Restic's nanosecond, local-offset time, to the microsecond, in UTC."""
   head, _, rest = raw.partition(".")
   if not rest:
     return datetime.fromisoformat(head.replace("Z", "+00:00")).astimezone(UTC)
@@ -103,13 +91,11 @@ def _moment(raw: str) -> datetime:
 
 
 def _timestamp(raw: str) -> str:
-  """Restic's nanosecond, local-offset time as kelso's UTC seconds."""
   moment = _moment(raw).replace(microsecond=0)
   return moment.isoformat().replace("+00:00", "Z")
 
 
 def _summary(message: dict) -> str:
-  """What one backup read and added: `12 files, 3.4 MB new of 1.2 GB, 4.1s`."""
   files = sum(
     int(message.get(key, 0))
     for key in ("files_new", "files_changed", "files_unmodified")
@@ -126,8 +112,6 @@ def _tags(raw: Iterable[str]) -> dict[str, str]:
 
 
 class Restic:
-  """One restic repository at a local path."""
-
   def __init__(
     self,
     repo: Path,
@@ -135,8 +119,6 @@ class Restic:
     cache: Path,
     owner: tuple[int, int] | None = None,
   ) -> None:
-    """`owner` is the (uid, gid) the repository and cache are left owned by:
-    the user kelso and kelsod run as, unless a test says otherwise."""
     self.repo = repo
     self._password = password
     self._cache = cache
@@ -151,12 +133,6 @@ class Restic:
     writable: bool = False,
     say: bool = False,
   ) -> str:
-    """Run `restic <args>`; return its stdout.
-
-    `binds` maps host paths to where they appear in the container, read-only
-    unless `writable`. The repository and the cache are always writable. With
-    `say`, the terminal is told `what` first: for the steps that take a while.
-    """
     if say:
       logger.info("restic: %s", what)
     self._cache.mkdir(parents=True, exist_ok=True)
@@ -216,7 +192,6 @@ class Restic:
     return (self.repo / "config").is_file()
 
   def init(self) -> bool:
-    """Create the repository unless it exists. True when it was created."""
     if self.exists():
       return False
     self.repo.mkdir(parents=True, exist_ok=True)
@@ -226,7 +201,6 @@ class Restic:
   def backup(
     self, sources: Mapping[Path, str], tags: Mapping[str, str], *, what: str
   ) -> str:
-    """Back up each host path at its guest path; returns the snapshot's id."""
     args = ["backup", "--json", "--host", socket.gethostname()]
     for key, value in tags.items():
       args += ["--tag", f"{key}={value}"]
@@ -239,8 +213,6 @@ class Restic:
     raise ResticError(f"Unable to {what}: restic reported no snapshot")
 
   def added_by(self, sources: Mapping[Path, str]) -> int:
-    """Bytes backing up `sources` would add, before compression. Reads what
-    changed since the last backup of the same paths, and writes nothing."""
     args = ["backup", "--dry-run", "--json", "--host", socket.gethostname()]
     out = self.run([*args, *sources.values()], sources, what="measure a backup")
     for line in out.splitlines():
@@ -250,12 +222,9 @@ class Restic:
     raise ResticError("Unable to measure a backup: restic reported no summary")
 
   def check(self) -> None:
-    """Raise unless the repository's structure is sound: every snapshot,
-    tree and index readable. Does not read the file data itself."""
     self.run(["check"], what="check the backup repository", say=True)
 
   def snapshots(self, tags: Mapping[str, str] | None = None) -> list[Snapshot]:
-    """Every snapshot carrying all of `tags`, oldest first."""
     args = ["snapshots", "--json"]
     if tags:
       args += ["--tag", ",".join(f"{k}={v}" for k, v in tags.items())]
@@ -272,11 +241,6 @@ class Restic:
     return sorted(found, key=lambda s: s.time)
 
   def restore(self, snapshot_id: str, target: Path, *, what: str) -> None:
-    """Restore a snapshot under `target`.
-
-    A file backed up at `/kelso/app/x/config.logtab` lands at
-    `<target>/kelso/app/x/config.logtab`.
-    """
     target.mkdir(parents=True, exist_ok=True)
     self.run(
       ["restore", snapshot_id, "--target", TARGET],
@@ -287,7 +251,6 @@ class Restic:
     )
 
   def dump(self, snapshot_id: str, path: str, *, what: str) -> str:
-    """One file from a snapshot, by the path it was backed up at."""
     return self.run(["dump", snapshot_id, path], what=what)
 
   def forget(self, snapshot_ids: Iterable[str], *, what: str) -> None:
@@ -299,7 +262,6 @@ class Restic:
     self.run(["prune"], what="free the space of forgotten backups", say=True)
 
   def change_password(self, new_password: str, scratch: Path) -> None:
-    """Make `new_password` the repository's password in place of this one."""
     scratch.mkdir(parents=True, exist_ok=True)
     secret = scratch / "new-password"
     fd = os.open(secret, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

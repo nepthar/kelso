@@ -1,9 +1,3 @@
-"""Shells: `kelso shell`, and kelsod's PTY behind a websocket.
-
-kelsod's tests swap `docker compose exec` for a local `sh`, so the PTY, the
-relay and the process handling are real and only the container is not.
-"""
-
 import json
 import os
 import pwd
@@ -50,7 +44,6 @@ def stand_in(monkeypatch, script: str) -> None:
 
 
 def drain(ws) -> tuple[bytes, WebSocketDisconnect]:
-  """Everything the terminal printed, and how the session closed."""
   out = b""
   with pytest.raises(WebSocketDisconnect) as closed:
     while True:

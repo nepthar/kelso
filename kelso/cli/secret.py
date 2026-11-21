@@ -1,8 +1,3 @@
-"""`kelso secret`: host secrets, the recovery phrase, and revealing any secret.
-
-App secrets are set with `kelso config <app> NAME=-`; only `reveal` prints one.
-"""
-
 import argparse
 
 from tabulate import tabulate

@@ -1,8 +1,3 @@
-"""`kelso status`: the dashboard as text -- host, apps, routes, locations, storage.
-
-`kelso status APP` is one app in full, starting with what APP resolves to.
-"""
-
 import argparse
 import json
 import os
@@ -128,7 +123,6 @@ def _routes(ctx: KelsoCtx) -> str:
 
 
 def _locations(ctx: KelsoCtx) -> str:
-  """Where each volume root, kelso directory and host volume really is."""
   root = ctx.config.kelso_root
   places = [
     *(
@@ -147,7 +141,6 @@ def _locations(ctx: KelsoCtx) -> str:
 
 
 def _where(path: Path, root: Path) -> str:
-  """A link's target, or where the folder is, under `$kelso` when it can be."""
   if path.is_symlink():
     target = path.readlink()
     if not target.is_absolute():
@@ -160,7 +153,6 @@ def _where(path: Path, root: Path) -> str:
 
 
 def _short(path: Path, root: Path) -> str:
-  """`path`, written from `$kelso` when it is under the kelso root."""
   if path.is_relative_to(root):
     return str(Path("$kelso") / path.relative_to(root))
   return str(path)

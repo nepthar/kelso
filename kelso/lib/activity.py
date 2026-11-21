@@ -1,12 +1,3 @@
-"""Kelso's own activity output: what an unattended run printed, kept on disk.
-
-This module owns one of two log streams. Container runtime logs belong to
-dockerd and reach the operator through `kelso logs`; what dockerd cannot keep
-is what *kelso* did, since a job's `compose run --rm` container is deleted the
-moment it exits. Each run leaves a plain file under `$kelso/var/logs/` and a
-row in `activity.logtab`.
-"""
-
 from __future__ import annotations
 
 import io
@@ -67,7 +58,6 @@ def _index_key(app_id: AppID | None) -> str:
 def _run_file(
   directory: Path, started: datetime, verb: str, app_id: AppID | None
 ) -> Path:
-  """A fresh `{timestamp}.{app_id}.{verb}.log` path. Lexical order is time order."""
   stamp = started.strftime("%Y-%m-%dT%H%M%SZ")
   middle = f"{app_id}." if app_id else ""
   path = directory / f"{stamp}.{middle}{verb}.log"
@@ -120,7 +110,6 @@ def begin_run(
   app_id: AppID | None,
   started: datetime,
 ) -> str:
-  """Create the run file so a live job can tee into it. Not indexed yet."""
   relpath = _new_relpath(ctx, app_id, started, verb)
   path = ctx.config.activity_root / relpath
   path.write_text(_run_header(verb, app_id, started, args))
@@ -139,7 +128,6 @@ def finish_run(
   started_by: str,
   args: dict[str, str] | None = None,
 ) -> None:
-  """Append the closing trailer to ``relpath`` and index the run."""
   path = ctx.config.activity_root / relpath
   path.parent.mkdir(parents=True, exist_ok=True)
   duration_ms = max(0, int((finished - started).total_seconds() * 1000))
@@ -174,7 +162,6 @@ def record_run(
   output: str,
   started_by: str,
 ) -> str:
-  """Write one run's output file and index record; returns its relative path."""
   relpath = begin_run(ctx, verb, args, app_id=app_id, started=started)
   if output:
     text = output if output.endswith("\n") else output + "\n"
@@ -196,7 +183,6 @@ def record_run(
 
 @contextmanager
 def _capture_kelso_logging(stream: io.TextIOBase) -> Iterator[None]:
-  """Tee `kelso.*` log records into `stream` for the duration."""
   handler = logging.StreamHandler(stream)
   handler.setLevel(logging.INFO)
   formatter = logging.Formatter(
@@ -217,8 +203,6 @@ def _capture_kelso_logging(stream: io.TextIOBase) -> Iterator[None]:
 
 
 class _Sink(io.TextIOBase):
-  """The run's log file, flushed per write so a reader can tail it mid-run."""
-
   def __init__(self, log: io.TextIOBase, echo: TextIO | None = None) -> None:
     self._log = log
     self._echo = echo
@@ -238,18 +222,10 @@ class _Sink(io.TextIOBase):
 
 
 class Detached(RuntimeError):
-  """Kelso stopped watching a command it started, which may still be running.
-
-  An `Activity` records the run as detached and does not let this propagate.
-  """
+  pass
 
 
 class Activity:
-  """One recorded run of kelso's own work: its log records and docker output.
-
-  Blocks do not nest; entering one inside another raises RuntimeError.
-  """
-
   def __init__(
     self,
     ctx: KelsoCtx,
@@ -346,7 +322,6 @@ class Activity:
     return detached
 
   def write(self, text: str) -> None:
-    """Put `text` in the run log (and the echo stream) verbatim."""
     if self._sink is None:
       raise RuntimeError(f"{self.verb} activity is not running")
     self._sink.write(text)
@@ -359,7 +334,6 @@ class Activity:
     env: dict[str, str] | None = None,
     cwd: str | os.PathLike[str] | None = None,
   ) -> Any:
-    """Run `cmd`. JSON out is captured and parsed; anything else is streamed."""
     if self._sink is None:
       raise RuntimeError(f"{self.verb} activity is not running")
     run_env = {**os.environ, **env} if env else None
@@ -398,7 +372,6 @@ class Activity:
 
 
 def _as_app_id(app: AppID | str | None) -> AppID | None:
-  """An id the log can file under, or `None` for the kelso-wide directory."""
   if not app:
     return None
   if isinstance(app, AppID):
@@ -410,12 +383,10 @@ def _as_app_id(app: AppID | str | None) -> AppID | None:
 
 
 def _succeeded(exc: BaseException | None) -> bool:
-  """No exception, or a command exiting 0 the way `kelso cmd` does."""
   return exc is None or (isinstance(exc, SystemExit) and exc.code in (0, None))
 
 
 def _describe(exc: BaseException) -> str:
-  """How an exception reads in a run log and a job record."""
   if isinstance(exc, ValueError | RuntimeError):
     return str(exc)
   if isinstance(exc, SystemExit):
@@ -424,7 +395,6 @@ def _describe(exc: BaseException) -> str:
 
 
 def _prune(directory: Path) -> None:
-  """Drop the oldest run files once the activity root is over budget."""
   files = sorted(p for p in directory.iterdir() if p.suffix == ".log")
   for stale in files[: max(0, len(files) - KEEP_RUNS)]:
     try:
@@ -440,7 +410,6 @@ def list_runs(
   verb: str | None = None,
   limit: int = 20,
 ) -> list[dict[str, Any]]:
-  """Recorded runs, newest first. `app` narrows to one app's (full) id."""
   key = _index_key(AppID(app)) if app and app != KELSO_DIR else None
   runs: list[dict[str, Any]] = []
   for record_key, entry in ctx.activity_log.history(suffix="/run"):
@@ -474,11 +443,6 @@ def list_runs(
 
 
 def run_state(text: str) -> str:
-  """How a run file's run ended, from its trailer.
-
-  With no trailer it is RUNNING while the process that wrote it lives, and
-  KILLED once that process is gone or the host has booted since.
-  """
   last = text.rstrip().rsplit("\n", 1)[-1]
   ended = re.fullmatch(r"# — (\w+) · finished .*", last)
   if ended:
@@ -495,7 +459,6 @@ def run_state(text: str) -> str:
 
 
 def read_run_log(ctx: KelsoCtx, filename: str) -> str:
-  """The text of one run file, named the way the index names it."""
   if not FILENAME_RE.fullmatch(filename):
     raise ValueError(f"No run log named {filename!r}")
   path = (ctx.config.activity_root / filename).resolve()

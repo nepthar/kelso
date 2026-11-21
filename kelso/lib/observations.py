@@ -21,8 +21,6 @@ logger = logging.getLogger("kelso")
 
 @dataclass(frozen=True)
 class RunState:
-  """The run-state of a single app, for lifecycle operations."""
-
   app_id: AppID
   run_path: Path
   run_dir_exists: bool
@@ -43,7 +41,6 @@ FINISHED = "finished"  # nothing running, and every unit exited 0
 
 
 def _active(unit: KelsoRunUnitStatus, one_shot: bool) -> bool:
-  """Up and not failing its healthcheck, or a one-shot that finished cleanly."""
   if unit.state.lower() == "running":
     return unit.health != "unhealthy"
   return one_shot and unit.finished
@@ -62,7 +59,6 @@ def app_state(
   volumes_exist: bool,
   has_containers: bool = False,
 ) -> str:
-  """`loaded`, `unloaded`, or `available`."""
   if run_dir_exists or has_containers:
     return LOADED
   # A lone kelsodb row is an orphan for `doctor`, not a kept app.
@@ -73,8 +69,6 @@ def app_state(
 
 @dataclass(frozen=True)
 class AppObservation:
-  """A union of every possible place an app can leave a trace - for diagnostics and status"""
-
   app_id: AppID
   bundle_path: Path | None
   run_dir_exists: bool
@@ -101,7 +95,6 @@ class AppObservation:
 
   @property
   def state(self) -> str:
-    """Where this app stands. See `app_state`."""
     return app_state(
       run_dir_exists=self.run_dir_exists,
       config_exists=self.config_exists,
@@ -111,7 +104,6 @@ class AppObservation:
 
   @property
   def update_version(self) -> str | None:
-    """The source's version, when a loaded app's source has a different one."""
     if not self.loaded or self.source_version in (None, self.loaded_version):
       return None
     return self.source_version
@@ -122,13 +114,10 @@ class AppObservation:
 
   @property
   def known(self) -> bool:
-    """Whether this id is more than a catalog entry -- something kelso put
-    on disk, in docker, or in its own db."""
     return self.state != AVAILABLE or self.db_present
 
   @property
   def orphaned_routes(self) -> bool:
-    """Routes kelso holds for an app with no bundle, loaded copy, or containers."""
     return (
       self.db_present
       and self.bundle_path is None
@@ -139,10 +128,6 @@ class AppObservation:
   def status(
     self, units: Iterable[str] = (), one_shots: Collection[str] | None = None
   ) -> str:
-    """`healthy`, `ok`, `degraded`, `finished` or `stopped`. `units` are the run
-    units the manifest declares; without them, only the containers that exist
-    count. `one_shots` are the units meant to exit; None when that is unknown,
-    and then any unit that exited cleanly counts as one."""
     containers = {c.run_unit: c for c in self.containers}
     if not self.running_count:
       done = containers and all(
@@ -162,13 +147,11 @@ class AppObservation:
 
 
 def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
-  """Where an app outside every repo was loaded from, if that is still there."""
   origin = ctx.loaded_origin(app_id)
   return origin if origin is not None and origin.exists() else None
 
 
 def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
-  """The loaded version, and the version in the bundle it was loaded from."""
   store = ctx.app_store(app_id)
   origin = store.get_meta("origin")
   source = None
@@ -190,7 +173,6 @@ _ROUTE_KEYS = ("config/subdomain", "routes/", "network/")
 
 
 def _rekeyed(raw: str) -> bool:
-  """A secret a rekey appended again: the same value, so not a change."""
   try:
     value = json.loads(raw)
   except ValueError:
@@ -200,8 +182,6 @@ def _rekeyed(raw: str) -> bool:
 
 @dataclass(frozen=True)
 class PendingChanges:
-  """What was written to an app store after it was last loaded or started."""
-
   # Config and binds: the next start reads them.
   config: bool = False
   # The subdomain and route assignments: the next start re-derives the routes.
@@ -213,10 +193,7 @@ class PendingChanges:
 
 
 def changes_since_start(path: Path) -> PendingChanges:
-  """What the app store at `path` has had written after its last load or start.
-
-  By order in the log rather than by timestamp, which is only to the second.
-  """
+  # By order in the log, not timestamp: timestamps are only to the second.
   config = routes = False
   for key, entry in LogTab(path).history():
     if key in _APPLIED_AT:
@@ -233,7 +210,6 @@ def changes_since_start(path: Path) -> PendingChanges:
 def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
-  """Every app kelso knows of, or just `only`, from one pass over each source."""
   contested = ctx.inventory.contested()
   bundles = {
     e.app_id: e.path for e in ctx.inventory.catalog if e.app_id not in contested
@@ -291,7 +267,6 @@ def collect_observations(
 
 
 def observe(app_id: AppID, ctx: KelsoCtx) -> AppObservation:
-  """One app's observation. Raises ValueError for an id kelso holds nothing for."""
   observation = collect_observations(ctx, only=app_id).get(str(app_id))
   if observation is None:
     raise ValueError(f'No app state found for "{app_id}"')

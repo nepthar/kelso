@@ -1,5 +1,3 @@
-"""`kelso update`: pull, stop, back up, re-load from the source, start again."""
-
 import json
 
 APP = "upd-app"

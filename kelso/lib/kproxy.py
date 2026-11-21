@@ -1,12 +1,3 @@
-"""What kelso needs to run an app behind kproxy: `restrict`, `ask` and `watch`.
-
-An app behind kproxy has its units sit on an internal network with no route out. kproxy
-is the one container on both that network and an ordinary one: it answers the
-units' DNS, lets them reach only what `[connections]` lists, and relays each
-of the app's routes in to its unit. The kproxy program itself lives in the
-repository's `kproxy/` directory; this module only generates what runs it.
-"""
-
 import hashlib
 import ipaddress
 import re
@@ -46,7 +37,6 @@ MIN_DOCKER = 27
 
 
 def docker_too_old(major: int) -> str | None:
-  """Why apps behind kproxy can't run on this docker, or None if they can."""
   if major >= MIN_DOCKER:
     return None
   return (
@@ -56,10 +46,6 @@ def docker_too_old(major: int) -> str | None:
 
 
 def endpoint_name(value: str) -> str:
-  """Normalize a domain name, which a rule matches with its subdomains.
-
-  Raises ValueError for anything kproxy would refuse as a rule name.
-  """
   name = value.strip().lower().removesuffix(".")
   try:
     ipaddress.ip_address(name)
@@ -72,10 +58,6 @@ def endpoint_name(value: str) -> str:
 
 
 def forward_target(value: str) -> str:
-  """Normalize an http connection's address: host:port, the host a name or IPv4 address.
-
-  Raises ValueError for anything kproxy would refuse as a rule target.
-  """
   host, sep, port = value.strip().rpartition(":")
   bad = ValueError(
     f"address {value!r} must be host:port with a numeric port, "
@@ -98,7 +80,6 @@ def forward_target(value: str) -> str:
 
 
 def subnets(pool: str) -> Iterable[ipaddress.IPv4Network]:
-  """The /24s in `pool`. Raises ValueError unless it is an IPv4 network that holds one."""
   net = ipaddress.ip_network(pool)
   if net.version != 4 or net.prefixlen > 24:
     raise ValueError(f"{pool!r} must be an IPv4 network of /24 or larger")
@@ -106,12 +87,10 @@ def subnets(pool: str) -> Iterable[ipaddress.IPv4Network]:
 
 
 def proxy_address(subnet: str) -> str:
-  """kproxy's fixed address on an app's internal network: the subnet's .2."""
   return str(ipaddress.ip_network(subnet)[2])
 
 
 def dynamic_range(subnet: str) -> str:
-  """The upper half of the subnet, which docker hands out; kproxy's .2 is below it."""
   return str(list(ipaddress.ip_network(subnet).subnets(prefixlen_diff=1))[1])
 
 
@@ -123,15 +102,6 @@ def rules_text(
   default: str = "deny",
   denied: Iterable[str] = (),
 ) -> str:
-  """The rules file for an app: what it may reach, how routes get in, and the
-  `default` policy (deny, ask or allow) for everything else.
-
-  Each of `hosts` is allowed with its subdomains over HTTP and HTTPS. Each of
-  `forwards` is a name over HTTP sent to its host:port. `ingress` is (route, host
-  port, unit, container port, proto) per route; the i-th gets `ingress_port(i)`.
-  Each of `denied` is refused with its subdomains, even if `hosts` lists it.
-  Raises ValueError for a forward that isn't host:port, naming it.
-  """
   http: dict[str, str] = {}
   https: dict[str, str] = {}
   refused = {endpoint_name(host) for host in denied}
@@ -158,7 +128,6 @@ def rules_text(
 
 
 def rules_json(rules: str) -> dict[str, Any]:
-  """`rules_text`'s output in the long form kproxy's `PUT /rules` takes."""
   out: dict[str, Any] = {"rules": []}
   for line in rules.splitlines():
     words = line.split()
@@ -190,17 +159,14 @@ def rules_json(rules: str) -> dict[str, Any]:
 
 
 def ingress_port(i: int) -> int:
-  """The port kproxy listens on for the i-th route `rules_text` was given."""
   return INGRESS_PORT_BASE + i
 
 
 def rules_digest(rules: str) -> str:
-  """Put in kproxy's environment, so new rules recreate the container."""
   return hashlib.sha256(rules.encode()).hexdigest()[:12]
 
 
 def source_dir() -> Path | None:
-  """kproxy's source: shipped inside an installed kelso, or beside a checkout."""
   here = Path(__file__).resolve().parents[1]
   for path in (here / "_kproxy", here.parent / "kproxy"):
     if (path / "Dockerfile").is_file():
@@ -209,7 +175,6 @@ def source_dir() -> Path | None:
 
 
 def image_tag(source: Path) -> str:
-  """An image tag that changes whenever anything the image is built from does."""
   digest = hashlib.sha256()
   for path in sorted(source.iterdir()):
     if path.name in ("Dockerfile", "go.mod", "go.sum", "ui.html") or (
@@ -233,8 +198,6 @@ def compose_networks(subnet: str) -> dict[str, Any]:
 
 
 def compose_service(*, source: Path, subnet: str, ports: list[str]) -> dict[str, Any]:
-  """The kproxy service. `ports` publishes each route's host port on the
-  `ingress_port` its rule listens on."""
   command = ["-admin", KPROXY_ADMIN_SOCKET]
   command += ["-rules-file", f"{KPROXY_GUEST_DIR}/rules.txt"]
   command += ["-stats-file", f"{KPROXY_GUEST_DIR}/{STATS_FILE}"]

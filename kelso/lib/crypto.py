@@ -20,8 +20,6 @@ def crypto_from_config(config: Config) -> CryptoEngine:
 
 
 class MissingKeyEngine:
-  """A root with no seed: refuses every use rather than store plaintext."""
-
   def __init__(self, keyfile: str):
     self._keyfile = keyfile
 
@@ -35,8 +33,6 @@ class MissingKeyEngine:
 
 
 class NoopCryptoEngine:
-  """Stores values as they are. For tests that do not exercise encryption."""
-
   def encrypt(self, plaintext: str) -> str:
     return plaintext
 

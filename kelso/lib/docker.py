@@ -28,7 +28,6 @@ _ERROR_TAIL = 1500
 
 @contextmanager
 def sink_output(sink: TextIO) -> Iterator[None]:
-  """Capture streamed docker output into `sink` for the duration."""
   token = _output_sink.set(sink)
   try:
     yield
@@ -48,12 +47,10 @@ class KelsoRunUnitStatus:
 
   @property
   def finished(self) -> bool:
-    """Exited cleanly: a one-shot that did what it was started for."""
     return self.state.lower() == "exited" and self.status.startswith("Exited (0)")
 
   @property
   def health(self) -> str:
-    """ "healthy", "unhealthy" or "starting" from a healthcheck; "" with none."""
     if "(health: starting)" in self.status:
       return "starting"
     if "(unhealthy)" in self.status:
@@ -65,8 +62,6 @@ class KelsoRunUnitStatus:
 
 @dataclass(frozen=True)
 class DockerReturn:
-  """Result of a ``docker`` invocation."""
-
   returncode: int
   data: list[dict[str, Any]]
 
@@ -81,7 +76,6 @@ def _parse_docker_label_string(raw: str) -> dict[str, str]:
 
 
 def load_kelso_run_unit_status() -> dict[str, tuple[KelsoRunUnitStatus, ...]]:
-  """Return every container that carries a Kelso app ID label."""
   result = docker_run_command(
     [
       "ps",
@@ -126,13 +120,11 @@ _SIZE_UNITS = {"B": 1, "kB": 10**3, "KB": 10**3, "MB": 10**6, "GB": 10**9, "TB":
 
 
 def _size_bytes(human: str) -> int:
-  """docker's decimal `Size` column, e.g. "187MB", as bytes."""
   number = human.rstrip("kKMGTB")
   return int(float(number or 0) * _SIZE_UNITS.get(human[len(number) :], 1))
 
 
 def list_images() -> list[DockerImage]:
-  """Every local image, one entry per image id."""
   refs: dict[str, list[str]] = {}
   sizes: dict[str, int] = {}
   for row in docker_run_command(["image", "ls"]).data:
@@ -146,12 +138,10 @@ def list_images() -> list[DockerImage]:
 
 
 def container_images() -> set[str]:
-  """The image each container, kelso's or not, was created from, as docker shows it."""
   return {row.get("Image", "") for row in docker_run_command(["ps", "-a"]).data}
 
 
 def remove_image(image: DockerImage) -> None:
-  """Delete an image by every name it has. Raises DockerError if docker refuses."""
   cmd = ["image", "rm", *(image.refs or (image.id,))]
   result = subprocess.run([DOCKER, *cmd], capture_output=True, text=True)
   if result.returncode != 0:
@@ -159,13 +149,10 @@ def remove_image(image: DockerImage) -> None:
 
 
 def pull_image(image: str) -> None:
-  """`docker pull`, streaming its progress. Raises DockerError if it fails."""
   docker_run_command(["pull", image], json_output=False)
 
 
 class DockerError(RuntimeError):
-  """A docker invocation exited non-zero."""
-
   def __init__(self, cmd: list[str], returncode: int, stderr: str = "") -> None:
     self.cmd = cmd
     self.returncode = returncode
@@ -177,7 +164,6 @@ class DockerError(RuntimeError):
 
 
 def _parse_json_output(stdout: str) -> list[dict[str, Any]]:
-  """Parse docker JSON output, tolerating both a single array and NDJSON lines."""
   text = stdout.strip()
   if not text:
     return []
@@ -190,7 +176,7 @@ def _parse_json_output(stdout: str) -> list[dict[str, Any]]:
 
 
 class DockerTimeout(RuntimeError):
-  """A docker invocation ran past its timeout and kelso stopped waiting."""
+  pass
 
 
 def _timed_out(cmd: list[str], timeout: float | None) -> DockerTimeout:
@@ -211,10 +197,6 @@ def docker_run_command(
   env: dict[str, str] | None = None,
   timeout: float | None = None,
 ) -> DockerReturn:
-  """Run `docker <cmd>`: captured and parsed with `json_output`, else streamed.
-
-  Raises DockerTimeout once `timeout` seconds pass, after killing the client.
-  """
   full = [DOCKER, *cmd]
   if json_output:
     full += ["--format", "json"]
@@ -295,7 +277,6 @@ def docker_output(
   env: dict[str, str] | None = None,
   timeout: float | None = None,
 ) -> str:
-  """Run `docker <cmd>` and return its stdout as is. Raises DockerError if it fails."""
   try:
     result = subprocess.run(
       [DOCKER, *cmd],
@@ -313,7 +294,6 @@ def docker_output(
 
 
 def server_major() -> int | None:
-  """The docker daemon's major version, or None if it can't be read."""
   try:
     data = docker_run_command(["version"]).data
   except (DockerError, OSError):
@@ -324,5 +304,4 @@ def server_major() -> int | None:
 
 
 def image_exists(tag: str) -> bool:
-  """Whether docker already has the image `tag`."""
   return docker_run_command(["image", "inspect", tag], check=False).returncode == 0

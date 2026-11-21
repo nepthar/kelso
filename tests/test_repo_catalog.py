@@ -1,10 +1,3 @@
-"""Extra repos: `[repo.<name>]` entries beyond `repos/local`.
-
-Several repos can carry the same app id. Kelso never guesses between them: a
-bare id resolves to the repo the app is bound to, and otherwise `<app>@<repo>`
-or a full path is how you say which one you mean; `doctor` reports the rest.
-"""
-
 import logging
 import re
 from pathlib import Path
@@ -49,7 +42,6 @@ def bound_to(kelso_env, app_id: str) -> Path | None:
 
 
 def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
-  """Every `kelso repo list` row for `app_id`, as [app_id, repo, status, version, path]."""
   rows = []
   repo = ""
   for line in catalog_output.splitlines():
@@ -63,7 +55,6 @@ def _rows(catalog_output: str, app_id: str) -> list[list[str]]:
 
 
 def _row(catalog_output: str, app_id: str) -> list[str]:
-  """The one `kelso repo list` row for `app_id`, split into its columns."""
   rows = _rows(catalog_output, app_id)
   assert len(rows) == 1, f"expected one {app_id} row, got {rows}"
   return rows[0]
@@ -101,7 +92,6 @@ def test_the_default_config_has_only_main(kelso_env):
   ],
 )
 def test_a_bad_repo_is_reported_and_ignored(kelso_env, caplog, block, problem):
-  """A typo in an optional section must not stop every kelso command."""
   with open(kelso_env.config, "a") as f:
     f.write("\n" + block)
 
@@ -114,7 +104,6 @@ def test_a_bad_repo_is_reported_and_ignored(kelso_env, caplog, block, problem):
 
 
 def test_one_bad_repo_drops_the_good_ones_too(kelso_env, caplog):
-  """All or nothing: a half-applied catalog is harder to explain than none."""
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -137,7 +126,6 @@ def test_a_bad_repo_still_lets_commands_run(kelso_env):
 
 
 def test_two_extra_repos_may_not_share_a_name(kelso_env):
-  """The name is a table key, so TOML refuses the second one."""
   add_repo_block(kelso_env, "dev", kelso_env.root / "one")
   add_repo_block(kelso_env, "dev", kelso_env.root / "two")
 
@@ -213,7 +201,6 @@ def test_an_ambiguous_id_gets_a_row_per_source(kelso_env):
 
 
 def test_status_follows_the_bundle_that_is_actually_loaded(kelso_env):
-  """Two bundles share the id; only the one loaded from carries its status."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -244,11 +231,6 @@ def test_status_follows_the_bundle_that_is_actually_loaded(kelso_env):
 
 
 def test_a_bundle_reachable_through_two_repos_counts_twice(kelso_env):
-  """Two entries are two catalog rows, even when they name one directory.
-
-  Loading by path resolves the link, so both routes to the bundle are one
-  binding rather than a rebinding.
-  """
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "dev-app")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -326,7 +308,6 @@ def test_a_full_path_picks_which_source_to_load(kelso_env):
 
 
 def test_only_one_app_is_loaded_per_id(kelso_env):
-  """Two bundles, one run dir: loading the other replaces what is loaded."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -343,7 +324,6 @@ def test_only_one_app_is_loaded_per_id(kelso_env):
 
 
 def test_an_ambiguous_id_still_stops_and_removes(kelso_env):
-  """The loaded copy is unambiguous, so lifecycle commands keep working."""
   dev = kelso_env.root / "dev-apps"
   bundle = a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)
@@ -403,7 +383,6 @@ def test_naming_a_repo_that_does_not_carry_the_app_refuses(kelso_env):
 
 
 def test_a_binding_outlives_an_unload(kelso_env):
-  """Config and secrets survive an unload; so does the source they suit."""
   dev = kelso_env.root / "dev-apps"
   a_bundle(dev, "ports-demo", display="From dev")
   add_repo_block(kelso_env, "hrbr-dev", dev)

@@ -1,12 +1,3 @@
-"""kelsod's end of a shell: a PTY between a websocket and either
-`docker compose exec` into an app's unit or a login shell on the host.
-
-In, binary frames are keystrokes and text frames are JSON control, only
-`{"resize": [cols, rows]}` so far. Out is binary terminal output. The close
-code says how it ended: EXITED with reason "exited N", IDLE, or REFUSED with
-the refusal also written to the terminal, since browsers drop long reasons.
-"""
-
 import asyncio
 import fcntl
 import ipaddress
@@ -62,7 +53,6 @@ def shell_argv(cmd: ShellCommand) -> list[str]:
 
 
 def hang_up(cmd: ShellCommand, pid: int) -> None:
-  """End the shell an abandoned session left running in its container."""
   code = docker_run_command(
     hangup_args(cmd, pid), cwd=cmd.cwd, json_output=False, check=False, env=cmd.env
   ).returncode
@@ -71,12 +61,7 @@ def hang_up(cmd: ShellCommand, pid: int) -> None:
 
 
 def network_refusal(ws: WebSocket) -> str | None:
-  """Why a shell may not open on this connection, or None.
-
-  Only the admin socket and loopback stand in front of an API with no
-  authentication. So a shell that arrived over the network is refused,
-  whatever `kelsod --host` was told.
-  """
+  # The API has no auth: refuse network shells whatever `kelsod --host` says.
   server = ws.scope.get("server")
   if server and server[1] is None:
     return None  # The admin socket: uvicorn gives its path and no port.
@@ -98,7 +83,6 @@ async def refuse(ws: WebSocket, message: str) -> None:
 async def serve(
   ws: WebSocket, cmd: ShellCommand, ctx: KelsoCtx, *, started_by: str
 ) -> None:
-  """A shell in an app's unit, filed in the activity log."""
   record = await asyncio.to_thread(
     lambda: ShellRecord(ctx, cmd.app_id, {"unit": cmd.unit}, started_by=started_by)
   )
@@ -113,7 +97,6 @@ async def serve(
 
 
 async def serve_host(ws: WebSocket, ctx: KelsoCtx, *, started_by: str) -> None:
-  """A login shell on the host as kelsod's own user, filed in the activity log."""
   argv, home = host_shell()
   record = await asyncio.to_thread(
     lambda: ShellRecord(ctx, None, {"shell": argv[0]}, started_by=started_by)
@@ -140,10 +123,9 @@ async def _session(
     await asyncio.shield(asyncio.to_thread(record.close, ending.text, ok=ending.ok))
 
 
+# Set before closing: a cancelled handler loses its return value.
 @dataclass
 class _Ending:
-  """How a session ended. Set before closing: a cancelled handler loses returns."""
-
   text: str = "disconnected"
   ok: bool = True
 
@@ -158,7 +140,6 @@ def _end(
   pid: int | None,
   hangup: Callable[[int], None] | None,
 ) -> None:
-  """Hang up the terminal, reap what ran on it, and end the container side too."""
   running = proc.poll() is None
   # Closing our end is the terminal hanging up: the kernel sends the session
   # SIGHUP. It goes first because a shell exiting from a terminal waits for its
@@ -194,10 +175,6 @@ async def _relay(
   hangup: Callable[[int], None] | None,
   ending: _Ending,
 ) -> None:
-  """Relay `ws` to `argv` on a fresh PTY until one side ends, noting how in `ending`.
-
-  `hangup` gets the pid `PID_MARKER` announced if the session is abandoned.
-  """
   loop = asyncio.get_running_loop()
   master, slave = os.openpty()
   _set_size(master, 80, 24)

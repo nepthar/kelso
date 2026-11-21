@@ -1,5 +1,3 @@
-"""`kelso cleanup`."""
-
 BASIC = "net.klso.basic-features"
 
 ORPHAN_ROUTE = {

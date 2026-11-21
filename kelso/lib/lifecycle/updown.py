@@ -1,17 +1,3 @@
-"""Bringing the host up or down to a `start_group`, one group at a time.
-
-`up(n)` starts groups 1 to `n`, lowest first, waiting for each to be ready
-before starting the next: healthy where a container's image has a healthcheck,
-and otherwise still running `SETTLE` seconds in. A group that is not ready in
-time is reported and the next one starts anyway. `down(n)` stops groups above
-`n`, highest first. Neither goes the other way: `up` never stops an app, and
-`down` never starts one.
-
-When kelsod starts it brings the host up, but only apps whose last action was
-"started", so whatever was running before a restart runs again. Group 0
-belongs to kelsod: it starts it, without waiting, as it starts, and takes it
-down as it exits. Progress is logged to `kelso.lifecycle.updown`."""
-
 import time
 from collections.abc import Iterable
 from logging import getLogger
@@ -32,7 +18,6 @@ DOWN_ACTION = "down"
 
 
 def start_groups(ctx: KelsoCtx, which: Iterable[int]) -> list[tuple[int, list[AppID]]]:
-  """Loaded apps in the groups `which`, by `start_group`, lowest first."""
   which = set(which)
   groups: dict[int, list[AppID]] = {}
   for app_id in sorted(ctx.inventory.loaded):
@@ -52,20 +37,14 @@ def _start_group(app: AppID, ctx: KelsoCtx) -> int:
 def up(
   ctx: KelsoCtx, target: int = 9, *, wait: float = DEFAULT_WAIT, resume: bool = False
 ) -> list[str]:
-  """Start groups 1 to `target`; what went wrong.
-
-  With `resume`, only apps whose last action was "started" are started.
-  """
   return _up(ctx, range(1, target + 1), wait, resume=resume)
 
 
 def down(ctx: KelsoCtx, target: int = 0) -> list[str]:
-  """Stop groups above `target`; what went wrong."""
   return _down(ctx, range(target + 1, 10))
 
 
 def start_kelsod_group(ctx: KelsoCtx) -> list[str]:
-  """Start group 0 without waiting for it to be ready; what failed to start."""
   return _up(ctx, KELSOD_GROUPS, None)
 
 
@@ -76,10 +55,6 @@ def stop_kelsod_group(ctx: KelsoCtx) -> list[str]:
 def _up(
   ctx: KelsoCtx, groups: Iterable[int], wait: float | None, *, resume: bool = False
 ) -> list[str]:
-  """Start the groups' apps, except those stopped on purpose; what went wrong.
-
-  With `wait` None, a group's apps are started and nothing waits for them.
-  """
   problems: list[str] = []
   for order, apps in start_groups(ctx, groups):
     logger.info("Starting run group %s", start_group_name(order))
@@ -113,7 +88,6 @@ def _up(
 
 
 def _down(ctx: KelsoCtx, groups: Iterable[int]) -> list[str]:
-  """Stop the groups' running apps, highest group first; what went wrong."""
   problems: list[str] = []
   for order, apps in reversed(start_groups(ctx, groups)):
     running = [app for app in apps if ctx.run_state(app).running_count]
@@ -132,7 +106,6 @@ def _down(ctx: KelsoCtx, groups: Iterable[int]) -> list[str]:
 
 
 def _wait_ready(apps: list[AppID], wait: float) -> list[AppID]:
-  """Poll docker until every app is ready or `wait` runs out; the ones still not."""
   began = time.monotonic()
   while True:
     settled = time.monotonic() - began >= SETTLE

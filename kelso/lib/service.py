@@ -1,8 +1,3 @@
-"""kelsod as a systemd user unit: writing the unit, and asking systemd to run it.
-
-systemd only. Anywhere else, kelsod is something you run in a terminal.
-"""
-
 import os
 import shutil
 import subprocess
@@ -37,7 +32,6 @@ ACTIVATE = (
 
 
 def has_systemd() -> bool:
-  """Whether this machine was booted with systemd -- the test `sd_booted` makes."""
   return Path("/run/systemd/system").is_dir() and shutil.which("systemctl") is not None
 
 
@@ -47,7 +41,6 @@ def unit_path() -> Path:
 
 
 def kelsod_path() -> Path:
-  """The kelsod installed alongside the kelso that is running."""
   sibling = Path(sys.executable).parent / "kelsod"
   if sibling.is_file():
     return sibling
@@ -61,7 +54,6 @@ def kelsod_path() -> Path:
 
 
 def _unit_root(text: str) -> str | None:
-  """The kelso root an existing unit runs kelsod against."""
   prefix = 'Environment="KELSO_ROOT='
   for line in text.splitlines():
     if line.startswith(prefix):
@@ -70,10 +62,6 @@ def _unit_root(text: str) -> str | None:
 
 
 def write_unit(root: Path) -> Path:
-  """Write (or rewrite) the unit for the kelso root at `root`.
-
-  Raises RuntimeError if the unit already serves a different kelso root.
-  """
   path = unit_path()
   if path.is_file():
     serves = _unit_root(path.read_text())
@@ -88,11 +76,6 @@ def write_unit(root: Path) -> Path:
 
 
 def stays_up(settle: float = 2.0) -> bool:
-  """Whether kelsod is still running `settle` seconds after it was started.
-
-  kelsod checks docker and git on startup and exits if either is missing, so a
-  start that systemd accepted can still fail a moment later.
-  """
   time.sleep(settle)
   result = subprocess.run(
     ("systemctl", "--user", "is-active", UNIT_NAME), capture_output=True, text=True
@@ -101,10 +84,6 @@ def stays_up(settle: float = 2.0) -> bool:
 
 
 def activate() -> None:
-  """Start kelsod now and at every boot.
-
-  Raises RuntimeError naming the command that failed and every one left to run.
-  """
   for i, command in enumerate(ACTIVATE):
     try:
       result = subprocess.run(command, capture_output=True, text=True)

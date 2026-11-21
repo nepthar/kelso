@@ -1,5 +1,3 @@
-"""Running kelso on another host over ssh, for `deploy` and `config --host`."""
-
 import json
 import subprocess
 import sys
@@ -16,7 +14,6 @@ def remote(host: str, command: str, *, tty: bool = False) -> list[str]:
 
 
 def remote_request(host: str, app: str) -> ConfigRequest:
-  """What `app` on `host` can be asked."""
   asked = subprocess.run(
     remote(host, f"kelso config {app} --json"), capture_output=True, text=True
   )
@@ -26,7 +23,6 @@ def remote_request(host: str, app: str) -> ConfigRequest:
 
 
 def run_remote(host: str, command: str) -> None:
-  """Run `command` on `host` in this terminal, exiting with its code if it fails."""
   done = subprocess.run(remote(host, command, tty=sys.stdin.isatty()))
   if done.returncode:
     raise SystemExit(done.returncode)

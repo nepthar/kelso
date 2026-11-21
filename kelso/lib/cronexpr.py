@@ -1,10 +1,3 @@
-"""Five-field cron schedules: minute, hour, day of month, month, day of week.
-
-Each field is `*` or a comma list of `n`, `a-b`, `*/s`, `a-b/s` or `a/s`. Day of
-week runs 0-7 with both 0 and 7 meaning Sunday. When both day fields are
-restricted, a day matching either one matches, as in every cron.
-"""
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -33,7 +26,6 @@ class CronSchedule:
 
   @classmethod
   def parse(cls, text: str) -> "CronSchedule":
-    """Raises ValueError naming the field that is wrong."""
     parts = text.split()
     if len(parts) != 5:
       raise ValueError(
@@ -57,7 +49,6 @@ class CronSchedule:
     )
 
   def next_after(self, after: datetime) -> datetime:
-    """The first matching minute strictly after `after`, in `after`'s clock."""
     at = after.replace(second=0, microsecond=0) + timedelta(minutes=1)
     limit = at + timedelta(days=_SEARCH_DAYS)
     while at < limit:
