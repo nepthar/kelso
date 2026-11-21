@@ -28,8 +28,9 @@ def remote(kelso_env, monkeypatch):
     code, out = 0, ""
     if argv[-1] == "kelso root":
       out = f"{ROOT}\n"
-    elif argv[-1].startswith("kelso app which"):
-      code, out = (0, f"{APP} {box.source}\n") if box.source else (1, "")
+    elif argv[-1] == f"kelso status {APP} --json":
+      loaded = {"app": APP, "loaded": True, "bundle": box.source, "repo": None}
+      code, out = (0, json.dumps(loaded)) if box.source else (1, "")
     elif argv[-1].endswith("--json"):
       request = ConfigRequest(APP, tuple(box.fields))
       out = json.dumps(config_request_view(request))
@@ -63,7 +64,7 @@ def test_first_deploy_copies_then_loads_and_starts(kelso_env, remote):
     f"box:{ROOT}/repos/local/{APP}.klso/",
   ]
   assert remote.cwds[2] == remote.bundle
-  assert remote.calls[1][-1] == f"kelso app which --loaded {APP}"
+  assert remote.calls[1][-1] == f"kelso status {APP} --json"
   assert remote.calls[3][-1] == f"kelso config {APP} --json"
   assert remote.calls[4][-1] == f"kelso start {APP}@local --allow-compose"
   assert len(remote.calls) == 5
@@ -154,8 +155,8 @@ def test_config_speaks_requests_and_responses_as_json(kelso_env):
   assert got.stdout.strip() == "elsewhere"
 
 
-def test_app_which_resolves_an_app_and_its_bundle(kelso_env):
-  assert kelso_env.run("app", "which", "upd-app").returncode == 1
+def test_status_says_what_an_app_name_resolves_to(kelso_env):
+  assert kelso_env.run("status", "upd-app").returncode == 1
   local = kelso_env.local_repo / "net.local.upd-app.klso"
   other = kelso_env.root / "more" / "net.more.upd-app.klso"
   for bundle in (local, other):
@@ -165,14 +166,21 @@ def test_app_which_resolves_an_app_and_its_bundle(kelso_env):
     )
   assert kelso_env.run("load", str(other)).returncode == 0
 
-  # Two apps share the stem; only among loaded apps does it name one.
-  shared = kelso_env.run("app", "which", "upd-app")
+  shared = kelso_env.run("status", "upd-app")
   assert shared.returncode == 1
-  assert "net.local.upd-app, net.more.upd-app" in shared.stderr
+  assert "net.local.upd-app (repo local), net.more.upd-app (loaded)" in shared.stderr
 
-  found = kelso_env.run("app", "which", "--loaded", "upd-app")
-  assert found.returncode == 0, found.stderr
-  assert found.stdout == f"net.more.upd-app {other.resolve()}\n"
-  by_id = kelso_env.run("app", "which", "upd-app@local")
-  assert by_id.stdout == f"net.local.upd-app {local}\n"
-  assert kelso_env.run("app", "which", "--loaded", "upd-app@local").returncode == 1
+  loaded = kelso_env.run("status", "net.more.upd-app")
+  assert loaded.returncode == 0, loaded.stderr
+  assert f"loaded from {other.resolve()}" in loaded.stdout
+  by_repo = kelso_env.run("status", "upd-app@local")
+  assert f"not loaded; `kelso start` loads it from {local} (repo local)" in (
+    by_repo.stdout
+  )
+  as_json = kelso_env.run("status", "upd-app@local", "--json")
+  assert json.loads(as_json.stdout) == {
+    "app": "net.local.upd-app",
+    "loaded": False,
+    "bundle": str(local),
+    "repo": "local",
+  }

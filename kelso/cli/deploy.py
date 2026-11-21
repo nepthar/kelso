@@ -81,12 +81,13 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   root = found.stdout.strip()
   dest = f"{root}/{REPOS_DIR}/{LOCAL_REPO}/{source.name}"
 
-  loaded = subprocess.run(
-    _remote(host, f"kelso app which --loaded {app}"), capture_output=True, text=True
+  asked = subprocess.run(
+    _remote(host, f"kelso status {app} --json"), capture_output=True, text=True
   )
-  if loaded.returncode not in (0, 1):
-    raise ValueError(f"Could not ask {host} about {app}: {loaded.stderr.strip()}")
-  was = loaded.stdout.strip().partition(" ")[2]
+  if asked.returncode not in (0, 1):
+    raise ValueError(f"Could not ask {host} about {app}: {asked.stderr.strip()}")
+  there = json.loads(asked.stdout) if asked.returncode == 0 else {}
+  was = there.get("bundle") if there.get("loaded") else None
   if not was:
     command = f"kelso start {app}@{LOCAL_REPO} --allow-compose"
   elif was == dest:

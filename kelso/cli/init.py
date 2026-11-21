@@ -44,7 +44,7 @@ port_base = 41000
 # published on that address alone, not on every interface.
 # route_address = "10.0.0.5"
 
-# The host in links people click: the `<-` URLs `kelso inspect` prints and
+# The host in links people click: the `<-` URLs `kelso status APP` prints and
 # the web UI. Defaults to route_address, then localhost. Set it when
 # route_address is a name only containers can use, as on Docker Desktop.
 # link_address = "10.0.0.5"

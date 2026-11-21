@@ -1,6 +1,10 @@
-"""`kelso status`: the dashboard as text -- host, apps, routes, locations, storage."""
+"""`kelso status`: the dashboard as text -- host, apps, routes, locations, storage.
+
+`kelso status APP` is one app in full, starting with what APP resolves to.
+"""
 
 import argparse
+import json
 import os
 import socket
 import time
@@ -12,23 +16,50 @@ from tabulate import tabulate
 
 from kelso import VERSION
 from kelso.lib import views
+from kelso.lib.app_inventory import CatalogEntry
+from kelso.lib.apps import AppID, read_last_app_action
+from kelso.lib.bundle import is_pathlike, load_bundle
 from kelso.lib.doctor import diagnose
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.metric import KELSO_DIRS, cpu_used_ratio
 from kelso.lib.net import waiting_note
-from kelso.lib.receipt import published_urls
+from kelso.lib.observations import RunState, observe
+from kelso.lib.receipt import capability_receipt, published_urls
 from kelso.lib.run_layout import load_run_data
 from kelso.lib.util import fmt_size
 
 
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
-    "status", help="Show the host, apps, routes, and storage at a glance"
+    "status",
+    help="Show the host, apps, routes, and storage; or one app in full",
+    description=(
+      "With APP, shows what APP resolves to -- a loaded app, or the bundle "
+      "`kelso start` would load it from -- then its state, containers, ports, "
+      "routes, volumes and config. A name that matches several apps is an "
+      "error that lists them."
+    ),
+  )
+  parser.add_argument(
+    "app",
+    nargs="?",
+    metavar="APP",
+    help="App ID, its last part, <app>@<repo>, or a path to a bundle",
+  )
+  parser.add_argument(
+    "--json",
+    action="store_true",
+    help="With APP, print what it resolves to: app, loaded, bundle, repo",
   )
   parser.set_defaults(func=run)
 
 
-def run(_args: argparse.Namespace, ctx: KelsoCtx) -> None:
+def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if args.app:
+    _one_app(args.app, ctx, as_json=args.json)
+    return
+  if args.json:
+    raise ValueError("--json needs an APP")
   with ctx.kelso_lock("status"):
     sections = [
       _host(),
@@ -173,3 +204,83 @@ def _doctor(ctx: KelsoCtx) -> str:
   if prognosis.problems or prognosis.warnings:
     found += "; see `kelso system doctor`"
   return f"Doctor     {found}"
+
+
+def _one_app(raw: str, ctx: KelsoCtx, *, as_json: bool) -> None:
+  if is_pathlike(raw):
+    source = Path(raw).expanduser().resolve()
+    with ctx.kelso_lock(f"status {source}"):
+      spec = load_bundle(source).app_spec()
+      entry = CatalogEntry(spec.app, source, None)
+      if as_json:
+        print(json.dumps(_resolution(spec.app, entry, ctx)))
+        return
+      print(capability_receipt(spec, None, ctx, compact=False))
+    return
+
+  name, _, repo = raw.partition("@")
+  app = ctx.inventory.app_id(name, repo=repo)
+  entry = ctx.inventory.bundle(app, repo)
+  if as_json:
+    print(json.dumps(_resolution(app, entry, ctx)))
+    return
+  with ctx.locked(f"status {app}", app):
+    loaded = ctx.loaded_spec(app)
+    spec = loaded or ctx.bundle_spec(app)
+
+    notes: tuple[str, ...] = ()
+    if loaded is not None:
+      if ctx.manifest_stale(app):
+        notes += (
+          f"manifest has changed, `kelso load {app}` may be required to reflect "
+          f"changes",
+        )
+      observation = observe(app, ctx)
+      if observation.changes_pending and observation.running_count:
+        notes += (
+          f"config has changed since {app} started; restart to apply: "
+          f"`kelso restart {app}`",
+        )
+
+    print(
+      capability_receipt(
+        spec,
+        load_run_data(spec, ctx) if loaded is not None else None,
+        ctx,
+        compact=False,
+        notes=notes,
+        bundle_line=_bundle_line(entry, loaded is not None),
+        state_line=_state_line(ctx.run_state(app)),
+        last_action=read_last_app_action(app, ctx) or "-",
+        show_logs=True,
+      )
+    )
+
+
+def _resolution(app: AppID, entry: CatalogEntry | None, ctx: KelsoCtx) -> dict:
+  return {
+    "app": str(app),
+    "loaded": app in ctx.inventory.loaded,
+    "bundle": str(entry.path) if entry else None,
+    "repo": entry.repo if entry else None,
+  }
+
+
+def _bundle_line(entry: CatalogEntry | None, loaded: bool) -> str:
+  where = "-" if entry is None else str(entry.path)
+  if entry is not None and entry.repo:
+    where += f" (repo {entry.repo})"
+  if loaded:
+    return f"loaded from {where}"
+  return f"not loaded; `kelso start` loads it from {where}"
+
+
+def _state_line(state: RunState) -> str:
+  total = len(state.containers)
+  if state.running_count:
+    return f"running, {state.running_count}/{total or state.running_count} containers"
+  if total and all(c.finished for c in state.containers):
+    return f"finished, 0/{total} containers"
+  if total:
+    return f"exited, 0/{total} containers"
+  return "not running"

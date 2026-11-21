@@ -7,7 +7,6 @@ from pathlib import Path
 from kelso import VERSION
 from kelso.cli import (
   agent_help,
-  app,
   backup,
   cleanup,
   cmd,
@@ -16,7 +15,6 @@ from kelso.cli import (
   deploy,
   dev,
   init,
-  inspect,
   load,
   logs,
   net,
@@ -58,8 +56,6 @@ COMMANDS = [
   update,
   restore,
   remove,
-  inspect,
-  app,
   logs,
   shell,
   dev,
@@ -88,8 +84,6 @@ Apps
   unload      Stop an app and remove its loaded copy, keeping data and config
   rm          Unload a stopped app and delete its temp and logs
               (--temp, --data, --purge: more or less)
-  inspect     Show an app's state, ports, routes, volumes, and config
-  app which   Print the app an id resolves to, and its bundle
   logs        Show an app's logs
   shell       Open a shell in one of an app's containers
 
@@ -98,11 +92,11 @@ Apps
   net         Show what an app behind kproxy reaches; allow or deny domains
 
 This box
-  status      Show the host, apps, routes, and storage at a glance
+  status      Show the host, apps, routes, and storage at a glance;
+              status APP: what APP resolves to, and that app in full
   root        Print the kelso root path
-  start_group Run apps in start_group 1 to N; stop the groups above N
-  up          Start all apps by start_group (start_group 9)
-  down        Stop all apps by start_group (start_group 0)
+  up [N]      Start apps by start_group, 1 to N (default 9); stops nothing
+  down [N]    Stop apps by start_group, above N (default 0); starts nothing
   cleanup     List what kelso no longer needs; --apply deletes it
               (unused images, orphaned routes; --temp)
 

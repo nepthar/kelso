@@ -32,7 +32,7 @@ kelso --version           # version and the git commit this install is from
 kelso root                # the kelso root; everything lives under it
 kelso status              # host, apps, routes, storage, last backup
 kelso ps                  # loaded apps and their state
-kelso inspect <app>       # one app: containers, ports, routes, volumes, config
+kelso status <app>        # one app: where it resolves, containers, ports, routes, config
 kelso logs <app> --tail 50
 kelso system doctor       # what is wrong on this box, with the fix for each
 kelso system activity     # what kelso did recently; --show N prints a run's log

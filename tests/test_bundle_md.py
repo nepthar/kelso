@@ -190,8 +190,8 @@ def test_invalid_md_bundle_fails_load_and_leaves_no_run_dir(kelso_env):
   assert not (kelso_env.run_root / "broken").exists()
 
 
-def test_inspect_md_bundle_by_path(kelso_env):
+def test_status_md_bundle_by_path(kelso_env):
   source = write_md_bundle(kelso_env.root / "elsewhere")
-  result = kelso_env.run("inspect", str(source))
+  result = kelso_env.run("status", str(source))
   assert result.returncode == 0, result.stderr
   assert "alpine:latest" in result.stdout

@@ -25,7 +25,7 @@ The only required section. Keys kelso does not know are refused.
 | `app_id` | string | from the filename | Refused if it disagrees with the filename. |
 | `display_name` | string | `""` | Shown in the UI and `kelso ps` instead of the id. |
 | `description` | string | `""` | One line. Shown in the catalog. |
-| `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso inspect` and the web UI. |
+| `author` | string | `""` | Who made the bundle, e.g. `"Jordan Parker <jordan@parker.sh>"`. Shown in `kelso status APP` and the web UI. |
 | `url` | string | `""` | Where to read more. Must start with `https://` or `http://`; the web UI links to it. |
 | `main` | identifier | `"main"` | Which `[run]` unit is the app itself. Must exist. |
 | `network_mode` | `open` \| `restrict` \| `ask` \| `watch` \| `host` | `open` | What the app can reach. See [Network modes](#network-modes). |
@@ -325,7 +325,7 @@ share the config namespace and always have a default.
 | Name | Default | Accepts |
 | --- | --- | --- |
 | `subdomain` | the app id's last part | A DNS label: letters, digits, `_` and `-`. Routes are published under it. |
-| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops. `kelso start_group N` stops the groups above N, highest first, then starts 1 to N in order; `kelso up` is `start_group 9` and `kelso down` is `start_group 0`. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
+| `start_group` | `6` | A whole number from 0 to 9: the group this app starts in. 0 init starts when kelsod starts and stops when it stops. `kelso up N` starts groups 1 to N in order (default 9) and never stops anything; `kelso down N` stops the groups above N, highest first (default 0), and never starts anything. Named groups: 2 support services (databases and the like), 4 routing & connections, 6 applications, 8 lazy applications. The odd numbers are free, to fit something between two of them. |
 
 A manifest may declare one of these names in `[config]` or `[adv_config]` to
 change its default and description, or to leave the default out and make the
@@ -574,9 +574,9 @@ never run kelso. See [demo-markdown](../demo-apps/net.klso.demo-markdown.klso.md
 ## Checking your work
 
 ```bash
-kelso inspect <app>      # what the manifest declares, resolved
+kelso status <app>       # what the manifest declares, resolved
 kelso load <app>         # parse errors, one list, with the key that caused each
 ```
 
-`kelso inspect` on an unloaded app reads the manifest it *would* load
+`kelso status APP` on an unloaded app reads the manifest it *would* load
 from, so it is the fastest way to see whether an edit did what you meant.

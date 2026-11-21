@@ -1,38 +1,47 @@
 import argparse
 
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle.updown import DEFAULT_WAIT, to_group
+from kelso.lib.lifecycle import updown
 
 
 def register(subparsers) -> None:
-  group_parser = subparsers.add_parser(
-    "start_group",
-    help="Run every loaded app in start_group 1 to N; stop those above N",
+  up = subparsers.add_parser(
+    "up", help="Start apps by start_group, 1 to N (default 9); stops nothing"
   )
-  group_parser.add_argument("group", type=int, choices=range(10), metavar="N")
-  _timeout(group_parser)
-  group_parser.set_defaults(func=run_group, activity="start_group")
-
-  up_parser = subparsers.add_parser("up", help="Same as `kelso start_group 9`")
-  _timeout(up_parser)
-  up_parser.set_defaults(func=run_group, group=9, activity="up")
-
-  down_parser = subparsers.add_parser("down", help="Same as `kelso start_group 0`")
-  down_parser.set_defaults(
-    func=run_group, group=0, timeout=DEFAULT_WAIT, activity="down"
-  )
-
-
-def _timeout(parser: argparse.ArgumentParser) -> None:
-  parser.add_argument(
+  _group(up, 9)
+  up.add_argument(
     "--timeout",
     type=float,
-    default=DEFAULT_WAIT,
+    default=updown.DEFAULT_WAIT,
     metavar="SECONDS",
-    help=f"How long to wait for a group to be ready (default: {DEFAULT_WAIT})",
+    help=f"How long to wait for a group to be ready (default: {updown.DEFAULT_WAIT})",
+  )
+  up.set_defaults(func=run_up, activity="up")
+
+  down = subparsers.add_parser(
+    "down", help="Stop apps by start_group, 9 down to N+1 (default 0); starts nothing"
+  )
+  _group(down, 0)
+  down.set_defaults(func=run_down, activity="down")
+
+
+def _group(parser: argparse.ArgumentParser, default: int) -> None:
+  parser.add_argument(
+    "group",
+    type=int,
+    choices=range(10),
+    nargs="?",
+    default=default,
+    metavar="N",
+    help=f"start_group, 0 to 9 (default: {default})",
   )
 
 
-def run_group(args: argparse.Namespace, ctx: KelsoCtx) -> None:
-  if to_group(ctx, args.group, wait=args.timeout):
+def run_up(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if updown.up(ctx, args.group, wait=args.timeout):
+    raise SystemExit(1)
+
+
+def run_down(args: argparse.Namespace, ctx: KelsoCtx) -> None:
+  if updown.down(ctx, args.group):
     raise SystemExit(1)

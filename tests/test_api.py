@@ -305,7 +305,7 @@ def test_app_config_request_never_projects_a_secret(kelso_env, client):
   assert config["admin_pass"]["secret_set"] is True
   assert config["admin_pass"]["value"] is None
 
-  # A non-secret value is shown, exactly as `kelso inspect` prints it.
+  # A non-secret value is shown, exactly as `kelso status APP` prints it.
   assert config["admin_user"]["secret"] is False
   assert config["admin_user"]["value"] == "root"
 

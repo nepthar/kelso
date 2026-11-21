@@ -134,9 +134,7 @@ def serve(
     logger.warning("kelsod starting apps in %ds", BOOT_DELAY)
     time.sleep(BOOT_DELAY)
     updown.start_kelsod_group(ctx)
-    jobs.submit(
-      "start_group", {"group": "9", "resume": "yes"}, ctx, started_by=BY_KELSOD
-    )
+    jobs.submit("up", {"resume": "yes"}, ctx, started_by=BY_KELSOD)
 
   threading.Thread(target=start_apps, name="kelsod-boot", daemon=True).start()
 

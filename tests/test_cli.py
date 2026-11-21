@@ -192,9 +192,9 @@ def test_rm_leaves_the_catalog_entry_alone(kelso_env):
   assert bundle.is_dir()
 
 
-def test_inspect_shows_live_state_for_an_loaded_app(kelso_env):
+def test_status_app_shows_live_state_for_an_loaded_app(kelso_env):
   assert kelso_env.run("start", "ports-demo").returncode == 0
-  inspected = kelso_env.run("inspect", "ports-demo")
+  inspected = kelso_env.run("status", "ports-demo")
   assert inspected.returncode == 0, inspected.stderr
   assert "running" in inspected.stdout
   assert "Containers:  main, image=alpine:latest" in inspected.stdout
@@ -215,31 +215,31 @@ def test_catalog_shows_available_apps_ps_hides_until_loaded(kelso_env):
 
   # Unloaded apps have no run/ copy; inspect a path instead of the catalog id.
   bundle = kelso_env.local_repo / f"{app_id}.klso"
-  inspected = kelso_env.run("inspect", str(bundle))
+  inspected = kelso_env.run("status", str(bundle))
   assert inspected.returncode == 0, inspected.stderr
 
 
-def test_inspect_shows_config_status(kelso_env):
+def test_status_app_shows_config_status(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
 
-  before = kelso_env.run("inspect", BASIC)
+  before = kelso_env.run("status", BASIC)
   assert before.returncode == 0, before.stderr
   assert "admin_user: (required)" in before.stdout
   assert "admin_pass: (secret)" in before.stdout
 
   assert kelso_env.run("config", BASIC, "--set", "admin_user=alice").returncode == 0
-  after = kelso_env.run("inspect", BASIC)
+  after = kelso_env.run("status", BASIC)
   assert after.returncode == 0, after.stderr
   assert "admin_user: alice" in after.stdout
   assert "admin_pass: (secret)" in after.stdout
 
 
-def test_inspect_notes_when_the_source_manifest_has_drifted(kelso_env):
+def test_status_app_notes_when_the_source_manifest_has_drifted(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   source = kelso_env.local_repo / f"{BASIC}.klso" / "manifest.toml"
   source.write_text(source.read_text() + "\n# edited after loading\n")
 
-  inspected = kelso_env.run("inspect", BASIC)
+  inspected = kelso_env.run("status", BASIC)
   assert inspected.returncode == 0, inspected.stderr
   assert "Note:" in inspected.stdout
   assert (
@@ -248,9 +248,9 @@ def test_inspect_notes_when_the_source_manifest_has_drifted(kelso_env):
   )
 
 
-def test_inspect_by_path_shows_declared_config_without_loading(kelso_env):
+def test_status_app_by_path_shows_declared_config_without_loading(kelso_env):
   bundle = kelso_env.local_repo / f"{BASIC}.klso"
-  inspected = kelso_env.run("inspect", str(bundle))
+  inspected = kelso_env.run("status", str(bundle))
   assert inspected.returncode == 0, inspected.stderr
   assert "admin_user: (required)" in inspected.stdout
   assert "admin_pass: (secret)" in inspected.stdout
@@ -260,7 +260,7 @@ def test_inspect_by_path_shows_declared_config_without_loading(kelso_env):
   assert "State:" not in inspected.stdout
 
 
-def test_inspect_shows_who_made_the_app_and_where_to_read_more(kelso_env):
+def test_status_app_shows_who_made_the_app_and_where_to_read_more(kelso_env):
   bundle = kelso_env.local_repo / "about-demo.klso"
   bundle.mkdir()
   (bundle / "manifest.toml").write_text(
@@ -275,7 +275,7 @@ url         = "https://example.com/help"
 image = "alpine:latest"
 """
   )
-  inspected = kelso_env.run("inspect", str(bundle))
+  inspected = kelso_env.run("status", str(bundle))
   assert inspected.returncode == 0, inspected.stderr
   lines = [line.split(None, 1) for line in inspected.stdout.splitlines()[1:5]]
   assert lines == [
@@ -755,7 +755,7 @@ def test_config_of_a_loaded_app_reads_the_run_copy(kelso_env):
     manifest.read_text().replace("[volumes]", "since_loading = {}\n\n[volumes]")
   )
   # The source now declares it; the loaded app does not.
-  assert "since_loading" in kelso_env.run("inspect", str(manifest.parent)).stdout
+  assert "since_loading" in kelso_env.run("status", str(manifest.parent)).stdout
   assert "since_loading" not in kelso_env.run("config", BASIC).stdout
 
   refused = kelso_env.run("config", BASIC, "--set", "since_loading=x")
@@ -1631,7 +1631,7 @@ def test_a_loaded_manifest_that_no_longer_parses_is_named_until_reloaded(kelso_e
   assert listed.returncode == 0, listed.stderr
   assert "broken manifest" in listed.stdout
   assert "`kelso load ports-demo`" in listed.stderr
-  for command in (["inspect", "ports-demo"], ["config", "ports-demo"]):
+  for command in (["status", "ports-demo"], ["config", "ports-demo"]):
     refused = kelso_env.run(*command)
     assert refused.returncode == 1
     assert "loaded manifest no longer parses" in refused.stderr
@@ -2261,7 +2261,7 @@ def test_a_cli_write_is_recorded_as_started_by_the_cli(kelso_env):
 def test_reading_records_nothing(kelso_env):
   assert kelso_env.run("start", "ports-demo").returncode == 0
   before = len(_runs(kelso_env))
-  for argv in (["ps"], ["inspect", "ports-demo"], ["cleanup"], ["cmd", "ports-demo"]):
+  for argv in (["ps"], ["status", "ports-demo"], ["cleanup"], ["cmd", "ports-demo"]):
     assert kelso_env.run(*argv).returncode == 0, argv
   assert len(_runs(kelso_env)) == before
 
@@ -2622,16 +2622,15 @@ def test_unload_says_how_to_load_it_again(kelso_env):
   assert f"kelso load {BASIC}" in done.stdout
 
 
-def test_inspect_falls_back_to_the_bundle_when_unloaded(kelso_env):
+def test_status_app_falls_back_to_the_bundle_when_unloaded(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
   assert kelso_env.run("unload", BASIC, "-y").returncode == 0
 
-  inspected = kelso_env.run("inspect", BASIC)
+  inspected = kelso_env.run("status", BASIC)
   assert inspected.returncode == 0, inspected.stderr
   # Not an errno about a missing manifest.
   assert "No such file" not in inspected.stderr
-  assert f"{BASIC} is not loaded" in inspected.stdout
-  assert f"kelso load {BASIC}" in inspected.stdout
+  assert "not loaded; `kelso start` loads it from" in inspected.stdout
 
 
 def test_system_volumes_says_which_volume_is_orphaned(kelso_env):
@@ -2644,10 +2643,10 @@ def test_system_volumes_says_which_volume_is_orphaned(kelso_env):
   assert uses == {"config": "idle", "cache": "idle", "retired": "orphaned"}
 
 
-def test_inspect_says_each_volumes_kind_and_when_nothing_runs(kelso_env):
+def test_status_app_says_each_volumes_kind_and_when_nothing_runs(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
 
-  inspected = kelso_env.run("inspect", BASIC)
+  inspected = kelso_env.run("status", BASIC)
   assert inspected.returncode == 0, inspected.stderr
   assert "State:       not running" in inspected.stdout
   assert "bin (app, read-only): $app/bin" in inspected.stdout

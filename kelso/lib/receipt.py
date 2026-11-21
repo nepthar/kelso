@@ -257,11 +257,12 @@ def capability_receipt(
   *,
   compact: bool = True,
   notes: tuple[str, ...] = (),
+  bundle_line: str | None = None,
   state_line: str | None = None,
   last_action: str | None = None,
   show_logs: bool = False,
 ) -> str:
-  """Bundle card for inspect / first-run up."""
+  """Bundle card for `kelso status APP` / first-run up."""
   app_id = spec.app
   lines: list[str] = [f"{app_id}"]
 
@@ -274,6 +275,8 @@ def capability_receipt(
     ]
     lines += [_labeled_line(label, value) for label, value in about if value]
 
+  if bundle_line is not None:
+    lines.append(_labeled_line("Bundle:", bundle_line))
   if state_line is not None:
     lines.append(_labeled_line("State:", state_line))
 

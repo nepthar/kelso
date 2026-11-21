@@ -24,7 +24,7 @@ longer has. Known renames: `kelso_address` is now `route_address`;
 ## If an app's id changed in its repo
 
 After `kelso repo update`, an app whose bundle was renamed has no source:
-`kelso app which <old id>` prints `<old id> -`. To move it to the new id,
+`kelso status <old id>` shows `Bundle: loaded from -`. To move it to the new id,
 keeping its data, config and routes:
 
 ```bash

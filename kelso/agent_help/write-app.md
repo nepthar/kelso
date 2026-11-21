@@ -30,7 +30,7 @@
    anything else (UDP, discovery, a raw TCP protocol) goes under
    `[run.main.ports]`.
 
-2. **Check it without running it:** `kelso inspect <path>` prints what the
+2. **Check it without running it:** `kelso status <path>` prints what the
    manifest resolves to, or every parse error with the key that caused it.
 
 3. **Run it:** `kelso dev <path>` loads the bundle and runs it in the

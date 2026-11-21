@@ -74,7 +74,7 @@ APP_OPTIONS: dict[str, AppOption] = {
     ),
     AppOption(
       "start_group",
-      "Startup group order used with `kelso start_group|up|down`",
+      "Startup group order used with `kelso up` and `kelso down`",
       lambda app: "6",
       _int_between(0, 9),
       tuple(str(n) for n in range(10)),
