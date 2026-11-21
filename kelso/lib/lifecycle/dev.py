@@ -69,7 +69,10 @@ def dev_plan(
     }
   for name, path in mounts.items():
     if not path.exists():
-      raise ValueError(f"App {app} - volume {name}: {path} does not exist")
+      raise ValueError(
+        f"App {app} - volume {name}: {path} does not exist; "
+        f"add it to the bundle, or fix the volume's src"
+      )
 
   run_data = load_run_data(spec, ctx)
   if run_data.start_blockers:

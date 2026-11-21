@@ -42,7 +42,10 @@ def validate_identifier(value: str) -> str:
     or len(value) > _IDENTIFIER_MAX_LEN
     or _IDENTIFIER_RE.fullmatch(value) is None
   ):
-    raise ValueError(f"Invalid identifier: {value!r}")
+    raise ValueError(
+      f"Invalid identifier: {value!r}; use up to {_IDENTIFIER_MAX_LEN} letters, "
+      f"digits, _ and -"
+    )
   return value
 
 

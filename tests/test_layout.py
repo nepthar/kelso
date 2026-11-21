@@ -707,14 +707,14 @@ def test_rm_needs_confirmation_and_says_it_cannot_be_undone(kelso_env):
   assert kelso_env.run("start", app_id).returncode == 0
 
   kelso_env.run("stop", app_id)
-  declined = kelso_env.run("rm", app_id, input="n\n")
+  declined = kelso_env.run("rm", app_id, input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
   assert "back it up first" in declined.stdout
   assert "Nothing removed" in declined.stdout
   assert (kelso_env.run_root / app_id).is_dir()
 
   kelso_env.run("stop", app_id)
-  confirmed = kelso_env.run("rm", "--purge", app_id, input="y\n")
+  confirmed = kelso_env.run("rm", "--purge", app_id, "-y")
   assert confirmed.returncode == 0, confirmed.stderr
   assert not (kelso_env.run_root / app_id).exists()
   assert not kelso_env.app_logtab(app_id).exists()
@@ -727,7 +727,7 @@ def test_rm_reports_host_volumes_it_leaves_alone(kelso_env):
   assert kelso_env.run("start", app_id, "--bind", "hostvol1=media").returncode == 0
 
   kelso_env.run("stop", app_id)
-  removed = kelso_env.run("rm", "--purge", app_id, input="y\n")
+  removed = kelso_env.run("rm", "--purge", app_id, input="y\n", tty=True)
   assert removed.returncode == 0, removed.stderr
   assert str(host_path) in removed.stdout
   assert host_path.is_dir()

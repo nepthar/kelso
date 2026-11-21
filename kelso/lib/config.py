@@ -413,10 +413,21 @@ def load_config_file(config_file: str | Path) -> Config:
   )
 
 
+# Settings config.toml no longer has, and what to do with one.
+_DROPPED_KEYS = {
+  "kelso_address": "renamed; change it to route_address",
+  "repos_root": "no longer a setting; delete the line",
+}
+
+
 def _fmt_validation_error(e: ValidationError, source: Path) -> str:
   lines = [f"config {source}: {e.error_count()} validation error(s)"]
   for err in e.errors():
     loc = ".".join(str(p) for p in err["loc"]) or "<root>"
+    if err["type"] == "extra_forbidden":
+      fix = _DROPPED_KEYS.get(loc, "not a setting; check its spelling or delete it")
+      lines.append(f"  {loc}: {fix}")
+      continue
     msg = err["msg"]
     got = err.get("input")
     got_str = f" (got: {got!r})" if got is not None else ""

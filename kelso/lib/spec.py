@@ -184,6 +184,11 @@ class AppSpec:
     return cls.from_bytes(data, app_id, manifest_path)
 
   @property
+  def one_shots(self) -> frozenset[str]:
+    """Run units meant to exit: the ones docker is told not to restart."""
+    return frozenset(n for n, unit in self.run_units.items() if unit.restart == "no")
+
+  @property
   def compose_warnings(self) -> tuple[ComposeWarning, ...]:
     """Every off-allowlist compose key this manifest passes through."""
     warnings = []

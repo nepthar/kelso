@@ -9,7 +9,12 @@ from kelso.lib.apps import AppID
 from kelso.lib.config import RouteProviderEntry
 from kelso.lib.configflow import ConfigField
 
-from .base import RouteProvider, RouteProviderError, refuse_foreign_route
+from .base import (
+  RouteProvider,
+  RouteProviderError,
+  RouteProviderUnreachable,
+  refuse_foreign_route,
+)
 
 if TYPE_CHECKING:
   from kelso.lib.kelso import KelsoCtx
@@ -127,7 +132,7 @@ class CloudflareTunnelRouteProvider(RouteProvider):
         **kwargs,
       )
     except requests.RequestException as e:
-      raise RouteProviderError(f"Cloudflare {method} {path} failed: {e}") from e
+      raise RouteProviderUnreachable(f"Cloudflare {method} {path} failed: {e}") from e
 
     if not resp.ok:
       raise RouteProviderError(self._failure(method, path, resp))

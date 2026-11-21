@@ -8,6 +8,7 @@ from .base import (
   NoopRouteProvider,
   RouteProvider,
   RouteProviderError,
+  RouteProviderUnreachable,
   refuse_foreign_route,
 )
 from .cloudflare import CloudflareTunnelRouteProvider
@@ -24,6 +25,7 @@ __all__ = [
   "PangolinRouteProvider",
   "RouteProvider",
   "RouteProviderError",
+  "RouteProviderUnreachable",
   "get_route_provider",
   "refuse_foreign_route",
 ]

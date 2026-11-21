@@ -4,6 +4,7 @@ from pathlib import Path
 
 from tabulate import tabulate
 
+from kelso.cli.confirm import confirm
 from kelso.lib import backup as backups_lib
 from kelso.lib.apps import AppID
 from kelso.lib.backup import PRE_RESTORE
@@ -107,11 +108,7 @@ def _show_layout(layout, ctx: KelsoCtx) -> None:
 
 
 def _go_ahead() -> bool:
-  try:
-    answer = input("A volume root here points somewhere else. Restore anyway? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")
+  return confirm("A volume root here points somewhere else. Restore anyway?")
 
 
 def _restore_app(
@@ -145,8 +142,4 @@ def _confirmed(plan: RestorePlan, backup_first: bool) -> bool:
     print(f"This is the newest {PRE_RESTORE} backup, so no new one is taken first.")
   elif backup_first and exists:
     print(f"What {app} holds now is backed up first.")
-  try:
-    answer = input(f"Restore {app} to {plan.backup.id}? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")
+  return confirm(f"Restore {app} to {plan.backup.id}?")

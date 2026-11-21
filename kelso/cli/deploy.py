@@ -4,14 +4,19 @@ Everything that changes the app happens on the box, through its own `kelso`.
 """
 
 import argparse
+import json
 import logging
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
+from kelso.cli.configform import collect
+from kelso.cli.kv import parse_kv
 from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, load_bundle
 from kelso.lib.config import REPOS_DIR
+from kelso.lib.configflow import ConfigRequest, request_from_view
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.repo import LOCAL_REPO
 
@@ -36,6 +41,23 @@ def register(subparsers) -> None:
     action="store_true",
     help="Update without backing up first, when the box's backup disk is not there",
   )
+  parser.add_argument(
+    "--set",
+    action="append",
+    default=[],
+    dest="sets",
+    metavar="NAME=VALUE",
+    help=(
+      "Answer something the app needs on the box: a config name, or "
+      "volume.<name> for a host volume there (repeatable)"
+    ),
+  )
+  parser.add_argument(
+    "-y",
+    "--yes",
+    action="store_true",
+    help="Skip the confirmation for compose keys kelso does not model",
+  )
   parser.set_defaults(func=run)
 
 
@@ -44,7 +66,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   app = app_id_from_path(source)
   host = args.host
   files = _files(source)
-  if not confirm_compose_warnings(app, source):
+  if not args.yes and not confirm_compose_warnings(app, source):
     print("Nothing deployed.")
     return
 
@@ -52,7 +74,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if found.returncode:
     raise ValueError(
       f"Could not run kelso on {host}: {found.stderr.strip()}\n"
-      f"Nothing was copied. Check that `ssh {host} kelso root` works."
+      f"Nothing was copied. Check that `ssh {host} '~/.local/bin/kelso root'` works."
     )
   root = found.stdout.strip()
   dest = f"{root}/{REPOS_DIR}/{LOCAL_REPO}/{source.name}"
@@ -69,6 +91,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     command = f"kelso update {app} --yes"
     if args.no_backup:
       command += " --no-backup"
+    command += f" && kelso start {app}"
   else:
     raise ValueError(
       f"{host} already has {app} loaded from {was}. Nothing was copied.\n"
@@ -86,7 +109,52 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     copy = subprocess.run([*rsync, str(source), f"{host}:{dest}"])
   _check(copy)
 
+  answers = _answers(host, app, args.sets)
+  if answers:
+    _check(
+      subprocess.run(
+        _remote(host, f"kelso config {app} --response"),
+        input=json.dumps({"values": answers}),
+        text=True,
+      )
+    )
   _check(subprocess.run(_remote(host, command)))
+
+
+def _answers(host: str, app: str, sets: list[str]) -> dict[str, str]:
+  """What to set on the box before starting: `--set`, plus whatever the app
+  still needs, asked here. Raises ValueError when there is no one to ask."""
+  asked = subprocess.run(
+    _remote(host, f"kelso config {app} --json"), capture_output=True, text=True
+  )
+  if asked.returncode:
+    raise ValueError(f"Could not ask {host} what {app} needs: {asked.stderr.strip()}")
+  request = request_from_view(json.loads(asked.stdout))
+  answers = dict(parse_kv(raw, "--set") for raw in sets)
+  errors = request.validate(answers)
+  if errors:
+    raise ValueError("; ".join(errors) + f"\n{app} was copied but not started.")
+  missing = [name for name in request.missing() if name not in answers]
+  if not missing:
+    return answers
+  if sys.stdin.isatty() and sys.stdout.isatty():
+    return {**collect(request).values, **answers}
+  raise ValueError(_needs(host, app, request, missing))
+
+
+def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> str:
+  lines = [f"{app} was copied to {host} but not started. It needs:"]
+  for name in missing:
+    entry = request.field(name)
+    assert entry is not None
+    one_of = f" One of: {', '.join(entry.choices)}." if entry.choices else ""
+    secret = " (secret)" if entry.secret else ""
+    lines.append(f"  {name}{secret}: {entry.desc}{one_of}")
+  lines.append(
+    f"Run this again with `--set NAME=VALUE` for each, or have a person fill "
+    f"them in on {host} with `kelso config {app} --edit`."
+  )
+  return "\n".join(lines)
 
 
 def _remote(host: str, command: str) -> list[str]:

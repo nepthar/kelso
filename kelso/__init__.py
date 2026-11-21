@@ -1,6 +1,19 @@
 """Kelso — app runtime and tooling."""
 
-from importlib.metadata import version
+import json
+from importlib.metadata import distribution
 
-# pyproject.toml is the one place the version is set.
-VERSION = version("kelso")
+
+def _version() -> str:
+  """pyproject.toml's version, with the git commit this install was made from."""
+  dist = distribution("kelso")
+  source = json.loads(dist.read_text("direct_url.json") or "{}")
+  commit = source.get("vcs_info", {}).get("commit_id")
+  if commit:
+    return f"{dist.version} ({commit[:7]})"
+  if source.get("dir_info", {}).get("editable"):
+    return f"{dist.version} (dev)"
+  return dist.version
+
+
+VERSION = _version()

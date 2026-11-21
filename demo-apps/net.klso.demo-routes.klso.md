@@ -16,7 +16,7 @@ description  = "Publishes primary, secondary, and host-only routes"
 app = { kind = "app", src = "app", readonly = true }
 
 [run.main]
-image  = "nginx:alpine"
+image  = "nginx:1.31.9-alpine"
 volumes = { app = "/etc/nginx/templates" }
 healthcheck = "wget -q -O /dev/null http://localhost:8081/ || exit 1"
 # The address the main route answers at, e.g. demo-routes.example.com.
@@ -31,7 +31,7 @@ sub1     = { port = "8082" }
 host_only = { port = "8083", private = true }
 ```
 
-One nginx server per route. nginx:alpine runs envsubst over `*.template`
+One nginx server per route. The nginx image runs envsubst over `*.template`
 files before nginx starts, filling in `${KLSO_DOMAIN}`, which the manifest maps
 from `${klso.domain}`. Until a route provider is assigned, that domain is the
 `kelso.localhost` placeholder.

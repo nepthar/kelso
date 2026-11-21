@@ -18,6 +18,7 @@ from kelso.lib.kproxy import docker_too_old
 from kelso.lib.observations import AppObservation
 from kelso.lib.recovery import read_keyfile
 from kelso.lib.spec import AppSpec
+from kelso.lib.store import ROUTES_UNPUBLISHED
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ def diagnose(ctx: KelsoCtx) -> DoctorPrognosis:
   for observation in ctx.observations():
     subject = observation.app_id
     problems += [Finding(subject, m) for m in _app_problems(observation, ctx)]
-    warnings += [Finding(subject, m) for m in _app_warnings(observation)]
+    warnings += [Finding(subject, m) for m in _app_warnings(observation, ctx)]
   return DoctorPrognosis(tuple(problems), tuple(warnings))
 
 
@@ -329,8 +330,15 @@ def _app_problems(observation: AppObservation, ctx: KelsoCtx) -> list[str]:
   return notes
 
 
-def _app_warnings(observation: AppObservation) -> list[str]:
+def _app_warnings(observation: AppObservation, ctx: KelsoCtx) -> list[str]:
   notes = []
+  if observation.running_count and (
+    why := ctx.app_store(observation.app_id).get_meta(ROUTES_UNPUBLISHED)
+  ):
+    notes.append(
+      f"running, but its routes are not published: {why}. Run `kelso start "
+      f"{observation.app_id}` again once the route provider answers."
+    )
   if 0 < observation.running_count < len(observation.containers):
     notes.append("mixed container states")
   if observation.orphaned_routes:

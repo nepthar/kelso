@@ -87,6 +87,11 @@ class Result:
   stderr: str
 
 
+class _Terminal(io.StringIO):
+  def isatty(self) -> bool:
+    return True
+
+
 @dataclass(frozen=True)
 class KelsoEnv:
   root: Path
@@ -160,13 +165,14 @@ class KelsoEnv:
     for key, value in entries.items():
       store.write(key, value)
 
-  def run(self, *args: str, input: str | None = None) -> Result:
+  def run(self, *args: str, input: str | None = None, tty: bool = False) -> Result:
     """Run a kelso command in this process, capturing both streams.
 
+    `tty` makes stdin claim to be a terminal, so kelso asks instead of refusing.
     Use `run_subprocess` when a test needs a genuinely separate process.
     """
     out, err = io.StringIO(), io.StringIO()
-    stdin = io.StringIO(input or "")
+    stdin = (_Terminal if tty else io.StringIO)(input or "")
     original_stdin = sys.stdin
     sys.stdin = stdin
     try:

@@ -13,6 +13,7 @@ import shutil
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -34,6 +35,8 @@ from kelso.lib.doctor import STALE_METRICS_SECONDS, Finding, diagnose, kelsod_pr
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle.load import LoadTarget, load_source
 from kelso.lib.repo import Repo, parse_github_url
+from kelso.lib.routes import RouteProviderUnreachable
+from kelso.lib.store import ROUTES_UNPUBLISHED
 from kelso.lib.util import refuse_root
 
 BASIC = "net.klso.basic-features"
@@ -295,7 +298,7 @@ compose = { privileged = true }
 """
   )
 
-  declined = kelso_env.run("start", "privileged-demo", input="n\n")
+  declined = kelso_env.run("start", "privileged-demo", input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
   assert "Nothing started." in declined.stdout
   assert not (kelso_env.run_root / "privileged-demo").exists()
@@ -1687,6 +1690,49 @@ def test_duplicate_fqdn_is_rejected_before_compose_up(
   assert ["compose", "up", "-d"] not in docker_calls
 
 
+def test_an_unreachable_route_provider_does_not_stop_a_start(
+  kelso_env, monkeypatch, stub_provider, caplog
+):
+  provider = stub_provider()
+  provider.route_owners = Mock(side_effect=RouteProviderUnreachable("no answer"))
+  docker_calls = []
+  monkeypatch.setattr(
+    "kelso.lib.lifecycle.run.docker_run_command",
+    lambda args, **kwargs: docker_calls.append(args) or "",
+  )
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app_id("routes-demo")
+  lifecycle.load(app, ctx.inventory.bundle(app).path, ctx)
+
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
+
+  assert ["compose", "up", "-d"] in docker_calls
+  assert provider.registered == []
+  assert read_last_app_action(app, ctx) == "started"
+  assert "routes are not published: no answer" in caplog.text
+  assert ctx.app_store(app).get_meta(ROUTES_UNPUBLISHED) == "no answer"
+
+  provider.route_owners = Mock(return_value={})
+  lifecycle.start(app, ctx.inventory.bundle(app).path, ctx)
+  assert provider.registered
+  assert ctx.app_store(app).get_meta(ROUTES_UNPUBLISHED) is None
+
+
+def test_doctor_warns_about_a_running_app_whose_routes_are_not_published(kelso_env):
+  assert kelso_env.run("load", "routes-demo").returncode == 0
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  app = ctx.resolve_app_id("routes-demo")
+  ctx.app_store(app).set_meta(ROUTES_UNPUBLISHED, "no answer")
+  kelso_env.set_containers(
+    [{"app_id": app, "run_unit": "main", "id": "c1", "state": "running"}]
+  )
+
+  warned = [w.message for w in _diagnose(kelso_env).warnings if w.subject == app]
+
+  assert any("routes are not published: no answer" in m for m in warned)
+
+
 def _started_routes_demo(monkeypatch, kelso_env, stub_provider, owners=None):
   provider = stub_provider(owners)
   monkeypatch.setattr(
@@ -2444,7 +2490,7 @@ def test_each_removal_records_what_it_did(kelso_env):
 def test_unload_confirmation_says_what_it_keeps(kelso_env):
   assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
 
-  declined = kelso_env.run("unload", BASIC, input="n\n")
+  declined = kelso_env.run("unload", BASIC, input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
   assert "Configuration and volume data will be kept" in declined.stdout
   assert f"kelso rm {BASIC}" in declined.stdout
@@ -2453,6 +2499,40 @@ def test_unload_confirmation_says_what_it_keeps(kelso_env):
   # Where kelso keeps a loaded copy is not the operator's problem.
   assert str(kelso_env.run_root) not in declined.stdout
   assert "Nothing removed" in declined.stdout
+  assert (kelso_env.run_root / BASIC).is_dir()
+
+
+def test_a_dropped_config_key_says_what_to_do_with_it(kelso_env):
+  text = kelso_env.config.read_text()
+  kelso_env.config.write_text('kelso_address = "10.0.0.5"\nbogus = 1\n' + text)
+
+  refused = kelso_env.run("ps")
+
+  assert refused.returncode == 1
+  assert "kelso_address: renamed; change it to route_address" in refused.stderr
+  assert "bogus: not a setting; check its spelling or delete it" in refused.stderr
+
+
+def test_unload_of_an_app_no_repo_carries_does_not_suggest_loading_by_id(kelso_env):
+  assert kelso_env.run("load", "ports-demo").returncode == 0
+  ctx = KelsoCtx(load_config_file(kelso_env.config))
+  source = ctx.inventory.bundle(ctx.resolve_app_id("ports-demo")).path
+  moved = source.with_name("elsewhere" + "".join(source.suffixes))
+  source.rename(moved)
+
+  done = kelso_env.run("unload", "ports-demo", "-y")
+
+  assert done.returncode == 0, done.stderr
+  assert "No repo has" in done.stdout
+  assert "Load it again with" not in done.stdout
+
+
+def test_unload_without_a_terminal_refuses_and_names_the_flag(kelso_env):
+  assert kelso_env.run("start", BASIC, "--set", "admin_user=alice").returncode == 0
+
+  refused = kelso_env.run("unload", BASIC)
+  assert refused.returncode == 2
+  assert "--yes" in refused.stderr
   assert (kelso_env.run_root / BASIC).is_dir()
 
 

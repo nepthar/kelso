@@ -77,11 +77,15 @@ def test_purge_clears_every_app_and_keeps_the_rest(kelso_env, tmp_path):
     bulk.rmdir()
   bulk.symlink_to(bulk_disk)
 
-  declined = kelso_env.run("system", "purge", input="no\n")
+  refused = kelso_env.run("system", "purge")
+  assert refused.returncode == 2
+  assert "--yes" in refused.stderr
+
+  declined = kelso_env.run("system", "purge", input="no\n", tty=True)
   assert "Nothing purged." in declined.stdout
   assert kelso_env.app_logtab(BASIC).is_file()
 
-  purged = kelso_env.run("system", "purge", input="purge\n")
+  purged = kelso_env.run("system", "purge", input="purge\n", tty=True)
   assert purged.returncode == 0, purged.stderr
   assert f"Purged {BASIC}" in purged.stdout
   assert "Purged ports-demo" in purged.stdout
@@ -133,7 +137,7 @@ def test_a_new_machine_comes_back_from_the_old_ones_backups(kelso_env, tmp_path)
   (root / "volumes" / "data").rmdir()
   (root / "volumes" / "data").symlink_to(data_disk)
 
-  restored = run_at(kelso_env, root, "restore", str(backups), input="y\n")
+  restored = run_at(kelso_env, root, "restore", str(backups), "-y")
   assert restored.returncode == 0, restored.stderr
   # What the old machine's root looked like, next to this one's.
   layout = restored.stdout.split("Restored kelso")[0]
@@ -199,7 +203,7 @@ def test_a_layout_that_differs_asks_first(kelso_env, tmp_path):
   (root / "volumes" / "temp").rmdir()
   (root / "volumes" / "temp").symlink_to(elsewhere)
 
-  declined = run_at(kelso_env, root, "restore", str(backups), input="n\n")
+  declined = run_at(kelso_env, root, "restore", str(backups), input="n\n", tty=True)
   assert declined.returncode == 0, declined.stderr
   assert "Nothing restored. Re-link" in declined.stdout
   assert not (root / "conf" / "apps").exists() or not any(

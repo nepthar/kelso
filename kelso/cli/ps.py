@@ -78,7 +78,7 @@ def _status(observation: AppObservation, spec: AppSpec | None) -> str:
   `stopped`, or the state of an app that is not loaded."""
   if not observation.loaded:
     return observation.state
-  status = observation.status(spec.run_units if spec else ())
+  status = observation.status(*((spec.run_units, spec.one_shots) if spec else ()))
   if status in (STOPPED, FINISHED):
     return status
   return "running" if status == OK else f"running ({status})"

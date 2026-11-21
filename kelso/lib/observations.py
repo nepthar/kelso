@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -42,11 +42,11 @@ STOPPED = "stopped"
 FINISHED = "finished"  # nothing running, and every unit exited 0
 
 
-def _active(unit: KelsoRunUnitStatus) -> bool:
+def _active(unit: KelsoRunUnitStatus, one_shot: bool) -> bool:
   """Up and not failing its healthcheck, or a one-shot that finished cleanly."""
   if unit.state.lower() == "running":
     return unit.health != "unhealthy"
-  return unit.finished
+  return one_shot and unit.finished
 
 
 # Where an app stands, as one word.
@@ -136,10 +136,13 @@ class AppObservation:
       and not self.containers
     )
 
-  def status(self, units: Iterable[str] = ()) -> str:
+  def status(
+    self, units: Iterable[str] = (), one_shots: Collection[str] | None = None
+  ) -> str:
     """`healthy`, `ok`, `degraded`, `finished` or `stopped`. `units` are the run
     units the manifest declares; without them, only the containers that exist
-    count."""
+    count. `one_shots` are the units meant to exit; None when that is unknown,
+    and then any unit that exited cleanly counts as one."""
     containers = {c.run_unit: c for c in self.containers}
     if not self.running_count:
       done = containers and all(
@@ -148,7 +151,8 @@ class AppObservation:
       )
       return FINISHED if done else STOPPED
     if any(
-      unit not in containers or not _active(containers[unit])
+      unit not in containers
+      or not _active(containers[unit], one_shots is None or unit in one_shots)
       for unit in {*units, *containers}
     ):
       return DEGRADED

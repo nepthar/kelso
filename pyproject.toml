@@ -48,6 +48,8 @@ packages = ["kelso"]
 # Restricted apps build kproxy from its source, in docker, on first use.
 [tool.hatch.build.targets.wheel.force-include]
 "kproxy" = "kelso/_kproxy"
+"docs/manifest.md" = "kelso/agent_help/manifest.md"
+"docs/volumes.md" = "kelso/agent_help/volumes.md"
 
 [dependency-groups]
 dev = [

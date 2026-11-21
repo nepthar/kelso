@@ -31,9 +31,10 @@ from kelso.lib.lifecycle.routes import (
   take_down_routes,
 )
 from kelso.lib.observations import changes_since_start
-from kelso.lib.routes import RouteProviderError
+from kelso.lib.routes import RouteProviderError, RouteProviderUnreachable
 from kelso.lib.run_layout import ConfigIssue, command_argv, load_run_data
 from kelso.lib.spec import AppSpec
+from kelso.lib.store import ROUTES_UNPUBLISHED
 from kelso.lib.util import now_ts
 
 
@@ -89,8 +90,11 @@ def start(
   if not paths.compose_path.is_file():
     raise ValueError(f"App {app} is not loaded; run `kelso load {app}` first")
 
+  unreachable: RouteProviderUnreachable | None = None
   try:
     preflight_app_routes(run_data, ctx)
+  except RouteProviderUnreachable as e:
+    unreachable = e
   except RouteProviderError as e:
     record_app_action("start-failed", app, ctx)
     raise ValueError(str(e)) from e
@@ -120,15 +124,28 @@ def start(
     raise ValueError(str(e)) from e
 
   try:
-    register_app_routes(run_data, ctx)
+    if unreachable is None:
+      register_app_routes(run_data, ctx)
+  except RouteProviderUnreachable as e:
+    unreachable = e
   except RouteProviderError as e:
     record_app_action("start-failed", app, ctx)
     raise ValueError(
       f"{e}. Containers may still be running; run `kelso stop {app}` to stop them."
     ) from e
+  if unreachable:
+    logger.warning(
+      "%s is running, but its routes are not published: %s. "
+      "Run `kelso start %s` again once the route provider answers.",
+      app,
+      unreachable,
+      app,
+    )
 
+  store = ctx.app_store(app)
+  store.set_meta(ROUTES_UNPUBLISHED, str(unreachable) if unreachable else None)
   # Everything on file is now what runs; `changes_since_start` counts from here.
-  ctx.app_store(app).set_meta("started_at", now_ts())
+  store.set_meta("started_at", now_ts())
   record_app_action("started", app, ctx)
   return result
 

@@ -2,6 +2,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from kelso.cli.confirm import confirm
 from kelso.lib.apps import AppID
 from kelso.lib.bundle import load_bundle
 from kelso.lib.kelso import KelsoCtx
@@ -94,8 +95,4 @@ def confirm_compose_warnings(app: str, bundle: Path) -> bool:
     for line in warning.option_lines():
       print(f"  {line}")
 
-  try:
-    answer = input(f"Load {app} anyway? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")
+  return confirm(f"Load {app} anyway?")

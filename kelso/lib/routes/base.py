@@ -18,6 +18,10 @@ class RouteProviderError(RuntimeError):
   """Raised when a route provider cannot complete an operation."""
 
 
+class RouteProviderUnreachable(RouteProviderError):
+  """The provider did not answer; nothing says the route itself is wrong."""
+
+
 def refuse_foreign_route(domain_name: str, owner: str | None) -> RouteProviderError:
   owner_desc = f"app {owner!r}" if owner else "a non-Kelso proxy host"
   return RouteProviderError(

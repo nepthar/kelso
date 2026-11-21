@@ -5,6 +5,8 @@ routes.
 
 import argparse
 
+from kelso.cli.confirm import confirm
+from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
   DATA,
@@ -73,13 +75,26 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   with ctx.locked(f"{plan.mode} {plan.app_id}", plan.app_id):
     rm(plan, ctx)
   print(_DONE[plan.mode].format(app=plan.app_id))
+  if plan.mode == UNLOAD:
+    if _has_source(plan.app_id, ctx):
+      print(f"Load it again with `kelso load {plan.app_id}`.")
+    else:
+      print(
+        f"No repo has {plan.app_id} any more. To load it again, put its bundle "
+        f"in a repo (`kelso repo list`) or pass its path to `kelso load`."
+      )
+
+
+def _has_source(app: AppID, ctx: KelsoCtx) -> bool:
+  try:
+    return ctx.inventory.bundle(app) is not None
+  except ValueError:
+    # Several repos carry it; `kelso load` says how to pick one.
+    return True
 
 
 _DONE: dict[RemovalMode, str] = {
-  UNLOAD: (
-    "Unloaded {app}. Configuration and volume data were kept.\n"
-    "Load it again with `kelso load {app}`."
-  ),
+  UNLOAD: "Unloaded {app}. Configuration and volume data were kept.",
   RM: "Removed {app}. Its data and configuration were kept.",
   TEMP: "Emptied {app}'s temp and logs volumes.",
   DATA: "Emptied all of {app}'s volumes. Its configuration and address are kept.",
@@ -105,11 +120,7 @@ def _confirmed(plan: RemovalPlan) -> bool:
     )
   else:
     _describe_removal(plan)
-  try:
-    answer = input(f"{_ASKED[plan.mode]} {plan.app_id}? [y/N] ")
-  except EOFError:
-    return False
-  return answer.strip().lower() in ("y", "yes")
+  return confirm(f"{_ASKED[plan.mode]} {plan.app_id}?")
 
 
 def _describe_removal(plan: RemovalPlan) -> None:
