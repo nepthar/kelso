@@ -71,7 +71,7 @@ class RouteProvider:
     value = kelso_db.get_secret(ref)
     if not value:
       raise RouteProviderError(
-        f"Missing system secret {ref!r}. Set it with `kelso system secret {ref}`, "
+        f"Missing host secret {ref!r}. Set it with `kelso secret set {ref}`, "
         f"which asks for the value"
       )
     return value

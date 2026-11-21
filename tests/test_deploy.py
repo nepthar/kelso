@@ -6,13 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-import kelso.cli.config
 import kelso.cli.deploy
 import kelso.cli.remote
 from kelso.lib.configflow import (
   ConfigField,
   ConfigRequest,
-  ConfigResponse,
   request_from_view,
 )
 from kelso.lib.views import config_request_view
@@ -92,51 +90,35 @@ def test_deploy_stops_and_lists_what_the_app_needs(kelso_env, remote):
   assert "admin_pass (secret): Password for the admin" in done.stderr
   assert "volume.media: Where the media is One of: media, nas." in done.stderr
   assert f"kelso config {APP} --edit --host box" in done.stderr
-  assert f"ssh box kelso config {APP} NAME=VALUE" in done.stderr
+  assert f"kelso config {APP} NAME=VALUE --host box" in done.stderr
   assert remote.calls[-1][-1] == f"kelso config {APP} --json"
 
 
-def test_deploy_on_a_terminal_asks_here_and_answers_on_the_box(
-  kelso_env, remote, monkeypatch
-):
+def test_deploy_on_a_terminal_opens_the_boxs_form(kelso_env, remote):
   remote.fields = NEEDS
-  answers = {"admin_pass": "hunter2", "volume.media": "nas"}
-  monkeypatch.setattr(
-    kelso.cli.deploy, "collect", lambda request, instead: ConfigResponse(answers)
-  )
   done = kelso_env.run("deploy", str(remote.bundle), "box", tty=True)
   assert done.returncode == 0, done.stderr
-  assert remote.calls[-2][-1] == f"kelso config {APP} --json-response"
-  assert json.loads(remote.inputs[-2]) == {"values": answers}
+  assert remote.calls[-2][:4] == ["ssh", "-o", "BatchMode=yes", "-t"]
+  assert remote.calls[-2][-1] == f"kelso config {APP} --edit"
   assert remote.calls[-1][-1] == f"kelso start {APP}@local --allow-compose"
 
 
-def test_config_edit_host_fills_in_the_form_here_for_the_box(
-  kelso_env, remote, monkeypatch
-):
-  remote.fields = NEEDS
-  shown = []
-
-  def collect(request, instead):
-    shown.append([f.name for f in request.fields])
-    return ConfigResponse({"volume.media": "media"})
-
-  monkeypatch.setattr(kelso.cli.config, "collect", collect)
-  done = kelso_env.run("config", APP, "--edit", "--host", "box", tty=True)
+def test_config_host_runs_the_same_command_on_the_host(kelso_env, remote):
+  done = kelso_env.run("config", APP, "route.main=web", "db_pass=-", "--host", "box")
   assert done.returncode == 0, done.stderr
-  assert shown == [["admin_pass", "volume.media"]]
-  assert [c[-1] for c in remote.calls] == [
-    f"kelso config {APP} --json",
-    f"kelso config {APP} --json-response",
+  assert remote.calls == [
+    [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "box",
+      f"kelso config {APP} route.main=web db_pass=-",
+    ]
   ]
-  assert json.loads(remote.inputs[-1]) == {"values": {"volume.media": "media"}}
-
-
-def test_config_host_goes_with_edit_alone(kelso_env, remote):
-  refused = kelso_env.run("config", APP, "x=1", "--host", "box")
-  assert refused.returncode == 1
-  assert f"ssh box kelso config {APP} NAME=VALUE" in refused.stderr
-  assert remote.calls == []
+  edit = kelso_env.run("config", APP, "--edit", "--host", "box", tty=True)
+  assert edit.returncode == 0, edit.stderr
+  assert remote.calls[-1][3] == "-t"
+  assert remote.calls[-1][-1].endswith(f"kelso config {APP} --edit")
 
 
 def test_deploy_to_a_loaded_app_updates_it(kelso_env, remote):

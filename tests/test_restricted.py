@@ -328,10 +328,10 @@ def test_a_domain_name_may_not_end_a_label_with_a_newline():
 
 def test_doctor_notes_a_docker_too_old_for_restricted_apps(kelso_env, monkeypatch):
   monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 26)
-  shown = kelso_env.run("system", "doctor")
+  shown = kelso_env.run("doctor")
   assert "docker 26 is older than 27" in shown.stdout
   monkeypatch.setattr("kelso.lib.doctor.server_major", lambda: 29)
-  assert "older than 27" not in kelso_env.run("system", "doctor").stdout
+  assert "older than 27" not in kelso_env.run("doctor").stdout
 
 
 def test_a_connection_may_not_share_a_units_name(tmp_path):

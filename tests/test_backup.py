@@ -87,11 +87,11 @@ def test_the_first_backup_says_the_phrase_is_the_only_way_in(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   first = kelso_env.run("backup", "run")
   assert first.returncode == 0, first.stderr
-  assert "kelso system recovery-phrase" in first.stdout
+  assert "kelso secret recovery-phrase" in first.stdout
   assert "Backed up kelso's own state" in first.stdout
 
   second = kelso_env.run("backup", "run")
-  assert "kelso system recovery-phrase" not in second.stdout
+  assert "kelso secret recovery-phrase" not in second.stdout
 
 
 def test_a_running_app_is_stopped_for_its_backup_and_started_again(kelso_env):
@@ -564,11 +564,11 @@ def test_a_colon_in_a_path_is_refused(tmp_path):
 
 
 def test_doctor_notes_backups_on_kelsos_own_disk(kelso_env):
-  quiet = kelso_env.run("system", "doctor")
+  quiet = kelso_env.run("doctor")
   assert "same disk as kelso" not in quiet.stdout + quiet.stderr
 
   (kelso_env.root / "backups").mkdir(exist_ok=True)
-  noted = kelso_env.run("system", "doctor")
+  noted = kelso_env.run("doctor")
   assert "same disk as kelso" in noted.stdout + noted.stderr
   assert noted.returncode == 0
 

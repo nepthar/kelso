@@ -40,8 +40,8 @@
     choices=[
       {'label': 'Clear temp and logs', 'verb': 'rm', 'args': {'app': app_id}, 'disabled': running,
        'desc': 'Takes it down and empties its temp and logs volumes. Its data and settings are kept, and Start brings it back. ' ~ stop_first},
-      {'label': 'Reset data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'data'}, 'disabled': running,
-       'desc': 'Empties every volume, so it starts as if newly installed. Its settings and secrets are kept, and it stays loaded. ' ~ stop_first},
+      {'label': 'Reset data', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'reset'}, 'disabled': running,
+       'desc': 'Takes it down and deletes every volume, so it starts as when first loaded. Its settings and secrets are kept, folders on this machine it was given are never touched, and Start brings it back. ' ~ stop_first},
       {'label': 'Delete everything', 'verb': 'rm', 'args': {'app': app_id, 'tier': 'purge'}, 'disabled': running,
        'desc': 'Deletes every volume, its settings and secrets, and its address. The catalog copy stays, so it can be installed again. ' ~ stop_first},
     ]) }}

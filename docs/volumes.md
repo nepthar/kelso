@@ -80,4 +80,4 @@ configuration, kelsodb, and your own apps in the `local` repo. Restoring an
 app puts all of that back together, as it was at the moment it was backed up.
 
 Secrets stay encrypted in the backup. Reading them anywhere but this machine
-takes your recovery phrase (`kelso system recovery-phrase`).
+takes your recovery phrase (`kelso secret recovery-phrase`).

@@ -281,13 +281,12 @@ MONGO_TLS = ""
 
 When we try to run this on a raspberry pi with `kelso start unifi-network-application`, we notice it doesn't seem to be working. Checking the logs with `kelso logs unifi-network-application`, we find that the database uses CPU extensions that the raspberry pi's arm chip doesn't support. No problem, we can walk back the version of mongo until we find one that works.
 
-Between each attempt we want a fresh database, because `init-mongo.sh` only runs against an empty one. `kelso rm --data` empties every volume while keeping the app loaded, with its configuration, secrets and routes intact, so we only set those up once:
+Between each attempt we want a fresh database, because `init-mongo.sh` only runs against an empty one. `kelso rm --reset` deletes every volume and unloads the app, keeping its configuration, secrets and routes, so we only set those up once:
 
 ```bash
 kelso stop unifi-network-application
-kelso rm --data unifi-network-application
-kelso load unifi-network-application   # picks up the edited manifest
-kelso start unifi-network-application
+kelso rm --reset unifi-network-application
+kelso start unifi-network-application   # loads the edited manifest
 ```
 
 It turns out that version 8.0.11 is both >= 8 and can run on the raspberry pi, so we pin it there. Since we pinned the db, let's pin the unifi-network-application to a version we can confirm works for us as well. While we're here, healthchecks let `kelso up` (and the status shown everywhere) know when each container is actually ready, rather than merely running:

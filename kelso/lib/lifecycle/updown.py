@@ -1,4 +1,4 @@
-"""Bringing the box up or down to a `start_group`, one group at a time.
+"""Bringing the host up or down to a `start_group`, one group at a time.
 
 `up(n)` starts groups 1 to `n`, lowest first, waiting for each to be ready
 before starting the next: healthy where a container's image has a healthcheck,
@@ -7,7 +7,7 @@ time is reported and the next one starts anyway. `down(n)` stops groups above
 `n`, highest first. Neither goes the other way: `up` never stops an app, and
 `down` never starts one.
 
-When kelsod starts it brings the box up, but only apps whose last action was
+When kelsod starts it brings the host up, but only apps whose last action was
 "started", so whatever was running before a restart runs again. Group 0
 belongs to kelsod: it starts it, without waiting, as it starts, and takes it
 down as it exits. Progress is logged to `kelso.lifecycle.updown`."""

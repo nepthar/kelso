@@ -268,7 +268,7 @@ What running behind kproxy costs the app:
 Behind kproxy, an app needs docker 27 or newer: older versions ignore the option
 that keeps the app's network from having an address on the host, so the app
 could reach the host's own services. `kelso start` refuses on an older docker,
-and `kelso system doctor` notes it.
+and `kelso doctor` notes it.
 
 kproxy's source ships inside kelso, and docker builds it the first time an app
 starts behind it, which takes about a minute; later starts reuse the image.

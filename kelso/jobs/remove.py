@@ -1,8 +1,8 @@
 from kelso.jobs.job import Job, logger
 from kelso.lib.kelso import KelsoCtx
-from kelso.lib.lifecycle import DATA, PURGE, RM, TEMP, UNLOAD, removal_plan, rm
+from kelso.lib.lifecycle import PURGE, RESET, RM, UNLOAD, removal_plan, rm
 
-_TIERS = {"": RM, "temp": TEMP, "data": DATA, "purge": PURGE}
+_TIERS = {"": RM, "reset": RESET, "purge": PURGE}
 
 
 class _RemovalJob(Job):
@@ -32,7 +32,7 @@ class UnloadJob(_RemovalJob):
 
 class RmJob(_RemovalJob):
   name = "rm"
-  description = "Remove a stopped app; tier temp, data or purge takes more or less"
+  description = "Remove a stopped app; tier reset or purge takes more"
   optional_args = ("tier",)
 
   def mode_for(self, kwargs: dict[str, str]) -> str:

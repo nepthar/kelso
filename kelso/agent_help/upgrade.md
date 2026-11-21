@@ -1,4 +1,4 @@
-# Upgrade kelso on a box
+# Upgrade kelso on a host
 
 ```bash
 cd "$(kelso root)"
@@ -8,7 +8,7 @@ kelso --version           # shows the commit now installed
 kelso ps                  # must list the apps; see below if it refuses
 kelso system service      # rewrites kelsod's unit and restarts it
 kelso repo update
-kelso ps && kelso system doctor
+kelso ps && kelso doctor
 ```
 
 Apps keep running throughout, except those in start group 0, which restart

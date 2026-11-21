@@ -186,7 +186,7 @@ def _volumes(ctx: KelsoCtx) -> str:
   headers = ["KIND", "DEVICE", "SIZE", "FREE"]
   table = f"Volumes\n{tabulate(rows, headers=headers)}"
   if any(root["used"] is not None and root["bytes"] is None for root in roots):
-    table += "\nNo sizes: kelsod is not recording them; see `kelso system doctor`."
+    table += "\nNo sizes: kelsod is not recording them; see `kelso doctor`."
   return table
 
 
@@ -202,7 +202,7 @@ def _doctor(ctx: KelsoCtx) -> str:
   prognosis = diagnose(ctx)
   found = f"{len(prognosis.problems)} problems, {len(prognosis.warnings)} warnings"
   if prognosis.problems or prognosis.warnings:
-    found += "; see `kelso system doctor`"
+    found += "; see `kelso doctor`"
   return f"Doctor     {found}"
 
 

@@ -14,7 +14,7 @@ from kelso.lib.lifecycle.run import stop
 # Deleting config while keeping data regenerates an app's secrets against a
 # database initialised with the old ones, and it comes back as an app that no
 # longer starts. So config only ever goes with the data, in PURGE.
-RemovalMode = Literal["unload", "rm", "temp", "data", "purge"]
+RemovalMode = Literal["unload", "rm", "temp", "reset", "purge"]
 
 # Stop it and remove the loaded copy under var/run. Nothing else.
 UNLOAD: RemovalMode = "unload"
@@ -22,9 +22,9 @@ UNLOAD: RemovalMode = "unload"
 RM: RemovalMode = "rm"
 # Of a stopped app: empty its temp and logs volumes. It stays loaded.
 TEMP: RemovalMode = "temp"
-# Of a stopped app: empty every volume, keeping its config, so it starts as if
-# just loaded. It stays loaded.
-DATA: RemovalMode = "data"
+# Of a stopped app: the loaded copy and every volume, keeping its config, so it
+# next starts as if just loaded.
+RESET: RemovalMode = "reset"
 # Of a stopped app: everything kelso holds for it -- the loaded copy, every
 # volume, its config and secrets, and its routes and host ports.
 PURGE: RemovalMode = "purge"
@@ -36,7 +36,7 @@ _ACTIONS: dict[str, str] = {
   UNLOAD: "unloaded",
   RM: "removed",
   TEMP: "cleared-temp",
-  DATA: "cleared-data",
+  RESET: "reset",
   PURGE: "purged",
 }
 
@@ -65,7 +65,7 @@ class RemovalPlan:
   @property
   def empties(self) -> bool:
     """Volumes are emptied rather than deleted, because the app stays loaded."""
-    return self.mode in (TEMP, DATA)
+    return self.mode == TEMP
 
 
 def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalPlan:
@@ -92,7 +92,7 @@ def removal_plan(app_id: AppID, ctx: KelsoCtx, *, mode: RemovalMode) -> RemovalP
   kinds = {UNLOAD: (), RM: _TEMP_KINDS, TEMP: _TEMP_KINDS}.get(mode, _ALL_KINDS)
   roots = ctx.config.volume_roots
   volumes = tuple(roots[k] / app_id for k in kinds if (roots[k] / app_id).is_dir())
-  unloads = mode in (UNLOAD, RM, PURGE)
+  unloads = mode in (UNLOAD, RM, RESET, PURGE)
 
   return RemovalPlan(
     app_id=app_id,

@@ -2,16 +2,17 @@
 
 import json
 import subprocess
+import sys
 
-from kelso.lib.configflow import ConfigRequest, ConfigResponse, request_from_view
+from kelso.lib.configflow import ConfigRequest, request_from_view
 
 SSH = ["ssh", "-o", "BatchMode=yes"]
 
 
-def remote(host: str, command: str) -> list[str]:
+def remote(host: str, command: str, *, tty: bool = False) -> list[str]:
   # sshd's shell runs no profile, so the PATH lacks ~/.local/bin, where kelso's
   # own install (`uv tool install`) puts it.
-  return [*SSH, host, f"PATH=~/.local/bin:$PATH; {command}"]
+  return [*SSH, *(["-t"] if tty else []), host, f"PATH=~/.local/bin:$PATH; {command}"]
 
 
 def remote_request(host: str, app: str) -> ConfigRequest:
@@ -24,12 +25,8 @@ def remote_request(host: str, app: str) -> ConfigRequest:
   return request_from_view(json.loads(asked.stdout))
 
 
-def send_response(host: str, app: str, response: ConfigResponse) -> None:
-  """Apply `response` on `host`, which prints what it set and what is still needed."""
-  done = subprocess.run(
-    remote(host, f"kelso config {app} --json-response"),
-    input=json.dumps({"values": response.values}),
-    text=True,
-  )
+def run_remote(host: str, command: str) -> None:
+  """Run `command` on `host` in this terminal, exiting with its code if it fails."""
+  done = subprocess.run(remote(host, command, tty=sys.stdin.isatty()))
   if done.returncode:
     raise SystemExit(done.returncode)

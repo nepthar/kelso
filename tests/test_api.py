@@ -1099,10 +1099,11 @@ def test_rm_verb_takes_a_tier(kelso_env, client, jobs):
   data = kelso_env.volumes_root / "data" / APP / "config"
   (data / "app.db").write_text("rows")
 
-  job = submit(client, jobs, "rm", {"app": APP, "tier": "data"})
+  job = submit(client, jobs, "rm", {"app": APP, "tier": "reset"})
   assert job["state"] == "done", job["error"]
-  assert data.is_dir() and list(data.iterdir()) == []
-  assert (kelso_env.run_root / APP).is_dir()
+  assert not data.exists()
+  assert not (kelso_env.run_root / APP).exists()
+  assert "config/admin_user" in kelso_env.app_logtab(APP).read_text()
 
   refused = client.post(
     "/jobs",

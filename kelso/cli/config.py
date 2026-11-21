@@ -1,13 +1,14 @@
 import argparse
 import json
 import logging
+import shlex
 import sys
 
 from tabulate import tabulate
 
 from kelso.cli.configform import collect
 from kelso.cli.kv import parse_kv, read_secret
-from kelso.cli.remote import remote_request, send_response
+from kelso.cli.remote import run_remote
 from kelso.lib.apps import AppID
 from kelso.lib.config import NONE_ROUTE_PROVIDER_TAG
 from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigRequest, ConfigResponse
@@ -41,7 +42,7 @@ def register(subparsers) -> None:
       "A secret is never given on the command line: NAME=- asks for it on a\n"
       "terminal, or reads it from stdin. One NAME=- per call.\n"
       "\n"
-      "--edit --host HOST fills in the form here for APP on HOST.\n"
+      "--host HOST runs the same command on HOST over ssh.\n"
       "\n"
       "Changes to a loaded app take effect when it next starts;\n"
       "`kelso restart <app>` applies them to a running one."
@@ -53,7 +54,7 @@ def register(subparsers) -> None:
       "  kelso config immich route.main=web,lan network.mode=watch\n"
       "  kelso config immich db_password=-          asks for it, hidden\n"
       "  kelso config immich network.mode=default   back to the manifest's\n"
-      "  kelso config immich --edit --host den       fill it in for den"
+      "  kelso config immich --edit --host den       the form, for den's immich"
     ),
   )
   parser.add_argument(
@@ -86,13 +87,14 @@ def register(subparsers) -> None:
   parser.add_argument(
     "--host",
     metavar="HOST",
-    help="With --edit: fill in the config of APP on HOST, a host you can `ssh` to",
+    help="Run this on HOST, a host you can `ssh` to, instead of here",
   )
   parser.set_defaults(
     func=run,
     activity=lambda a: (
       "config"
-      if a.edit or a.json_response or any("=" in item for item in a.items)
+      if not a.host
+      and (a.edit or a.json_response or any("=" in item for item in a.items))
       else None
     ),
   )
@@ -100,12 +102,7 @@ def register(subparsers) -> None:
 
 def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   if args.host:
-    if not args.edit or args.items or args.json or args.json_response:
-      raise ValueError(
-        "--host goes with --edit alone; to set a value on another host, run "
-        f"`ssh {args.host} kelso config {args.app} NAME=VALUE`"
-      )
-    _edit_remote(args.host, args.app)
+    run_remote(args.host, f"kelso config {shlex.join(_remote_args(args))}")
     return
   app = ctx.resolve_app_id(args.app)
   # Asked for before the lock, which nothing else should wait on while you type.
@@ -222,18 +219,10 @@ def _edit(app: AppID, spec: AppSpec, ctx: KelsoCtx) -> None:
   _report(apply_app_config(spec, response, ctx), spec, ctx)
 
 
-def _edit_remote(host: str, app: str) -> None:
-  request = remote_request(host, app)
-  if not request.fields:
-    print(f"App {app} on {host} declares no config")
-    return
-  response = collect(
-    request, f"set values with `ssh {host} kelso config {app} NAME=VALUE`"
-  )
-  if response == EMPTY_CONFIG_RESPONSE:
-    print("No changes")
-    return
-  send_response(host, app, response)
+def _remote_args(args: argparse.Namespace) -> list[str]:
+  flags = [("--edit", args.edit), ("--json", args.json)]
+  flags.append(("--json-response", args.json_response))
+  return [args.app, *args.items, *(flag for flag, on in flags if on)]
 
 
 def _report(written: list[str], spec: AppSpec, ctx: KelsoCtx) -> None:

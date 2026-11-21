@@ -9,10 +9,9 @@ from kelso.cli.confirm import confirm
 from kelso.lib.apps import AppID
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import (
-  DATA,
   PURGE,
+  RESET,
   RM,
-  TEMP,
   UNLOAD,
   RemovalMode,
   RemovalPlan,
@@ -32,23 +31,19 @@ def register(subparsers) -> None:
 
   remove = subparsers.add_parser(
     "rm",
-    help="Unload a stopped app and delete its temp and logs volumes",
+    help="Unload a stopped app and delete its temp and logs; --reset, --purge: more",
   )
   remove.add_argument("app_id", help="App ID to remove")
   tier = remove.add_mutually_exclusive_group()
   tier.add_argument(
-    "--temp",
+    "--reset",
     dest="mode",
     action="store_const",
-    const=TEMP,
-    help="Only empty its temp and logs volumes; it stays loaded",
-  )
-  tier.add_argument(
-    "--data",
-    dest="mode",
-    action="store_const",
-    const=DATA,
-    help="Empty all its volumes, keeping its config; it stays loaded",
+    const=RESET,
+    help=(
+      "Delete every volume too, keeping its config, so it next starts as when "
+      "first loaded; host volumes are never touched"
+    ),
   )
   tier.add_argument(
     "--purge",
@@ -96,8 +91,7 @@ def _has_source(app: AppID, ctx: KelsoCtx) -> bool:
 _DONE: dict[RemovalMode, str] = {
   UNLOAD: "Unloaded {app}. Configuration and volume data were kept.",
   RM: "Removed {app}. Its data and configuration were kept.",
-  TEMP: "Emptied {app}'s temp and logs volumes.",
-  DATA: "Emptied all of {app}'s volumes. Its configuration and address are kept.",
+  RESET: "Reset {app}. Its configuration was kept; `kelso start {app}` starts it afresh.",
   PURGE: "Purged {app}.",
 }
 
@@ -105,8 +99,7 @@ _DONE: dict[RemovalMode, str] = {
 _ASKED: dict[RemovalMode, str] = {
   UNLOAD: "Unload",
   RM: "Remove",
-  TEMP: "Empty temp and logs of",
-  DATA: "Empty all volumes of",
+  RESET: "Reset",
   PURGE: "Purge",
 }
 

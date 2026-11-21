@@ -118,7 +118,7 @@ def test_restore_under_another_phrase_says_to_rekey(kelso_env, tmp_path):
   refused = run_at(kelso_env, root, "restore", str(backups))
   assert refused.returncode == 1
   assert "different recovery phrase" in refused.stderr
-  assert "kelso system rekey --phrase" in refused.stderr
+  assert "kelso secret rekey --phrase" in refused.stderr
 
 
 def test_a_new_machine_comes_back_from_the_old_ones_backups(kelso_env, tmp_path):

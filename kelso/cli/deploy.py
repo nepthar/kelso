@@ -1,6 +1,6 @@
-"""`kelso deploy`: copy a bundle to another box over ssh and load or update it there.
+"""`kelso deploy`: copy a bundle to another host over ssh and load or update it there.
 
-Everything that changes the app happens on the box, through its own `kelso`.
+Everything that changes the app happens on the host, through its own `kelso`.
 """
 
 import argparse
@@ -11,12 +11,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from kelso.cli.configform import collect
 from kelso.cli.load import confirm_compose_warnings
-from kelso.cli.remote import SSH, remote, remote_request, send_response
+from kelso.cli.remote import SSH, remote, remote_request, run_remote
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, load_bundle
 from kelso.lib.config import REPOS_DIR
-from kelso.lib.configflow import EMPTY_CONFIG_RESPONSE, ConfigRequest
+from kelso.lib.configflow import ConfigRequest
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.repo import LOCAL_REPO
 
@@ -26,7 +25,7 @@ logger = logging.getLogger("kelso.cli")
 def register(subparsers) -> None:
   parser = subparsers.add_parser(
     "deploy",
-    help="Copy an app bundle to another box and load or update it there",
+    help="Copy an app bundle to another host and load or update it there",
   )
   parser.add_argument(
     "bundle",
@@ -37,7 +36,7 @@ def register(subparsers) -> None:
   parser.add_argument(
     "--no-backup",
     action="store_true",
-    help="Update without backing up first, when the box's backup disk is not there",
+    help="Update without backing up first, when the host's backup disk is not there",
   )
   parser.add_argument(
     "--allow-compose",
@@ -104,7 +103,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
 
 def _ask_for_missing(host: str, app: str) -> None:
-  """Ask here for what the app still needs on `host`, and send it there.
+  """Have the person here fill in what the app still needs on `host`.
 
   Raises ValueError when there is no one to ask.
   """
@@ -114,9 +113,7 @@ def _ask_for_missing(host: str, app: str) -> None:
     return
   if not sys.stdin.isatty():
     raise ValueError(_needs(host, app, request, missing))
-  response = collect(request, f"run `kelso config {app} --edit --host {host}`")
-  if response != EMPTY_CONFIG_RESPONSE:
-    send_response(host, app, response)
+  run_remote(host, f"kelso config {app} --edit")
 
 
 def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> str:
@@ -128,8 +125,8 @@ def _needs(host: str, app: str, request: ConfigRequest, missing: list[str]) -> s
     secret = " (secret)" if entry.secret else ""
     lines.append(f"  {name}{secret}: {entry.desc}{one_of}")
   lines.append(
-    f"Fill them in with `kelso config {app} --edit --host {host}`, or set each "
-    f"with `ssh {host} kelso config {app} NAME=VALUE` (NAME=- for a secret), "
+    f"Set each with `kelso config {app} NAME=VALUE --host {host}` (NAME=- for a "
+    f"secret), or fill them in with `kelso config {app} --edit --host {host}`; "
     f"then deploy again."
   )
   return "\n".join(lines)

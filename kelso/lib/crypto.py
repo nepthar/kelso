@@ -28,7 +28,7 @@ class MissingKeyEngine:
   def _refuse(self, _: str) -> str:
     raise ValueError(
       f"No recovery phrase in {self._keyfile}, so kelso has no key to encrypt "
-      f"or decrypt secrets with. Make one with `kelso system rekey`."
+      f"or decrypt secrets with. Make one with `kelso secret rekey`."
     )
 
   encrypt = decrypt = _refuse
