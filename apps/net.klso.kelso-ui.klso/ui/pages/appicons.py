@@ -1,14 +1,16 @@
 import ssl
 import time
 from functools import cache
+from html.parser import HTMLParser
 from http.client import HTTPException
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, build_opener
 
 from api import API, ApiError, api
 from fastapi import APIRouter
 from fastapi.responses import Response
-from web import STATIC
+from icons import favicon_svg
+from web import FAVICON, SELF_ID, STATIC
 
 router = APIRouter()
 
@@ -50,16 +52,55 @@ def _drawn(name):
   return (STATIC / "icons" / f"{name}.svg").read_bytes()
 
 
-def _fetch(url):
+def _get(url):
   try:
     with _opener.open(url, timeout=TIMEOUT) as response:
       kind = response.headers.get_content_type()
       body = response.read(LIMIT + 1)
+      final = response.geturl()
   except (OSError, ValueError, HTTPException):
     return None
-  if not kind.startswith("image/") or not body or len(body) > LIMIT:
+  if not body or len(body) > LIMIT:
     return None
-  return kind, body
+  return kind, body, final
+
+
+def _fetch(url):
+  got = _get(url)
+  if got is None or not got[0].startswith("image/"):
+    return None
+  return got[0], got[1]
+
+
+class _Links(HTMLParser):
+  def __init__(self):
+    super().__init__()
+    self.base = None
+    self.icons = []
+
+  def handle_starttag(self, tag, attrs):
+    attrs = dict(attrs)
+    href = attrs.get("href")
+    if not href:
+      return
+    if tag == "base" and self.base is None:
+      self.base = href
+    elif tag == "link" and "icon" in (attrs.get("rel") or "").lower().split():
+      self.icons.append(href)
+
+
+def _linked(origin):
+  got = _get(origin + "/")
+  if got is None or got[0] != "text/html":
+    return None
+  links = _Links()
+  links.feed(got[1].decode("utf-8", "replace"))
+  base = urljoin(got[2], links.base or "")
+  for href in links.icons:
+    url = urljoin(base, href)
+    if _origin(url) == origin and (found := _fetch(url)):
+      return found
+  return None
 
 
 def _origin(url, loopback=""):
@@ -91,13 +132,23 @@ def _search(route):
     for path in FILES:
       if found := _fetch(origin + path):
         return found
+    if found := _linked(origin):
+      return found
   return None
+
+
+def _choose(routes, route):
+  if route:
+    return next((r for r in routes if r["name"] == route), None)
+  return next((r for r in routes if r["name"] == "main"), routes[0] if routes else None)
 
 
 @router.get("/icons/{app_id}")
 @router.get("/icons/{app_id}/{route}")
 def icon(app_id: str, route: str = ""):
   drawn = "route" if route else "app"
+  if SELF_ID and app_id == SELF_ID:
+    return Response(favicon_svg(*FAVICON), media_type="image/svg+xml", headers=HEADERS)
   hit = _kept.get((app_id, route))
   if hit and hit[0] > time.monotonic():
     found = hit[1]
@@ -106,7 +157,7 @@ def icon(app_id: str, route: str = ""):
       routes = api(f"/apps/{quote(app_id, safe='')}").get("routes", [])
     except ApiError:
       routes = None
-    chosen = next((r for r in routes or [] if r["name"] == (route or "main")), None)
+    chosen = _choose(routes or [], route)
     if chosen is None:
       found = None
     else:

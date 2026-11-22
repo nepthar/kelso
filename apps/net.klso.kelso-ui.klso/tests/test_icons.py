@@ -311,3 +311,67 @@ def test_the_start_menu_asks_for_each_icon_by_app_and_route(client, fake):
   assert 'src="/icons/kelso-ui"' in text
   assert 'data-icon="/icons/kelso-ui"' in text
   assert "/icons/kelso-ui/main" in text
+
+
+def test_a_page_that_answers_everything_is_read_for_its_icon_link(
+  client, fake, monkeypatch, site
+):
+  page = b'<html><head><link rel="icon" href="/icons/favicon.ico"/></head></html>'
+  one = site(
+    {
+      "/icon.svg": ("text/html", page),
+      "/favicon.ico": ("text/html", page),
+      "/": ("text/html", page),
+      "/icons/favicon.ico": ("image/x-icon", ICO),
+    }
+  )
+  _routes(monkeypatch, ("main", one.url))
+  assert client.get("/icons/kelso-ui").content == ICO
+
+
+def test_an_icon_link_is_found_past_a_redirect_and_a_base(
+  client, fake, monkeypatch, site
+):
+  page = (
+    b'<html><head><base href="/manage/">'
+    b'<link rel="apple-touch-icon" href="big.png">'
+    b'<link rel="shortcut icon" href="img/fav.png?v=2"></head></html>'
+  )
+  one = site(
+    {
+      "/": ("redirect", b"/manage/account/login"),
+      "/manage/account/login": ("text/html", page),
+      "/manage/img/fav.png?v=2": ("image/png", ICO),
+    }
+  )
+  _routes(monkeypatch, ("main", one.url))
+  assert client.get("/icons/kelso-ui").content == ICO
+
+
+def test_an_icon_link_to_another_site_is_not_followed(client, fake, monkeypatch, site):
+  elsewhere = site({"/fav.png": ("image/png", ICO)})
+  page = f'<link rel="icon" href="{elsewhere.url}/fav.png">'.encode()
+  one = site({"/": ("text/html", page)})
+  _routes(monkeypatch, ("main", one.url))
+  assert client.get("/icons/kelso-ui").content == _drawn("app")
+  assert elsewhere.hits == []
+
+
+def test_an_app_with_no_main_route_takes_its_icon_from_its_first(
+  client, fake, monkeypatch, site
+):
+  admin = site({"/icon.svg": ("image/svg+xml", SVG)})
+  _routes(monkeypatch, ("admin", admin.url))
+  assert client.get("/icons/kelso-ui").content == SVG
+
+
+def test_this_app_draws_its_own_icon_without_asking_itself(
+  client, fake, monkeypatch, site
+):
+  one = site({"/icon.svg": ("image/svg+xml", SVG)})
+  _routes(monkeypatch, ("main", one.url))
+  monkeypatch.setattr(appicons, "SELF_ID", "kelso-ui")
+  response = client.get("/icons/kelso-ui")
+  assert response.headers["content-type"] == "image/svg+xml"
+  assert b"<path" in response.content and response.content != SVG
+  assert one.hits == []

@@ -25,6 +25,9 @@ NEEDS_API = 2
 # Random per load (kelso-ui's `instance_id`), so two kelso-ui tabs can be
 # told apart even when neither can reach its kelsod.
 INSTANCE_ID = os.environ.get("KELSO_UI_ID", "").strip()
+SELF_ID = os.environ.get("KLSO_ID", "").strip()
+# A tab icon has no theme, and this reads on light and dark.
+FAVICON = ("dune", "#f08a4b")
 
 
 # kelsod's hostname, as it last gave it. Pages that do not otherwise need
@@ -123,8 +126,7 @@ templates.globals.update(
   NEEDS_API=NEEDS_API,
   INSTANCE_ID=INSTANCE_ID,
   NO_PASSWORD=auth.TESTING_NO_PASSWORD,
-  # A tab icon has no theme, and this reads on light and dark.
-  FAVICON=favicon("dune", "#f08a4b"),
+  FAVICON=favicon(*FAVICON),
 )
 templates.filters["size"] = fmt_size
 templates.filters["brand"] = brand

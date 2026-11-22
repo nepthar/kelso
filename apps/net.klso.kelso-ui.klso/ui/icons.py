@@ -147,13 +147,16 @@ STROKED = {
 }
 
 
-def favicon(name, color):
-  svg = (
+def favicon_svg(name, color):
+  return (
     f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path '
     f'd="{STROKED[name]}" fill="none" stroke="{color}" stroke-width="2" '
     f'stroke-linecap="round" stroke-linejoin="round"/></svg>'
   )
-  return "data:image/svg+xml," + quote(svg)
+
+
+def favicon(name, color):
+  return "data:image/svg+xml," + quote(favicon_svg(name, color))
 
 
 def mdi(name):
