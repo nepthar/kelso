@@ -96,6 +96,11 @@
     close: function (from) {
       var win = windowOf(from);
       if (win) closeWindow(win);
+    },
+    closeOpener: function (from) {
+      var win = windowOf(from);
+      if (win && windows.indexOf(win.opener) >= 0) closeWindow(win.opener);
+      if (win) focusWindow(win);
     }
   };
 

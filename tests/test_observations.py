@@ -22,6 +22,7 @@ def _observed(**kwargs) -> AppObservation:
   base = dict(
     app_id=AppID("demo.app"),
     bundle_path=None,
+    loaded=True,
     run_dir_exists=True,
     compose_exists=True,
     config_exists=True,
@@ -98,6 +99,7 @@ def _with_units(*units: KelsoRunUnitStatus) -> AppObservation:
   return AppObservation(
     app_id=AppID("demo"),
     bundle_path=None,
+    loaded=True,
     run_dir_exists=True,
     compose_exists=True,
     config_exists=True,

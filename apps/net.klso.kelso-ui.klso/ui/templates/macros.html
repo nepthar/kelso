@@ -106,14 +106,15 @@
   `default` draws it as the surface's one default button.
   The JSON attributes are single-quoted: `tojson` escapes ' but not ".
 -#}
-{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", icon="", danger=false, bar=false, tone="", default=false) -%}
+{% macro job_button(label, verb="", title="", desc="", args=none, fields=[], choices=[], enabled=true, autorun=false, done="", closes=false, icon="", danger=false, bar=false, tone="", default=false) -%}
 <button type="button" class="job-open{{ ' cmd' if bar else (' icon' if icon) }}{{ ' cmd-' ~ tone if tone }}{{ ' danger' if danger }}{{ ' default' if default }}"
   {%- if not enabled %} disabled{% endif %}
   {%- if icon and not bar %} title="{{ label }}" aria-label="{{ label }}"{% endif %}
   data-verb="{{ verb }}" data-title="{{ title }}" data-desc="{{ desc }}"
   data-args='{{ (args or {})|tojson }}' data-fields='{{ fields|tojson }}' data-choices='{{ choices|tojson }}'
   {%- if done %} data-done="{{ done }}"{% endif %}
-  {%- if autorun %} data-autorun="1"{% endif %}>
+  {%- if autorun %} data-autorun="1"{% endif %}
+  {%- if closes %} data-closes="1"{% endif %}>
   {%- if bar %}{{ mdi(icon) }}<span>{{ label }}</span>{% else %}{{ mdi(icon) if icon else label }}{% endif -%}
 </button>
 {%- endmacro %}

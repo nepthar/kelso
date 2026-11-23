@@ -47,19 +47,13 @@ def _active(unit: KelsoRunUnitStatus, one_shot: bool) -> bool:
 
 
 # Where an app stands, as one word.
-LOADED = "loaded"  # there is a run dir kelso can start from
-UNLOADED = "unloaded"  # no run dir, but kelso still holds state for it
+LOADED = "loaded"  # its run dir holds a frozen bundle kelso can start from
+UNLOADED = "unloaded"  # not loaded, but kelso still holds state for it
 AVAILABLE = "available"  # a catalog entry and nothing else
 
 
-def app_state(
-  *,
-  run_dir_exists: bool,
-  config_exists: bool,
-  volumes_exist: bool,
-  has_containers: bool = False,
-) -> str:
-  if run_dir_exists or has_containers:
+def app_state(*, loaded: bool, config_exists: bool, volumes_exist: bool) -> str:
+  if loaded:
     return LOADED
   # A lone kelsodb row is an orphan for `doctor`, not a kept app.
   if config_exists or volumes_exist:
@@ -71,6 +65,7 @@ def app_state(
 class AppObservation:
   app_id: AppID
   bundle_path: Path | None
+  loaded: bool
   run_dir_exists: bool
   compose_exists: bool
   config_exists: bool
@@ -96,10 +91,9 @@ class AppObservation:
   @property
   def state(self) -> str:
     return app_state(
-      run_dir_exists=self.run_dir_exists,
+      loaded=self.loaded,
       config_exists=self.config_exists,
       volumes_exist=self.volumes_exist,
-      has_containers=bool(self.containers),
     )
 
   @property
@@ -109,12 +103,8 @@ class AppObservation:
     return self.source_version
 
   @property
-  def loaded(self) -> bool:
-    return self.state == LOADED
-
-  @property
   def known(self) -> bool:
-    return self.state != AVAILABLE or self.db_present
+    return self.state != AVAILABLE or self.db_present or bool(self.containers)
 
   @property
   def orphaned_routes(self) -> bool:
@@ -146,21 +136,21 @@ class AppObservation:
     return HEALTHY if checked and all(h == "healthy" for h in checked) else OK
 
 
-def _loaded_from(app_id: AppID, ctx: KelsoCtx) -> Path | None:
-  origin = ctx.loaded_origin(app_id)
-  return origin if origin is not None and origin.exists() else None
+def _bundle_path(app_id: AppID, ctx: KelsoCtx) -> Path | None:
+  try:
+    entry = ctx.inventory.bundle(app_id)
+  except ValueError:
+    return None
+  return entry.path if entry else None
 
 
-def _versions(app_id: AppID, ctx: KelsoCtx) -> tuple[str | None, str | None]:
-  store = ctx.app_store(app_id)
-  origin = store.get_meta("origin")
-  source = None
-  if origin and Path(origin).exists():
-    try:
-      source = load_bundle(Path(origin)).app_spec().version
-    except ValueError:
-      pass
-  return store.get_meta("loaded_version"), source
+def _source_version(origin: Path | None) -> str | None:
+  if origin is None or not origin.exists():
+    return None
+  try:
+    return load_bundle(origin).app_spec().version
+  except ValueError:
+    return None
 
 
 # A load or a start applies every change recorded before it.
@@ -210,19 +200,16 @@ def changes_since_start(path: Path) -> PendingChanges:
 def collect_observations(
   ctx: KelsoCtx, only: AppID | None = None
 ) -> dict[str, AppObservation]:
-  contested = ctx.inventory.contested()
-  bundles = {
-    e.app_id: e.path for e in ctx.inventory.catalog if e.app_id not in contested
-  }
-  run_ids = (
-    {path.name for path in ctx.config.run_root.iterdir() if path.is_dir()}
-    if ctx.config.run_root.is_dir()
-    else set()
-  )
+  inventory = ctx.inventory
   docker = load_kelso_run_unit_status()
   db_ids = set(ctx.kelso_db.app_ids())
-  config_ids = set(ctx.inventory.origins)
-  app_ids = set(bundles) | run_ids | set(docker) | db_ids | config_ids
+  app_ids = (
+    {e.app_id for e in inventory.catalog}
+    | inventory.loaded
+    | set(inventory.origins)
+    | set(docker)
+    | db_ids
+  )
   if only is not None:
     app_ids &= {str(only)}
 
@@ -233,35 +220,31 @@ def collect_observations(
     app_id = AppID(raw_id)
     paths = ctx.loaded_paths(app_id)
     action = actions.get(raw_id)
-    run_dir_exists = paths.run_path.is_dir()
-    loaded_version, source_version = (
-      _versions(app_id, ctx)
-      if run_dir_exists and raw_id in config_ids
-      else (None, None)
-    )
+    loaded = app_id in inventory.loaded
+    kept = app_id in inventory.origins
+    store = ctx.app_store(app_id) if loaded and kept else None
     pending = (
       changes_since_start(ctx.config.app_config_path(app_id))
-      if run_dir_exists and raw_id in config_ids
+      if store is not None
       else PendingChanges()
     )
     observations[app_id] = AppObservation(
       app_id=app_id,
-      bundle_path=bundles.get(raw_id) or _loaded_from(app_id, ctx),
-      run_dir_exists=run_dir_exists,
+      bundle_path=_bundle_path(app_id, ctx),
+      loaded=loaded,
+      run_dir_exists=paths.run_path.is_dir(),
       compose_exists=paths.compose_path.is_file(),
-      config_exists=raw_id in config_ids,
-      # Spelled out rather than borrowing `lifecycle.managed_volume_dirs`,
-      # which would import back through KelsoCtx into this module.
-      volumes_exist=any(
-        (root / raw_id).is_dir() for root in ctx.config.volume_roots.values()
-      ),
+      config_exists=kept,
+      volumes_exist=ctx.has_volumes(app_id),
       containers=docker.get(raw_id, ()),
       db_present=raw_id in db_ids,
       last_action=action[1] if action else None,
       changes_pending=pending.any,
       routes_pending=pending.routes,
-      loaded_version=loaded_version,
-      source_version=source_version,
+      loaded_version=store.get_meta("loaded_version") if store is not None else None,
+      source_version=(
+        _source_version(inventory.origins[app_id]) if store is not None else None
+      ),
     )
   return observations
 

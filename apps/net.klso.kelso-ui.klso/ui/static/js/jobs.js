@@ -23,7 +23,9 @@
       choices: JSON.parse(btn.getAttribute("data-choices") || "[]"),
       // Where the page that asked goes once the job has run: by default, itself again.
       done: btn.getAttribute("data-done") || location.pathname + location.search,
-      autorun: !!btn.getAttribute("data-autorun")
+      autorun: !!btn.getAttribute("data-autorun"),
+      // Running it removes the page that asked, so that window goes at once.
+      closes: !!btn.getAttribute("data-closes")
     };
   }
 
@@ -154,6 +156,7 @@
       if (input.value.trim()) args[input.name] = input.value;
     });
     ran = true;
+    if (spec.closes && desktop) desktop.closeOpener(window);
     fieldsEl.querySelectorAll("input").forEach(function (i) { i.disabled = true; });
     choicesEl.querySelectorAll("input").forEach(function (i) { i.disabled = true; });
     settle();

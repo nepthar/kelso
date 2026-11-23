@@ -36,6 +36,7 @@
 {% set running = app.status not in ('stopped', 'finished', None) %}
 {% set stop_first = 'Stop it first.' if running else '' %}
 {{ job_button('Remove', icon='delete-outline', bar=true, tone='stop', title='Remove ' ~ name, danger=true,
+    done='/apps', closes=true,
     desc='Pick how much of ' ~ name ~ ' to remove. None of these can be undone. To keep a copy of its data first, close this and Back up.',
     choices=[
       {'label': 'Clear temp and logs', 'verb': 'rm', 'args': {'app': app_id}, 'disabled': running,

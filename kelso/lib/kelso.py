@@ -212,14 +212,14 @@ class KelsoCtx:
     return spec
 
   def app_state(self, app: AppID | str) -> str:
-    app_id = str(app)
     return app_state(
-      run_dir_exists=self.loaded_paths(app_id).run_path.is_dir(),
-      config_exists=self.config.app_config_path(app_id).is_file(),
-      volumes_exist=any(
-        (root / app_id).is_dir() for root in self.config.volume_roots.values()
-      ),
+      loaded=self.is_loaded(app),
+      config_exists=self.config.app_config_path(app).is_file(),
+      volumes_exist=self.has_volumes(app),
     )
+
+  def has_volumes(self, app: AppID | str) -> bool:
+    return any((root / app).is_dir() for root in self.config.volume_roots.values())
 
   def bundle_spec(self, app: AppID) -> "AppSpec":
     entry = self.inventory.bundle(app)
