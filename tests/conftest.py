@@ -252,6 +252,15 @@ def block_real_docker(
 
 
 @pytest.fixture(autouse=True)
+def getpass_reads_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+  # getpass opens /dev/tty, not sys.stdin, so a faked terminal would prompt the
+  # real one.
+  read = lambda prompt="": input(prompt)  # noqa: E731
+  monkeypatch.setattr("kelso.cli.configform.getpass", read)
+  monkeypatch.setattr("kelso.cli.kv.getpass", read)
+
+
+@pytest.fixture(autouse=True)
 def addresses_are_on_host(monkeypatch: pytest.MonkeyPatch) -> None:
   monkeypatch.setattr("kelso.lib.run_layout.address_on_host", lambda address: True)
 
