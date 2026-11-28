@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from kelso.cli.confirm import Refused
 from kelso.cli.load import confirm_compose_warnings
 from kelso.cli.remote import SSH, remote, remote_request, run_remote
 from kelso.lib.bundle import KLSO_MD_SUFFIX, KLSO_SUFFIX, app_id_from_path, load_bundle
@@ -55,7 +56,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
 
   found = subprocess.run(remote(host, "kelso root"), capture_output=True, text=True)
   if found.returncode:
-    raise ValueError(
+    raise Refused(
       f"Could not run kelso on {host}: {found.stderr.strip()}\n"
       f"Nothing was copied. Check that `ssh {host} '~/.local/bin/kelso root'` works."
     )
@@ -66,7 +67,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     remote(host, f"kelso status {app} --json"), capture_output=True, text=True
   )
   if asked.returncode not in (0, 1):
-    raise ValueError(f"Could not ask {host} about {app}: {asked.stderr.strip()}")
+    raise Refused(f"Could not ask {host} about {app}: {asked.stderr.strip()}")
   there = json.loads(asked.stdout) if asked.returncode == 0 else {}
   was = there.get("bundle") if there.get("loaded") else None
   if not was:
@@ -76,7 +77,7 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
     if args.no_backup:
       command += " --no-backup"
   else:
-    raise ValueError(
+    raise Refused(
       f"{host} already has {app} loaded from {was}. Nothing was copied.\n"
       f"If this is the same app and you want to deploy your version, remove it "
       f"on {host} first with `kelso rm --purge {app}`, which deletes its data "
@@ -132,7 +133,7 @@ def _files(source: Path) -> list[str]:
       continue
     src = volume.src or name
     if not (source / src).exists():
-      raise ValueError(
+      raise Refused(
         f"[volumes.{name}] names {src}, which is not in {source}. "
         f"Nothing was copied; add it or fix the volume's src."
       )

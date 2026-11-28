@@ -1,5 +1,12 @@
 # Write an app, run it here, deploy it to a host
 
+Before building an app from scratch, consider whether an open-source project
+already publishes a Docker image (or an existing kelso bundle) that covers most
+of what the user wants. A kelso bundle is a visible management and modification
+layer on top of a Docker image: you can start from that image and layer custom
+files (`app` volumes), config, commands, or a small sibling `[run.<unit>]`
+sidecar on top without maintaining a custom image.
+
 1. **Write the bundle** in `$(kelso root)/repos/local/`. Its file name is its
    app id: `com.example.notes.klso.md` is the app `com.example.notes`. The
    smallest bundle is one file:

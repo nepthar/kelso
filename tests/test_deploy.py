@@ -130,7 +130,7 @@ def test_deploy_to_a_loaded_app_updates_it(kelso_env, remote):
 def test_deploy_refuses_a_volume_whose_files_are_missing(kelso_env, remote):
   (remote.bundle / "src").rmdir()
   done = kelso_env.run("deploy", str(remote.bundle), "box")
-  assert done.returncode == 1
+  assert done.returncode == 2
   assert "[volumes.src] names src" in done.stderr
   assert remote.calls == []
 
@@ -138,7 +138,7 @@ def test_deploy_refuses_a_volume_whose_files_are_missing(kelso_env, remote):
 def test_deploy_refuses_an_app_loaded_from_elsewhere(kelso_env, remote):
   remote.source = f"{ROOT}/repos/demos/{APP}.klso"
   done = kelso_env.run("deploy", str(remote.bundle), "box")
-  assert done.returncode == 1
+  assert done.returncode == 2
   assert f"box already has {APP} loaded from {remote.source}" in done.stderr
   assert len(remote.calls) == 2
 

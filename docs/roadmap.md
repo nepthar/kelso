@@ -88,26 +88,27 @@ does well (refuse, and name the fix) into something an agent can parse.
 - **`kelso docs agent`** prints those docs from the installed kelso, so an
   agent always reads the playbook for the version it is driving, never a newer
   one from the web.
-- **`--json` on every command.** The same data the human output shows, stable
-  and documented, so an agent never scrapes a table.
+- **`--json` where scripting needs it.** Query and handoff commands (`version`,
+  `status <app>`, `ps`, `config`, `doctor`/`problems`, `activity`) offer
+  `--json` so scripts and kelso-to-kelso calls never scrape a table. Mutation
+  verbs stay clean prose: an LLM reads concise stdout/stderr receipts without
+  needing a JSON schema on every command.
 - **Exit codes that mean something.** 0 done; 1 failed while doing it; 2 refused
-  before doing anything, with the fix named. An agent knows from the code alone
-  whether anything changed.
+  before doing anything, always paired with a plain-English reason and fix on
+  `stderr`. An agent knows from the code alone whether anything changed and from
+  `stderr` how to unblock it.
 - **Problems as data.** Every refusal, `doctor` finding and start blocker is
-  `{code, owner, problem, evidence, fix}`. `owner` says who has to act: the
-  `app` (its code or manifest), the `operator` (config, a secret, a disk), or
-  `kelso` (a bug to report). `evidence` is what the finding rests on, such as
-  the log tail of a unit that exited. `fix` is the commands that resolve it.
-  The current prose messages become the human rendering of the same record.
+  `{subject, problem, fix}`—plain English with the minimal useful fix, rendered
+  as text for humans and `--json` where scripted. No error-code taxonomy to
+  maintain.
 - **Questions as data.** When a plan cannot go ahead without an answer (a
   required config value, a host volume to bind), the command exits 2 and prints
   the `ConfigRequest` it needs as JSON. The answer is a `ConfigResponse`, given
   with `kelso config <app> NAME=VALUE`, the same one the TUI and the web form fill.
   Plan, answer, plan again converges to ready.
 - **Nothing waits on a terminal that isn't there.** A command that would ask
-  `[y/N]` checks for a terminal first. Without one it refuses with exit 2,
-  naming the `--yes` that skips the question, instead of waiting for an answer
-  that never comes.
+  `[y/N]` checks for a terminal first. Without one it refuses with exit 2 and
+  names `--yes` on `stderr`, instead of waiting for an answer that never comes.
 - **Plan, then apply.** Anything that changes state can print what it will do
   without doing it (`--plan`), as text for a human and JSON for the agent. Most
   verbs already build a plan object first (`RemovalPlan`, `RestorePlan`,
@@ -124,11 +125,14 @@ does well (refuse, and name the fix) into something an agent can parse.
   <id>` reattaches to a job and exits with its result.
 - **The CLI is the interface.** An agent drives kelso over a shell, locally or
   through `ssh`. There is no MCP server: an agent can use any interface it has
-  an example of, and a shell, `--json` and good docs stay usable by a human too.
-- **Agents never handle secrets.** The agent writes the manifest and declares
-  each secret. Kelso generates the ones marked `auto`, and the person pastes the
-  rest into the web UI. A plan that is waiting on a secret names the page to
-  send the person to.
+  an example of, and a shell, selective `--json` and good docs stay usable by a
+  human too.
+- **Agents never have to handle secrets.** We cannot stop a shell-capable agent
+  from reading `master.key` on disk, but normal operation never requires an
+  agent to see, invent or pass a secret. The agent declares each secret in the
+  manifest; kelso generates the ones marked `auto`, and for operator-supplied
+  secrets the agent sends the person to the app's config page in `kelso-ui` (if
+  running) or to `kelso config <app> --edit` in their terminal.
 
 ### 2. Custom apps: write, run, publish
 
@@ -145,10 +149,11 @@ live.
   3. `kelso deploy <app> <host>` copies the bundle to the box over `ssh`, loads
      and starts it there, and reports live or failed with the reason.
 
-  `deploy` refuses, with exit code 2, when the laptop's kelso version differs
-  from the box's, and names the command that brings them level. `new`, `dev` and
-  `deploy` are the dev workflow, so they run on the dev platforms, without
-  kelsod.
+  `deploy` refuses, with exit code 2 and the reason and fix on `stderr`, before
+  copying anything when preconditions fail (missing bundle files, a different
+  loaded origin, or a version mismatch between workstation and host). `new`,
+  `dev` and `deploy` are the dev workflow, so they run on the dev platforms,
+  without kelsod.
 - **`ssh` is the transport.** Whoever can `ssh` to the
   box can deploy to it; there is no new login, port or certificate. `deploy`
   connects with `BatchMode=yes`, so a password prompt fails fast instead of
@@ -215,13 +220,25 @@ live.
   provisioned with generated credentials, and offers the URL as
   `${conn.<name>.url}`. The database is part of the app, so its backups and
   restores stay whole.
-- **The dev loop an agent can close.** Today `kelso dev` holds the foreground,
-  so an agent has to background it and `kill <pid>`, which is fragile and leaves
-  orphaned containers or timing races. Give `kelso dev` a non-blocking lifecycle
-  an agent can drive directly (start, wait until healthy, inspect logs, stop),
-  with `--json` status and a "healthy at URL" signal (or startup logs on
-  failure), so an agent edits, verifies, and iterates cleanly without shell
-  job-control hacks.
+- **The dev loop an agent can close.** Today `kelso dev` holds the foreground
+  and loads straight into the real `var/run/` and `conf/apps/`, forcing agents
+  to background it and `kill <pid>` and risking cross-contamination with real
+  apps. Replace it with a small, isolated subcommand tree:
+  - `kelso dev start <path>` re-materializes from `<path>` (no separate
+    `load`/`reload`), starts or restarts the dev copy, waits until healthy, and
+    prints the live URLs (or startup logs on failure).
+  - `kelso dev stop <path|app>` stops and removes the dev containers (printing
+    the kproxy `[connections]` summary if proxied).
+  - `kelso dev ps` lists all running dev apps straight from Docker labels
+    (`kelso.dev=true`, `kelso.dev_source`), never from kelso's folder tree.
+  - `kelso dev logs <path|app>` shows dev container logs.
+  - `kelso dev clear <path|app>` removes the entire `$kelso/var/dev/<app>`
+    directory (refusing while running), keeping the subcommand surface minimal.
+
+  Dev runs use their own Docker project (`kelso_dev_<app>`), ephemeral host
+  ports unless pinned, and keep their compose file, volumes and encrypted
+  `config.logtab` under `var/dev/<app>/` so they never collide with real apps,
+  `kelso ps`, `kelso up/down`, `kelsodb` or backups.
 - **Unchanged means nothing to do.** Loading records a hash of the bundle (its
   manifest and files) and the image digests it resolved. Loading or updating to
   the same hash is a no-op that says `unchanged`, and the hash is how an
@@ -235,6 +252,20 @@ live.
 
 ### 3. Sharing
 
+- **Copy, modify, publish.** A kelso bundle is a visible management and
+  modification layer on top of a Docker image. The layer can be as thin or as
+  involved as you like: from a thin wrapper around an upstream app like AdGuard
+  or Jellyfin (allocating storage, secrets and routes, and optionally layering
+  custom CSS, override scripts or a small sibling `[run.<unit>]` sidecar on top)
+  all the way to a base runtime image like Ruby on Rails or Python where the
+  bundle *is* the whole app. Anyone can copy a maintainer's bundle, customize it
+  with an LLM, and optionally publish their own version—without building or
+  hosting a Docker image.
+- **Upstream provenance for LLM merges.** Kelso does not build bundle
+  inheritance or patch engines. Instead, an optional `upstream` hint in `[app]`
+  (the source repo/URL and commit or version it was copied from) gives the next
+  LLM a clean starting point to diff upstream's new release and fold updates
+  into a customized bundle.
 - **A capability card.** One compact summary of what a bundle asks for—network
   access (open vs restricted, allowed internet and LAN hosts), storage (`data`,
   `bulk`, `host` binds), exposed routes and auth posture, privileges
@@ -397,8 +428,8 @@ dashboard.
 
 - **`kelso problems --json`.** One feed of everything wrong now: `doctor`
   findings, unhealthy apps, a full disk, a failed backup or update, kelsod not
-  running. Each item uses the same `{code, problem, fix}` shape, so an agent can
-  be pointed at the box and told "keep it healthy".
+  running. Each item uses the same `{subject, problem, fix}` shape, so an agent
+  can be pointed at the box and told "keep it healthy".
 - **A webhook.** One configurable URL, sent each new problem and, optionally,
   the activity log as it happens. Undelivered messages queue in a logtab spool,
   so a webhook that is down gets them later.
