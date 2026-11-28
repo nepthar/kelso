@@ -71,7 +71,7 @@ port = { default = "8080" }
 
 [run.main]
 image = "alpine"
-env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN = "literal", UNKNOWN = "${nope}" }
+env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN = "literal" }
 """,
   )
 
@@ -94,8 +94,23 @@ env = { USER = "${admin_user}", PASS = "${admin_pass}", PORT = "${port}", PLAIN 
   assert env["PASS"] == "${admin_pass}"
   assert env["PORT"] == "${port}"
   assert env["PLAIN"] == "literal"
-  # Not a declared config name, so it is left for compose to deal with.
-  assert env["UNKNOWN"] == "${nope}"
+
+
+def test_undeclared_env_reference_is_refused(tmp_path):
+  with pytest.raises(
+    ConfigError, match="UNKNOWN references \\$\\{nope\\}, which is not declared"
+  ):
+    spec_of(
+      tmp_path,
+      """\
+[app]
+version = "1"
+
+[run.main]
+image = "alpine"
+env = { UNKNOWN = "${nope}" }
+""",
+    )
 
 
 def test_adv_config_declares_the_same_values_but_marked_advanced(tmp_path):

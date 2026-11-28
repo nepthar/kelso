@@ -14,6 +14,7 @@ import pytest
 import kelso.lib.docker
 import kelso.lib.doctor
 import kelso.lib.lifecycle.rootfs
+import kelso.lib.lifecycle.updown
 import kelso.lib.restic
 from kelso.cli.main import run as cli_run
 from kelso.lib.apps import AppID
@@ -328,6 +329,7 @@ def kelso_env(
   monkeypatch.chdir(root)
   # No kelsod runs under test; its own tests call `kelsod_problems` directly.
   monkeypatch.setattr(kelso.lib.doctor, "kelsod_problems", lambda ctx: [])
+  monkeypatch.setattr(kelso.lib.lifecycle.updown, "SETTLE", 0)
   return env
 
 

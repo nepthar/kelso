@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from kelso.lib import kproxy
 from kelso.lib.apps import AppID
 from kelso.lib.docker import (
   DockerError,
@@ -140,9 +141,11 @@ def _recorded_temp_sizes(ctx: KelsoCtx) -> dict[str, int]:
 
 
 def _unused_images(ctx: KelsoCtx) -> list[DockerImage]:
-  # Kelso's own: the root-filesystem helper and restic, which `image ls`
-  # names by tag even though kelso pins restic by digest.
+  # Kelso's own: the root-filesystem helper, restic (which `image ls` names by
+  # tag even though kelso pins it by digest), and the current kproxy image.
   named = {_normal(ROOTFS_IMAGE), _normal(RESTIC_IMAGE.partition("@")[0])}
+  if (source := kproxy.source_dir()) is not None:
+    named.add(_normal(kproxy.image_tag(source)))
   for raw_id in ctx.config.run_root.iterdir() if ctx.config.run_root.is_dir() else ():
     spec = ctx.loaded_spec(raw_id.name)
     if spec is not None:

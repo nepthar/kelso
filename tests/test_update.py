@@ -38,7 +38,8 @@ def test_update_pulls_first_then_backs_up_and_restarts(kelso_env):
   pull = calls.index(["pull", "alpine:3.20"])
   down = next(i for i, c in enumerate(calls) if c[:2] == ["compose", "down"])
   assert pull < down
-  assert calls[-1][:3] == ["compose", "up", "-d"]
+  compose = [c for c in calls if c[0] == "compose"]
+  assert compose[-1][:3] == ["compose", "up", "-d"]
 
   listed = kelso_env.run("backup", "list", APP).stdout.splitlines()
   (row,) = [line.split() for line in listed[2:]]
@@ -86,3 +87,38 @@ def test_an_update_to_the_same_version_says_it_reloaded(kelso_env):
   updated = kelso_env.run("update", APP)
   assert updated.returncode == 0, updated.stderr
   assert "Reloaded upd-app at 1.0: its source changed without a new" in updated.stdout
+
+
+def test_update_fails_when_the_restarted_app_is_not_healthy(kelso_env, monkeypatch):
+  from kelso.lib.docker import KelsoRunUnitStatus
+  from kelso.lib.lifecycle import updown
+
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("start", APP).returncode == 0
+  write_bundle(kelso_env, "1.1", tag="3.20")
+
+  unhealthy = {
+    APP: (
+      KelsoRunUnitStatus(
+        APP, "main", "cid", f"{APP}-main-1", "running", "Up 5 seconds (unhealthy)"
+      ),
+    )
+  }
+  monkeypatch.setattr(updown, "load_kelso_run_unit_status", lambda: unhealthy)
+
+  failed = kelso_env.run("update", APP)
+  assert failed.returncode == 1
+  assert "did not become healthy" in failed.stderr
+  assert "unhealthy" in failed.stderr
+  assert f"kelso restore {APP}" in failed.stderr
+
+
+def test_update_with_start_starts_a_stopped_app(kelso_env):
+  write_bundle(kelso_env, "1.0")
+  assert kelso_env.run("load", APP).returncode == 0
+  write_bundle(kelso_env, "1.1", tag="3.20")
+
+  updated = kelso_env.run("update", APP, "--start")
+  assert updated.returncode == 0, updated.stderr
+  assert f"Started {APP}" in updated.stdout
+  assert "running" in kelso_env.run("ps").stdout

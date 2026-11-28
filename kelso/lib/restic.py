@@ -24,14 +24,13 @@ REPO = "/repo"
 CACHE = "/cache"
 TARGET = "/restore"
 
-# Restic runs as root, to read volume files containers wrote as root. What it
-# writes into the repository and its cache would be root's too, so after every
-# command the same container gives them to the user kelso runs as. The exit
-# status stays restic's; a chown that fails (a share that squashes root, say)
-# does not fail the command it follows.
+# Backup and restore run as root to read/preserve root-owned volume files.
+# Afterwards, hand any newly created root-owned files in the repository or
+# cache back to the user kelso runs as. A chown that fails (a root-squashing
+# share, say) does not fail the command it follows.
 OWNED_BY_KELSO = (
   'restic "$@"; status=$?; '
-  f'chown -R "$KELSO_UID:$KELSO_GID" {REPO} {CACHE} 2>/dev/null; '
+  f'find {REPO} {CACHE} -user 0 -exec chown "$KELSO_UID:$KELSO_GID" {{}} + 2>/dev/null; '
   "exit $status"
 )
 
@@ -132,6 +131,7 @@ class Restic:
     what: str,
     writable: bool = False,
     say: bool = False,
+    as_root: bool = False,
   ) -> str:
     if say:
       logger.info("restic: %s", what)
@@ -153,21 +153,26 @@ class Restic:
       f"RESTIC_REPOSITORY={REPO}",
       "-e",
       f"RESTIC_CACHE_DIR={CACHE}",
-      "-e",
-      f"KELSO_UID={self.owner[0]}",
-      "-e",
-      f"KELSO_GID={self.owner[1]}",
       *(
         arg for host, guest, mode in mounts for arg in ("-v", f"{host}:{guest}:{mode}")
       ),
-      "--entrypoint",
-      "sh",
-      RESTIC_IMAGE,
-      "-c",
-      OWNED_BY_KELSO,
-      "restic",
-      *args,
     ]
+    if as_root:
+      cmd += [
+        "-e",
+        f"KELSO_UID={self.owner[0]}",
+        "-e",
+        f"KELSO_GID={self.owner[1]}",
+        "--entrypoint",
+        "sh",
+        RESTIC_IMAGE,
+        "-c",
+        OWNED_BY_KELSO,
+        "restic",
+        *args,
+      ]
+    else:
+      cmd += ["-u", f"{self.owner[0]}:{self.owner[1]}", RESTIC_IMAGE, *args]
     logger.debug("restic: %s", " ".join(args))
     env = {**os.environ, "RESTIC_PASSWORD": self._password}
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
@@ -204,7 +209,9 @@ class Restic:
     args = ["backup", "--json", "--host", socket.gethostname()]
     for key, value in tags.items():
       args += ["--tag", f"{key}={value}"]
-    out = self.run([*args, *sources.values()], sources, what=what, say=True)
+    out = self.run(
+      [*args, *sources.values()], sources, what=what, say=True, as_root=True
+    )
     for line in out.splitlines():
       message = json.loads(line)
       if message.get("message_type") == "summary":
@@ -214,7 +221,9 @@ class Restic:
 
   def added_by(self, sources: Mapping[Path, str]) -> int:
     args = ["backup", "--dry-run", "--json", "--host", socket.gethostname()]
-    out = self.run([*args, *sources.values()], sources, what="measure a backup")
+    out = self.run(
+      [*args, *sources.values()], sources, what="measure a backup", as_root=True
+    )
     for line in out.splitlines():
       message = json.loads(line)
       if message.get("message_type") == "summary":
@@ -248,6 +257,7 @@ class Restic:
       what=what,
       writable=True,
       say=True,
+      as_root=True,
     )
 
   def dump(self, snapshot_id: str, path: str, *, what: str) -> str:

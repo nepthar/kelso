@@ -70,12 +70,11 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   there = json.loads(asked.stdout) if asked.returncode == 0 else {}
   was = there.get("bundle") if there.get("loaded") else None
   if not was:
-    command = f"kelso start {app}@{LOCAL_REPO} --allow-compose"
+    command = f"kelso start {app}@{LOCAL_REPO} --allow-compose --wait"
   elif was == dest:
-    command = f"kelso update {app} --allow-compose"
+    command = f"kelso update {app} --allow-compose --start"
     if args.no_backup:
       command += " --no-backup"
-    command += f" && kelso start {app}"
   else:
     raise ValueError(
       f"{host} already has {app} loaded from {was}. Nothing was copied.\n"

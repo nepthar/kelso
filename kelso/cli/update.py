@@ -4,6 +4,7 @@ from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import update
 from kelso.lib.lifecycle.update import update_source
+from kelso.lib.lifecycle.updown import DEFAULT_WAIT
 
 
 def register(subparsers) -> None:
@@ -16,6 +17,18 @@ def register(subparsers) -> None:
     "--no-backup",
     action="store_true",
     help="Update without backing up first, when the backup disk is not there",
+  )
+  parser.add_argument(
+    "--start",
+    action="store_true",
+    help="Start the app after updating, even if it was stopped",
+  )
+  parser.add_argument(
+    "--timeout",
+    type=float,
+    default=DEFAULT_WAIT,
+    metavar="SECONDS",
+    help=f"How long to wait for the app to be healthy (default: {DEFAULT_WAIT})",
   )
   parser.add_argument(
     "--allow-compose",
@@ -35,4 +48,12 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
   ):
     print("Nothing updated.")
     return
-  print(update(app, ctx, backup=not args.no_backup).summary(app))
+  print(
+    update(
+      app,
+      ctx,
+      backup=not args.no_backup,
+      start_after=args.start,
+      wait=args.timeout,
+    ).summary(app)
+  )

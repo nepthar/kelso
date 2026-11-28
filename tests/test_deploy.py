@@ -69,7 +69,7 @@ def test_first_deploy_copies_then_loads_and_starts(kelso_env, remote):
   assert remote.cwds[2] == remote.bundle
   assert remote.calls[1][-1] == f"kelso status {APP} --json"
   assert remote.calls[3][-1] == f"kelso config {APP} --json"
-  assert remote.calls[4][-1] == f"kelso start {APP}@local --allow-compose"
+  assert remote.calls[4][-1] == f"kelso start {APP}@local --allow-compose --wait"
   assert len(remote.calls) == 5
 
 
@@ -97,7 +97,7 @@ def test_deploy_on_a_terminal_opens_the_boxs_form(kelso_env, remote):
   assert done.returncode == 0, done.stderr
   assert remote.calls[-2][:4] == ["ssh", "-o", "BatchMode=yes", "-t"]
   assert remote.calls[-2][-1] == f"kelso config {APP} --edit"
-  assert remote.calls[-1][-1] == f"kelso start {APP}@local --allow-compose"
+  assert remote.calls[-1][-1] == f"kelso start {APP}@local --allow-compose --wait"
 
 
 def test_config_host_runs_the_same_command_on_the_host(kelso_env, remote):
@@ -123,7 +123,7 @@ def test_deploy_to_a_loaded_app_updates_it(kelso_env, remote):
   done = kelso_env.run("deploy", str(remote.bundle), "box", "--no-backup")
   assert done.returncode == 0, done.stderr
   assert remote.calls[-1][-1] == (
-    f"kelso update {APP} --allow-compose --no-backup && kelso start {APP}"
+    f"kelso update {APP} --allow-compose --start --no-backup"
   )
 
 

@@ -550,12 +550,14 @@ def _validate_env_refs(manifest: Manifest) -> list[str]:
   for unit_name, run_entry in manifest.run.items():
     for var, value in run_entry.env.items():
       for ref in sorted(EnvTemplate(value).get_identifiers()):
-        if ref in known or "." not in ref:
-          continue  # Undeclared config-style; compose leaves it unsubstituted.
+        if ref in known:
+          continue
         where = f"[run.{unit_name}.env]: {var} references ${{{ref}}}"
         conn = ref.removeprefix(CONN_KEY_PREFIX).split(".")[0]
         if ref.startswith(CONN_KEY_PREFIX) and conn not in manifest.connections:
           errors.append(f"{where}, but no connection {conn!r} is declared")
+        elif "." not in ref:
+          errors.append(f"{where}, which is not declared in [config] or [adv_config]")
         else:
           errors.append(f"{where}, which is not a known substitution")
   return errors
