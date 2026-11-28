@@ -215,9 +215,13 @@ live.
   provisioned with generated credentials, and offers the URL as
   `${conn.<name>.url}`. The database is part of the app, so its backups and
   restores stay whole.
-- **The dev loop an agent can close.** `kelso dev` already runs a working copy
-  with live source. It gains `--json` status and a "healthy at URL" signal, so an
-  agent edits, sees it come up or fail, reads the logs, and edits again.
+- **The dev loop an agent can close.** Today `kelso dev` holds the foreground,
+  so an agent has to background it and `kill <pid>`, which is fragile and leaves
+  orphaned containers or timing races. Give `kelso dev` a non-blocking lifecycle
+  an agent can drive directly (start, wait until healthy, inspect logs, stop),
+  with `--json` status and a "healthy at URL" signal (or startup logs on
+  failure), so an agent edits, verifies, and iterates cleanly without shell
+  job-control hacks.
 - **Unchanged means nothing to do.** Loading records a hash of the bundle (its
   manifest and files) and the image digests it resolved. Loading or updating to
   the same hash is a no-op that says `unchanged`, and the hash is how an
@@ -231,9 +235,16 @@ live.
 
 ### 3. Sharing
 
+- **A capability card.** One compact summary of what a bundle asks for—network
+  access (open vs restricted, allowed internet and LAN hosts), storage (`data`,
+  `bulk`, `host` binds), exposed routes and auth posture, privileges
+  (`no-new-privileges`, unmodelled compose options, mounted sockets), and
+  resource limits—shown on `--plan`, `kelso status`, the web UI, and before
+  loading a bundle from a URL or repo. Gives a person a 10-second, enforced view
+  of what they are trusting.
 - **Run a bundle from a URL.** `kelso start https://…/app.klso.md` fetches it,
-  shows the danger callouts and the plan, and asks. A single-file bundle becomes
-  something you can send in a message.
+  shows its capability card, danger callouts and plan, and asks. A single-file
+  bundle becomes something you can send in a message.
 - **Record where it came from.** A bundle loaded from a URL or repo records its
   source and commit, so `update` knows where to look and `inspect` can say who
   you are trusting.
@@ -279,6 +290,11 @@ is simpler than any of them, and Cloudflare keeps adding useful pieces to it.
 - **Access in front of private apps.** A route can ask for Cloudflare Access, so
   an app meant for the household is published behind a login without the app
   knowing about it.
+- **A private network route provider.** Not every personal or household app
+  belongs on the public internet. Add a route provider for private networks
+  (such as Tailscale / `tailscale serve` or LAN-only HTTPS) so apps get clean
+  HTTPS URLs reachable only on your tailnet or LAN without exposing ports or
+  routing through Cloudflare's edge.
 - **The others stay.** Nginx Proxy Manager and Pangolin keep working for people
   who want everything self-hosted. The routes guide (in the todo list) leads with
   Cloudflare.
@@ -432,6 +448,23 @@ the local repository or `restic copy` mirrors one into the other each night.
 and `http` connections. What is left:
 
 - **A `tcp` connection kind.** kproxy already relays a TCP port to one address.
+
+### Auth and user provisioning
+Most self-hosted apps either come with their own isolated user database or—for
+small custom and LLM-built apps—have no authentication at all. Kelso should
+bridge both through two mechanisms:
+
+- **Kelso-managed user provisioning.** A bundle maintainer (for an app like
+  Jellyfin) can ship provisioning scripts in the bundle and declare in the
+  manifest that the app supports kelso-managed auth. Kelso calls those hooks—the
+  same way it invokes `[commands]` and `[cron]`—to create, update or disable
+  users from one place. Custom and LLM-written apps can hook into the same
+  contract directly instead of inventing a user management system each time.
+- **Front-door auth for apps with none.** A bundle with no built-in login can
+  declare that in its manifest, allowing the operator to put its routes behind
+  kelso auth (a lightweight forward-auth gate or provider-level auth such as
+  Cloudflare Access or Tailscale identity) without the app implementing
+  authentication itself.
 
 ### Services
 Let a bundle say "give me a postgres database and a login" and be given one

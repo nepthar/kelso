@@ -12,7 +12,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.recovery import backup_password_from, read_keyfile
 from kelso.lib.repo import LOCAL_REPO
 from kelso.lib.restic import Restic, Snapshot
-from kelso.lib.util import fmt_size
+from kelso.lib.util import fmt_size, path_size
 
 logger = getLogger("kelso.backup")
 
@@ -116,13 +116,50 @@ def create_repository(ctx: KelsoCtx, restic: Restic) -> bool:
     return restic.init()
 
 
+SPACE_HEADROOM_FACTOR = 2
+MIN_FREE_BYTES = 100 * 1024 * 1024
+
+
 def free_bytes(path: Path) -> int:
   return shutil.disk_usage(path).free
 
 
-def refuse_without_space(restic: Restic, sources: dict[Path, str], what: str) -> None:
-  needed = restic.added_by(sources)
+def _recorded_app_bytes(
+  ctx: KelsoCtx, app: AppID, bulk_names: Iterable[str]
+) -> int | None:
+  expected = [
+    *((DATA, name) for name in _volume_dirs(ctx, app, DATA)),
+    *((BULK, name) for name in bulk_names),
+  ]
+  gauges = ctx.read_gauges(f"volume_size_bytes/{app}/")
+  total = 0
+  for kind, name in expected:
+    entry = gauges.get(f"gauge/volume_size_bytes/{app}/{kind}/{name}")
+    if entry is None:
+      return None
+    total += int(float(entry.value))
+  bundle = ctx.loaded_paths(app).bundle_path_in_run
+  if bundle.is_dir():
+    total += path_size(bundle)
+  config = ctx.config.app_config_path(app)
+  if config.is_file():
+    total += config.stat().st_size
+  return total
+
+
+def refuse_without_space(
+  restic: Restic,
+  sources: dict[Path, str],
+  what: str,
+  *,
+  estimated_bytes: int | None = None,
+) -> None:
   free = free_bytes(restic.repo)
+  if estimated_bytes is not None and free >= max(
+    estimated_bytes * SPACE_HEADROOM_FACTOR, MIN_FREE_BYTES
+  ):
+    return
+  needed = restic.added_by(sources)
   if needed > free:
     raise ValueError(
       f"Not enough space to {what}: it would add up to {fmt_size(needed)} to "
@@ -281,7 +318,13 @@ def backup_app(
   snapshots: dict[str, str] = {}
   with ctx.app_lock(app, by):
     bulk = bulk_sources(ctx, app)
-    refuse_without_space(restic, {**app_sources(ctx, app), **bulk}, by)
+    bulk_names = [guest.rsplit("/", 1)[-1] for guest in bulk.values()]
+    refuse_without_space(
+      restic,
+      {**app_sources(ctx, app), **bulk},
+      by,
+      estimated_bytes=_recorded_app_bytes(ctx, app, bulk_names),
+    )
     running = False
     if ctx.is_loaded(app):
       with ctx.kelso_lock(by):

@@ -389,14 +389,22 @@ def test_a_backup_without_room_for_it_is_refused(kelso_env, monkeypatch):
   assert _backups(kelso_env, BASIC) == []
 
 
-def test_update_refuses_when_the_repository_fails_its_check(kelso_env):
+def test_backup_run_reports_when_the_repository_fails_its_check(kelso_env):
   assert kelso_env.run("load", BASIC).returncode == 0
   _back_up(kelso_env, BASIC)
   (kelso_env.root / "backups" / "corrupt").touch()
-  refused = kelso_env.run("update", BASIC)
-  assert refused.returncode == 1
-  assert "Nothing changed" in refused.stderr
-  assert "repository contains errors" in refused.stderr
+  checked = kelso_env.run("backup", "run", BASIC)
+  assert checked.returncode == 1
+  assert "repository contains errors" in checked.stderr
+
+
+def test_update_skips_full_repository_check(kelso_env):
+  assert kelso_env.run("load", BASIC).returncode == 0
+  _back_up(kelso_env, BASIC)
+  before = len(_runs(kelso_env, RESTIC_IMAGE))
+  assert kelso_env.run("update", BASIC).returncode == 0
+  update_runs = _runs(kelso_env, RESTIC_IMAGE)[before:]
+  assert not any("check" in args for args in update_runs)
 
 
 def test_a_stale_lock_is_cleared_and_the_update_goes_ahead(kelso_env):
@@ -579,13 +587,51 @@ def test_the_config_form_turns_a_bulk_volume_on(kelso_env):
 def test_restic_hands_the_repository_back_to_kelsos_user(kelso_env):
   assert kelso_env.run("load", "ports-demo").returncode == 0
   _back_up(kelso_env, "ports-demo")
+  uid_gid = f"{os.getuid()}:{os.getgid()}"
+  root_calls, user_calls = [], []
   for args in _runs(kelso_env, RESTIC_IMAGE):
-    assert f"KELSO_UID={os.getuid()}" in args
-    assert f"KELSO_GID={os.getgid()}" in args
-    script = args[args.index("-c") + 1]
-    assert script.startswith('restic "$@"; status=$?;')
-    assert 'chown -R "$KELSO_UID:$KELSO_GID" /repo /cache' in script
-    assert script.endswith("exit $status")
+    if "-c" in args:
+      root_calls.append(args)
+      assert f"KELSO_UID={os.getuid()}" in args
+      assert f"KELSO_GID={os.getgid()}" in args
+      script = args[args.index("-c") + 1]
+      assert script.startswith('restic "$@"; status=$?;')
+      assert (
+        'find /repo /cache -user 0 -exec chown "$KELSO_UID:$KELSO_GID" {} +' in script
+      )
+      assert script.endswith("exit $status")
+    else:
+      user_calls.append(args)
+      assert "-u" in args and args[args.index("-u") + 1] == uid_gid
+  assert root_calls and user_calls
+
+
+def test_space_check_skips_dry_run_when_recent_metrics_have_headroom(
+  kelso_env, monkeypatch
+):
+  from kelso.lib.metric import record_volume_sizes
+
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("x" * 5000)
+  record_volume_sizes(_ctx(kelso_env))
+  monkeypatch.setattr(backup_lib, "free_bytes", lambda _path: 500 * 1024 * 1024)
+
+  _back_up(kelso_env, BASIC)
+  assert not any("--dry-run" in args for args in _runs(kelso_env, RESTIC_IMAGE))
+
+
+def test_space_check_falls_back_to_dry_run_when_free_space_is_tight(
+  kelso_env, monkeypatch
+):
+  from kelso.lib.metric import record_volume_sizes
+
+  assert kelso_env.run("load", BASIC).returncode == 0
+  (kelso_env.volumes_root / "data" / BASIC / "config" / "db.txt").write_text("x" * 5000)
+  record_volume_sizes(_ctx(kelso_env))
+  monkeypatch.setattr(backup_lib, "free_bytes", lambda _path: 10 * 1024 * 1024)
+
+  _back_up(kelso_env, BASIC)
+  assert any("--dry-run" in args for args in _runs(kelso_env, RESTIC_IMAGE))
 
 
 def test_a_backup_says_what_restic_is_doing(kelso_env):

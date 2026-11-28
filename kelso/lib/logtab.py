@@ -61,7 +61,7 @@ class LogTab:
     data = (line + "\n").encode()
     data_len = len(data)
 
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o666)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     one_call = True
     try:
       offset = 0
@@ -100,7 +100,8 @@ class LogTab:
       header.append(f"# {path.name}, created {now_ts()}")
       header.append("# Format: <date>\\t<set|del|clr>\\t<key>\\t<value>\\n")
       header = "\n".join(header)
-      with open(path, "w") as f:
+      fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+      with os.fdopen(fd, "w") as f:
         f.write(header + "\n")
 
   def _value_err(self, errmsg: str) -> None:
@@ -227,7 +228,7 @@ class LogTab:
     lines.append("# end compacted entries")
     data = ("\n".join(lines) + "\n").encode()
 
-    fd = os.open(compact_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
+    fd = os.open(compact_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
       offset = 0
       while offset < len(data):

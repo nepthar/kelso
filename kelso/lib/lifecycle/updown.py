@@ -81,7 +81,7 @@ def _up(
       except (ValueError, RuntimeError) as error:
         problems.append(f"{app}: {error}")
         logger.warning("  %s: failed: %s", app, error)
-    for app in _wait_ready(waiting, wait) if wait is not None else ():
+    for app in wait_ready(waiting, wait) if wait is not None else ():
       problems.append(f"{app}: not ready after {wait:g}s")
       logger.warning("  %s: not ready after %gs; going on", app, wait)
   return problems
@@ -105,15 +105,40 @@ def _down(ctx: KelsoCtx, groups: Iterable[int]) -> list[str]:
   return problems
 
 
-def _wait_ready(apps: list[AppID], wait: float) -> list[AppID]:
+def wait_ready(apps: list[AppID], wait: float = DEFAULT_WAIT) -> list[AppID]:
   began = time.monotonic()
   while True:
     settled = time.monotonic() - began >= SETTLE
     units = load_kelso_run_unit_status()
     pending = [app for app in apps if not _ready(units.get(app, ()), settled)]
-    if not pending or time.monotonic() - began >= wait:
+    if (
+      not pending
+      or time.monotonic() - began >= wait
+      or all(any(u.health == "unhealthy" for u in units.get(a, ())) for a in pending)
+    ):
       return pending
     time.sleep(1)
+
+
+def ensure_ready(
+  app: AppID, *, wait: float = DEFAULT_WAIT, backup: str | None = None
+) -> None:
+  """Wait until `app` is ready, or raise with its unit states and rollback hint."""
+  if not wait_ready([app], wait):
+    return
+  units = load_kelso_run_unit_status().get(app, ())
+  detail = (
+    ", ".join(f"{u.run_unit}: {u.status or u.state}" for u in units)
+    or "no containers running"
+  )
+  back = (
+    f" To go back, run `kelso stop {app} && kelso restore {app} {backup}`."
+    if backup
+    else ""
+  )
+  raise RuntimeError(
+    f"{app} did not become healthy ({detail}). Check `kelso logs {app}`.{back}"
+  )
 
 
 def _ready(units: tuple[KelsoRunUnitStatus, ...], settled: bool) -> bool:

@@ -27,7 +27,7 @@ def _parse_docker(args: list[str]) -> tuple[dict[str, str], dict[str, Path], lis
       host, guest, _mode = args[i + 1].split(":")
       binds[guest] = Path(host)
       i += 2
-    elif arg == "--entrypoint":
+    elif arg in ("--entrypoint", "-u", "--user"):
       i += 2
     else:
       # IMAGE -c SCRIPT $0 ARGS: kelso wraps restic in a shell that hands the

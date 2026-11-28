@@ -492,3 +492,12 @@ def test_auto_compact_clear_drops_matching_prefix(tmp_path):
   tab.clear("a/")
   assert _values(tab.load()) == {"b/1": "z"}
   assert _ops(path) == [["set", "b/1"]]
+
+
+def test_logtab_files_are_owner_only(tmp_path):
+  path = tmp_path / "secret.logtab"
+  tab = LogTab(path)
+  assert path.stat().st_mode & 0o777 == 0o600
+  tab.write("a", "1")
+  tab.compact(0)
+  assert path.stat().st_mode & 0o777 == 0o600

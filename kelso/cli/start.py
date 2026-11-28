@@ -4,6 +4,7 @@ import logging
 from kelso.cli.load import confirm_compose_warnings
 from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle import load_target, start
+from kelso.lib.lifecycle.updown import DEFAULT_WAIT, ensure_ready
 from kelso.lib.receipt import capability_receipt, location_receipt
 
 logger = logging.getLogger("kelso.cli")
@@ -23,6 +24,18 @@ def register(subparsers) -> None:
     "--force",
     action="store_true",
     help="Start even though this id was last loaded from somewhere else",
+  )
+  parser.add_argument(
+    "--wait",
+    action="store_true",
+    help="Wait for the app to be healthy before exiting",
+  )
+  parser.add_argument(
+    "--timeout",
+    type=float,
+    default=DEFAULT_WAIT,
+    metavar="SECONDS",
+    help=f"How long --wait waits for the app to be healthy (default: {DEFAULT_WAIT})",
   )
   parser.add_argument(
     "--allow-compose",
@@ -45,6 +58,8 @@ def run(args: argparse.Namespace, ctx: KelsoCtx) -> None:
       return
 
   result = start(app, ctx, target.bundle)
+  if args.wait:
+    ensure_ready(app, wait=args.timeout)
   compact = capability_receipt(result.spec, result.run_data, ctx, compact=True)
   if compact.strip():
     print(compact)

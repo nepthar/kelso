@@ -272,7 +272,12 @@ def run(args: argparse.Namespace, _ctx) -> None:
 
   (root / "repos" / LOCAL_REPO).mkdir(parents=True, exist_ok=True)
   git.adopt(root / "repos" / LOCAL_REPO)
+  (root / CONF_DIR).mkdir(parents=True, exist_ok=True)
+  (root / CONF_DIR).chmod(0o700)
   (root / CONF_DIR / "apps").mkdir(parents=True, exist_ok=True)
+  (root / CONF_DIR / "apps").chmod(0o700)
+  (root / "volumes").mkdir(exist_ok=True)
+  (root / "volumes").chmod(0o700)
   for kind in VOLUME_KINDS:
     # A link made before init is where the operator wants this kind to live.
     kind_root = root / "volumes" / kind
@@ -280,10 +285,12 @@ def run(args: argparse.Namespace, _ctx) -> None:
       kind_root.mkdir(parents=True, exist_ok=True)
   for name in VAR_DIRS:
     (root / "var" / name).mkdir(parents=True, exist_ok=True)
+  (root / "var" / "run").chmod(0o700)
   # Like a volume root: a link made before init is where backups should go.
   backups = root / "backups"
   if not backups.is_symlink():
     backups.mkdir(exist_ok=True)
+    backups.chmod(0o700)
 
   address = lan_address()
   template = CONFIG_TEMPLATE

@@ -38,21 +38,29 @@ def test_cleanup_removes_what_an_interrupted_restore_left(kelso_env):
 
 
 def test_cleanup_keeps_the_images_kelso_runs_itself(kelso_env):
+  from kelso.lib import kproxy
   from kelso.lib.lifecycle.rootfs import ROOTFS_IMAGE
   from kelso.lib.restic import RESTIC_IMAGE
 
   repo, _, rest = RESTIC_IMAGE.partition(":")
   tag = rest.partition("@")[0]
   alpine, _, alpine_tag = ROOTFS_IMAGE.partition(":")
+  source = kproxy.source_dir()
+  assert source is not None
+  kp_repo, _, kp_tag = kproxy.image_tag(source).partition(":")
   kelso_env.set_images(
     [
       {"ID": "r1", "Repository": repo, "Tag": tag, "Size": "30MB"},
       {"ID": "a1", "Repository": alpine, "Tag": alpine_tag, "Size": "8MB"},
+      {"ID": "k1", "Repository": kp_repo, "Tag": kp_tag, "Size": "12MB"},
+      {"ID": "k0", "Repository": kp_repo, "Tag": "000000000000", "Size": "12MB"},
     ]
   )
   shown = kelso_env.run("cleanup")
   assert repo not in shown.stdout
   assert alpine not in shown.stdout
+  assert f"{kp_repo}:{kp_tag}" not in shown.stdout
+  assert f"{kp_repo}:000000000000" in shown.stdout
 
 
 def test_cleanup_removes_only_images_nothing_uses(kelso_env):

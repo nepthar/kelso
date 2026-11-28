@@ -515,6 +515,7 @@ def load(
     # to app_bundle/. AppSpec always comes from the run tree, never the source bundle.
     run_path = paths.run_path
     run_path.mkdir(parents=True, exist_ok=True)
+    run_path.chmod(0o700)
     try:
       incoming = _load_incoming(bundle, run_path)
       spec = AppSpec.from_file(incoming / "manifest.toml", app)

@@ -230,7 +230,7 @@ app-wide: every unit gets the same.
 
 The manifest's mode is the author's. You can run any app but a `host` one in
 another mode with `kelso config <app> network.mode=<mode>`, and go back to the
-manifest's with `--network default`. It takes effect at the next start, and
+manifest's with `kelso config <app> network.mode=default`. It takes effect at the next start, and
 receipts say when the mode is yours rather than the manifest's.
 
 `kelso net <app>` shows what an app behind kproxy is doing: the domains it is
@@ -370,7 +370,7 @@ kelso config immich route.main=pangolin,npm
 
 The first one listed is the primary: its domain is the one `${routes.<name>}`
 and `${klso.domain}` resolve to. Take it out and the next one becomes primary.
-`--route main=none` publishes the route nowhere; `none` cannot be combined with
+`kelso config <app> route.main=none` publishes the route nowhere; `none` cannot be combined with
 other providers.
 
 ## `[run.<unit>.ports.<name>]`
@@ -530,8 +530,8 @@ manifest fields; setting them twice would mean one of them silently losing.
 **Keys kelso does not recognise are announced.** There is an allowlist of
 options that shape how a container runs without reaching outside it —
 `depends_on`, `mem_limit`, `user`, `ulimits`, `read_only` and
-friends — and anything outside it produces a warning on load, in `kelso
-inspect`, and on the app's card in the web UI:
+friends — and anything outside it produces a warning on load, in `kelso status
+<app>`, and on the app's card in the web UI:
 
 > Warning: This application sets free-form docker options on main that are not
 > guaranteed to be safe. Please review them before continuing

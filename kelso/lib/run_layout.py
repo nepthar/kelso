@@ -406,13 +406,18 @@ def _load_volume_links(
 
 
 def _compare_route(
-  issues: list[ConfigIssue], spec_route: AppRoute, conf_route: AssignedRoute
+  app: AppID,
+  issues: list[ConfigIssue],
+  spec_route: AppRoute,
+  conf_route: AssignedRoute,
 ) -> None:
+  reload_fix = f"Reload it with `kelso load {app}`"
+
   def mismatch(field: str, from_spec: Any, from_config: Any):
     issues.append(
       ConfigIssue(
         f"route {spec_route.route_name}: {field} mismatch: manifest={from_spec} config={from_config}",
-        "Examine w/ `kelso route list`, remove app data & runtime with `kelso rm --purge`",
+        reload_fix,
         self_healing=True,
       )
     )
@@ -427,7 +432,7 @@ def _compare_route(
       issues.append(
         ConfigIssue(
           f"route {spec_route.route_name}: host port not allocated",
-          "Clear data with `kelso rm --purge` and retry with `kelso start`",
+          reload_fix,
           self_healing=True,
         )
       )
@@ -454,12 +459,13 @@ def _load_routes(
 
   missing_routes = set(spec.routes.keys()) - set(found_routes.keys())
   extra_routes = set(found_routes.keys()) - set(spec.routes.keys())
+  reload_fix = f"Reload it with `kelso load {spec.app}`"
 
   for name in sorted(missing_routes):
     issues.append(
       ConfigIssue(
         f"route {name}: declared but not allocated",
-        "Clear data with `kelso rm --purge` and retry with `kelso start`",
+        reload_fix,
         self_healing=True,
       )
     )
@@ -467,7 +473,7 @@ def _load_routes(
     issues.append(
       ConfigIssue(
         f"route {name}: allocated but not in the manifest",
-        "Clear data with `kelso rm --purge` and retry with `kelso start`",
+        reload_fix,
         self_healing=True,
       )
     )
@@ -479,7 +485,7 @@ def _load_routes(
       # We already added an issue for extra/missing routes.
       continue
 
-    _compare_route(issues, from_spec, configd)
+    _compare_route(spec.app, issues, from_spec, configd)
     loaded[name] = configd
 
   return loaded

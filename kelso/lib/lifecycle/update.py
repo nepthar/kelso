@@ -17,6 +17,7 @@ from kelso.lib.kelso import KelsoCtx
 from kelso.lib.lifecycle._common import logger
 from kelso.lib.lifecycle.load import load
 from kelso.lib.lifecycle.run import start, stop
+from kelso.lib.lifecycle.updown import DEFAULT_WAIT, ensure_ready
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class UpdateResult:
   # The backup of the version it replaced; None when told not to take one.
   backup: str | None
   was_running: bool
+  started: bool = False
 
   def summary(self, app: AppID) -> str:
     if self.previous == self.version:
@@ -43,6 +45,8 @@ class UpdateResult:
       lines.append(f"  backup {self.backup} holds the version it replaced")
     if self.was_running:
       lines.append(f"Restarted {app}")
+    elif self.started:
+      lines.append(f"Started {app}")
     return "\n".join(lines)
 
 
@@ -58,7 +62,14 @@ def update_source(app: AppID, ctx: KelsoCtx) -> Path:
   return origin
 
 
-def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
+def update(
+  app: AppID,
+  ctx: KelsoCtx,
+  *,
+  backup: bool = True,
+  start_after: bool = False,
+  wait: float = DEFAULT_WAIT,
+) -> UpdateResult:
   source = update_source(app, ctx)
   try:
     spec = load_bundle(source).app_spec()
@@ -85,7 +96,6 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
         refuse_same_second(restic, run, app)
         name = backup_app(app, ctx, restic, reason=UPDATE, run=run).id
         forget_expired(ctx, restic, prune=False)
-        restic.check()
       except Exception as e:
         if running:
           with ctx.kelso_lock(by):
@@ -95,6 +105,7 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
           f"problem below, or pass --no-backup to update without one.\n{e}"
         ) from e
 
+    should_start = running or start_after
     with ctx.kelso_lock(by):
       try:
         load(app, source, ctx, version_change=True)
@@ -114,6 +125,8 @@ def update(app: AppID, ctx: KelsoCtx, *, backup: bool = True) -> UpdateResult:
         previous=previous or "",
         backup=name or "",
       )
-      if running:
+      if should_start:
         start(app, ctx)
-  return UpdateResult(previous, spec.version, name, running)
+    if should_start:
+      ensure_ready(app, wait=wait, backup=name)
+  return UpdateResult(previous, spec.version, name, running, should_start)
